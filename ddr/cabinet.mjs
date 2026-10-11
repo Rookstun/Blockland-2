@@ -12,6 +12,7 @@
 //           score/combo row, judgement, 4 receptors, 4 lanes (LineOffset <- scroll).
 //   towers, marquee; the chip (with its synth speakers) behind the cabinet.
 import * as brs from '../mapgen/lib/brs.mjs';
+import { K, STRIP_Z0, STRIP_H } from './wsgen.mjs';
 
 const OWNER = { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'soapstain22', display_name: 'renderman' };
 const GRID_OFFSET = 1024; // the writer adds -1024 to inner-grid positions
@@ -19,7 +20,7 @@ const MB = 'PB_DefaultMicroBrick';
 const FACE_MINUS_Y = 13;  // orientation: text face toward -y (casinogen/ruins)
 const LANE_COL = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]];
 const ARROWS = ['←', '↓', '↑', '→'];
-const FONT = 'RobotoMono', ARROW_FONT = 'IosevkaTerm'; // words: plain monospace; arrows: the font proven to draw ← ↓ ↑ →
+const FONT = 'MonaspaceXenon', ARROW_FONT = 'MonaspaceXenon'; // owner's pick, words and arrows
 const TEXT = { // Font = index of FONT in the externalAssets (set per build). LineHeight = glyph height in units.
   Font: 0, Rotation: -90, Skew: 0, Kerning: 0, LineHeight: 4, WidthScale: 1, LineOffset: -20, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },  // LineOffset -20 = owner's line spacing
   Color: { R: 255, G: 255, B: 255, A: 255 }, MaterialSlider: 10, ShadingWidth: 2, OutlineColor: { R: 0, G: 0, B: 0, A: 255 }, OutlineWidth: 1,
@@ -141,19 +142,22 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
   const judge = panel(-32, -70, 74, 98, { Text: '', LineHeight: 7.5, Color: rgba([255, 255, 255]) });
   wireOut('judge_t', judge, TD, 'Text');
   wireOut('judge_c', judge, TD, 'Color');
+  panel(32, -32, 16, STRIP_Z0, { Text: '' });                           // sill under the lanes
   const LANE_W = 16;
   for (let k = 0; k < 4; k++) {
     const x0 = 32 - k * LANE_W, x1 = x0 - LANE_W;                      // LEFT lane at +x (the dancer's left)
-    const rec = panel(x0, x1, 90, 98, { Text: ARROWS[k], Font: AF, LineHeight: 7.5, OutlineWidth: 2, Color: rgba([70, 70, 80]) });
+    const rec = panel(x0, x1, STRIP_Z0 + K * STRIP_H, 98, { Text: ARROWS[k], Font: AF, LineHeight: 7.5, OutlineWidth: 2, Color: rgba([70, 70, 80]) });
     wireOut(`rec${k}`, rec, TD, 'Color');
     wireOut('rainbow_c', rec, TD, 'OutlineColor');
-    const lane = panel(x0, x1, 16, 90, { Text: '', Font: AF, LineHeight: 6, OutlineWidth: 2, Color: rgba(LANE_COL[k]) });
-    wireOut(`lane${k}`, lane, TD, 'Text');
-    wireOut('rainbow_c', lane, TD, 'OutlineColor');
+    // K strips, each one arrow sprite slid up the lane by its Offset (Y = up)
+    for (let j = 0; j < K; j++) {
+      const spr = panel(x0, x1, STRIP_Z0 + j * STRIP_H, STRIP_Z0 + (j + 1) * STRIP_H, { Text: '', Font: AF, LineHeight: 8, OutlineWidth: 2, Color: rgba(LANE_COL[k]) });
+      wireOut(`spr${k}${j}`, spr, TD, 'Text');
+      wireOut(`off${k}${j}`, spr, TD, 'Offset');
+      wireOut('rainbow_c', spr, TD, 'OutlineColor');
+    }
   }
-  // Offset test markers (which axis moves text on the face?): none / X / Y / Z by 8 units
-  [[0, 0, 0], [8, 0, 0], [0, 8, 0], [0, 0, 8]].forEach(([X, Y, Z], i) =>
-    panel(-32, -70, [16, 30, 44, 58][i], [30, 44, 58, 74][i], { Text: ['O', 'X', 'Y', 'Z'][i], LineHeight: 7.5, Offset: { X, Y, Z }, Color: rgba([255, 255, 255]) }));
+  panel(-32, -70, 16, 74, { Text: '' });                                // (Offset test markers measured: Y = up)
   // beat lamps: dots above the screen + one on each marquee end, colour + real light pulse on the beat
   const LIGHT = { type: 'Component_PointLight', data: { bMatchBrickShape: false, bEnabled: true, Brightness: 0, Radius: 220, Color: rgba(PINK), bUseBrickColor: false, bCastShadows: false, RayTracingVisibility: 0 } };
   const lamp = (x0, x1, z0, z1, y, text) => {

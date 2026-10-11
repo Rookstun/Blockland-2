@@ -6,7 +6,13 @@
 // music plays on synth speakers wired from P<v>/V<v>. DEBUG lines go to chat.
 import { LANES } from './chart.mjs';
 
-export const WIN = 12;          // rows on screen
+// smooth scroll: each lane = K strip panels, each shows one arrow slid by its TextDisplay Offset
+// (Offset.Y = up in world units, measured in game). Arrow z on the screen = RECEPTOR_Z - dt * SPEED.
+const NL = String.fromCharCode(10);
+export const K = 6;             // arrow sprites per lane (strips)
+export const STRIP_Z0 = 18, STRIP_H = 12;   // strips at z 18..90 (cabinet.mjs builds them from these)
+const RECEPTOR_Z = 94, LOOK = 1.6;          // receptor centre; seconds of lookahead on screen
+const SPEED = (RECEPTOR_Z - STRIP_Z0) / LOOK;
 const NBSP = ' ';
 export const LEAD_SEC = 4;      // countdown before the first row
 const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
@@ -26,13 +32,6 @@ const col = ([r, g, b]) => `ColorSRGB(${r}, ${g}, ${b}, 255)`;
 export function generate(songs, voiceDefs) {
   const S = songs.length, V = voiceDefs.length, CLICK = voiceDefs.map(([, g]) => g === 'click'), L = [0, 1, 2, 3];
   const lead = songs.map(s => Math.ceil(LEAD_SEC / s.rowDur) + 1);
-  // lane strings: lead blanks + one 2-char cell (glyph or space, newline) per row + WIN blanks
-  const laneStr = songs.map((s, i) => L.map(k => {
-    // blank = no-break space: plain trailing spaces got trimmed and the lanes' rows drifted apart
-    const cells = new Array(lead[i] + s.rowsTotal + WIN).fill(`${NBSP}\n`);
-    for (const n of s.lanes[k]) cells[lead[i] + n.row] = LANES[k] + '\n';
-    return cells.join('');
-  }));
   const offs = per => { const o = [0]; for (const x of per) o.push(o[o.length - 1] + x.length); return o; };
   const out = [];
   const D = (name, type, xs) => out.push(`var ${name}: ${type}[] = ${arr(type, xs)}`);
@@ -46,9 +45,7 @@ export function generate(songs, voiceDefs) {
   D('BPM', 'int', songs.map(s => s.bpm));
   D('STEPS', 'int', songs.map(s => s.steps));
   for (const k of L) {
-    D(`LS${k}`, 'string', laneStr.map(x => x[k]));
     D(`NT${k}`, 'float', songs.flatMap(s => s.lanes[k].map(n => n.t)));
-    D(`NR${k}`, 'int', songs.flatMap(s => s.lanes[k].map(n => n.row)));
     D(`NO${k}`, 'int', offs(songs.map(s => s.lanes[k])));
   }
   for (let v = 0; v < V; v++) {
@@ -63,7 +60,6 @@ var none: character
 var state: int = 0          // 0 seat empty, 1 song select, 2 dancing, 3 results
 var song: int = 0
 var t0: float = 0.0
-var lastRow: int = -99999
 var lead: int = 0
 var rowD: float = 0.1
 var sync: float = 0.0       // /ddrsync: chart delay vs the music, seconds
@@ -84,8 +80,8 @@ var beatC: color = ColorSRGB(60, 20, 50, 255)
 var beatB: float = 0.0
 var rainbow: color = ColorSRGB(0, 0, 0, 255)
 var lampC: color = ColorSRGB(255, 60, 200, 255)
-${eachL(k => `var live${k}: string = ""
-var scr${k}: string = ""
+${eachL(k => `${[...Array(K).keys()].map(j => `var st${k}${j}: string = ""
+var so${k}${j}: vector = Vec(0.0, 0.0, 0.0)`).join(NL)}
 var ni${k}: int = 0
 var ne${k}: int = 0
 var flash${k}: float = -9.0
@@ -108,7 +104,8 @@ out beat_c: color = beatC
 out beat_b: float = beatB
 out rainbow_c: color = rainbow
 out lamp_c: color = lampC
-${eachL(k => `out lane${k}: string = scr${k}
+${eachL(k => `${[...Array(K).keys()].map(j => `out spr${k}${j}: string = st${k}${j}
+out off${k}${j}: vector = so${k}${j}`).join(NL)}
 out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
 ${eachV(v => `out P${v}: float = vp${v}
@@ -120,17 +117,13 @@ ${eachV(v => `  vv${v} = 0.0
   vo${v} = -9999.0`)}
 }
 
-mod redraw() {
-  let base: int = max(0, lastRow + lead) * 2
-${eachL(k => `  scr${k} = live${k}.Substring(base, ${WIN * 2})`)}
-}
 
 mod clearScreen() {
   rainbow = ColorSRGB(0, 0, 0, 255)
   lampC = ColorSRGB(255, 60, 200, 255)
   beatC = ColorSRGB(60, 20, 50, 255)
   beatB = 0.0
-${eachL(k => `  scr${k} = ""`)}
+${eachL(k => [...Array(K).keys()].map(j => `  st${k}${j} = ""`).join(NL))}
   judge = ""
   info = ""
   comboTxt = ""
@@ -161,8 +154,7 @@ mod start() {
   jcol = ColorSRGB(255, 255, 255, 255)
   info = "0"
   comboTxt = ""
-${eachL(k => `  live${k} = LS${k}[song]
-  ni${k} = NO${k}[song]
+${eachL(k => `  ni${k} = NO${k}[song]
   ne${k} = NO${k}[song + 1]`)}
 ${eachV(v => `  vi${v} = VO${v}[song]
   ve${v} = VO${v}[song + 1]
@@ -170,7 +162,6 @@ ${eachV(v => `  vi${v} = VO${v}[song]
   va${v} = 0.0
   vo${v} = -9999.0`)}   // fresh voices: a stale note end kept the old note droning
   t0 = ServerUptime() + ${f(LEAD_SEC)}
-  lastRow = -99999
   title = NAMES[song]
   state = 2
 ${dbg('start \${NAMES[song]} t0=\${t0}')}
@@ -256,10 +247,7 @@ ${eachL(k => `mod press${k}() {
       if dt <= ${f(W.good)} {
         judgeHit(dt)
         flash${k} = t
-        let at: int = (NR${k}[ni${k}] + lead) * 2
-        live${k} = live${k}.Substring(0, at) .. "${NBSP}" .. live${k}.Substring(at + 1, live${k}.Length() - at - 1)
         ni${k} = ni${k} + 1
-        redraw()
       }
     }
   } else if state == 1 {
@@ -311,11 +299,15 @@ on Clock(interval = 0.02) {
     if t > LEN[song] + 1.5 {
       finish()
     } else {
-      let row: int = floor(tc / rowD + 0.5)   // rounded: an arrow sits on the receptor row centred on its time
-      if row != lastRow {
-        lastRow = row
-        redraw()
-      }
+${eachL(k => [...Array(K).keys()].map(j => { const zc = STRIP_Z0 + (j + 0.5) * STRIP_H; return `      // lane ${k} sprite ${j}: the next note with index = ${j} (mod ${K})
+      let j${k}${j}: int = ni${k} + ((${j} - ni${k}) % ${K} + ${K}) % ${K}
+      let d${k}${j} = NT${k}[j${k}${j}] - tc
+      if j${k}${j} < ne${k} && d${k}${j} < ${f(LOOK)} {
+        st${k}${j} = "${LANES[k]}"
+        so${k}${j} = Vec(0.0, ${f(RECEPTOR_Z - zc)} - d${k}${j} * ${f(SPEED)}, 0.0)
+      } else if st${k}${j} != "" {
+        st${k}${j} = ""
+      }`; }).join(NL))}
 ${eachL(k => `      if ni${k} < ne${k} && tc > NT${k}[ni${k}] + ${f(W.good)} {
         missed()
         ni${k} = ni${k} + 1
