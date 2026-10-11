@@ -7,6 +7,7 @@
 import { LANES } from './chart.mjs';
 
 export const WIN = 12;          // rows on screen
+const NBSP = '00a0';
 export const LEAD_SEC = 4;      // countdown before the first row
 const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
 const RAINBOW_COMBO = 10;      // combo that turns the arrow outlines rainbow
@@ -27,7 +28,8 @@ export function generate(songs, voiceDefs) {
   const lead = songs.map(s => Math.ceil(LEAD_SEC / s.rowDur) + 1);
   // lane strings: lead blanks + one 2-char cell (glyph or space, newline) per row + WIN blanks
   const laneStr = songs.map((s, i) => L.map(k => {
-    const cells = new Array(lead[i] + s.rowsTotal + WIN).fill(' \n');
+    // blank = no-break space: plain trailing spaces got trimmed and the lanes' rows drifted apart
+    const cells = new Array(lead[i] + s.rowsTotal + WIN).fill(`${NBSP}\n`);
     for (const n of s.lanes[k]) cells[lead[i] + n.row] = LANES[k] + '\n';
     return cells.join('');
   }));
@@ -255,7 +257,7 @@ ${eachL(k => `mod press${k}() {
         judgeHit(dt)
         flash${k} = t
         let at: int = (NR${k}[ni${k}] + lead) * 2
-        live${k} = live${k}.Substring(0, at) .. " " .. live${k}.Substring(at + 1, live${k}.Length() - at - 1)
+        live${k} = live${k}.Substring(0, at) .. "${NBSP}" .. live${k}.Substring(at + 1, live${k}.Length() - at - 1)
         ni${k} = ni${k} + 1
         redraw()
       }
