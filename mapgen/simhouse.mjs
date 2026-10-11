@@ -842,12 +842,20 @@ const YARD = {
 // (owner 2026-10-08: shed roofs, open plans, random breakfast bars, "make sure
 // all this"): three shed roofs, two open plans; a breakfast bar in every
 // open-plan kitchen and, by chance, in the others
-const LOT_W = 780, LOTS = [
+// SIM_SEED=n (suburb.mjs, owner 2026-10-11: "a ton of houses"): four random lots instead of the fixed street
+const SIM_SEED = Number(process.env.SIM_SEED) || 0;
+const randomLot = i => {
+  const s = SIM_SEED * 10 + i + 1; seed = s;
+  const [W, D] = pick([[48, 40], [44, 44], [52, 40], [48, 44]], s, 2);
+  return { plan: pick(['open', 'centre', 'cross'], s, 1), W, D, storeys: rnd(s, 4) < 0.45 ? 1 : 2, s, win: Math.floor(rnd(s, 5) * WINDOW_STYLES.length),
+    job: pick(Object.keys(JOBS), s, 6), roof: rnd(s, 7) < 0.5 ? 'shed' : 'gable' };
+};
+const LOT_W = 780, LOTS = (SIM_SEED ? [0, 1, 2, 3].map(randomLot) : [
   { plan: 'open', W: 48, D: 40, storeys: 1, s: 111, win: 3, job: 'baker', roof: 'shed' },
   { plan: 'centre', W: 44, D: 44, storeys: 2, s: 222, win: 2, job: 'musician', roof: 'gable' },
   { plan: 'open', W: 52, D: 40, storeys: 2, s: 333, win: 1, job: 'programmer', roof: 'shed' },
   { plan: 'cross', W: 48, D: 40, storeys: 1, s: 444, win: 0, job: 'artist', roof: 'shed' },
-].map(l => { seed = l.s; return { ...l, bar: l.plan === 'open' || rnd(l.s, 77) < 0.5 }; });
+]).map(l => { seed = l.s; return { ...l, bar: l.plan === 'open' || rnd(l.s, 77) < 0.5 }; });
 const ROAD = [100, 280], WALK = [280, 340], LOT_Y = [340, 1100], HOUSE_Y = 500;
 const XS = LOTS.map((_, i) => (i - (LOTS.length - 1) / 2) * (LOT_W + 20));
 const PAD = [XS[0] - LOT_W / 2 - 80, ROAD[0] - 60, XS[XS.length - 1] + LOT_W / 2 + 80, LOT_Y[1] + 80];
