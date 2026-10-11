@@ -1,0 +1,1737 @@
+// Big map generator: island terrain with mountains, lakes, cliff caves (Zelda-style,
+// a doorway and a room in the rock) and wallgen dungeons sunk into the ground.
+//
+//   node mapgen.mjs [--seed N] [--size CELLS] [--out DIR] [--dry] [--no-smooth]
+//
+// Writes DIR/chunk_NNN.json, each { ops: [{ op: 'bricks', at: [0, 0, 0], bricks }] },
+// ready for the omegga bridge (job.mjs). Bricks use game units (stud = 10,
+// brick = 12), half-extent sizes and RGB colors.
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+import { TOWN_CELLS, build as buildTown, surface as townSurface, planTown, planVillage, RIVER_LOCAL } from './town.mjs';
+import { floorPieces } from './floors.mjs';
+import { orientFor } from './orient.mjs';
+import { makeBuilder } from './builder.mjs';
+import { buildDungeon, SIZE as DSIZE, STOREY as DSTOREY } from './dungeon.mjs';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// ---------------------------------------------------------------- options --
+const args = process.argv.slice(2);
+const opt = (name, def) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : def;
+};
+const SEED = Number(opt('--seed', 20261001));
+// --scale K (owner 2026-10-05: "make the world 3x bigger and spread out"): the
+// map side, the island, the town's place on it, biome sizes and the spacing
+// and number of hamlets, outposts and caves all scale by K; buildings,
+// dungeons and the town itself keep their size, the terrain noise its grain.
+const K = Number(opt('--scale', 1));
+const N = Number(opt('--size', 2 * Math.round((576 * K) / 2))); // cells per side
+const OUT = path.resolve(opt('--out', path.join(HERE, 'out')));
+const DRY = args.includes('--dry');
+
+const CELL = 40; // world units per voxel, x/y (4 studs)
+const VZ = 12; // world units per voxel, z (1 brick)
+const NZ = 170;
+// The map grows west and south from a fixed north-east corner (x 2900, y 4900),
+// which keeps it clear of other players' builds east and north of it.
+const CENTER = [2900 - (N * CELL) / 2, 4900 - (N * CELL) / 2];
+const X0 = CENTER[0] - (N * CELL) / 2;
+const Y0 = CENTER[1] - (N * CELL) / 2;
+const SEA = 22; // sea level, voxels. The sea is the game's water plane (environment waterHeight WATER_Z), not bricks
+const WATER_Z = (SEA + 1) * VZ - 6;
+const MAX_H_CELLS = 16; // biggest merged box: 16 cells (64 studs) across
+const MAX_Z_VOX = 50; // and 50 bricks tall
+
+// ------------------------------------------------------------------ noise --
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const R = rng(SEED);
+const perm = new Uint8Array(512);
+{
+  const p = [...Array(256).keys()];
+  for (let i = 255; i > 0; i--) {
+    const j = Math.floor(R() * (i + 1));
+    [p[i], p[j]] = [p[j], p[i]];
+  }
+  for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+}
+const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+const lerp = (a, b, t) => a + (b - a) * t;
+const G3 = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+function noise3(x, y, z) {
+  const X = Math.floor(x), Y = Math.floor(y), Z = Math.floor(z);
+  x -= X; y -= Y; z -= Z;
+  const xi = X & 255, yi = Y & 255, zi = Z & 255;
+  const g = (i, j, k, dx, dy, dz) => {
+    const v = G3[perm[xi + i + perm[yi + j + perm[zi + k]]] % 12];
+    return v[0] * dx + v[1] * dy + v[2] * dz;
+  };
+  const u = fade(x), v = fade(y), w = fade(z);
+  return lerp(
+    lerp(lerp(g(0,0,0,x,y,z), g(1,0,0,x-1,y,z), u), lerp(g(0,1,0,x,y-1,z), g(1,1,0,x-1,y-1,z), u), v),
+    lerp(lerp(g(0,0,1,x,y,z-1), g(1,0,1,x-1,y,z-1), u), lerp(g(0,1,1,x,y-1,z-1), g(1,1,1,x-1,y-1,z-1), u), v),
+    w
+  );
+}
+const noise2 = (x, y) => noise3(x, y, 0.5);
+function fbm2(x, y, oct = 5) {
+  let a = 1, f = 1, s = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    s += a * noise2(x * f, y * f);
+    n += a;
+    a *= 0.5;
+    f *= 2.03;
+  }
+  return s / n;
+}
+function ridged2(x, y, oct = 5) {
+  let a = 1, f = 1, s = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    const r = 1 - Math.abs(noise2(x * f + 17.3 * i, y * f - 9.1 * i));
+    s += a * r * r;
+    n += a;
+    a *= 0.5;
+    f *= 2.1;
+  }
+  return s / n;
+}
+function fbm3(x, y, z, oct = 3) {
+  let a = 1, f = 1, s = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    s += a * noise3(x * f, y * f, z * f);
+    n += a;
+    a *= 0.5;
+    f *= 2.0;
+  }
+  return s / n;
+}
+// cheap per-position hash in [0, 1)
+const hash = (a, b, c = 0) => {
+  let h = Math.imul(a, 374761393) + Math.imul(b, 668265263) + Math.imul(c, 2147483647) + SEED;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+const smooth = (e0, e1, x) => {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+};
+
+// -------------------------------------------------------------- materials --
+// id -> { color, material?, asset?, intensity? }
+const MATS = [null];
+const mat = (color, extra = {}) => MATS.push({ color, ...extra }) - 1;
+const GRASS = [mat([84, 140, 58]), mat([96, 152, 64]), mat([74, 128, 52])];
+const DIRT = mat([110, 80, 54]);
+const SAND = mat([214, 196, 142], { asset: 'PB_DefaultTile' });
+const SNOW = mat([236, 240, 245], { asset: 'PB_DefaultTile' });
+const ROCK = [mat([122, 118, 112]), mat([108, 104, 100])];
+const STONE = mat([96, 94, 92]);
+const DEEP = mat([68, 66, 70]);
+const BEDROCK = mat([34, 32, 36]);
+const WATER = mat([52, 128, 196], { material: 'BMC_Glass', asset: 'PB_DefaultTile' });
+const LAVA = mat([255, 96, 20], { material: 'BMC_Glow', intensity: 4, asset: 'PB_DefaultTile' });
+const GOLD = mat([232, 186, 40], { material: 'BMC_Metallic' });
+const IRON = mat([176, 128, 104], { material: 'BMC_Metallic' });
+const GEM = mat([60, 220, 200], { material: 'BMC_Glow', intensity: 3 });
+const MOSS = mat([70, 96, 60]);
+const PLAZA = mat([150, 146, 134]);
+const COBBLE = mat([164, 156, 142]);
+const PATH = mat([142, 112, 76]);
+const GRAVEL = mat([90, 84, 78]);
+const MUD = mat([74, 56, 38]);
+const MUCK = mat([104, 92, 46]); // yellow-brown slime on the swamp banks
+const POOL_BED = mat([58, 46, 32]);
+// desert (2026-10-03): dune sand, red mesa rock on slopes, dry grass at the edge
+const DUNE = [mat([226, 192, 128], { asset: 'PB_DefaultTile' }), mat([214, 178, 116], { asset: 'PB_DefaultTile' })];
+const MESA = [mat([178, 104, 70]), mat([160, 90, 60])];
+const DRYGRASS = mat([170, 160, 88]);
+
+// --------------------------------------------------------------- dungeons --
+// Zelda-style temple dungeons from dungeon.mjs: floors of rooms on a 5 x 5
+// grid with 3-floor atriums, buried whole: nothing shows above ground but a
+// trench cut down to the entrance stairwell. Each goes where the land is
+// already high enough to cover it (near its anchor `at`); where it isn't,
+// the ground swells into a grassy hill over it.
+// They stand on rock just above the game water plane (environment
+// waterHeight WATER_Z), so no floor of theirs is underwater.
+const BASE_VOX = SEA + 2;
+const SPAWN_CHANCE = 0.35; // share of rooms with a spawner; the deepest level's biggest room gets 3
+const TOWN_PIN = { fx: Math.round(237 * K) - 65, fy: Math.round(261 * K) - 65, h: 47 }; // centre kept when the town shrank 250 -> 130 cells // see the town section
+const COVER = 3;        // voxels of ground over a dungeon's roof
+const RAISE_BLEND = 30; // cells over which a hill over a dungeon fades out
+// ------------------------------------------------------------------ island --
+// (owner, 2026-10-03: "more island like, not a square; harder the further up the
+// island, spawn town first") A long island along a curved SPINE (cells,
+// relative to the town centre): it starts just behind the spawn town and runs
+// diagonally across the map to mountains at the far end. HALF is the
+// half-width at each spine point. progress(x, y) is 0 at the town and 1 at the
+// far end; dungeons, the henge, outposts and the mountains are placed by it.
+const ISLAND = {
+  spine: [[-45, -45], [0, 0], [60, 80], [110, 165], [165, 205], [215, 228]].map(([a, b]) => [a * K, b * K]),
+  half: [100, 140, 135, 120, 90, 55].map(h => h * K),
+};
+const spine = (() => {
+  const tcx = TOWN_PIN.fx + TOWN_CELLS / 2, tcy = TOWN_PIN.fy + TOWN_CELLS / 2;
+  const P = ISLAND.spine.map(([a, b]) => [tcx + a, tcy + b]);
+  const pts = []; // dense samples: [x, y, arc length, half width]
+  let s = 0;
+  for (let i = 0; i + 1 < P.length; i++) {
+    const seg = Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]), n = Math.ceil(seg / 2);
+    for (let k = 0; k < n; k++) {
+      const f = k / n;
+      // a smooth curve through the points (Catmull-Rom)
+      const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+      const cr = j => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * f + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * f * f + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * f * f * f);
+      const x = cr(0), y = cr(1);
+      if (pts.length) s += Math.hypot(x - pts[pts.length - 1][0], y - pts[pts.length - 1][1]);
+      pts.push([x, y, s, ISLAND.half[i] + (ISLAND.half[i + 1] - ISLAND.half[i]) * f]);
+    }
+  }
+  pts.push([...P[P.length - 1], s + 1, ISLAND.half[ISLAND.half.length - 1]]);
+  const sTown = pts.reduce((b, p) => (Math.hypot(p[0] - tcx, p[1] - tcy) < Math.hypot(b[0] - tcx, b[1] - tcy) ? p : b))[2];
+  return { pts, L: pts[pts.length - 1][2], sTown };
+})();
+// nearest spine sample to (x, y): [sample, distance]
+const nearSpine = (x, y) => {
+  let best = spine.pts[0], bd = Infinity;
+  for (const p of spine.pts) { const d = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (d < bd) { bd = d; best = p; } }
+  return [best, Math.sqrt(bd)];
+};
+const progress = (x, y) => Math.max(0, Math.min(1, (nearSpine(x, y)[0][2] - spine.sTown) / (spine.L - spine.sTown)));
+// a point at progress t, pushed sideways by off cells (+ = right of the spine's direction)
+const spineAt = (t, off = 0) => {
+  const s = spine.sTown + t * (spine.L - spine.sTown);
+  const i = Math.max(1, spine.pts.findIndex(p => p[2] >= s));
+  const a = spine.pts[i - 1], b = spine.pts[i], len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  return [b[0] + ((b[1] - a[1]) / len) * off, b[1] - ((b[0] - a[0]) / len) * off];
+};
+
+const DUNGEONS = [
+  // tiers: enemy spawner tier per floor, top floor first (see SPAWNERS)
+  { name: 'Hollow Crypt', levels: 3, seed: SEED + 1, up: [0.5, 0], tiers: [1, 2, 3], theme: 'crypt' },
+  { name: 'Sunken Keep', levels: 4, seed: SEED + 2, up: [0.72, -35 * K], tiers: [2, 3, 4, 5], theme: 'keep' },
+  { name: 'Mountain Deep', levels: 5, seed: SEED + 3, up: [0.94, 0], tiers: [3, 4, 5, 6, 7], theme: 'deep' },
+];
+for (const d of DUNGEONS) {
+  d.cells = DSIZE / CELL; // 51 cells
+  d.height = d.levels * DSTOREY;
+  d.topVox = BASE_VOX + d.height / VZ;
+  d.anchor = spineAt(...d.up); // preferred centre, cells: by progress up the island (easy near town)
+  // the layout first: it decides where the entrance trench goes
+  d.out = buildDungeon({ levels: d.levels, seed: d.seed, theme: d.theme, spawnChance: SPAWN_CHANCE });
+  if (d.out.dropped.length) throw new Error(`${d.name}: ${d.out.dropped.length} overlapping pieces, e.g. ${d.out.dropped[0]}`);
+}
+// Chebyshev distance (cells) from a column to a dungeon footprint; <= 0 inside
+const footDist = (d, x, y) =>
+  Math.max(d.fx - x, x - (d.fx + d.cells - 1), d.fy - y, y - (d.fy + d.cells - 1));
+
+// -------------------------------------------------------------- heightmap --
+const H = new Int16Array(N * N);
+const surfaceMat = new Uint8Array(N * N);
+const PLAZA_RING = 3, BLEND = 16;
+for (let x = 0; x < N; x++)
+  for (let y = 0; y < N; y++) {
+    const wx = X0 + x * CELL, wy = Y0 + y * CELL;
+    // distance from the spine over the local half-width, a ragged coast
+    const [sp, sd] = nearSpine(x, y);
+    const r = (sd / sp[3]) * 0.86 + fbm2(wx / 2500 + 40, wy / 2500, 3) * 0.2;
+    const up = Math.max(0, Math.min(1, (sp[2] - spine.sTown) / (spine.L - spine.sTown)));
+    let base = 31 + fbm2(wx / 3200, wy / 3200) * 44;
+    let mask = smooth(-0.15, 0.2, fbm2(wx / 6000 + 100, wy / 6000 - 50, 3));
+    // mountains round the deepest dungeon's anchor
+    const dm = Math.hypot(x - DUNGEONS[2].anchor[0], y - DUNGEONS[2].anchor[1]);
+    mask = Math.max(mask, smooth(70 * K, 30 * K, dm));
+    mask = Math.max(mask, smooth(0.45, 1, up) * 0.85); // wilder ground further up the island
+    let h = base + mask * Math.pow(ridged2(wx / 2200, wy / 2200), 1.4) * 145;
+    h = lerp(h, 9, smooth(0.72, 0.97, r)); // ocean ring
+    H[x * N + y] = Math.max(4, Math.min(NZ - 8, Math.round(h)));
+  }
+
+const inBounds = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+
+// dungeon sites: the deepest picks first. A site costs the ground it would
+// have to raise (average voxels) plus a little for straying from the anchor.
+for (const d of [...DUNGEONS].sort((a, b) => b.levels - a.levels)) {
+  const need = d.topVox + COVER, C = d.cells, W1 = N + 1;
+  const P = new Float64Array(W1 * W1), Q = new Float64Array(W1 * W1);
+  for (let x = 0; x < N; x++)
+    for (let y = 0; y < N; y++) {
+      const h = H[x * N + y], i = (x + 1) * W1 + y + 1;
+      P[i] = Math.max(0, need - h) + P[x * W1 + y + 1] + P[i - 1] - P[x * W1 + y];
+      Q[i] = (h <= SEA + 4 ? 1 : 0) + Q[x * W1 + y + 1] + Q[i - 1] - Q[x * W1 + y];
+    }
+  const sum = (A, fx, fy) => A[(fx + C) * W1 + fy + C] - A[fx * W1 + fy + C] - A[(fx + C) * W1 + fy] + A[fx * W1 + fy];
+  let best = null;
+  for (let fx = 24; fx + C < N - 24; fx += 2)
+    for (let fy = 24; fy + C < N - 24; fy += 2) {
+      const cx = fx + C / 2, cy = fy + C / 2;
+      if (sum(Q, fx, fy) > 0) continue; // all dry land
+      if (Math.max(Math.abs(TOWN_PIN.fx + TOWN_CELLS / 2 - cx), Math.abs(TOWN_PIN.fy + TOWN_CELLS / 2 - cy)) < (C + TOWN_CELLS) / 2 + RAISE_BLEND + 16) continue;
+      if (DUNGEONS.some(o => o !== d && o.fx !== undefined && Math.max(Math.abs(o.fx + o.cells / 2 - cx), Math.abs(o.fy + o.cells / 2 - cy)) < C + 2 * RAISE_BLEND)) continue;
+      const away = Math.hypot(cx - d.anchor[0], cy - d.anchor[1]);
+      if (away > 60 * K) continue; // stay at its place up the island (difficulty order)
+      const score = sum(P, fx, fy) / (C * C) + 0.15 * away;
+      if (!best || score < best.score) best = { fx, fy, score, raise: sum(P, fx, fy) / (C * C) };
+    }
+  if (!best) throw new Error(`no site for ${d.name}`);
+  Object.assign(d, { fx: best.fx, fy: best.fy, raise: Math.round(best.raise * 10) / 10 });
+  d.origin = [X0 + d.fx * CELL, Y0 + d.fy * CELL, BASE_VOX * VZ];
+  console.error(`${d.name}: site cells ${d.fx},${d.fy} (anchor ${d.anchor.map(Math.round)}), ground raised ${d.raise} voxels on average`);
+  // swell the ground over it where it is too low, fading out over RAISE_BLEND
+  for (let x = d.fx - RAISE_BLEND; x < d.fx + C + RAISE_BLEND; x++)
+    for (let y = d.fy - RAISE_BLEND; y < d.fy + C + RAISE_BLEND; y++) {
+      if (!inBounds(x, y)) continue;
+      const fd = footDist(d, x, y), i = x * N + y;
+      const top = need + Math.round(fbm2((X0 + x * CELL) / 700 + d.seed % 97, (Y0 + y * CELL) / 700, 3) * 3);
+      const target = fd <= 2 ? Math.max(d.topVox + 1, top) : lerp(top, H[i], smooth(2, RAISE_BLEND, fd));
+      H[i] = Math.max(H[i], Math.round(target));
+    }
+}
+
+// entrance trenches: a pit (two cells round the stairwell) down to the roof, then a
+// cutting 3 cells wide to the nearest side of the footprint and on out,
+// its floor climbing a brick per cell until it meets the ground
+const trenchCell = new Uint8Array(N * N);
+for (const d of DUNGEONS) {
+  const [ex0, ey0, ex1, ey1] = d.out.entrance, C = d.cells;
+  const px0 = d.fx + Math.floor(ex0 / CELL) - 2, py0 = d.fy + Math.floor(ey0 / CELL) - 2;
+  const px1 = d.fx + Math.floor((ex1 - 1) / CELL) + 2, py1 = d.fy + Math.floor((ey1 - 1) / CELL) + 2;
+  const roof = d.topVox - 1; // a column with H = roof and nothing in it shows the roof
+  const cut = (x, y, h) => { if (inBounds(x, y) && H[x * N + y] > h) H[x * N + y] = h; if (inBounds(x, y)) trenchCell[x * N + y] = 1; };
+  for (let x = px0; x <= px1; x++) for (let y = py0; y <= py1; y++) cut(x, y, roof);
+  const mx = Math.round((px0 + px1) / 2), my = Math.round((py0 + py1) / 2);
+  const ways = [[-1, 0, px0 - d.fx], [1, 0, d.fx + C - 1 - px1], [0, -1, py0 - d.fy], [0, 1, d.fy + C - 1 - py1]];
+  const [dx, dy] = ways.sort((a, b) => a[2] - b[2])[0];
+  let x = dx ? (dx < 0 ? px0 : px1) : mx, y = dy ? (dy < 0 ? py0 : py1) : my;
+  for (let k = 0; k < 160; k++) {
+    x += dx; y += dy;
+    const out = footDist(d, x, y) > 0 ? footDist(d, x, y) : 0;
+    const floor = roof + out;
+    const side = [-1, 0, 1].map(l => [x + dy * l, y + dx * l]);
+    if (out > 0 && side.every(([sx, sy]) => !inBounds(sx, sy) || H[sx * N + sy] <= floor)) break;
+    for (const [sx, sy] of side) cut(sx, sy, floor);
+    d.mouth = [x, y];
+  }
+}
+
+
+// ------------------------------------------------------------------- town --
+// The spawn hub: the flattest dryish square near the island centre, clear of the
+// dungeons, flattened like a dungeon plaza and paved. Dirt paths run from it
+// to each dungeon. Buildings are added with the decor.
+const TOWN = { cells: TOWN_CELLS, blend: 16 };
+// The town is pinned where it was first built (the manor, shops and players'
+// builds stand in it); the search below is how that spot was found.
+const town = TOWN_PIN ?? (() => {
+  let best = null;
+  const C = TOWN.cells;
+  for (let fx = 20; fx + C < N - 20; fx += 4)
+    for (let fy = 20; fy + C < N - 20; fy += 4) {
+      const mx = fx + C / 2, my = fy + C / 2;
+      if (DUNGEONS.some(d => Math.max(Math.abs(d.fx + d.cells / 2 - mx), Math.abs(d.fy + d.cells / 2 - my)) < (d.cells + C) / 2 + RAISE_BLEND + TOWN.blend)) continue;
+      let lo = Infinity, hi = -Infinity, sum = 0;
+      for (let x = fx; x < fx + C; x++) for (let y = fy; y < fy + C; y++) {
+        const h = H[x * N + y];
+        lo = Math.min(lo, h); hi = Math.max(hi, h); sum += h;
+      }
+      // flattening fills ponds, so only the average has to clear the shore
+      if (sum / (C * C) <= SEA + 6) continue;
+      const score = hi - lo + Math.hypot(mx - N / 2, my - N / 2) * 0.25;
+      if (!best || score < best.score) best = { fx, fy, h: Math.round(sum / (C * C)), score };
+    }
+  if (!best) throw new Error('no dry flat site for the town');
+  return best;
+})();
+const townDist = (x, y) =>
+  Math.max(town.fx - x, x - (town.fx + TOWN.cells - 1), town.fy - y, y - (town.fy + TOWN.cells - 1));
+// the town's own rnd (the same hash build() gets), and its plan: paths, plaza,
+// exits (town.mjs planTown). Only the plan's cells are flattened (a ragged
+// disc plus the paths out to the exits); the rest of the square keeps its
+// ground, blended toward the town over TOWN.blend cells.
+const townRnd = (a, b = 0, c = 0) => hash(a + 7919, b, c);
+const townPlan = planTown(townRnd);
+const townKind = new Uint8Array(N * N);   // 0 natural, 1 grass lot, 2 paved (path / plaza)
+const townNear = new Uint8Array(N * N);   // within 2 cells of the flattened town
+{
+  const B = TOWN.blend, x0 = town.fx - B, y0 = town.fy - B, S = TOWN.cells + 2 * B;
+  const dist = new Float32Array(S * S).fill(Infinity), queue = [];
+  for (let x = town.fx; x < town.fx + TOWN.cells; x++)
+    for (let y = town.fy; y < town.fy + TOWN.cells; y++) {
+      const k = townSurface((x - town.fx - TOWN.cells / 2 + 0.5) * CELL, (y - town.fy - TOWN.cells / 2 + 0.5) * CELL, townPlan);
+      if (!k || !inBounds(x, y)) continue;
+      townKind[x * N + y] = k === 'lot' ? 1 : 2;
+      dist[(x - x0) * S + (y - y0)] = 0; queue.push([x - x0, y - y0]);
+    }
+  // multi-source BFS (8-neighbour, diagonal 1.41) for the blend distance
+  for (let qi = 0; qi < queue.length; qi++) {
+    const [a, b] = queue[qi], d0 = dist[a * S + b];
+    for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const na = a + da, nb = b + db; if (na < 0 || nb < 0 || na >= S || nb >= S) continue;
+      const nd = d0 + (da && db ? 1.41 : 1);
+      if (nd < dist[na * S + nb] && nd < B) { dist[na * S + nb] = nd; queue.push([na, nb]); }
+    }
+  }
+  for (let a = 0; a < S; a++)
+    for (let b = 0; b < S; b++) {
+      const d = dist[a * S + b], x = a + x0, y = b + y0;
+      if (!inBounds(x, y) || d === Infinity) continue;
+      if (d <= 2) townNear[x * N + y] = 1;
+      H[x * N + y] = d === 0 ? town.h : Math.round(lerp(town.h, H[x * N + y], smooth(0, B, d)));
+    }
+}
+
+// ------------------------------------------------------------------ river --
+// (owner 2026-10-05: "make this river big and long and goes through the
+// world") One river from the far mountains down the island, through the town
+// along RIVER_LOCAL, out to the sea behind it. Its water level only falls on
+// the way down (rapids where it drops), equals the town's (a brick under the
+// paving) through town, and never sinks below the sea. The bed is carved
+// RIVER.depth under the level; the banks are levelled to a brick above it and
+// rise a brick per cell; where the ground is lower it is built up into a
+// levee. The water is glass with collision off (you wade), down to the sea
+// plane, where the game's water takes over. Roads crossing it get bridges.
+const RIVER = { rw: 3 + K, bank: 12, depth: 2 };
+const riverCell = new Uint8Array(N * N), riverLevel = new Int16Array(N * N), riverBankL = new Int16Array(N * N).fill(-999);
+const riverLevelNear = (x, y) => riverBankL[x * N + y];
+const keepOut = new Uint8Array(N * N);   // no trees, plants, boulders, caves, outposts (river, banks, bridges)
+const noSmooth = new Uint8Array(N * N);  // no smoothing pieces (river water, bridge decks)
+const riverRiver = (() => {
+  const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2;
+  const halfAt = t => { const s = spine.sTown + t * (spine.L - spine.sTown); return (spine.pts.find(q => q[2] >= s) ?? spine.pts[spine.pts.length - 1])[3]; };
+  const clearOf = p => DUNGEONS.every(d => footDist(d, Math.round(p[0]), Math.round(p[1])) > RIVER.rw + RIVER.bank + RAISE_BLEND);
+  const way = [];
+  for (const t of [0.97, 0.88, 0.78, 0.68, 0.58, 0.48, 0.38, 0.28, 0.18, 0.09]) {
+    let got = null;
+    for (const side of [1, -1]) { for (const f of [0.45, 0.3, 0.6, 0.15, 0.75]) { const q = spineAt(t, side * f * halfAt(t)); if (clearOf(q)) { got = q; break; } } if (got) break; }
+    if (got) way.push(got);
+  }
+  for (const [ux, uy] of RIVER_LOCAL) way.push([tx + ux / CELL, ty + uy / CELL]);
+  for (const [a, b] of [[-95, -45], [-170, -95], [-260, -150], [-360, -210]]) way.push([tx + a * K, ty + b * K]);
+  // dense centre line (Catmull-Rom), swung by a meander that fades out in town
+  const raw = [];
+  for (let i = 0; i + 1 < way.length; i++) {
+    const p0 = way[Math.max(0, i - 1)], p1 = way[i], p2 = way[i + 1], p3 = way[Math.min(way.length - 1, i + 2)];
+    const n = Math.max(1, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1])));
+    for (let k = 0; k < n; k++) {
+      const f = k / n, cr = j => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * f + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * f * f + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * f * f * f);
+      raw.push([cr(0), cr(1)]);
+    }
+  }
+  const pts = [];
+  let s = 0;
+  for (let i = 0; i < raw.length; i++) {
+    if (i) s += Math.hypot(raw[i][0] - raw[i - 1][0], raw[i][1] - raw[i - 1][1]);
+    const q = raw[Math.min(raw.length - 1, i + 1)], o = raw[Math.max(0, i - 1)], tl = Math.hypot(q[0] - o[0], q[1] - o[1]) || 1;
+    const inTown = Math.max(0, 1 - Math.max(0, townDist(Math.round(raw[i][0]), Math.round(raw[i][1]))) / 25);
+    const m = (4 * Math.sin(s / 37) + 2 * Math.sin(s / 13 + 1)) * K * (1 - inTown);
+    const x = raw[i][0] - ((q[1] - o[1]) / tl) * m, y = raw[i][1] + ((q[0] - o[0]) / tl) * m;
+    if (!inBounds(Math.round(x), Math.round(y))) break;
+    pts.push([x, y]);
+  }
+  // levels: lowest ground across the channel, falling only, pinned to the town
+  const townL = town.h - 1, rw = RIVER.rw;
+  const ground = pts.map(([x, y]) => {
+    let g = Infinity;
+    for (let a = -rw; a <= rw; a++) for (let b = -rw; b <= rw; b++) {
+      if (a * a + b * b > rw * rw) continue;
+      const cx = Math.round(x) + a, cy = Math.round(y) + b;
+      if (inBounds(cx, cy)) g = Math.min(g, H[cx * N + cy]);
+    }
+    return g;
+  });
+  const inT = pts.map(([x, y]) => townDist(Math.round(x), Math.round(y)) <= 0);
+  const firstT = inT.indexOf(true), lastT = inT.lastIndexOf(true);
+  const L = new Array(pts.length);
+  for (let i = 0; i < pts.length; i++) {
+    if (inT[i]) { L[i] = townL; continue; }
+    const prev = i ? L[i - 1] : ground[0] - 1;
+    L[i] = Math.min(prev, ground[i] - 1);
+    if (firstT >= 0 && i < firstT) L[i] = Math.max(L[i], townL);  // upstream never below the town
+    L[i] = Math.max(L[i], SEA - 1);
+  }
+  // stop a little way into the sea
+  let end = pts.length;
+  for (let i = Math.max(0, lastT) + 1, wet = 0; i < pts.length; i++) { wet = ground[i] <= SEA - 2 ? wet + 1 : 0; if (wet > 6) { end = i; break; } }
+  return { pts: pts.slice(0, end), L: L.slice(0, end) };
+})();
+{
+  const { pts, L } = riverRiver, rw = RIVER.rw, R = rw + RIVER.bank;
+  const best = new Float32Array(N * N).fill(Infinity), idx = new Int32Array(N * N).fill(-1);
+  pts.forEach(([px, py], i) => {
+    for (let x = Math.floor(px - R); x <= Math.ceil(px + R); x++)
+      for (let y = Math.floor(py - R); y <= Math.ceil(py + R); y++) {
+        if (!inBounds(x, y)) continue;
+        const d = Math.hypot(x + 0.5 - px, y + 0.5 - py), c = x * N + y;
+        if (d <= R && d < best[c]) { best[c] = d; idx[c] = i; }
+      }
+  });
+  for (let x = 0; x < N; x++)
+    for (let y = 0; y < N; y++) {
+      const c = x * N + y, d = best[c];
+      if (idx[c] < 0 || DUNGEONS.some(dd => footDist(dd, x, y) <= 2) || trenchCell[c]) continue;
+      const lv = L[idx[c]];
+      riverBankL[c] = lv;
+      if (d <= rw) {
+        riverCell[c] = 1; riverLevel[c] = lv; noSmooth[c] = 1; keepOut[c] = 1;
+        H[c] = Math.min(H[c], lv - RIVER.depth);
+        continue;
+      }
+      if (d <= rw + 2) keepOut[c] = 1;
+      if (townKind[c]) continue; // the town is already level with the banks
+      const target = lv + 1 + Math.floor(d - rw);
+      if (H[c] > target) H[c] = target;
+      if (d <= rw + 3 && H[c] < lv + 1) H[c] = lv + 1;
+    }
+  console.error(`river: ${pts.length} cells long, ${rw * 2} wide, level ${L[0]} -> ${L[L.length - 1]} (town ${town.h - 1})`);
+}
+const riverNear = (cx, cy, r) => {
+  for (let x = cx - r; x <= cx + r; x += 2) for (let y = cy - r; y <= cy + r; y += 2) if (inBounds(x, y) && riverCell[x * N + y]) return true;
+  return false;
+};
+// ------------------------------------------------------------------ swamp --
+// The piss-and-shit swamp: a marsh outside one of the town gates, sunk to sea
+// level so the water plane floods its pools (lily pads on them); the rest is
+// mud with rushes, dead trees and turd piles. Zombies (swamp_zombie_1/2 prefabs) spawn
+// on the mud. A dirt road runs from the gate.
+const SWAMP = { r: Math.round(45 * K), blend: 18 }; // smaller since the island (2026-10-03): it has to fit beside the town
+const swamp = (() => {
+  const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2;
+  let best = null; const why = { far: 0, edge: 0, town: 0, dungeon: 0, water: 0 };
+  for (let cx = 8; cx < N - 8; cx += 5)
+    for (let cy = 8; cy < N - 8; cy += 5) {
+      const d = Math.hypot(cx - tx, cy - ty);
+      if (d > TOWN.cells / 2 + 235 * K) { why.far++; continue; }
+      // the road leaves by the gate facing it
+      const [gx, gy] = Math.abs(cx - tx) >= Math.abs(cy - ty) ? [Math.sign(cx - tx), 0] : [0, Math.sign(cy - ty)];
+      {
+        const R = SWAMP.r + SWAMP.blend;
+        if (cx - R < 8 || cy - R < 8 || cx + R >= N - 8 || cy + R >= N - 8) { why.edge++; continue; } // the sea ring may eat a bit
+        const reach = Math.ceil(R * 1.12); // the noisy edge reaches about 12% further
+        if (townDist(cx, cy) < reach + 4) { why.town++; continue; }
+        if (DUNGEONS.some(dd => footDist(dd, cx, cy) < reach + 6)) { why.dungeon++; continue; }
+        if (riverNear(cx, cy, reach + 4)) { why.dungeon++; continue; }
+        let land = 0, sum = 0, n = 0;
+        for (let x = cx - SWAMP.r; x <= cx + SWAMP.r; x += 3)
+          for (let y = cy - SWAMP.r; y <= cy + SWAMP.r; y += 3) {
+            if (Math.hypot(x - cx, y - cy) > SWAMP.r) continue;
+            const h = H[x * N + y];
+            n++; sum += h; if (h > SEA) land++;
+          }
+        if (land / n < 0.6) { why.water++; continue; } // a marsh, not a bay
+        const score = sum / n + d * 0.15;
+        if (!best || score < best.score) best = { x: cx, y: cy, gate: [gx, gy], score };
+      }
+    }
+  if (!best) throw new Error('no site for the swamp: ' + JSON.stringify(why));
+  return best;
+})();
+const swampCell = new Uint8Array(N * N); // 1 = swamp floor (mud or pool)
+const swampRho = (x, y) => {
+  const wx = X0 + x * CELL, wy = Y0 + y * CELL;
+  return Math.hypot(x - swamp.x, y - swamp.y) * (1 + 0.18 * fbm2(wx / 1800 + 61, wy / 1800 - 23, 3));
+};
+for (let x = swamp.x - SWAMP.r - SWAMP.blend - 12; x <= swamp.x + SWAMP.r + SWAMP.blend + 12; x++)
+  for (let y = swamp.y - SWAMP.r - SWAMP.blend - 12; y <= swamp.y + SWAMP.r + SWAMP.blend + 12; y++) {
+    if (!inBounds(x, y)) continue;
+    const rho = swampRho(x, y);
+    if (rho >= SWAMP.r + SWAMP.blend) continue;
+    const wx = X0 + x * CELL, wy = Y0 + y * CELL;
+    // pools (SEA-3..SEA-1, under the water plane) and mud banks (SEA..SEA+1)
+    const core = SEA - 1 + Math.max(-2, Math.min(2, Math.round(fbm2(wx / 520 + 13, wy / 520 + 71, 3) * 3.2)));
+    if (rho < SWAMP.r) { H[x * N + y] = core; swampCell[x * N + y] = 1; }
+    else H[x * N + y] = Math.round(lerp(core, H[x * N + y], smooth(SWAMP.r, SWAMP.r + SWAMP.blend, rho)));
+  }
+
+// --------------------------------------------------------------- villages --
+// Hamlets round the island (town.mjs lays them out: well, checkpoint, houses
+// round a square), joined to the town and to each other by dirt roads. Four of
+// the six keep a sword shop (the shop_<tier> prefabs): cheap blades near town,
+// the best farthest out, and the hamlets between have none.
+const VILLAGE = { r: 22, blend: 12, count: Math.round(6 * K), core: 5 }; // r: town.mjs VILLAGE_R / 40
+const villages = [];
+{
+  const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2;
+  const R = VILLAGE.r + VILLAGE.blend, cand = [], vwhy = { town: 0, dungeon: 0, swamp: 0, wet: 0, high: 0 };
+  for (let cx = 30; cx < N - 30; cx += 4)
+    for (let cy = 30; cy < N - 30; cy += 4) {
+      if (townDist(cx, cy) < R + TOWN.blend + 10) { vwhy.town++; continue; }
+      if (DUNGEONS.some(d => footDist(d, cx, cy) < R + 6)) { vwhy.dungeon++; continue; }
+      if (Math.hypot(cx - swamp.x, cy - swamp.y) < (SWAMP.r + SWAMP.blend) * 1.12 + R + 10) { vwhy.swamp++; continue; }
+      if (riverNear(cx, cy, R + 4)) { vwhy.wet++; continue; }
+      let lo = Infinity, hi = -Infinity, sum = 0, n = 0;
+      for (let x = cx - VILLAGE.r; x <= cx + VILLAGE.r; x += 2)
+        for (let y = cy - VILLAGE.r; y <= cy + VILLAGE.r; y += 2) {
+          const h = H[x * N + y];
+          lo = Math.min(lo, h); hi = Math.max(hi, h); sum += h; n++;
+        }
+      if (lo <= SEA + 3) { vwhy.wet++; continue; }
+      if (hi > 130) { vwhy.high++; continue; } // dry, and below the bare rock (130: the island is taller since 2026-10-03)
+      cand.push({ x: cx, y: cy, h: Math.round(sum / n), score: hi - lo + hash(cx, cy, 71) * 4 });
+    }
+  cand.sort((a, b) => a.score - b.score);
+  console.error(`villages: ${cand.length} candidate sites ${JSON.stringify(vwhy)}`);
+  for (const c of cand) {
+    if (villages.length >= VILLAGE.count) break;
+    if (villages.some(v => Math.hypot(v.x - c.x, v.y - c.y) < 90 * K)) continue;
+    villages.push(c);
+  }
+  for (const v of villages)
+    for (let x = v.x - R; x <= v.x + R; x++)
+      for (let y = v.y - R; y <= v.y + R; y++) {
+        if (!inBounds(x, y)) continue;
+        const rho = Math.hypot(x - v.x, y - v.y);
+        if (rho <= VILLAGE.r) H[x * N + y] = v.h;
+        else if (rho < R) H[x * N + y] = Math.round(lerp(v.h, H[x * N + y], smooth(VILLAGE.r, R, rho)));
+      }
+  villages.sort((a, b) => Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty));
+  const GROUPS = [['bronze', 'iron'], ['steel'], ['black', 'mithril'], ['adamant', 'rune']];
+  villages.forEach((v, k) => { v.seed = 9000 + k; v.shops = null; });
+  if (villages.length) GROUPS.forEach((g, k) => { villages[Math.round((k * (villages.length - 1)) / (GROUPS.length - 1))].shops = g; });
+}
+const villageDist = (x, y) => villages.reduce((m, v) => Math.min(m, Math.hypot(x - v.x, y - v.y)), Infinity);
+// each hamlet's plan (town.mjs planVillage): cobbled green and herringbone paths
+const villagePaved = new Uint8Array(N * N);
+for (const v of villages) {
+  v.plan = planVillage(v.seed, townRnd);
+  for (let x = v.x - VILLAGE.r; x <= v.x + VILLAGE.r; x++)
+    for (let y = v.y - VILLAGE.r; y <= v.y + VILLAGE.r; y++) {
+      if (!inBounds(x, y)) continue;
+      const k = v.plan.surfaceAt((x - v.x + 0.5) * CELL, (y - v.y + 0.5) * CELL);
+      if (k === 'street' || k === 'square') villagePaved[x * N + y] = 1;
+    }
+}
+
+// ------------------------------------------------------------------ henge --
+// The Evil Wizard's stonehenge (from stonehenge.mjs, 2026-10-03; owner: wizards
+// only, no goblins): the flattest HENGE.n-cell square patch near the anchor,
+// levelled to its mean and blended out over HENGE.blend cells; grass with a
+// trampled earth disc, trilithons on the axes, stones on the diagonals, an
+// inner ring and a glowing rune altar (bricks further down), and three
+// enemy_wizard spawner prefabs (spawners.json).
+const HENGE = { at: (([cx, cy]) => [X0 + cx * CELL, Y0 + cy * CELL])(spineAt(0.8, 55 * K)), n: 17, search: Math.round(60 * K), blend: 5 }; // the wizards, far up the island
+const henge = (() => {
+  const n = HENGE.n, ax = Math.round((HENGE.at[0] - X0) / CELL) - (n >> 1), ay = Math.round((HENGE.at[1] - Y0) / CELL) - (n >> 1);
+  let best = null;
+  for (let x0 = ax - HENGE.search; x0 <= ax + HENGE.search; x0++)
+    for (let y0 = ay - HENGE.search; y0 <= ay + HENGE.search; y0++) {
+      if (x0 < 4 || y0 < 4 || x0 + n > N - 4 || y0 + n > N - 4) continue;
+      let sum = 0, ok = true;
+      for (let i = 0; i < n && ok; i++) for (let j = 0; j < n; j++) {
+        const x = x0 + i, y = y0 + j, h = H[x * N + y];
+        if (h <= SEA + 2 || swampCell[x * N + y] || keepOut[x * N + y] || townDist(x, y) <= TOWN.blend + 4 || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend + 4 ||
+            DUNGEONS.some(d => footDist(d, x, y) <= PLAZA_RING + BLEND + 4)) { ok = false; break; }
+        sum += h;
+      }
+      if (!ok) continue;
+      const mean = sum / (n * n);
+      let dev = 0;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) dev += Math.abs(H[(x0 + i) * N + y0 + j] - mean);
+      const score = dev + Math.hypot(x0 - ax, y0 - ay) * 2;
+      if (!best || score < best.score) best = { x0, y0, n, h: Math.round(mean), score };
+    }
+  if (!best) throw new Error('henge: no site');
+  return best;
+})();
+// --------------------------------------------------------------- outposts --
+// two skeleton spawners every so often up the island, tier 1 near the town to
+// 7 at the far end (dungeon_spawner_<tier> prefabs, spawners.json), on flat
+// open ground; reserved cells keep trees, boulders, plants and caves off them
+const reserved = new Uint8Array(N * N);
+const outposts = [];
+const hengeDistPre = (x, y) => Math.max(henge.x0 - x, x - (henge.x0 + henge.n - 1), henge.y0 - y, y - (henge.y0 + henge.n - 1));
+const OUTPOSTS = Math.round(10 * K);
+for (let k = 0; k < OUTPOSTS; k++) {
+  const t = 0.25 + k * (0.75 / OUTPOSTS), tier = Math.min(7, 1 + Math.floor(((t - 0.25) / 0.7) * 7)); // tier 1 just past the town, 7 at the far end
+  const [ax, ay] = spineAt(t, (k % 2 ? 1 : -1) * (25 + (k % 3) * 12) * K);
+  let best = null;
+  for (let x = Math.round(ax) - 24; x <= Math.round(ax) + 24; x++)
+    for (let y = Math.round(ay) - 24; y <= Math.round(ay) + 24; y++) {
+      if (!inBounds(x - 3, y - 3) || !inBounds(x + 3, y + 3)) continue;
+      const h = H[x * N + y];
+      if (h <= SEA + 2 || swampCell[x * N + y] || keepOut[x * N + y] || townDist(x, y) <= TOWN.blend + 2 || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend ||
+          DUNGEONS.some(d => footDist(d, x, y) <= PLAZA_RING + BLEND) || hengeDistPre(x, y) <= HENGE.blend + 3) continue;
+      // no neighbour higher (so no smoothing piece lands in this cell) and gentle round it
+      let flat = true;
+      for (let dx = -1; dx <= 1 && flat; dx++) for (let dy = -1; dy <= 1; dy++) { const g = H[(x + dx) * N + y + dy]; if (g > h || h - g > 2) { flat = false; break; } }
+      if (!flat) continue;
+      const d = Math.hypot(x - ax, y - ay);
+      if (!best || d < best.d) best = { x, y, h, d };
+    }
+  if (!best) { console.error(`outpost ${k} (t ${t.toFixed(2)}) found no flat open ground near ${Math.round(ax)},${Math.round(ay)}`); continue; }
+  outposts.push({ ...best, tier, t });
+  for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) reserved[(best.x + dx) * N + best.y + dy] = 1;
+}
+console.error(`outposts: ${outposts.map(o => 'T' + o.tier).join(' ')}`);
+const hengeDist = (x, y) => Math.max(henge.x0 - x, x - (henge.x0 + henge.n - 1), henge.y0 - y, y - (henge.y0 + henge.n - 1));
+for (let x = henge.x0 - HENGE.blend; x < henge.x0 + henge.n + HENGE.blend; x++)
+  for (let y = henge.y0 - HENGE.blend; y < henge.y0 + henge.n + HENGE.blend; y++) {
+    if (!inBounds(x, y)) continue;
+    const fd = hengeDist(x, y);
+    if (fd <= 0) H[x * N + y] = henge.h;
+    else if (fd < HENGE.blend) H[x * N + y] = Math.round(lerp(henge.h, H[x * N + y], smooth(0, HENGE.blend, fd)));
+  }
+console.error(`henge: site cells ${henge.x0},${henge.y0}, ground ${henge.h}`);
+
+const pathCell = new Uint8Array(N * N);
+{
+  const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2;
+  // wobble = false for straight leads (out of a gate, into a hamlet)
+  const road = (sx, sy, dx, dy, stop, wobble = true) => {
+    const steps = Math.ceil(Math.hypot(dx - sx, dy - sy) * 2);
+    for (let k = 0; k <= steps; k++) {
+      const w = wobble ? Math.min(1, k / 12, (steps - k) / 12) : 0; // wobble fades in/out at the ends
+      const px = sx + ((dx - sx) * k) / steps + Math.sin(k / 9) * 2 * w, py = sy + ((dy - sy) * k) / steps + Math.cos(k / 11) * 2 * w;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const x = Math.round(px) + a, y = Math.round(py) + b;
+        if (inBounds(x, y) && townDist(x, y) > 0 && !stop(x, y)) pathCell[x * N + y] = 1;
+      }
+    }
+  };
+  // town gates (mid-wall, town.mjs): every road from town leaves through one,
+  // straight out for LEAD cells before it starts to wander
+  const LEAD = 8;
+  const gates = townPlan.exits.map(({ dir: [a, b], at }) => {
+    const edge = [tx + at[0] / CELL + a, ty + at[1] / CELL + b];
+    return { dir: [a, b], edge, out: [edge[0] + a * LEAD, edge[1] + b * LEAD] };
+  });
+  const nearestGate = (x, y) => gates.reduce((p, q) => (Math.hypot(q.out[0] - x, q.out[1] - y) < Math.hypot(p.out[0] - x, p.out[1] - y) ? q : p));
+  const leadOut = (g, stop) => road(g.edge[0], g.edge[1], g.out[0], g.out[1], stop, false);
+  for (const d of DUNGEONS) {
+    const stop = (x, y) => trenchCell[x * N + y] === 1 || footDist(d, x, y) <= 0;
+    const g = nearestGate(d.mouth[0], d.mouth[1]);
+    leadOut(g, stop);
+    road(g.out[0], g.out[1], d.mouth[0], d.mouth[1], stop);
+  }
+  // the swamp road leaves by its gate
+  {
+    const stop = (x, y) => swampCell[x * N + y] === 1;
+    const g = gates.find(q => q.dir[0] === swamp.gate[0] && q.dir[1] === swamp.gate[1]);
+    leadOut(g, stop);
+    road(g.out[0], g.out[1], swamp.x, swamp.y, stop);
+  }
+  // hamlets: each joins the nearest town exit or hamlet already joined, and
+  // runs into the end of the hamlet path facing it (town.mjs planVillage)
+  const ends = gates.map(g => ({ at: g.out, gate: g }));
+  for (const v of villages) {
+    const from = ends.reduce((p, q) => (Math.hypot(q.at[0] - v.x, q.at[1] - v.y) < Math.hypot(p.at[0] - v.x, p.at[1] - v.y) ? q : p));
+    const spoke = v.plan.spokes.reduce((p, q) => (Math.hypot(v.x + q.end[0] / CELL - from.at[0], v.y + q.end[1] / CELL - from.at[1]) < Math.hypot(v.x + p.end[0] / CELL - from.at[0], v.y + p.end[1] / CELL - from.at[1]) ? q : p));
+    const tip = [v.x + spoke.end[0] / CELL, v.y + spoke.end[1] / CELL];
+    const stop = (x, y) => villageDist(x, y) <= VILLAGE.r - 1.5 || swampCell[x * N + y] === 1 || DUNGEONS.some(d => footDist(d, x, y) <= 0);
+    if (from.gate) leadOut(from.gate, stop);
+    road(from.at[0], from.at[1], tip[0], tip[1], stop);
+    ends.push({ at: [v.x + spoke.end[0] / CELL * 1.15, v.y + spoke.end[1] / CELL * 1.15] });
+  }
+}
+
+// ---------------------------------------------------------------- bridges --
+// (owner 2026-10-05: "make bridges spawn over paths with bodies of water")
+// every road cell over water (the river, or ground under the sea plane) gets a
+// plank deck flush with the bank (river: level + 2, sea: SEA + 2 bricks up),
+// and a low rail on each edge that faces open water
+const deck = new Int16Array(N * N); // deck top (units), 0 = none
+{
+  for (let x = 0; x < N; x++)
+    for (let y = 0; y < N; y++) {
+      const c = x * N + y;
+      if (!pathCell[c]) continue;
+      if (riverCell[c]) deck[c] = (riverLevel[c] + 2) * VZ;
+      else if (H[c] <= SEA) deck[c] = (SEA + 2) * VZ;
+      if (deck[c]) { keepOut[c] = 1; noSmooth[c] = 1; }
+    }
+}
+
+// ----------------------------------------------------------------- voxels --
+const V = new Uint8Array(N * N * NZ);
+const vi = (x, y, z) => (x * N + y) * NZ + z;
+const inMap = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+const hAt = (x, y) => H[Math.min(N - 1, Math.max(0, x)) * N + Math.min(N - 1, Math.max(0, y))];
+
+// ----------------------------------------------------------------- desert --
+// A desert biome (2026-10-03): the flattest broad stretch of land well away
+// from the town and the swamp. Surface only (the terrain keeps its shape, so
+// nothing else moves): dune sand, red mesa rock on slopes and peaks, a dry-grass
+// fringe; cacti and dead scrub instead of trees and flowers. Villages inside it
+// get western houses (town.mjs, village.desert).
+const DESERT = { r: Math.round(80 * K), blend: 26 };
+const desert = (() => {
+  const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2;
+  let best = null;
+  for (let cx = DESERT.r; cx < N - DESERT.r; cx += 8)
+    for (let cy = DESERT.r; cy < N - DESERT.r; cy += 8) {
+      if (Math.hypot(cx - tx, cy - ty) < TOWN.cells / 2 + DESERT.r + 40 * K) continue;
+      if (Math.hypot(cx - swamp.x, cy - swamp.y) < SWAMP.r + SWAMP.blend + DESERT.r + DESERT.blend) continue;
+      let land = 0, n = 0, sum = 0, sq = 0;
+      for (let x = cx - DESERT.r; x <= cx + DESERT.r; x += 4)
+        for (let y = cy - DESERT.r; y <= cy + DESERT.r; y += 4) {
+          if (Math.hypot(x - cx, y - cy) > DESERT.r) continue;
+          const h = H[x * N + y]; n++;
+          if (h > SEA + 1) { land++; sum += h; sq += h * h; }
+        }
+      if (land / n < 0.85) continue;
+      const mean = sum / land, sd = Math.sqrt(Math.max(0, sq / land - mean * mean));
+      const score = sd + mean * 0.1;
+      if (!best || score < best.score) best = { x: cx, y: cy, score };
+    }
+  if (!best) throw new Error('no site for the desert');
+  return best;
+})();
+const desertW = (x, y) => {
+  const wx = X0 + x * CELL, wy = Y0 + y * CELL;
+  const rho = Math.hypot(x - desert.x, y - desert.y) * (1 + 0.2 * fbm2(wx / 2200 - 41, wy / 2200 + 17, 3));
+  return 1 - smooth(DESERT.r - DESERT.blend / 2, DESERT.r + DESERT.blend / 2, rho);
+};
+for (const v of villages) v.desert = desertW(v.x, v.y) > 0.5;
+
+for (let x = 0; x < N; x++)
+  for (let y = 0; y < N; y++) {
+    const h = H[x * N + y];
+    const wx = X0 + x * CELL, wy = Y0 + y * CELL;
+    let slope = 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) slope = Math.max(slope, Math.abs(hAt(x + dx, y + dy) - h));
+    const shade = Math.floor((fbm2(wx / 900 + 7, wy / 900, 2) + 1) * 1.5) % 3;
+    const nearWater = h <= SEA + 1;
+    let dw = 0;
+    const plaza = false; // dungeons are buried now: no paved plazas
+    let top, sub;
+    if (plaza) [top, sub] = [PLAZA, STONE];
+    else if (riverCell[x * N + y]) [top, sub] = [GRAVEL, STONE];
+    else if (villagePaved[x * N + y]) [top, sub] = [COBBLE, STONE];
+    else if (swampCell[x * N + y]) [top, sub] = [h < SEA ? POOL_BED : fbm2(wx / 300 + 5, wy / 300) > 0.1 ? MUCK : MUD, MUD];
+    else if (townKind[x * N + y]) [top, sub] = townKind[x * N + y] === 1 ? [GRASS[shade], DIRT] : [COBBLE, STONE];
+    else if (keepOut[x * N + y] && !pathCell[x * N + y] && h <= riverLevelNear(x, y) + 1) [top, sub] = [SAND, DIRT];
+    else if (hengeDist(x, y) <= 0) [top, sub] = [Math.hypot(x - henge.x0 - (henge.n >> 1), y - henge.y0 - (henge.n >> 1)) < 6.5 ? DIRT : GRASS[shade], DIRT];
+    else if (pathCell[x * N + y] && h > SEA + 1 && slope < 4) [top, sub] = [PATH, DIRT];
+    else if (h < SEA - 1) [top, sub] = [h < SEA - 6 ? GRAVEL : SAND, SAND];
+    else if (nearWater) [top, sub] = [SAND, SAND];
+    else if ((dw = desertW(x, y)) > 0.55 || (dw > 0.3 && hash(x, y, 77) < (dw - 0.3) / 0.25))
+      [top, sub] = slope >= 4 || h > 96 ? [MESA[shade & 1], MESA[shade & 1]] : [DUNE[shade & 1], DUNE[0]];
+    else if (dw > 0.12 && hash(x, y, 78) < (dw - 0.12) / 0.2 && slope < 4 && h <= 96) [top, sub] = [DRYGRASS, DIRT];
+    else if (h > 118 + noise2(wx / 400, wy / 400) * 8) [top, sub] = [SNOW, ROCK[0]];
+    else if (slope >= 4 || h > 96) [top, sub] = [ROCK[shade & 1], ROCK[shade & 1]];
+    else [top, sub] = [GRASS[shade], DIRT];
+    surfaceMat[x * N + y] = top;
+    for (let z = 0; z <= h; z++) {
+      let m;
+      if (z < 2) m = BEDROCK;
+      else if (z === h) m = top;
+      else if (z >= h - 3) m = sub;
+      else if (z < 20) m = DEEP;
+      else m = STONE;
+      V[vi(x, y, z)] = m;
+    }
+    // no water bricks: the environment water plane fills the sea
+  }
+
+// ------------------------------------------------------------------ caves --
+// Zelda-style caves: a dark doorway cut into a cliff face, a short passage,
+// and one room inside the mountain. A site is a walkable cell at the foot of
+// a cliff with enough rock behind it for the passage and room plus a thick
+// roof. Rooms are lit by two fires and hold either an old man with a sword
+// or a treasure chest.
+// Since 2026-10-03 (owner: "more intricate") the room is an irregular blob up
+// to 9 cells across under a domed ceiling, with a raised ledge at the back (a
+// 1-brick step up), a couple of low side alcoves and a natural rock pillar;
+// the interior pass adds stalactites, stalagmites and glowing crystals.
+const CAVE = { door: 8, cover: 3, R: 4, depth: 3, max: Math.round(10 * K * K), spacing: Math.round(34 * K) };
+const caves = [];
+let carved = 0;
+{
+  // cells of a cave at door cell (x, y) facing into the hill along (dx, dy):
+  // [cx, cy, t (open voxels above the base), raise (floor voxels kept), k, l, role]
+  const cellsOf = (x, y, dx, dy) => {
+    const out = [], R = CAVE.R, kc = CAVE.depth + R - 1;
+    const ph = [0, 1, 2].map(i => hash(x, y, 300 + i) * Math.PI * 2), amp = [0, 1, 2].map(i => 0.12 + 0.1 * hash(x, y, 310 + i));
+    const rad = a => R * (0.78 + amp[0] * Math.sin(2 * a + ph[0]) + amp[1] * Math.sin(3 * a + ph[1]) + amp[2] * Math.sin(5 * a + ph[2]));
+    const P = (k, l) => [x + dx * k - dy * l, y + dy * k + dx * l];
+    for (let k = 1; k < CAVE.depth; k++) out.push([...P(k, 0), CAVE.door, 0, k, 0, 'passage']);
+    const pillarSide = hash(x, y, 320) < 0.5 ? -1 : 1, pillar = hash(x, y, 321) < 0.7 ? [kc + 1, pillarSide * 2] : null;
+    for (let k = CAVE.depth; k <= kc + R + 1; k++)
+      for (let l = -R - 1; l <= R + 1; l++) {
+        const u = k - kc, d = Math.hypot(u, l), r = rad(Math.atan2(l, u));
+        const spine = l === 0 && k <= kc;
+        if (d > r && !spine) continue;
+        if (pillar && k === pillar[0] && l === pillar[1]) continue; // rock left standing
+        const t = Math.max(CAVE.door + 1, Math.round(9 + 5 * (1 - d / Math.max(r, 1))));
+        const raise = u > r * 0.35 ? 1 : 0;
+        out.push([...P(k, l), t, raise, k, l, 'room']);
+      }
+    // two low alcoves off the sides, just past the room's rim
+    const has = (k, l) => out.some(e => e[4] === k && e[5] === l);
+    for (const sg of [-1, 1]) {
+      const k = kc + Math.round((hash(x, y, 330 + sg) - 0.5) * 2);
+      let l = 0;
+      while (has(k, l) && Math.abs(l) <= R + 1) l += sg;
+      if (Math.abs(l) > R + 1 || !has(k, l - sg)) continue;
+      out.push([...P(k, l), 6, 0, k, l, 'alcove']);
+      if (hash(x, y, 340 + sg) < 0.6 && !has(k + 1, l)) out.push([...P(k + 1, l), 5, 0, k + 1, l, 'alcove']);
+    }
+    return out;
+  };
+  const sites = [];
+  for (let x = 4; x < N - 4; x++)
+    for (let y = 4; y < N - 4; y++) {
+      const h = H[x * N + y];
+      if (h <= SEA + 1 || !GRASS.includes(surfaceMat[x * N + y]) && !ROCK.includes(surfaceMat[x * N + y])) continue;
+      if (DUNGEONS.some(d => footDist(d, x, y) <= PLAZA_RING + BLEND) || keepOut[x * N + y] || townDist(x, y) <= TOWN.blend || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend || hengeDist(x, y) <= HENGE.blend + 12 || reserved[x * N + y]) continue;
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        if (hAt(x - dx, y - dy) > h + 1) continue; // open ground in front of the door
+        const cells = cellsOf(x, y, dx, dy);
+        // the room must sit under real hillside; the passage gets a built rock facade
+        if (cells.every(([cx, cy, t, , , , role]) => inMap(cx, cy) && (role === 'passage' || H[cx * N + cy] >= h + t + CAVE.cover) &&
+            H[cx * N + cy] >= h + 2 &&
+            townDist(cx, cy) > TOWN.blend && !DUNGEONS.some(d => footDist(d, cx, cy) <= PLAZA_RING)))
+          sites.push({ x, y, dx, dy, h, r: hash(x, y, 77) });
+      }
+    }
+  sites.sort((p, q) => p.r - q.r);
+  for (const s of sites) {
+    if (caves.length >= CAVE.max) break;
+    if (caves.some(c => Math.hypot(c.x - s.x, c.y - s.y) < CAVE.spacing)) continue;
+    caves.push(s);
+    // facade: the passage cells and their neighbours rise into a rock face
+    for (let k = 1; k < CAVE.depth; k++)
+      for (let l = -2; l <= 2; l++) {
+        const cx = s.x + s.dx * k - s.dy * l, cy = s.y + s.dy * k + s.dx * l;
+        const top = s.h + CAVE.door + 3 - (Math.abs(l) === 2 ? 2 : 0);
+        for (let z = H[cx * N + cy] + 1; z <= top; z++) V[vi(cx, cy, z)] = ROCK[(k + l) & 1];
+        if (H[cx * N + cy] < top) { H[cx * N + cy] = top; surfaceMat[cx * N + cy] = ROCK[(k + l) & 1]; }
+      }
+    s.cells = cellsOf(s.x, s.y, s.dx, s.dy);
+    for (const [cx, cy, t, raise] of s.cells) {
+      for (let z = s.h + 1 + raise; z <= s.h + t; z++) { V[vi(cx, cy, z)] = 0; carved++; }
+      V[vi(cx, cy, s.h + raise)] = GRAVEL;
+    }
+  }
+  console.error(`caves: ${caves.length} of ${sites.length} candidate sites`);
+}
+
+// clear the dungeon volumes (the ground over them stays); rock fill comes from the plan
+for (const d of DUNGEONS)
+  for (let x = d.fx; x < d.fx + d.cells; x++)
+    for (let y = d.fy; y < d.fy + d.cells; y++)
+      for (let z = BASE_VOX; z < d.topVox; z++) V[vi(x, y, z)] = 0;
+
+// --------------------------------------------------------- greedy meshing --
+const bricks = [];
+const pushBox = (m, x0, y0, z0, x1, y1, z1) => {
+  // voxel box [x0,x1) x [y0,y1) x [z0,z1)
+  const M = MATS[m];
+  bricks.push({
+    position: [X0 + ((x0 + x1) / 2) * CELL, Y0 + ((y0 + y1) / 2) * CELL, ((z0 + z1) / 2) * VZ],
+    size: [((x1 - x0) * CELL) / 2, ((y1 - y0) * CELL) / 2, ((z1 - z0) * VZ) / 2],
+    color: M.color,
+    ...(M.asset ? { asset: M.asset } : {}),
+    ...(M.material ? { material: M.material } : {}),
+    ...(M.intensity ? { material_intensity: M.intensity } : {}),
+  });
+};
+const paved = new Map(); // top z -> Set of 'studX,studY' (global stud cells)
+const PAVE_BED = mat([128, 122, 112]);
+{
+  const done = new Uint8Array(V.length);
+  for (let z = 0; z < NZ; z++)
+    for (let x = 0; x < N; x++)
+      for (let y = 0; y < N; y++) {
+        const i = vi(x, y, z);
+        const m = V[i];
+        if (!m || done[i]) continue;
+        const free = (X, Y, Z) => V[vi(X, Y, Z)] === m && !done[vi(X, Y, Z)];
+        let w = 1;
+        while (x + w < N && w < MAX_H_CELLS && free(x + w, y, z)) w++;
+        let l = 1;
+        grow: while (y + l < N && l < MAX_H_CELLS) {
+          for (let a = 0; a < w; a++) if (!free(x + a, y + l, z)) break grow;
+          l++;
+        }
+        let h = 1;
+        grow2: while (z + h < NZ && h < MAX_Z_VOX) {
+          for (let a = 0; a < w; a++) for (let b = 0; b < l; b++) if (!free(x + a, y + b, z + h)) break grow2;
+          h++;
+        }
+        for (let a = 0; a < w; a++) for (let b = 0; b < l; b++) for (let c = 0; c < h; c++) done[vi(x + a, y + b, z + c)] = 1;
+        if (m === COBBLE) {
+          // paved (town streets and square, hamlet cores): an 8-high bed, the
+          // top plate is herringbone pavers laid below
+          pushBox(PAVE_BED, x, y, z, x + w, y + l, z + h);
+          const bed = bricks[bricks.length - 1];
+          bed.position[2] -= 2; bed.size[2] -= 2;
+          const top = (z + h) * VZ;
+          const set = paved.get(top) ?? paved.set(top, new Set()).get(top);
+          for (let a = x * 4; a < (x + w) * 4; a++) for (let b = y * 4; b < (y + l) * 4; b++) set.add(a + ',' + b);
+        } else pushBox(m, x, y, z, x + w, y + l, z + h);
+      }
+}
+// herringbone pavers (owner 2026-10-04): 1 x 2-stud tiles on the global stud
+// grid (wallgen's herringboneRects), a few stone tones
+{
+  // style 'paving' in floors.mjs; pick keeps the live layout's tones
+  for (const [top, cells] of paved)
+    for (const r of floorPieces(cells, 'paving', { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 91) * C.length)] }))
+      bricks.push({
+        asset: r.brick.asset, position: [X0 + ((r.x0 + r.x1) / 2) * 10, Y0 + ((r.y0 + r.y1) / 2) * 10, top - 2],
+        size: [(r.x1 - r.x0) * 5, (r.y1 - r.y0) * 5, 2], color: r.brick.color,
+      });
+}
+const terrainCount = bricks.length;
+
+// Enemy spawners: the 7 skeleton Bot Spawn Points built in-game, saved on the
+// server as prefabs dungeon_spawner_1..7 (easiest first). Their bot settings
+// live in brick components the bridge can't write, so the generator only
+// lists where each goes; load-spawners.mjs stamps the prefabs there.
+const SPAWNERS = ['Handaxe', 'Arming Sword', 'Spear', 'Longsword', 'Bow', 'Zweihander', 'Battleaxe'];
+const spawners = []; // { at: [x, y, z], tier, dungeon, level }
+
+// ------------------------------------------------------- dungeon bricks --
+for (const d of DUNGEONS) {
+  const [ox, oy, oz] = d.origin;
+  const out = d.out;
+  for (const { label, ...b } of out.bricks) bricks.push({ ...b, position: [b.position[0] + ox, b.position[1] + oy, b.position[2] + oz] });
+  for (const s of out.spawns)
+    spawners.push({ at: [s.at[0] + ox, s.at[1] + oy, s.at[2] + oz], tier: d.tiers[d.levels - 1 - s.level], dungeon: d.name, level: d.levels - s.level });
+  d.entrance = [X0 + (d.mouth[0] + 0.5) * CELL, Y0 + (d.mouth[1] + 0.5) * CELL, (H[d.mouth[0] * N + d.mouth[1]] + 1) * VZ]; // the trench mouth
+  console.error(`${d.name}: ${d.levels} floors, ${out.bricks.length} bricks, ${out.atria.length} atriums, ${out.spawns.length} spawners`);
+}
+const dungeonCount = bricks.length - terrainCount;
+
+// ------------------------------------------------------------- smoothing --
+// Every terrain step of 1 to MAX_RISE bricks gets a micro wedge on the low
+// cell rising to the higher neighbour, as tall as the step (taller steps stay
+// cliffs); where two steps meet, an outer-corner piece (a cube
+// with one corner cut off) fills the concave corner and a corner tetrahedron
+// rounds the convex one. Pieces are coloured like the surface they rise to.
+// --no-smooth turns it off.
+//
+// Orientation: see orient.mjs (ORIENT, orientFor).
+const MAX_RISE = 6;
+const SMOOTH = opt('--smooth', 'wedge'); // 'ramp' (micro ramps on straight slopes) or 'wedge' (tipped micro wedges)
+let ramps = 0, triCaps = 0;
+const rampCol = new Uint8Array(N * N);
+const capCol = new Uint8Array(N * N); // cells with a diagonal triangle cap (no plants on them)
+// per smoothed cell: its rise k and which way it slopes up (plants sit at the high edge)
+const rampK = new Uint8Array(N * N), rampUp = new Int8Array(N * N); // rampUp: 0 none, 1 flat fill, else 2 + dir index
+const DIR8 = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+if (!args.includes('--no-smooth'))
+for (let x = 0; x < N; x++)
+  for (let y = 0; y < N; y++) {
+    const h = H[x * N + y];
+    if (h + 1 <= SEA || V[vi(x, y, h)] === 0) continue;
+    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || noSmooth[x * N + y]) continue;
+    const hN = (dx, dy) => (inMap(x + dx, y + dy) ? H[(x + dx) * N + y + dy] : h);
+    // the step up to the lowest higher neighbour (1..MAX_RISE bricks); every
+    // piece on this cell rises by that much
+    const orth = [[1, 0], [0, 1], [-1, 0], [0, -1]], diag8 = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+    const rises = [...orth, ...diag8].map(([dx, dy]) => hN(dx, dy) - h).filter(r => r > 0);
+    if (!rises.length) continue;
+    const k = Math.min(...rises);
+    if (k > MAX_RISE) continue;
+    let clear = true;
+    for (let z = h + 1; z <= h + k; z++) if (V[vi(x, y, z)] !== 0) clear = false;
+    if (!clear) continue;
+    // a neighbour exactly k up with solid ground on top
+    const up = (dx, dy) => {
+      if (hN(dx, dy) !== h + k) return 0;
+      const t = V[vi(x + dx, y + dy, h + k)];
+      return t && t !== WATER ? t : 0;
+    };
+    const ups = orth.filter(([dx, dy]) => up(dx, dy));
+    const higher = ([dx, dy]) => hN(dx, dy) > h;
+    // the tidy cases first (one slope, a two-sided inner corner, a diagonal
+    // outer corner); when none fits, the notch fallbacks below
+    const tidy = () => {
+      if (ups.length === 1) {
+        const [dx, dy] = ups[0];
+        if (higher([-dx, -dy]) || higher([dy, dx]) || higher([-dy, -dx])) return null;
+        return ['PB_DefaultMicroWedge', [[dx, dy]], up(dx, dy)];
+      }
+      if (ups.length === 2 && ups[0][0] !== -ups[1][0] && ups[0][1] !== -ups[1][1]) {
+        const dx = ups[0][0] + ups[1][0], dy = ups[0][1] + ups[1][1];
+        if (higher([-dx, 0]) || higher([0, -dy])) return null;
+        return ['PB_DefaultMicroWedgeOuterCorner', ups, up(ups[0][0], ups[0][1])];
+      }
+      if (ups.length === 0 && !orth.some(higher)) {
+        const diag = [[1, 1], [-1, 1], [-1, -1], [1, -1]].filter(([dx, dy]) => up(dx, dy));
+        if (diag.length !== 1) return null;
+        const [dx, dy] = diag[0];
+        return ['PB_DefaultMicroWedgeCorner', [[dx, 0], [0, dy]], up(dx, dy)];
+      }
+      return null;
+    };
+    // notches the tidy cases skip (they left holes): rise toward the middle
+    // of a U, an inner corner, a lone higher side, fill pits and ditches
+    const notch = () => {
+      const hi = orth.filter(higher);
+      const solidTop = ([dx, dy]) => { const t = V[vi(x + dx, y + dy, Math.min(hN(dx, dy), h + k))]; return t && t !== WATER ? t : 0; };
+      if (hi.length === 3) {
+        const low = orth.find(d => !higher(d));
+        const d = [-low[0], -low[1]];
+        return ['PB_DefaultMicroWedge', [d], solidTop(d)];
+      }
+      if (hi.length === 2 && hi[0][0] !== -hi[1][0] && hi[0][1] !== -hi[1][1]) return ['PB_DefaultMicroWedgeOuterCorner', hi, solidTop(hi[0])];
+      if (hi.length === 1) return ['PB_DefaultMicroWedge', [hi[0]], solidTop(hi[0])];
+      if (hi.length === 4 || hi.length === 2) return ['fill', null, solidTop(hi[0])];
+      return null;
+    };
+    const pick = tidy() ?? notch();
+    if (!pick || !pick[2]) continue;
+    const [asset, dirs, top] = pick;
+    const M = MATS[top];
+    // straight slopes: an upright micro ramp (the owner's hand-smoothed style).
+    // Rotation 0 rises toward -x; each step turns a quarter anticlockwise.
+    const RAMP_ROT = { '-1,0': 0, '0,-1': 1, '1,0': 2, '0,1': 3 };
+    const orient = asset === 'fill' ? { size: [CELL / 2, CELL / 2, (k * VZ) / 2] }
+      : asset === 'PB_DefaultMicroWedge' && SMOOTH === 'ramp'
+      ? { asset: 'PB_DefaultMicroRamp', direction: 4, rotation: RAMP_ROT[dirs[0].join(',')], size: [CELL / 2, CELL / 2, (k * VZ) / 2] }
+      : { asset, ...orientFor(asset, dirs, [CELL / 2, CELL / 2, (k * VZ) / 2]) };
+    bricks.push({
+      ...orient,
+      position: [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, (h + 1) * VZ + (k * VZ) / 2],
+      color: M.color,
+      ...(M.material ? { material: M.material } : {}),
+    });
+    // diagonal slopes (owner's hand fix, 2026-10-03): an outer corner only
+    // climbs one step, so where the diagonal cell between its two higher sides
+    // is higher still, a triangle corner on top carries the slope on toward it
+    if (asset === 'PB_DefaultMicroWedgeOuterCorner') {
+      const dx = Math.sign(dirs[0][0] + dirs[1][0]), dy = Math.sign(dirs[0][1] + dirs[1][1]);
+      const kt = Math.min(k, hN(dx, dy) - (h + k));
+      let free = kt > 0;
+      for (let z = h + k + 1; free && z <= h + k + kt; z++) if (V[vi(x, y, z)] !== 0) free = false;
+      if (free) {
+        const TRI_ROT = { '-1,-1': 0, '1,-1': 1, '1,1': 2, '-1,1': 3 }; // rotation = the corner it rises toward
+        bricks.push({
+          asset: 'PB_DefaultMicroWedgeTriangleCorner', direction: 4, rotation: TRI_ROT[dx + ',' + dy], size: [CELL / 2, CELL / 2, (kt * VZ) / 2],
+          position: [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, (h + k + 1) * VZ + (kt * VZ) / 2],
+          color: M.color, ...(M.material ? { material: M.material } : {}),
+        });
+        triCaps++;
+        capCol[x * N + y] = 1;
+      }
+    }
+    ramps++;
+    rampCol[x * N + y] = 1;
+    rampK[x * N + y] = k;
+    if (asset === "fill") rampUp[x * N + y] = 1;
+    else if (asset !== "PB_DefaultMicroWedgeCorner") {
+      const ux = Math.sign(dirs.reduce((a, d) => a + d[0], 0)), uy = Math.sign(dirs.reduce((a, d) => a + d[1], 0));
+      rampUp[x * N + y] = 2 + DIR8.findIndex(([dx, dy]) => dx === ux && dy === uy);
+    }
+  }
+
+// --gaps: count cells still below an orthogonal neighbour with no piece, by step height
+if (args.includes('--gaps')) {
+  const by = {};
+  for (let x = 1; x < N - 1; x++)
+    for (let y = 1; y < N - 1; y++) {
+      const h = H[x * N + y];
+      if (rampCol[x * N + y] || h + 1 <= SEA || V[vi(x, y, h)] === 0 || V[vi(x, y, h + 1)] !== 0) continue;
+      if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || noSmooth[x * N + y]) continue;
+      const r = Math.max(...[[1, 0], [0, 1], [-1, 0], [0, -1]].map(([dx, dy]) => H[(x + dx) * N + y + dy] - h));
+      if (r > 0) by[Math.min(r, 12)] = (by[Math.min(r, 12)] ?? 0) + 1;
+    }
+  console.error('unsmoothed cells by tallest step (bricks):', JSON.stringify(by));
+}
+
+// --probe x,y (world units): print terrain heights (bricks above sea level 0)
+// round that point and mark smoothed cells with *, to debug the smoothing
+if (opt('--probe', null)) {
+  const [px, py] = opt('--probe').split(',').map(Number);
+  const cx = Math.floor((px - X0) / CELL), cy = Math.floor((py - Y0) / CELL);
+  console.error(`probe cell ${cx},${cy}; rows +y at top, columns -x..+x`);
+  for (let y = cy + 4; y >= cy - 4; y--) {
+    let row = '';
+    for (let x = cx - 4; x <= cx + 4; x++) row += (inMap(x, y) ? String(H[x * N + y]) + (rampCol[x * N + y] ? '*' : ' ') : ' -  ').padStart(5) + (x === cx && y === cy ? '<' : ' ');
+    console.error(row);
+  }
+}
+
+// ------------------------------------------------------------------ decor --
+const at = (x, y, z) => [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, z * VZ];
+let trees = 0;
+const treeAt = []; // [x, y] world, to keep canopies (up to 60 units across) apart
+// trees: at most one per 4x4 block of cells
+for (let bx = 0; bx < N; bx += 4)
+  for (let by = 0; by < N; by += 4) {
+    const x = bx + Math.floor(hash(bx, by, 1) * 4), y = by + Math.floor(hash(bx, by, 2) * 4);
+    if (!inMap(x, y)) continue;
+    const s = surfaceMat[x * N + y];
+    if (!GRASS.includes(s) && !(ROCK.includes(s) && H[x * N + y] < 100)) continue;
+    const h = H[x * N + y];
+    if (V[vi(x, y, h)] === 0) continue; // a cave mouth ate the ground
+    const forest = fbm2((X0 + x * CELL) / 1500, (Y0 + y * CELL) / 1500, 2);
+    if (hash(bx, by, 3) > 0.25 + forest * 0.9) continue;
+    const trunk = 6 + Math.floor(hash(x, y, 4) * 6); // bricks
+    // keep canopies (from about the trunk top, 1.5 cells across) out of hillsides
+    let crowded = false;
+    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+      const lim = Math.max(Math.abs(dx), Math.abs(dy)) <= 1 ? trunk - 3 : trunk + 4;
+      if (hAt(x + dx, y + dy) > h + lim) crowded = true;
+    }
+    if (rampCol[x * N + y] || caves.some(c => Math.hypot(c.x - x, c.y - y) < 4) || townNear[x * N + y] || keepOut[x * N + y] || villageDist(x, y) <= VILLAGE.r + 3 || hengeDist(x, y) <= 3 || reserved[x * N + y]) crowded = true;
+    const [tx, ty] = at(x, y, 0);
+    if (treeAt.some(([px, py]) => Math.max(Math.abs(px - tx), Math.abs(py - ty)) < 130)) crowded = true;
+    if (crowded) continue;
+    const [wx, wy, wz] = at(x, y, h + 1);
+    const pine = h > 60;
+    bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, wz + trunk * 6], size: [10, 10, trunk * 6], color: [92, 64, 40] });
+    const leaf = pine ? [46, 86, 52] : [58, 120, 48];
+    // round tiers [radius, bricks tall]: a cone for pines, a rounded blob otherwise
+    const tiers = pine
+      ? [[55, 2], [45, 2], [35, 2], [25, 2], [15, 2], [5, 2]]
+      : [[40, 1], [55, 2], [60, 2], [50, 2], [30, 1]];
+    let z = wz + trunk * 12; // canopy starts at the trunk top so the two don't overlap
+    for (const [r, t] of tiers) {
+      bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, z + t * 6], size: [r, r, t * 6], color: leaf });
+      z += t * 12;
+    }
+    trees++;
+    treeAt.push([wx, wy]);
+  }
+// boulders: round rocks on grass and rock
+let boulders = 0;
+const boulderCells = [];
+for (let bx = 2; bx < N; bx += 7)
+  for (let by = 2; by < N; by += 7) {
+    const x = bx + Math.floor(hash(bx, by, 11) * 5), y = by + Math.floor(hash(bx, by, 12) * 5);
+    if (!inMap(x, y) || hash(bx, by, 13) > 0.18) continue;
+    const s = surfaceMat[x * N + y];
+    const h = H[x * N + y];
+    if (!(GRASS.includes(s) || ROCK.includes(s)) || V[vi(x, y, h)] === 0) continue;
+    if (rampCol[x * N + y] || townNear[x * N + y] || keepOut[x * N + y] || villageDist(x, y) <= VILLAGE.r + 2 || hengeDist(x, y) <= 2 || reserved[x * N + y]) continue;
+    const [wx, wy, wz] = at(x, y, h + 1);
+    const grey = [[118, 114, 108], [100, 98, 94]][Math.floor(hash(x, y, 14) * 2)];
+    bricks.push({ asset: 'B_4x4_Round', position: [wx, wy, wz + 6], size: [0, 0, 0], color: grey });
+    bricks.push({ asset: 'B_2x2_Round', position: [wx + (hash(x, y, 15) < 0.5 ? -10 : 10), wy, wz + 18], size: [0, 0, 0], color: grey });
+    boulders++;
+    boulderCells.push(x * N + y);
+  }
+// ---------------------------------------------------------------- plants --
+// Brickadia's plant bricks over the grass (ferns and bushes in the woods,
+// flower meadows in patches of one colour), then the swamp: lily pads on the
+// pools, rushes, dead trees, turd piles and the zombie spawners.
+// A plant needs its own cell clear (ground, no smoothing wedge, nothing
+// standing there); tall ones stay out from under tree canopies; the leaf bush
+// is wider than a cell, so its whole 3 x 3 must be flat and free.
+// Collision half extents measured in-game (sky probes, 2026-10-02).
+const PLANT = {
+  B_Fern: [10, 10, 2], B_Flower: [10, 10, 2], B_Small_Flower: [6, 6, 2], B_Tulip: [6, 6, 6], B_Rose: [6, 6, 4],
+  B_Bush: [14, 14, 16], B_Leaf_Bush: [26, 26, 20], B_Pine_Tree: [16, 16, 38], B_Branch: [20, 10, 2],
+  B_Lotus_1x1: [6, 6, 4], B_Lotus_2x2: [10, 10, 6], B_Pumpkin: [10, 10, 8],
+};
+const blocked = new Uint8Array(N * N); // something stands here
+const canopy = new Uint8Array(N * N);  // under a tree: short plants only
+for (const [tx, ty] of treeAt) {
+  const cx = Math.floor((tx - X0) / CELL), cy = Math.floor((ty - Y0) / CELL);
+  blocked[cx * N + cy] = 1;
+  for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) if (inMap(cx + dx, cy + dy)) canopy[(cx + dx) * N + cy + dy] = 1;
+}
+for (const c of boulderCells) blocked[c] = 1;
+for (const c of caves)
+  for (let dx = -8; dx <= 8; dx++) for (let dy = -8; dy <= 8; dy++) if (inMap(c.x + dx, c.y + dy)) blocked[(c.x + dx) * N + c.y + dy] = 1;
+const plantCount = {};
+/** a plant (or prop) on cell (x, y); false if it doesn't fit */
+/** a saguaro on cell (x, y): a ribbed pole trunk and one or two arms; false if it doesn't fit */
+let cacti = 0;
+function cactus(x, y) {
+  const i = x * N + y, h = H[i];
+  if (blocked[i] || rampCol[i] || capCol[i] || V[vi(x, y, h)] === 0) return false;
+  const t = 5 + Math.floor(hash(x, y, 81) * 5); // trunk, bricks
+  for (let z = h + 1; z <= Math.min(NZ - 1, h + t + 1); z++) if (V[vi(x, y, z)]) return false;
+  const [wx, wy, wz] = at(x, y, h + 1);
+  const green = [[70, 118, 58], [62, 106, 52], [78, 126, 64]][Math.floor(hash(x, y, 82) * 3)];
+  bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, wz + t * 6], size: [5, 5, t * 6], color: green });
+  // arms: a short stub out of the trunk, then up; one each side at most, inside the cell
+  [[1, 0], [-1, 0]].forEach(([dx], k) => {
+    if (hash(x, y, 83 + k) < (k ? 0.55 : 0.2)) return;
+    const az = wz + Math.min(t - 3, 2 + Math.floor(hash(x, y, 85 + k) * 3)) * 12;
+    bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx + dx * 7, wy, az + 4], size: [2, 4, 4], color: green });
+    bricks.push({ asset: 'PB_DefaultPole', position: [wx + dx * 14, wy, az + 24], size: [5, 5, 16], color: green });
+  });
+  blocked[i] = 1;
+  cacti++;
+  return true;
+}
+function plant(x, y, asset, color, { rot = 0, jitter = true, extra = {} } = {}) {
+  const [px, py, hz] = PLANT[asset];
+  const [ex, ey] = rot % 2 ? [py, px] : [px, py];
+  const h = H[x * N + y], i0 = x * N + y;
+  // on a smoothing piece: a flat fill of any height, or a 1-brick wedge with
+  // the plant pushed to its high edge (it floats a few units at most)
+  const lift = rampCol[i0] ? rampK[i0] : 0;
+  const up = rampUp[i0] >= 2 ? DIR8[rampUp[i0] - 2] : null;
+  if (rampCol[i0] && !(rampUp[i0] === 1 || (up && lift === 1))) return false;
+  if (capCol[i0]) return false;
+  const free = (cx, cy, base) => {
+    const i = cx * N + cy;
+    if (!inMap(cx, cy) || blocked[i] || (rampCol[i] && i !== i0) || H[i] !== h || V[vi(cx, cy, h)] === 0) return false;
+    if (hz > 6 && canopy[i]) return false;
+    for (let z = base + 1; z <= Math.min(NZ - 1, base + Math.ceil((2 * hz) / VZ)); z++) if (V[vi(cx, cy, z)]) return false;
+    return true;
+  };
+  const wide = ex > 20 || ey > 20;
+  if (lift && (wide || asset === 'B_Bush' || asset === 'B_Pine_Tree')) return false; // too broad to perch on a slope
+  if (!free(x, y, h + lift)) return false;
+  if (wide) for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if ((dx || dy) && !free(x + dx, y + dy, h)) return false;
+  // keep clear of the cell edge: the game rejects BOTH bricks when two just touch
+  // (seen live with bushes and pines against the neighbouring wedges)
+  const pad = asset === 'B_Bush' || asset === 'B_Pine_Tree' ? 4 : 2;
+  const off = (m, k, u) => (m <= 0 ? 0 : u ? u * m : jitter ? 2 * Math.round(((hash(x, y, k) * 2 - 1) * m) / 2) : 0);
+  const [wx, wy] = at(x, y, 0);
+  bricks.push({ asset, size: [0, 0, 0], position: [wx + off(20 - ex - pad, 31, up?.[0]), wy + off(20 - ey - pad, 32, up?.[1]), (h + 1 + lift) * VZ + hz], color, ...(rot ? { rotation: rot } : {}), ...extra });
+  if (wide) { for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) blocked[(x + dx) * N + y + dy] = 1; }
+  else blocked[x * N + y] = 1;
+  plantCount[asset] = (plantCount[asset] ?? 0) + 1;
+  return true;
+}
+const pickW = (table, r) => { // [[item, weight], ...]
+  let t = r * table.reduce((a, [, w]) => a + w, 0);
+  for (const [item, w] of table) if ((t -= w) < 0) return item;
+  return table[table.length - 1][0];
+};
+const LEAF = [[70, 130, 50], [90, 150, 60], [60, 112, 46]];
+const BLOOM = [[220, 50, 60], [240, 200, 50], [160, 90, 200], [240, 240, 245], [245, 140, 50], [240, 130, 170], [90, 130, 230]];
+
+// zombie spawners on the swamp mud first, each with a clear 3 x 3
+const swampSpawns = [];
+{
+  const cand = [];
+  for (let x = swamp.x - SWAMP.r; x <= swamp.x + SWAMP.r; x++)
+    for (let y = swamp.y - SWAMP.r; y <= swamp.y + SWAMP.r; y++)
+      if (inMap(x, y) && swampCell[x * N + y] && H[x * N + y] >= SEA) cand.push([hash(x, y, 41), x, y]);
+  cand.sort((a, b) => a[0] - b[0]);
+  for (const [, x, y] of cand) {
+    if (swampSpawns.length >= 18) break;
+    if (swampSpawns.some(s => Math.hypot(s.x - x, s.y - y) < 14)) continue;
+    const h = H[x * N + y];
+    let ok = true;
+    for (let dx = -1; dx <= 1 && ok; dx++) for (let dy = -1; dy <= 1 && ok; dy++) {
+      const i = (x + dx) * N + y + dy;
+      if (!swampCell[i] || H[i] !== h || rampCol[i] || blocked[i] || V[vi(x + dx, y + dy, h + 1)]) ok = false;
+    }
+    if (!ok) continue;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) blocked[(x + dx) * N + y + dy] = 1;
+    swampSpawns.push({ x, y });
+    const [wx, wy] = at(x, y, 0);
+    spawners.push({ at: [wx, wy, (h + 1) * VZ + 2], prefab: hash(x, y, 42) < 0.7 ? 'swamp_zombie_1' : 'swamp_zombie_2', dungeon: 'Swamp', level: 0 });
+  }
+}
+
+// checkpoints: on each dungeon's roof in the entrance pit (beside the bottom
+// end of the stairwell, clear of its top), and where the swamp road ends.
+// The hamlets' own sit by their wells (town.mjs).
+const checkpoints = [];
+for (const d of DUNGEONS) {
+  const [ex0, ey0, ex1, ey1] = d.out.entrance, alongX = d.out.entranceSide === 'S' || d.out.entranceSide === 'N';
+  const [lx, ly] = alongX ? [ex0 - 40, (ey0 + ey1) / 2] : [(ex0 + ex1) / 2, ey0 - 40];
+  const p = [d.origin[0] + lx, d.origin[1] + ly, d.topVox * VZ + 2];
+  bricks.push({ asset: 'B_CheckPoint', size: [0, 0, 0], position: p, color: [240, 200, 60] });
+  checkpoints.push({ at: p, where: d.name });
+}
+{
+  const ends = [];
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (pathCell[x * N + y] && !swampCell[x * N + y]) ends.push([Math.hypot(x - swamp.x, y - swamp.y), x, y]);
+  ends.sort((a, b) => a[0] - b[0]);
+  const fits = (x, y) => {
+    const h = H[x * N + y];
+    if (h <= SEA + 1 || V[vi(x, y, h)] === 0 || V[vi(x, y, h + 1)]) return false;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      const i = (x + dx) * N + y + dy;
+      if (!inMap(x + dx, y + dy) || H[i] !== h || rampCol[i] || blocked[i]) return false;
+    }
+    return true;
+  };
+  done: for (const [, ex, ey] of ends.slice(0, 40))
+    for (let r = 0; r <= 6; r++)
+      for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
+        const x = ex + dx, y = ey + dy;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !inMap(x, y) || !fits(x, y)) continue;
+        const [wx, wy, wz] = at(x, y, H[x * N + y] + 1);
+        bricks.push({ asset: 'B_CheckPoint', size: [0, 0, 0], position: [wx, wy, wz + 2], color: [240, 200, 60] });
+        checkpoints.push({ at: [wx, wy, wz + 2], where: 'Swamp road' });
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) blocked[(x + a) * N + y + b] = 1;
+        break done;
+      }
+}
+
+// swamp pools: the water plane fills them; lily pads float on top
+{
+  const kind = new Uint8Array(N * N);
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++)
+    if (swampCell[x * N + y] && H[x * N + y] < SEA) kind[x * N + y] = 1;
+  // lily pads
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+    if (!kind[x * N + y] || hash(x, y, 43) > 0.12) continue;
+    const big = hash(x, y, 44) < 0.5, a = big ? 'B_Lotus_2x2' : 'B_Lotus_1x1', [ex, ey, hz] = PLANT[a];
+    const [wx, wy] = at(x, y, 0);
+    const off = (m, k) => 2 * Math.round(((hash(x, y, k) * 2 - 1) * m) / 2);
+    bricks.push({ asset: a, size: [0, 0, 0], position: [wx + off(18 - ex, 45), wy + off(18 - ey, 46), WATER_Z + hz], color: hash(x, y, 47) < 0.8 ? [86, 128, 52] : [230, 150, 190] });
+    plantCount[a] = (plantCount[a] ?? 0) + 1;
+  }
+}
+
+// dead trees on the mud: bare grey trunks with branches sticking out
+let deadTrees = 0;
+for (let bx = swamp.x - SWAMP.r; bx <= swamp.x + SWAMP.r; bx += 5)
+  for (let by = swamp.y - SWAMP.r; by <= swamp.y + SWAMP.r; by += 5) {
+    const x = bx + Math.floor(hash(bx, by, 51) * 5), y = by + Math.floor(hash(bx, by, 52) * 5);
+    if (!inMap(x, y) || !swampCell[x * N + y] || H[x * N + y] < SEA || hash(bx, by, 53) > 0.35) continue;
+    const h = H[x * N + y];
+    let ok = true;
+    for (let dx = -1; dx <= 1 && ok; dx++) for (let dy = -1; dy <= 1 && ok; dy++) {
+      const i = (x + dx) * N + y + dy;
+      if (!inMap(x + dx, y + dy) || blocked[i] || H[i] > h + 1) ok = false;
+    }
+    if (!ok || rampCol[x * N + y] || V[vi(x, y, h + 1)]) continue;
+    const t = 8 + Math.floor(hash(x, y, 54) * 7), [wx, wy, wz] = at(x, y, h + 1);
+    const bark = [[92, 82, 70], [80, 72, 62]][Math.floor(hash(x, y, 55) * 2)];
+    bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, wz + t * 6], size: [10, 10, t * 6], color: bark });
+    // branches: one per side, at different heights above 6 bricks
+    [[1, 0], [0, 1], [-1, 0], [0, -1]].forEach(([dx, dy], k) => {
+      if (hash(x, y, 56 + k) < 0.3) return;
+      const z = wz + 72 + Math.floor(hash(x, y, 60 + k) * (t * 12 - 84) / 12) * 12 + 2;
+      bricks.push({ asset: 'B_Branch', size: [0, 0, 0], position: [wx + dx * 30, wy + dy * 30, z], color: bark, ...(dy ? { rotation: 1 } : {}) });
+    });
+    blocked[x * N + y] = 1;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) canopy[(x + dx) * N + y + dy] = 1;
+    deadTrees++;
+  }
+
+// swamp floor and the grass everywhere else
+let turds = 0;
+for (let x = 1; x < N - 1; x++)
+  for (let y = 1; y < N - 1; y++) {
+    const i = x * N + y, h = H[i], s = surfaceMat[i];
+    const r = hash(x, y, 21), r2 = hash(x, y, 22);
+    const wx = X0 + x * CELL, wy = Y0 + y * CELL;
+    if (swampCell[i]) {
+      if (h < SEA) continue;
+      if (r < 0.28) plant(x, y, 'B_Bush', [[112, 122, 50], [96, 110, 46], [128, 120, 60]][Math.floor(r2 * 3)]) || plant(x, y, 'B_Fern', [84, 104, 48]); // rushes
+      else if (r < 0.36) plant(x, y, 'B_Fern', [[84, 104, 48], [100, 112, 52]][Math.floor(r2 * 2)]);
+      else if (r < 0.38 && !blocked[i] && !rampCol[i] && !canopy[i] && !V[vi(x, y, h + 1)] && !V[vi(x, y, h + 3)]) {
+        // turd pile: a soft-serve stack of round bricks
+        const [cx, cy, cz] = at(x, y, h + 1), poo = [[96, 62, 30], [84, 54, 26]][Math.floor(r2 * 2)];
+        bricks.push({ asset: 'B_2x2_Round', size: [0, 0, 0], position: [cx, cy, cz + 6], color: poo });
+        bricks.push({ asset: 'B_1x1_Round', size: [0, 0, 0], position: [cx, cy, cz + 18], color: poo });
+        bricks.push({ asset: 'B_1x1_Cone', size: [0, 0, 0], position: [cx, cy, cz + 30], color: poo });
+        blocked[i] = 1;
+        turds++;
+      } else if (r < 0.39) plant(x, y, 'B_Small_Flower', [150, 255, 60], { extra: { material: 'BMC_Glow', material_intensity: 3 } }); // swamp glow
+      continue;
+    }
+    if (h <= SEA + 1 || townNear[i] || keepOut[i] || pathCell[i] || villageDist(x, y) <= VILLAGE.r + 1 || hengeDist(x, y) <= 0 || reserved[x * N + y]) continue;
+    if (trenchCell[i]) continue;
+    const forest = fbm2(wx / 1500, wy / 1500, 2), meadow = fbm2(wx / 700 + 300, wy / 700 - 40, 3);
+    if (GRASS.includes(s)) {
+      if (forest > 0.08) {
+        if (r > 0.34) continue;
+        const a = pickW([['B_Fern', 30], ['B_Bush', 14], ['B_Leaf_Bush', 12], ['B_Pine_Tree', 9], ['B_Branch', 8], ['B_Small_Flower', 6], ['B_Rose', 3]], r2);
+        const col = a === 'B_Branch' ? [104, 74, 46] : a === 'B_Pine_Tree' ? [[40, 90, 55], [52, 102, 60]][Math.floor(r2 * 97) % 2]
+          : a === 'B_Small_Flower' || a === 'B_Rose' ? BLOOM[Math.floor(hash(x, y, 23) * BLOOM.length)] : LEAF[Math.floor(hash(x, y, 23) * 3)];
+        plant(x, y, a, col, { rot: a === 'B_Branch' && hash(x, y, 24) < 0.5 ? 1 : 0 }) || (a === 'B_Leaf_Bush' && plant(x, y, 'B_Bush', col)) || (['B_Leaf_Bush', 'B_Bush', 'B_Pine_Tree'].includes(a) && plant(x, y, 'B_Fern', LEAF[Math.floor(hash(x, y, 23) * 3)]));
+      } else if (meadow > 0.12) {
+        if (r > 0.4) continue;
+        // a meadow patch keeps one colour; the odd stem is another
+        const patch = Math.floor((fbm2(wx / 260 + 9, wy / 260 + 3, 2) + 1) * 3.5 * 7) % BLOOM.length;
+        const col = hash(x, y, 25) < 0.85 ? BLOOM[patch] : BLOOM[Math.floor(hash(x, y, 26) * BLOOM.length)];
+        const a = pickW([['B_Flower', 30], ['B_Small_Flower', 28], ['B_Tulip', 20], ['B_Rose', 14], ['B_Fern', 8]], r2);
+        plant(x, y, a, a === 'B_Fern' ? LEAF[0] : col);
+      } else {
+        if (r > 0.12) continue;
+        const a = pickW([['B_Fern', 40], ['B_Bush', 20], ['B_Small_Flower', 25], ['B_Pumpkin', 2], ['B_Tulip', 13]], r2);
+        plant(x, y, a, a === 'B_Pumpkin' ? [230, 120, 30] : a === 'B_Fern' || a === 'B_Bush' ? LEAF[Math.floor(hash(x, y, 23) * 3)] : BLOOM[Math.floor(hash(x, y, 26) * BLOOM.length)]);
+      }
+    } else if (ROCK.includes(s) && h < 100) {
+      if (r < 0.04) plant(x, y, r2 < 0.6 ? 'B_Bush' : 'B_Fern', [[96, 116, 70], [84, 104, 64]][Math.floor(r2 * 2)]);
+    } else if (s === SAND) {
+      if (r < 0.03) plant(x, y, 'B_Bush', [170, 168, 96]); // dune grass
+    } else if (DUNE.includes(s) || s === DRYGRASS) {
+      if (r < 0.06) cactus(x, y);
+      else if (r < 0.05) plant(x, y, 'B_Branch', [[132, 104, 70], [118, 92, 62]][Math.floor(r2 * 2)], { rot: r2 < 0.5 ? 1 : 0 }); // dead scrub
+      else if (s === DRYGRASS && r < 0.1) plant(x, y, 'B_Fern', [[176, 160, 90], [160, 146, 80]][Math.floor(r2 * 2)]); // dry tufts
+    } else if (MESA.includes(s) && h < 100) {
+      if (r < 0.02) plant(x, y, 'B_Branch', [118, 92, 62], { rot: r2 < 0.5 ? 1 : 0 });
+    }
+  }
+
+// the henge's stones (micro bricks: a regular brick's underside is ugly) and wizards
+{
+  const [cx, cy] = at(henge.x0 + (henge.n >> 1), henge.y0 + (henge.n >> 1), 0), G = (henge.h + 1) * VZ;
+  const HB = makeBuilder();
+  const GREY = [[138, 136, 128], [124, 122, 116], [150, 146, 136], [116, 114, 110]];
+  let k = 0;
+  const stone = (x0, y0, z0, x1, y1, z1, label) => HB.box(cx + x0, cy + y0, z0, cx + x1, cy + y1, z1, { asset: 'PB_DefaultMicroBrick', color: GREY[k++ % GREY.length] }, label);
+  // trilithons on the axes, radius 220: two 30 x 20 uprights 132 tall, a lintel across them
+  for (const [ax, ay] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+    const r = 220, ux = ax ? 0 : 1, uy = ax ? 1 : 0;
+    for (const sg of [-1, 1]) {
+      const px = ax * r + ux * sg * 35, py = ay * r + uy * sg * 35, hx = ux ? 15 : 10, hy = ux ? 10 : 15;
+      stone(px - hx, py - hy, G, px + hx, py + hy, G + 132, 'upright');
+    }
+    const hx = ux ? 60 : 12, hy = ux ? 12 : 60;
+    stone(ax * r - hx, ay * r - hy, G + 132, ax * r + hx, ay * r + hy, G + 156, 'lintel');
+  }
+  // single stones on the diagonals, one short
+  for (const [dx, dy, h] of [[1, 1, 108], [-1, 1, 96], [-1, -1, 108], [1, -1, 72]]) {
+    const px = Math.round((dx * 220) / Math.SQRT2 / 10) * 10, py = Math.round((dy * 220) / Math.SQRT2 / 10) * 10;
+    stone(px - 15, py - 15, G, px + 15, py + 15, G + h, 'stone');
+  }
+  // inner ring of 6 small stones at radius 130
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const px = Math.round((130 * Math.cos(a)) / 10) * 10, py = Math.round((130 * Math.sin(a)) / 10) * 10;
+    stone(px - 10, py - 10, G, px + 10, py + 10, G + 48 + (i % 3) * 12, 'inner');
+  }
+  stone(250, -330, G, 380, -300, G + 20, 'fallen');
+  // altar with a glowing purple rune
+  stone(-20, -10, G, 20, 10, G + 24, 'altar base');
+  stone(-40, -20, G + 24, 40, 20, G + 36, 'altar');
+  HB.box(cx - 10, cy - 10, G + 36, cx + 10, cy + 10, G + 38, { asset: 'PB_DefaultMicroBrick', color: [170, 60, 255], material: 'BMC_Glow', material_intensity: 8 }, 'rune');
+  if (HB.dropped.length) throw new Error(`henge: ${HB.dropped.length} overlaps, e.g. ${HB.dropped[0]}`);
+  for (const { label, ...b } of HB.bricks) bricks.push(b);
+  // wizards only: one in front of the altar, two inside the ring
+  for (const [x, y] of [[0, -70], [150, 90], [-150, 90]])
+    spawners.push({ at: [cx + x, cy + y, G + 2], prefab: 'enemy_wizard', dungeon: 'Henge', level: 0 });
+  henge.center = [cx, cy, G];
+}
+for (const o of outposts) {
+  const [wx, wy] = at(o.x, o.y, 0), z = (o.h + 1) * VZ + 2;
+  for (const dx of [-40, 40]) spawners.push({ at: [wx + dx, wy, z], tier: o.tier, dungeon: 'Outpost', level: 0 });
+}
+
+// cave interiors: two fires, then an old man with a sword or a chest, on the
+// ledge at the back; stalactites under the high ceiling, stalagmites and
+// glowing crystal clusters round the walls
+for (const [n, c] of caves.entries()) {
+  const { x, y, dx, dy, h } = c;
+  const R = CAVE.R, kc = CAVE.depth + R - 1;
+  const byKL = new Map(c.cells.map(e => [e[4] + ',' + e[5], e]));
+  const cell = (k, l) => at(x + dx * k - dy * l, y + dy * k + dx * l, h + 1);
+  const floorOf = (k, l) => (h + 1 + (byKL.get(k + ',' + l)?.[3] ?? 0)) * VZ;
+  // props stand on the spine near the back-centre
+  let pk = kc + 1;
+  while (pk > kc - 1 && !byKL.has(pk + ',0')) pk--;
+  const used = new Set([pk + ',0', (pk - 1) + ',0', (pk + 1) + ',0']);
+  for (const l of [-2, 2]) {
+    const fk = byKL.has(kc + ',' + l) ? kc : kc - 1;
+    if (!byKL.has(fk + ',' + l)) continue;
+    used.add(fk + ',' + l);
+    const [wx, wy] = cell(fk, l), fz = floorOf(fk, l);
+    bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, fz + 18], size: [10, 10, 18], color: [70, 66, 62] });
+    bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, fz + 42], size: [15, 15, 6], color: [255, 120, 30], material: 'BMC_Glow', material_intensity: 8 });
+    bricks.push({ asset: 'B_1x1_Cone', position: [wx, wy, fz + 54], size: [0, 0, 0], color: [255, 200, 60], material: 'BMC_Glow', material_intensity: 10 });
+  }
+  const [mx, my] = cell(pk, 0), floorZ = floorOf(pk, 0);
+  if (n % 2 === 0) {
+    // old man: robe, beard, face, and the sword laid on the floor in front
+    bricks.push({ position: [mx, my, floorZ + 30], size: [10, 10, 30], color: [150, 40, 30] });
+    bricks.push({ position: [mx, my, floorZ + 66], size: [10, 10, 6], color: [230, 190, 150] });
+    bricks.push({ position: [mx - dx * 15, my - dy * 15, floorZ + 54], size: [5, 5, 6], color: [240, 240, 240] });
+    const [sx, sy] = cell(pk - 1, 0), sz = floorOf(pk - 1, 0);
+    bricks.push({ position: [sx, sy, sz + 2], size: dx ? [15, 5, 2] : [5, 15, 2], color: [210, 215, 225], material: 'BMC_Metallic' });
+    bricks.push({ position: [sx - dx * 20, sy - dy * 20, sz + 2], size: dx ? [5, 10, 2] : [10, 5, 2], color: [120, 80, 40] });
+  } else {
+    bricks.push({ position: [mx, my, floorZ + 12], size: [20, 15, 12], color: [110, 70, 30] });
+    bricks.push({ asset: 'PB_DefaultRampCrest', position: [mx, my, floorZ + 30], size: [20, 15, 6], color: [232, 186, 40], material: 'BMC_Metallic' });
+  }
+  const CRYSTAL = [[90, 170, 255], [170, 110, 255], [80, 230, 200]][n % 3];
+  const rockC = [[112, 108, 102], [96, 92, 88]];
+  for (const [cx, cy, t, raise, k, l, role] of c.cells) {
+    if (role === 'passage' || used.has(k + ',' + l)) continue;
+    const [wx, wy] = cell(k, l), fz = (h + 1 + raise) * VZ, ceil = (h + t + 1) * VZ;
+    const r = hash(cx, cy, 350 + n);
+    const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => !byKL.has((k + a) + ',' + (l + b)));
+    if (role === 'alcove' || (edge && r < 0.3)) {
+      // crystal cluster: a tall shard and one or two short ones, glowing
+      const off = [[-10, -10, 14], [10, 5, 8], [-5, 12, 6]];
+      for (const [ox, oy, hz] of off.slice(0, role === 'alcove' ? 3 : 2))
+        bricks.push({ position: [wx + ox, wy + oy, fz + hz], size: [5, 5, hz], color: CRYSTAL, material: 'BMC_Glow', material_intensity: 4 });
+      continue;
+    }
+    if (edge && r < 0.65) {
+      // stalagmite: a stubby rock column with a thin tip
+      const tall = 2 + Math.floor(hash(cx, cy, 360) * 3);
+      bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, fz + 6 * tall], size: [15, 15, 6 * tall], color: rockC[0] });
+      bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, fz + 12 * tall + 8], size: [5, 5, 8], color: rockC[1] });
+      continue;
+    }
+    if (!edge && t - raise >= 11 && r < 0.45) {
+      // stalactite hanging from the dome, tip well above head height
+      bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, ceil - 12], size: [15, 15, 12], color: rockC[1] });
+      bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, ceil - 34], size: [10, 10, 10], color: rockC[0] });
+      bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, ceil - 52], size: [5, 5, 8], color: rockC[1] });
+    }
+  }
+}
+
+// river water: glass (collision off) from the bed up to the level, in runs
+// along x; none where the level is at the sea (the game's water covers it)
+{
+  const W = { color: [60, 140, 200], material: 'BMC_Glass', collision: false };
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N;) {
+      const c = x * N + y;
+      if (!riverCell[c] || riverLevel[c] <= SEA) { x++; continue; }
+      const h = H[c], lv = riverLevel[c];
+      let x1 = x + 1;
+      while (x1 < N && x1 - x < 16 && riverCell[x1 * N + y] && H[x1 * N + y] === h && riverLevel[x1 * N + y] === lv) x1++;
+      const z0 = (h + 1) * VZ, z1 = (lv + 1) * VZ;
+      if (z1 > z0) bricks.push({ ...W, position: [X0 + ((x + x1) / 2) * CELL, Y0 + (y + 0.5) * CELL, (z0 + z1) / 2], size: [(x1 - x) * 20, 20, (z1 - z0) / 2] });
+      x = x1;
+    }
+}
+// bridge decks (planks) and their rails over open water
+{
+  const PLANK = [[150, 104, 64], [134, 92, 56], [160, 114, 72]], RAIL = [96, 66, 42], MB = 'PB_DefaultMicroBrick';
+  let decks = 0;
+  for (let x = 0; x < N; x++)
+    for (let y = 0; y < N; y++) {
+      const top = deck[x * N + y];
+      if (!top) continue;
+      const wx = X0 + x * CELL, wy = Y0 + y * CELL;
+      bricks.push({ asset: MB, position: [wx + 20, wy + 20, top - 2], size: [20, 20, 2], color: PLANK[(x + y) % 3] });
+      decks++;
+      const open = (dx, dy) => { const nx = x + dx, ny = y + dy; if (!inMap(nx, ny)) return true; const n = nx * N + ny; return !deck[n] && (riverCell[n] === 1 || H[n] <= SEA); };
+      if (open(0, -1)) bricks.push({ asset: MB, position: [wx + 20, wy + 2, top + 10], size: [20, 2, 10], color: RAIL });
+      if (open(0, 1)) bricks.push({ asset: MB, position: [wx + 20, wy + 38, top + 10], size: [20, 2, 10], color: RAIL });
+      if (open(-1, 0)) bricks.push({ asset: MB, position: [wx + 2, wy + 20, top + 10], size: [2, 16, 10], color: RAIL });
+      if (open(1, 0)) bricks.push({ asset: MB, position: [wx + 38, wy + 20, top + 10], size: [2, 16, 10], color: RAIL });
+    }
+  console.error(`bridges: ${decks} deck cells`);
+}
+
+// town buildings (town.mjs), positioned from the square's centre on its paving
+const townBricks = bricks.length;
+// through the overlap guard: the game would reject overlapping bricks
+const townB = makeBuilder();
+const townStats = buildTown({
+  put: (b, x, y, z) => townB.add({ ...b, position: [X0 + (town.fx + TOWN.cells / 2) * CELL + x, Y0 + (town.fy + TOWN.cells / 2) * CELL + y, (town.h + 1) * VZ + z] }, b.asset ?? 'box'),
+  orientFor,
+  rnd: townRnd,
+  plan: townPlan,
+  riverAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; },
+});
+if (townB.dropped.length) throw new Error(`town: ${townB.dropped.length} overlapping pieces, e.g.\n${townB.dropped.slice(0, 8).join('\n')}`);
+for (const { label, ...b } of townB.bricks) bricks.push(b);
+// hamlets, each through its own overlap guard; their shop spots become
+// sword-shop prefab placements (shops.json)
+const shops = [];
+for (const v of villages) {
+  const vb = makeBuilder(), o = [X0 + v.x * CELL, Y0 + v.y * CELL, (v.h + 1) * VZ];
+  const st = buildTown({
+    put: (b, x, y, z) => vb.add({ ...b, position: [o[0] + x, o[1] + y, o[2] + z] }, b.asset ?? 'box'),
+    orientFor,
+    rnd: townRnd,
+    village: { seed: v.seed, shops: v.shops?.length ?? 0, desert: v.desert },
+    plan: v.plan,
+    riverAt: (ux, uy) => { const x = v.x + Math.floor(ux / CELL), y = v.y + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; },
+  });
+  if (vb.dropped.length) throw new Error(`village: ${vb.dropped.length} overlapping pieces, e.g.\n${vb.dropped.slice(0, 8).join('\n')}`);
+  for (const { label, ...b } of vb.bricks) bricks.push(b);
+  (st.shopSpots ?? []).forEach(([x, y, z], k) => shops.push({ at: [o[0] + x, o[1] + y, o[2] + z], tier: v.shops[k], orient: 18 }));
+  for (const hs of st.houseShops) shops.push({ at: [o[0] + hs.at[0], o[1] + hs.at[1], o[2] + hs.at[2]], tier: hs.tier, orient: hs.orient, house: true, ...(hs.prefab ? { prefab: hs.prefab } : {}) });
+  checkpoints.push({ at: [o[0], o[1] - 100, o[2] + 2], where: 'village' });
+  v.center = o;
+  v.buildings = st.buildings;
+}
+const townCount = bricks.length - townBricks;
+// thinned-out town buildings as world boxes, so a live world built before the
+// thinning can be cleared with br.World.ClearRegion
+const townOrigin = [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN.cells / 2) * CELL, (town.h + 1) * VZ];
+// sword-shop stands inside some town houses (town.mjs HOUSE_SHOP_CHANCE)
+for (const hs of townStats.houseShops) shops.push({ at: hs.at.map((v, k) => townOrigin[k] + v), tier: hs.tier, orient: hs.orient, house: true });
+// the spawn market: every sword shop and gun stand on the plaza
+for (const ts of townStats.townShops ?? []) shops.push({ at: ts.at.map((v, k) => townOrigin[k] + v), tier: ts.tier, orient: ts.orient, market: true, ...(ts.prefab ? { prefab: ts.prefab } : {}) });
+const townRemoved = townStats.removed.map(({ type, lo, hi }) => ({
+  type,
+  lo: lo.map((v, k) => (k === 2 ? Math.max(v, 0) : v) + townOrigin[k]), // never below the paving
+  hi: hi.map((v, k) => v + townOrigin[k]),
+}));
+delete townStats.removed;
+// ClearRegion takes every brick entirely inside a box (+1 margin). Rotated
+// bricks are judged by their centre (their local size is permuted). Kept
+// bricks a box swallows (a few street lamps) go back in after the clear.
+const inBox = b => townRemoved.some(({ lo, hi }) => [0, 1, 2].every(k => b.position[k] - b.size[k] >= lo[k] - 1 && b.position[k] + b.size[k] <= hi[k] + 1));
+const swallowed = bricks.filter(b => inBox(b.direction || b.rotation ? { position: b.position, size: [0, 0, 0] } : b));
+fs.mkdirSync(OUT, { recursive: true });
+fs.writeFileSync(path.join(OUT, 'town_removed.json'), JSON.stringify({ boxes: townRemoved, restore: swallowed }));
+const decorCount = bricks.length - terrainCount - dungeonCount;
+
+console.error(JSON.stringify({
+  seed: SEED, cells: N, mapStuds: (N * CELL) / 10, waterHeight: WATER_Z,
+  town: { center: [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN.cells / 2) * CELL, (town.h + 1) * VZ], bricks: townCount, ...townStats, thinnedOut: townRemoved.length, restoredAfterClear: swallowed.length },
+  caves: caves.length, carvedVoxels: carved,
+  terrainBricks: terrainCount, dungeonBricks: dungeonCount, decorBricks: decorCount, total: bricks.length,
+  trees, boulders, ramps,
+  plants: plantCount,
+  desert: { centre: [X0 + desert.x * CELL, Y0 + desert.y * CELL], r: DESERT.r * CELL, cacti, villages: villages.filter(v => v.desert).length },
+  swamp: { center: at(swamp.x, swamp.y, 0).slice(0, 2), gate: swamp.gate, zombieSpawners: swampSpawns.length, deadTrees, turds },
+  villages: villages.map(v => ({ center: v.center, shops: v.shops, buildings: v.buildings })),
+  checkpoints,
+  bounds: { x: [X0, X0 + N * CELL], y: [Y0, Y0 + N * CELL] },
+  spawners: Object.fromEntries(SPAWNERS.map((n, t) => [n, spawners.filter(p => p.tier === t + 1).length])),
+  caveDoors: caves.map(c => at(c.x, c.y, c.h + 1).map(Math.round)),
+  henge: henge.center,
+  outposts: outposts.map(o => ({ at: at(o.x, o.y, o.h + 1).map(Math.round), tier: o.tier, progress: +o.t.toFixed(2) })),
+  dungeons: DUNGEONS.map(d => ({ name: d.name, levels: d.levels, entrance: d.entrance,
+    center: [d.origin[0] + (d.cells * CELL) / 2, d.origin[1] + (d.cells * CELL) / 2] })),
+}, null, 1));
+
+// Procedural sizes off the stud/plate grid load as "Missing brick type".
+// Micro bricks snap to 1/5 stud (2 units), so only whole half-extents there.
+const offGrid = bricks.filter(b => b.size[0] && (/^PB_DefaultMicro/.test(b.asset ?? '')
+  ? b.size.some(v => !Number.isInteger(v))
+  : b.size[0] % 5 || b.size[1] % 5 || b.size[2] % 2));
+if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid, e.g. ${JSON.stringify(offGrid[0])}`);
+
+// ----------------------------------------------------------------- output --
+// World shift (owner 2026-10-05: spawn points don't work, the game drops you on
+// the highest surface round (-200, 0), "make this area the centre of the
+// world"): everything is generated in the old frame (terrain noise is keyed to
+// it) and moved at output so the town square's centre lands on (0, 0).
+// Live coordinates = generator coordinates + SHIFT. The summary above is in
+// the generator frame.
+const SHIFT = [-(X0 + (town.fx + TOWN.cells / 2) * CELL), -(Y0 + (town.fy + TOWN.cells / 2) * CELL), 0]; // (10660, 7700) at scale 1
+if (!DRY) {
+  const mv = p => [p[0] + SHIFT[0], p[1] + SHIFT[1], p[2] + SHIFT[2]];
+  for (const b of bricks) b.position = mv(b.position);
+  for (const sp of spawners) sp.at = mv(sp.at);
+  for (const sh of shops) sh.at = mv(sh.at);
+  console.error(`shifted by ${SHIFT.join(',')}: town centre now at 0,0`);
+  for (const f of fs.readdirSync(OUT)) if (/^chunk_\d+\.json$/.test(f)) fs.rmSync(path.join(OUT, f));
+  // bottom-up, west to east, so the map rises out of the ground
+  bricks.sort((a, b) => (a.position[2] - a.size[2]) - (b.position[2] - b.size[2]) || a.position[0] - b.position[0]);
+  const PER = 5000;
+  let n = 0;
+  for (let i = 0; i < bricks.length; i += PER, n++) {
+    const job = { ops: [{ op: 'bricks', at: [0, 0, 0], captureMs: 1500, bricks: bricks.slice(i, i + PER) }] };
+    fs.writeFileSync(path.join(OUT, `chunk_${String(n).padStart(3, '0')}.json`), JSON.stringify(job));
+  }
+  console.error(`wrote ${n} chunks to ${OUT}`);
+  fs.writeFileSync(path.join(OUT, 'spawners.json'), JSON.stringify(spawners));
+  fs.writeFileSync(path.join(OUT, 'shops.json'), JSON.stringify(shops));
+  // overview image source for a quick look: height + water + dungeons
+  const px = [];
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const h = H[x * N + y];
+      const c = h <= SEA ? MATS[WATER].color : MATS[surfaceMat[x * N + y]].color;
+      const k = 0.6 + Math.min(0.6, h / 150);
+      px.push(c.map(v => Math.min(255, Math.round(v * k))));
+    }
+  fs.writeFileSync(path.join(OUT, 'overview.ppm'), Buffer.concat([
+    Buffer.from(`P6 ${N} ${N} 255\n`), Buffer.from(px.flat()),
+  ]));
+}

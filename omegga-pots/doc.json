@@ -1,0 +1,15 @@
+{
+  "name": "pots",
+  "description": "Smashable pots: interact with a pot (prefab \"pot\") to break it; it may drop a coin and comes back after a while.",
+  "author": "pooper",
+  "config": {
+    "respawnSeconds": { "description": "Seconds before a smashed pot comes back", "type": "number", "default": 90 },
+    "shardSeconds": { "description": "Seconds the broken bits lie there", "type": "number", "default": 8 },
+    "chanceCopper": { "description": "Percent chance of a 1-coin drop", "type": "number", "default": 55 },
+    "chanceSilver": { "description": "Percent chance of a 10-coin drop", "type": "number", "default": 15 },
+    "chanceGold": { "description": "Percent chance of a 25-coin drop", "type": "number", "default": 3 },
+    "placers": { "description": "Comma-separated player names allowed to use !pot besides the host", "type": "string", "default": "abysmal garbage" },
+    "feetOffset": { "description": "Units from a player's position down to their feet (for !pot)", "type": "number", "default": 36 }
+  },
+  "commands": [{ "name": "!pot", "description": "Drop a smashable pot at your feet (host / placers)", "example": "!pot", "args": [] }]
+}

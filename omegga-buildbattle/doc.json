@@ -1,0 +1,13 @@
+{
+  "name": "buildbattle",
+  "description": "Minecraft-style build battles: sign up, get a plot and a theme, build against the clock, then everyone tours the builds and votes.",
+  "author": "pooper",
+  "config": {
+    "buildMinutes": { "description": "Default build time, minutes (!bb start N overrides)", "type": "number", "default": 5 },
+    "voteSeconds": { "description": "Seconds at each plot during voting", "type": "number", "default": 20 }
+  },
+  "commands": [
+    { "name": "!bb", "description": "Build battle: join, leave, start [minutes], stop, theme, builds [page], load <n>", "example": "!bb start 5", "args": [{ "name": "action", "description": "join | leave | start | stop | theme", "required": true }, { "name": "minutes", "description": "build time for start", "required": false }] },
+    { "name": "!vote", "description": "Score the build you are looking at, 1-5", "example": "!vote 4", "args": [{ "name": "score", "description": "1 to 5", "required": true }] }
+  ]
+}

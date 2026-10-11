@@ -1,0 +1,25 @@
+{
+  "name": "brick-wall-builder",
+  "version": "1.0.0",
+  "description": "Floor-plan photo to Brickadia brick walls, with a configuration GUI",
+  "main": "gui_server.js",
+  "scripts": {
+    "start": "node gui_server.js",
+    "gui": "node gui_server.js",
+    "editor": "node server.js",
+    "pipeline": "node 05_generate_brick_walls.js",
+    "test": "node --test tests/test_bricklaying.test.js",
+    "dungeon": "node 06_generate_dungeon.js --out-prefix dungeon_runs/dungeon"
+  },
+  "dependencies": {
+    "brs-js": "^3.8.0",
+    "express": "^4.18.2"
+  },
+  "keywords": [
+    "editor",
+    "file",
+    "simple"
+  ],
+  "author": "Claude Code Assistant",
+  "license": "MIT"
+}

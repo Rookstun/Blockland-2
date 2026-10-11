@@ -1,0 +1,39 @@
+{
+  "image": "testfile.png",
+  "extract": {
+    "minRun": 2,
+    "mergeGap": 1,
+    "overlapMin": 1,
+    "inkThreshold": 200,
+    "tolerance": 40,
+    "minPixels": 2
+  },
+  "plan": {
+    "gapMax": 6,
+    "markSearch": 2,
+    "lineSnap": 0,
+    "doorCutW": 2,
+    "windowCutW": 3,
+    "margin": 1
+  },
+  "build": {
+    "wallCourses": 6,
+    "courseHeight": 12,
+    "doorOpenCourses": 3,
+    "windowSillCourses": 2,
+    "windowOpenCourses": 2,
+    "scale": 4,
+    "stud": 10,
+    "cornerSnap": 10,
+    "planMargin": 20
+  },
+  "style": {
+    "wallColor": "#121212",
+    "glass": false,
+    "glassColor": "#8ad8ff",
+    "glassAlpha": 176,
+    "material": "BMC_Plastic",
+    "glassMaterial": "BMC_Glass",
+    "intensity": 0
+  }
+}

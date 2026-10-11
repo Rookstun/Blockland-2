@@ -1,0 +1,10 @@
+{
+  "name": "progress",
+  "description": "Saves every player's coins, XP, level and sword tier for good and restores them after a restart or world reload. !progress shows yours.",
+  "author": "pooper",
+  "config": {
+    "interval": { "description": "Seconds between saves", "type": "number", "default": 20 },
+    "joinDelay": { "description": "Seconds after joining before restoring", "type": "number", "default": 8 }
+  },
+  "commands": [{ "name": "!progress", "description": "Show your saved progress", "example": "!progress", "args": [] }]
+}

@@ -1,0 +1,42 @@
+{
+  "importing": {
+    "maxDimension": 500
+  },
+  "extract": {
+    "minRun": 6,
+    "mergeGap": 3,
+    "overlapMin": 4,
+    "inkThreshold": 200,
+    "tolerance": 40,
+    "minPixels": 2
+  },
+  "plan": {
+    "gapMax": 40,
+    "markSearch": 18,
+    "lineSnap": 4,
+    "doorCutW": 5,
+    "windowCutW": 9,
+    "margin": 2
+  },
+  "build": {
+    "wallCourses": 6,
+    "courseHeight": 12,
+    "doorOpenCourses": 3,
+    "windowSillCourses": 2,
+    "windowOpenCourses": 2,
+    "scale": 1,
+    "stud": 10,
+    "cornerSnap": 10,
+    "planMargin": 20
+  },
+  "style": {
+    "wallColor": "#121212",
+    "glass": false,
+    "glassColor": "#8ad8ff",
+    "glassAlpha": 176,
+    "material": "BMC_Plastic",
+    "glassMaterial": "BMC_Glass",
+    "intensity": 0
+  },
+  "image": "jail.png"
+}

@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brick Wall Builder</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1b1e24;
+    --panel-2: #22262e;
+    --line: #2e3440;
+    --text: #e6e9ef;
+    --dim: #9aa4b2;
+    --accent: #6cc2ff;
+    --accent-2: #ffb347;
+    --ok: #64d18a;
+    --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.45 "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  }
+  /* ------------------------------------------------------------- sidebar -- */
+  .sidebar {
+    width: 340px; flex: 0 0 340px; background: var(--panel);
+    border-right: 1px solid var(--line); display: flex; flex-direction: column;
+  }
+  .sidebar header { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .sidebar header h1 { margin: 0; font-size: 16px; letter-spacing: .3px; }
+  .sidebar header p { margin: 4px 0 0; font-size: 12px; color: var(--dim); }
+  .scroll { overflow-y: auto; padding: 6px 16px 16px; flex: 1; }
+  .sidebar footer { padding: 12px 16px; border-top: 1px solid var(--line); background: var(--panel-2); }
+
+  details.group { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  details.group > summary {
+    cursor: pointer; font-weight: 600; font-size: 13px; letter-spacing: .4px;
+    text-transform: uppercase; color: var(--dim); padding: 4px 0; list-style: none;
+  }
+  details.group > summary::before { content: "▸ "; color: var(--accent); }
+  details.group[open] > summary::before { content: "▾ "; }
+  details.group > summary::-webkit-details-marker { display: none; }
+
+  .row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+  .row label { flex: 1; font-size: 13px; }
+  .row .hint { display: block; font-size: 11px; color: var(--dim); }
+  input[type="number"], select, input[type="text"] {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 5px; padding: 5px 7px; width: 82px; font: inherit; font-size: 13px;
+  }
+  input[type="text"] { width: 100%; }
+  input[type="range"] { flex: 1; accent-color: var(--accent); }
+  input[type="color"] {
+    width: 42px; height: 28px; padding: 0; background: none;
+    border: 1px solid var(--line); border-radius: 5px;
+  }
+  input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+  button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 11px; font: inherit; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary {
+    background: var(--accent); border-color: var(--accent); color: #0d1117;
+    font-weight: 700; width: 100%; padding: 10px;
+  }
+  button.primary:hover:not(:disabled) { color: #0d1117; filter: brightness(1.08); }
+
+  #drop {
+    border: 1px dashed var(--line); border-radius: 8px; padding: 14px; text-align: center;
+    color: var(--dim); font-size: 12px; cursor: pointer; margin: 8px 0;
+  }
+  #drop.hot { border-color: var(--accent); color: var(--accent); }
+  .legend { font-size: 11px; color: var(--dim); margin: 6px 0 0; }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; }
+
+  /* ---------------------------------------------------------------- main -- */
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .tabs { display: flex; gap: 4px; padding: 10px 14px 0; border-bottom: 1px solid var(--line); }
+  .tab {
+    padding: 7px 14px; border: 1px solid var(--line); border-bottom: none;
+    border-radius: 7px 7px 0 0; background: var(--panel); color: var(--dim); cursor: pointer;
+    font-size: 13px;
+  }
+  .tab.active { background: var(--panel-2); color: var(--text); }
+  .views { flex: 1; position: relative; overflow: hidden; background: #0f1115; }
+  .view { position: absolute; inset: 0; display: none; overflow: auto; padding: 14px; }
+  .view.active { display: block; }
+  .view.center { display: none; place-items: center; }
+  .view.center.active { display: grid; }
+  #overlayImg, #sourceImg { max-width: 100%; max-height: 100%; image-rendering: pixelated;
+    background: #fff; border-radius: 6px; }
+  #iso { width: 100%; height: 100%; display: block; cursor: grab; }
+  #iso.dragging { cursor: grabbing; }
+  .isoBar {
+    position: absolute; left: 14px; bottom: 14px; display: flex; gap: 8px; align-items: center;
+    background: rgba(27,30,36,.9); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+    font-size: 12px; color: var(--dim);
+  }
+  pre#log {
+    margin: 0; font: 12px/1.5 ui-monospace, Consolas, monospace; color: #cfd6e4; white-space: pre-wrap;
+  }
+  .statusbar {
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    padding: 9px 14px; border-top: 1px solid var(--line); background: var(--panel);
+    font-size: 12px; color: var(--dim);
+  }
+  .statusbar b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .msg.ok { color: var(--ok); }
+  .msg.bad { color: var(--bad); }
+  .msg.warn { color: var(--accent-2); }
+  .placeholder { color: var(--dim); font-size: 13px; text-align: center; }
+  canvas.diagram { width: 100%; height: 132px; background: #0f1115; border: 1px solid var(--line);
+    border-radius: 6px; margin-top: 6px; }
+  .exportRow { display: flex; gap: 8px; margin: 8px 0; }
+  .exportRow button { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <header>
+    <h1>Brick Wall Builder</h1>
+    <p>Floor-plan photo → Brickadia save</p>
+  </header>
+
+  <div class="scroll">
+    <!-- ------------------------------------------------------- import -- -->
+    <details class="group" open>
+      <summary>Import photo</summary>
+      <div id="drop">Drop a floor-plan photo or sketch here<br><span style="opacity:.75">(or click to choose a file)</span></div>
+      <input type="file" id="file" accept="image/*" hidden>
+      <div class="row">
+        <label for="image">Plan image</label>
+        <select id="image" style="width:150px"></select>
+      </div>
+      <div class="row">
+        <label for="maxDimension">Downscale to <span class="hint">1 source pixel = 1 stud; stage 1 scans in Python, so huge photos crawl</span></label>
+        <input type="number" id="maxDimension" min="64" max="2000" step="10">
+      </div>
+      <p class="legend">
+        Walls: any dark grey/black ink.
+        Markers: <span class="swatch" style="background:#00ffff"></span>cyan = window,
+        <span class="swatch" style="background:#ff0000"></span><span class="swatch" style="background:#0000ff"></span><span class="swatch" style="background:#00ff00"></span><span class="swatch" style="background:#ffff00"></span>red/blue/green/yellow = door.
+      </p>
+    </details>
+
+    <!-- --------------------------------------------------------- walls -- -->
+    <details class="group" open>
+      <summary>Wall height</summary>
+      <div class="row">
+        <label for="wallCourses">Wall height <span class="hint" id="wallHeightHint"></span></label>
+        <input type="number" id="wallCourses" min="1" max="60" step="1">
+      </div>
+      <div class="row"><input type="range" id="wallCoursesRange" min="1" max="40" step="1"></div>
+      <div class="row">
+        <label for="courseHeight">Course height <span class="hint">world units per brick course</span></label>
+        <input type="number" id="courseHeight" min="2" max="120" step="1">
+      </div>
+      <div class="row">
+        <label for="stud">Stud size <span class="hint">world units per stud</span></label>
+        <input type="number" id="stud" min="2" max="100" step="1">
+      </div>
+      <div class="row">
+        <label for="scale">Plan scale <span class="hint">studs per source pixel</span></label>
+        <input type="number" id="scale" min="0.1" max="8" step="0.1">
+      </div>
+      <div class="row">
+        <label for="planMargin">Ground margin <span class="hint">empty studs kept around the plan</span></label>
+        <input type="number" id="planMargin" min="0" max="500" step="1">
+      </div>
+      <div class="row">
+        <label for="cornerSnap">Corner snap <span class="hint">studs; how far apart walls still count as meeting</span></label>
+        <input type="number" id="cornerSnap" min="0" max="100" step="1">
+      </div>
+    </details>
+
+    <!-- ----------------------------------------------- doors + windows -- -->
+    <details class="group" open>
+      <summary>Doors &amp; windows</summary>
+      <div class="row">
+        <label for="doorOpenCourses">Door opening height <span class="hint">bottom courses left open</span></label>
+        <input type="number" id="doorOpenCourses" min="0" max="60" step="1">
+      </div>
+      <div class="row">
+        <label for="windowSillCourses">Window sill height <span class="hint">solid courses below the window</span></label>
+        <input type="number" id="windowSillCourses" min="0" max="60" step="1">
+      </div>
+      <div class="row">
+        <label for="windowOpenCourses">Window opening height <span class="hint">open courses in the window band</span></label>
+        <input type="number" id="windowOpenCourses" min="0" max="60" step="1">
+      </div>
+      <canvas class="diagram" id="elevation"></canvas>
+    </details>
+
+    <!-- -------------------------------------------------- margining -- -->
+    <details class="group">
+      <summary>Window &amp; door margining</summary>
+      <div class="row">
+        <label for="windowCutW">Window width <span class="hint">px cut for a window marker on solid wall</span></label>
+        <input type="number" id="windowCutW" min="1" max="200" step="1">
+      </div>
+      <div class="row">
+        <label for="doorCutW">Door width <span class="hint">px cut for a door marker on solid wall</span></label>
+        <input type="number" id="doorCutW" min="1" max="200" step="1">
+      </div>
+      <div class="row">
+        <label for="margin">Edge margin <span class="hint">px of wall material kept each side of a cut</span></label>
+        <input type="number" id="margin" min="0" max="100" step="0.5">
+      </div>
+      <div class="row">
+        <label for="gapMax">Max opening gap <span class="hint">px; wider un-inked gaps are open space, not an opening</span></label>
+        <input type="number" id="gapMax" min="1" max="500" step="1">
+      </div>
+      <div class="row">
+        <label for="markSearch">Marker reach <span class="hint">px from a wall line a marker can still label</span></label>
+        <input type="number" id="markSearch" min="1" max="200" step="1">
+      </div>
+      <div class="row">
+        <label for="lineSnap">Line snap <span class="hint">px tolerance for "same wall line"</span></label>
+        <input type="number" id="lineSnap" min="0" max="50" step="1">
+      </div>
+    </details>
+
+    <!-- -------------------------------------------------- detection -- -->
+    <details class="group">
+      <summary>Ink detection (photos)</summary>
+      <div class="row">
+        <label for="inkThreshold">Ink threshold <span class="hint">grey darker than this is wall; raise for dim photos</span></label>
+        <input type="number" id="inkThreshold" min="1" max="254" step="1">
+      </div>
+      <div class="row">
+        <label for="minRun">Min run <span class="hint">px; shorter marks are ignored</span></label>
+        <input type="number" id="minRun" min="1" max="200" step="1">
+      </div>
+      <div class="row">
+        <label for="mergeGap">Merge gap <span class="hint">px between rows of one thick line</span></label>
+        <input type="number" id="mergeGap" min="0" max="50" step="1">
+      </div>
+      <div class="row">
+        <label for="overlapMin">Band overlap <span class="hint">px overlap for "same wall band"</span></label>
+        <input type="number" id="overlapMin" min="0" max="100" step="1">
+      </div>
+      <div class="row">
+        <label for="tolerance">Marker tolerance <span class="hint">colour distance; raise for JPEG photos</span></label>
+        <input type="number" id="tolerance" min="1" max="400" step="1">
+      </div>
+      <div class="row">
+        <label for="minPixels">Min marker size <span class="hint">px in a marker blob</span></label>
+        <input type="number" id="minPixels" min="1" max="5000" step="1">
+      </div>
+    </details>
+
+    <!-- ------------------------------------------------------- colour -- -->
+    <details class="group" open>
+      <summary>Colour &amp; material</summary>
+      <div class="row">
+        <label for="wallColor">Wall colour</label>
+        <input type="color" id="wallColor">
+        <input type="text" id="wallColorText" style="width:88px">
+      </div>
+      <div class="row">
+        <label for="wallType">Wall type <span class="hint">cave = rough 1x1 stone columns</span></label>
+        <select id="wallType" style="width:130px">
+          <option value="brick">Brick (running bond)</option>
+          <option value="cave">Cave</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="material">Wall material</label>
+        <select id="material" style="width:130px"></select>
+      </div>
+      <div class="row">
+        <label for="intensity">Material intensity <span class="hint">glow / metallic strength</span></label>
+        <input type="number" id="intensity" min="0" max="10" step="1">
+      </div>
+      <div class="row">
+        <label for="glass">Fill windows with panes</label>
+        <input type="checkbox" id="glass">
+      </div>
+      <div class="row">
+        <label for="glassColor">Pane colour</label>
+        <input type="color" id="glassColor">
+        <input type="text" id="glassColorText" style="width:88px">
+      </div>
+      <div class="row">
+        <label for="glassAlpha">Pane opacity <span class="hint">0 = clear, 255 = solid</span></label>
+        <input type="number" id="glassAlpha" min="0" max="255" step="1">
+      </div>
+      <div class="row">
+        <label for="glassMaterial">Pane material</label>
+        <select id="glassMaterial" style="width:130px"></select>
+      </div>
+    </details>
+
+    <!-- ------------------------------------------------ storeys + stairs -- -->
+    <details class="group" open>
+      <summary>Storeys &amp; stairs</summary>
+      <div class="row">
+        <label for="storeys">Storeys <span class="hint">each one a full wall height; fences stay one storey</span></label>
+        <input type="number" id="storeys" min="1" max="20" step="1">
+      </div>
+      <div class="row">
+        <label for="stairs">Stairs between storeys <span class="hint">one switchback stack per building, placed against a wall</span></label>
+        <input type="checkbox" id="stairs">
+      </div>
+      <div class="row">
+        <label for="stairWidth">Flight width <span class="hint">studs</span></label>
+        <input type="number" id="stairWidth" min="1" max="20" step="1">
+      </div>
+      <div class="row">
+        <label for="stairRise">Step rise <span class="hint" id="stairRiseHint">world units; must divide the storey height</span></label>
+        <input type="number" id="stairRise" min="2" max="60" step="2">
+      </div>
+      <div class="row">
+        <label for="stairRun">Step depth <span class="hint">studs of tread per step</span></label>
+        <input type="number" id="stairRun" min="1" max="10" step="1">
+      </div>
+      <div class="row">
+        <label for="stairsColor">Stair colour</label>
+        <input type="color" id="stairsColor">
+        <input type="text" id="stairsColorText" style="width:88px">
+      </div>
+      <div class="row">
+        <label for="stairsMaterial">Stair material</label>
+        <select id="stairsMaterial" style="width:130px"></select>
+      </div>
+    </details>
+
+    <!-- ------------------------------------------------ floor + ceiling -- -->
+    <details class="group" open>
+      <summary>Floors &amp; ceiling</summary>
+      <div class="row">
+        <label for="floor">Floor enclosed rooms <span class="hint">plates inside closed walls, on every storey</span></label>
+        <input type="checkbox" id="floor">
+      </div>
+      <div class="row">
+        <label for="floorH">Floor thickness <span class="hint">world units (4 = one plate); even</span></label>
+        <input type="number" id="floorH" min="2" max="60" step="2">
+      </div>
+      <div class="row">
+        <label for="floorColor">Floor colour</label>
+        <input type="color" id="floorColor">
+        <input type="text" id="floorColorText" style="width:88px">
+      </div>
+      <div class="row">
+        <label for="floorMaterial">Floor material</label>
+        <select id="floorMaterial" style="width:130px"></select>
+      </div>
+      <div class="row">
+        <label for="ceiling">Ceiling <span class="hint">plates over the top storey's rooms; lower storeys' ceiling is the floor above</span></label>
+        <input type="checkbox" id="ceiling">
+      </div>
+      <div class="row">
+        <label for="ceilingH">Ceiling thickness <span class="hint">world units; even</span></label>
+        <input type="number" id="ceilingH" min="2" max="60" step="2">
+      </div>
+      <div class="row">
+        <label for="ceilingDrop">Ceiling drop <span class="hint">courses below the wall top</span></label>
+        <input type="number" id="ceilingDrop" min="0" max="60" step="1">
+      </div>
+      <div class="row">
+        <label for="ceilingColor">Ceiling colour</label>
+        <input type="color" id="ceilingColor">
+        <input type="text" id="ceilingColorText" style="width:88px">
+      </div>
+      <div class="row">
+        <label for="ceilingMaterial">Ceiling material</label>
+        <select id="ceilingMaterial" style="width:130px"></select>
+      </div>
+      <div class="row">
+        <label for="floorMax">Largest plate <span class="hint">studs per side, floors, ceiling and roof</span></label>
+        <input type="number" id="floorMax" min="1" max="200" step="1">
+      </div>
+    </details>
+
+    <!-- ------------------------------------------------------------ roof -- -->
+    <details class="group" open>
+      <summary>Roof</summary>
+      <div class="row">
+        <label for="roof">Roof <span class="hint">over each building's rooms and outer walls</span></label>
+        <input type="checkbox" id="roof">
+      </div>
+      <div class="row">
+        <label for="roofStep">Slope <span class="hint">studs each layer steps in; 0 = flat</span></label>
+        <input type="number" id="roofStep" min="0" max="20" step="1">
+      </div>
+      <div class="row">
+        <label for="roofLayers">Max layers <span class="hint">a sloped roof flattens off here</span></label>
+        <input type="number" id="roofLayers" min="1" max="200" step="1">
+      </div>
+      <div class="row">
+        <label for="roofH">Layer thickness <span class="hint">world units (4 = plate, 12 = brick); even</span></label>
+        <input type="number" id="roofH" min="2" max="60" step="2">
+      </div>
+      <div class="row">
+        <label for="roofOverhang">Overhang <span class="hint">studs past the outer walls</span></label>
+        <input type="number" id="roofOverhang" min="0" max="20" step="1">
+      </div>
+      <div class="row">
+        <label for="roofColor">Roof colour</label>
+        <input type="color" id="roofColor">
+        <input type="text" id="roofColorText" style="width:88px">
+      </div>
+      <div class="row">
+        <label for="roofMaterial">Roof material</label>
+        <select id="roofMaterial" style="width:130px"></select>
+      </div>
+    </details>
+
+    <!-- ------------------------------------------------------- export -- -->
+    <details class="group" open>
+      <summary>Export</summary>
+      <div class="exportRow">
+        <button id="dlBrz" disabled>Download .brz</button>
+        <button id="dlBrs" disabled>Download .brs</button>
+      </div>
+      <div class="row">
+        <label for="buildsDir" style="flex:none">Brickadia builds folder</label>
+      </div>
+      <input type="text" id="buildsDir" placeholder="not found — paste the path to copy into">
+      <div class="exportRow">
+        <button id="install" disabled>Copy .brz into Brickadia</button>
+      </div>
+      <div class="exportRow">
+        <button id="savePreset">Save settings</button>
+        <button id="resetDefaults">Reset to defaults</button>
+      </div>
+    </details>
+  </div>
+
+  <footer>
+    <button class="primary" id="generate">Generate walls</button>
+    <div id="msg" class="msg" style="margin-top:8px; font-size:12px; min-height:16px"></div>
+  </footer>
+</div>
+
+<main>
+  <div class="tabs">
+    <div class="tab active" data-view="isoView">3D preview</div>
+    <div class="tab" data-view="planView">Plan overlay</div>
+    <div class="tab" data-view="srcView">Source image</div>
+    <div class="tab" data-view="logView">Log</div>
+  </div>
+  <div class="views">
+    <div class="view active" id="isoView" style="padding:0">
+      <canvas id="iso"></canvas>
+      <div class="isoBar">
+        <span>drag to pan</span>
+        <label for="isoZoom">zoom</label>
+        <input type="range" id="isoZoom" min="0.2" max="4" step="0.05" value="1" style="width:110px">
+        <button id="isoRotate">rotate 90°</button>
+        <label for="isoView3d">show</label>
+        <select id="isoView3d" style="width:auto"><option value="all">whole building</option></select>
+        <button id="isoFit">fit</button>
+      </div>
+    </div>
+    <div class="view center" id="planView"><div class="placeholder" id="planPlaceholder">Generate to see the extracted floor plan.</div><img id="overlayImg" hidden></div>
+    <div class="view center" id="srcView"><img id="sourceImg" hidden><div class="placeholder" id="srcPlaceholder">Pick or import a plan image.</div></div>
+    <div class="view" id="logView"><pre id="log">No run yet.</pre></div>
+  </div>
+  <div class="statusbar" id="stats">
+    <span>bricks <b id="sBricks">—</b></span>
+    <span>wall runs <b id="sRuns">—</b></span>
+    <span>doors <b id="sDoors">—</b></span>
+    <span>windows <b id="sWindows">—</b></span>
+    <span>panes <b id="sPanes">—</b></span>
+    <span>floor plates <b id="sFloor">—</b></span>
+    <span>ceiling <b id="sCeiling">—</b></span>
+    <span>roof <b id="sRoof">—</b></span>
+    <span>stair steps <b id="sStairs">—</b></span>
+    <span>height <b id="sHeight">—</b></span>
+    <span>file <b id="sFile">—</b></span>
+  </div>
+</main>
+
+<script src="/lib.js"></script>
+<script>
+"use strict";
+
+// Every control on the page, grouped exactly the way /api/generate wants its
+// body -- so reading and writing settings is one loop instead of one line per
+// input, and adding a knob means adding it here and in the HTML only.
+const FIELDS = {
+  importing: { maxDimension: "maxDimension" },
+  extract: {
+    minRun: "minRun", mergeGap: "mergeGap", overlapMin: "overlapMin",
+    inkThreshold: "inkThreshold", tolerance: "tolerance", minPixels: "minPixels",
+  },
+  plan: {
+    gapMax: "gapMax", markSearch: "markSearch", lineSnap: "lineSnap",
+    doorCutW: "doorCutW", windowCutW: "windowCutW", margin: "margin",
+  },
+  build: {
+    wallCourses: "wallCourses", courseHeight: "courseHeight", doorOpenCourses: "doorOpenCourses",
+    windowSillCourses: "windowSillCourses", windowOpenCourses: "windowOpenCourses",
+    scale: "scale", stud: "stud", cornerSnap: "cornerSnap", planMargin: "planMargin",
+    storeys: "storeys", floorH: "floorH", floorMax: "floorMax",
+    ceilingH: "ceilingH", ceilingDrop: "ceilingDrop",
+    roofH: "roofH", roofOverhang: "roofOverhang", roofStep: "roofStep", roofLayers: "roofLayers",
+    stairWidth: "stairWidth", stairRise: "stairRise", stairRun: "stairRun",
+  },
+  style: {
+    wallColor: "wallColor", wallType: "wallType", glass: "glass", glassColor: "glassColor",
+    glassAlpha: "glassAlpha", material: "material", glassMaterial: "glassMaterial",
+    floor: "floor", floorColor: "floorColor", floorMaterial: "floorMaterial",
+    ceiling: "ceiling", ceilingColor: "ceilingColor", ceilingMaterial: "ceilingMaterial",
+    roof: "roof", roofColor: "roofColor", roofMaterial: "roofMaterial",
+    stairs: "stairs", stairsColor: "stairsColor", stairsMaterial: "stairsMaterial",
+    intensity: "intensity",
+  },
+};
+// Colour pickers that have a hex text box beside them ("<id>Text").
+const COLOR_IDS = ["wallColor", "glassColor", "floorColor", "ceilingColor", "roofColor", "stairsColor"];
+
+const $ = (id) => document.getElementById(id);
+let DEFAULTS = null;
+let lastRun = null;   // { slug, plan, stats, settings }
+
+function readSettings() {
+  const out = {};
+  for (const [group, fields] of Object.entries(FIELDS)) {
+    out[group] = {};
+    for (const [key, id] of Object.entries(fields)) {
+      const el = $(id);
+      out[group][key] = el.type === "checkbox" ? el.checked
+        : el.type === "number" ? Number(el.value)
+        : el.value;
+    }
+  }
+  out.image = $("image").value;
+  return out;
+}
+
+function writeSettings(s) {
+  for (const [group, fields] of Object.entries(FIELDS)) {
+    if (!s[group]) continue;
+    for (const [key, id] of Object.entries(fields)) {
+      if (s[group][key] === undefined) continue;
+      const el = $(id);
+      if (el.type === "checkbox") el.checked = Boolean(s[group][key]);
+      else el.value = s[group][key];
+    }
+  }
+  if (s.image) selectImage(s.image);
+  syncDerived();
+}
+
+// Colour picker <-> hex text box, wall-height readout, elevation diagram.
+function syncDerived() {
+  for (const id of COLOR_IDS) $(id + "Text").value = $(id).value;
+  $("wallCoursesRange").value = Math.min(40, Number($("wallCourses").value) || 1);
+  const courses = Number($("wallCourses").value) || 0;
+  const ch = Number($("courseHeight").value) || 0;
+  const storeys = Math.max(1, Number($("storeys").value) || 1);
+  $("wallHeightHint").textContent =
+    `${courses} courses = ${courses * ch} world units (${(courses * ch / 100).toFixed(2)} m-ish)` +
+    (storeys > 1 ? ` per storey, ${storeys * courses * ch} in all` : "");
+  const rise = Number($("stairRise").value) || 0;
+  const storeyH = courses * ch;
+  $("stairRiseHint").textContent = rise > 0 && storeyH % rise === 0
+    ? `world units; ${storeyH / rise} steps per storey`
+    : `world units; must divide the storey height (${storeyH})`;
+  drawElevation();
+  scheduleIso();
+  if (isStale()) setMsg("preview only — click Generate to rebuild the save", "warn");
+}
+
+// True when the controls have moved since the last successful generate -- the
+// 3D preview follows the controls live, but the .brs/.brz on disk does not.
+function isStale() {
+  if (!lastRun || !lastRun.settings) return false;
+  const now = readSettings();
+  for (const group of ["extract", "plan", "build", "style"]) {
+    for (const key of Object.keys(FIELDS[group])) {
+      const a = now[group][key], b = lastRun.settings[group][key];
+      if (typeof a === "number" ? Math.abs(a - b) > 1e-9 : a !== b) return true;
+    }
+  }
+  return now.image !== lastRun.settings.image;
+}
+
+function setMsg(text, kind) {
+  const el = $("msg");
+  el.textContent = text || "";
+  el.className = "msg" + (kind ? " " + kind : "");
+}
+
+// ------------------------------------------------------- elevation diagram --
+// A straight-on section of one wall: what the course settings actually do to a
+// window and a door. This is the control that tells you the window band has
+// walked off the top of the wall before you generate 20k bricks.
+function drawElevation() {
+  const cv = $("elevation");
+  const ctx = cv.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const courses = Math.max(1, Number($("wallCourses").value) || 1);
+  const doorOpen = Number($("doorOpenCourses").value) || 0;
+  const sill = Number($("windowSillCourses").value) || 0;
+  const winOpen = Number($("windowOpenCourses").value) || 0;
+  const wall = $("wallColor").value;
+  const pane = $("glass").checked ? $("glassColor").value : null;
+
+  const pad = 10, labelH = 14;
+  const rowH = Math.max(2, (h - pad * 2 - labelH) / courses);
+  const colW = (w - pad * 3) / 2;
+
+  const columns = [
+    { x: pad, label: "window wall", open: (c) => c >= sill && c < sill + winOpen, glass: true },
+    { x: pad * 2 + colW, label: "door wall", open: (c) => c < doorOpen, glass: false },
+  ];
+
+  ctx.font = "11px 'Segoe UI', sans-serif";
+  for (const col of columns) {
+    for (let c = 0; c < courses; c++) {
+      const y = h - labelH - pad - (c + 1) * rowH;
+      const open = col.open(c);
+      if (open && col.glass && pane) {
+        ctx.fillStyle = pane;
+        ctx.globalAlpha = Math.max(0.15, (Number($("glassAlpha").value) || 0) / 255);
+        ctx.fillRect(col.x, y, colW, rowH - 1);
+        ctx.globalAlpha = 1;
+      } else if (open) {
+        ctx.fillStyle = "#0b0d11";
+        ctx.fillRect(col.x, y, colW, rowH - 1);
+        ctx.strokeStyle = "#333a47";
+        ctx.strokeRect(col.x + .5, y + .5, colW - 1, rowH - 2);
+      } else {
+        ctx.fillStyle = wall;
+        ctx.fillRect(col.x, y, colW, rowH - 1);
+        ctx.strokeStyle = "rgba(255,255,255,.08)";
+        ctx.strokeRect(col.x + .5, y + .5, colW - 1, rowH - 2);
+      }
+    }
+    ctx.fillStyle = "#9aa4b2";
+    ctx.fillText(col.label, col.x, h - 3);
+  }
+  // ground line
+  ctx.strokeStyle = "#4a5364";
+  ctx.beginPath();
+  ctx.moveTo(pad - 4, h - labelH - pad + .5);
+  ctx.lineTo(w - pad + 4, h - labelH - pad + .5);
+  ctx.stroke();
+
+  if (sill + winOpen > courses) {
+    ctx.fillStyle = "#ffb347";
+    ctx.fillText("window band above wall top", pad, 12);
+  } else if (doorOpen >= courses && doorOpen > 0) {
+    ctx.fillStyle = "#ffb347";
+    ctx.fillText("no lintel above doors", pad, 12);
+  }
+}
+
+// ------------------------------------------------------------- 3D preview --
+// Drawn from lib.buildModel -- the function stage 5 builds the save from --
+// run here with the current controls (lib.js is served by gui_server.js), so
+// every storey, floor, ceiling, roof layer and stair step in the preview comes
+// from the same placement code as the .brz. Nothing structural is re-derived
+// in this file.
+//
+// Everything in the model is a box on the stud grid, so it's drawn as stud
+// columns, far to near (x + y ascending), each column bottom-up. For columns
+// with a one-stud footprint that painter's order is exact -- no wall can end
+// up drawn over something in front of it, which sorting whole spans got wrong.
+const iso = { zoom: 1, rot: 0, panX: 0, panY: 0, fitted: false, view: "all" };
+let modelCache = { key: null };
+let facesCache = { key: null };
+
+function previewInputs() {
+  const st = readSettings();
+  const s = st.build;
+  const lib = window.BrickLib;
+  const cfg = {
+    ...lib.CONFIG, SCALE: s.scale, STUD: s.stud, COURSE_H: s.courseHeight, WALL_COURSES: s.wallCourses,
+    DOOR_OPEN_COURSES: s.doorOpenCourses, WINDOW_SILL_COURSES: s.windowSillCourses,
+    WINDOW_OPEN_COURSES: s.windowOpenCourses, CORNER_SNAP: s.cornerSnap, MARGIN: s.planMargin,
+    STOREYS: s.storeys, FLOOR_H: s.floorH, FLOOR_MAX: s.floorMax, CEILING_H: s.ceilingH,
+    CEILING_DROP: s.ceilingDrop, ROOF_H: s.roofH, ROOF_OVERHANG: s.roofOverhang, ROOF_STEP: s.roofStep,
+    ROOF_LAYERS: s.roofLayers, STAIR_WIDTH: s.stairWidth, STAIR_RISE: s.stairRise, STAIR_RUN: s.stairRun,
+  };
+  const opts = { glass: st.style.glass, floor: st.style.floor, ceiling: st.style.ceiling,
+                 roof: st.style.roof, stairs: st.style.stairs };
+  return { cfg, opts };
+}
+
+// The model plus its stud columns: "x,y" -> [{z0, z1, kind}] bottom-up.
+function previewModel() {
+  const lib = window.BrickLib;
+  const { cfg, opts } = previewInputs();
+  const key = JSON.stringify([lastRun.slug, cfg, opts]);
+  if (modelCache.key === key) return modelCache;
+  let model = null, error = null;
+  const columns = new Map();
+  try {
+    const runs = lib.snapEndpoints(lib.normalizeRuns(lastRun.plan.runs, cfg), cfg);
+    model = lib.buildModel(runs, cfg, opts);
+    const add = (x0, y0, x1, y1, z0, z1, kind) => {
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const k = x + "," + y;
+          let col = columns.get(k);
+          if (!col) columns.set(k, (col = []));
+          col.push({ z0, z1, kind });
+        }
+      }
+    };
+    const brick = (b, kind) => {
+      const z0 = b.course * cfg.COURSE_H;
+      if (b.orient === "H") add(b.a, b.line, b.b, b.line + 1, z0, z0 + cfg.COURSE_H, kind);
+      else add(b.line, b.a, b.line + 1, b.b, z0, z0 + cfg.COURSE_H, kind);
+    };
+    for (const b of model.walls) brick(b, "wall");
+    for (const b of model.glass) brick(b, "pane");
+    for (const sl of model.slabs) add(sl.x0, sl.y0, sl.x1, sl.y1, sl.z0, sl.z1, sl.kind);
+    for (const col of columns.values()) col.sort((p, q) => p.z0 - q.z0);
+  } catch (err) {
+    error = err.message;
+  }
+  // Ground rectangle: the image bounds in the same stud space normalizeRuns used.
+  let minX = Infinity, minY = Infinity;
+  for (const r of lastRun.plan.runs) {
+    const ends = [lib.toStud(r.start, cfg.SCALE), lib.toStud(r.end, cfg.SCALE)];
+    const line = lib.toStud(r.line, cfg.SCALE);
+    if (r.orient === "H") { minX = Math.min(minX, ...ends); minY = Math.min(minY, line); }
+    else { minX = Math.min(minX, line); minY = Math.min(minY, ...ends); }
+  }
+  const ox = cfg.MARGIN - minX, oy = cfg.MARGIN - minY;
+  const ground = [ox, oy, lastRun.plan.width * cfg.SCALE + ox, lastRun.plan.height * cfg.SCALE + oy];
+  modelCache = { key, cfg, opts, model, error, columns, ground };
+  return modelCache;
+}
+
+// "view" control: whole building, without the roof, without roof and ceiling,
+// or cut off above storey N.
+function viewKeeps(view, seg, cfg) {
+  if (view === "all") return true;
+  if (seg.kind === "roof") return false;
+  if (view === "noroof") return true;
+  if (seg.kind === "ceiling") return false;
+  if (view === "open") return true;
+  const upTo = Number(view.slice(1)) * cfg.WALL_COURSES * cfg.COURSE_H;
+  return seg.z0 < upTo;
+}
+
+// Point rotation by quarter turns about the origin.
+function rotPoint(u, v, r) {
+  switch (((r % 4) + 4) % 4) {
+    case 1: return [-v, u];
+    case 2: return [-u, -v];
+    case 3: return [v, -u];
+    default: return [u, v];
+  }
+}
+
+// Visible faces in draw order, in rotated stud space. A side face is dropped
+// when the neighbouring column covers it; a top when something sits on it.
+function previewFaces(mc) {
+  const key = mc.key + "|" + iso.rot + "|" + iso.view;
+  if (facesCache.key === key) return facesCache;
+  const rcols = new Map();
+  for (const [k, col] of mc.columns) {
+    const segs = col.filter((sg) => viewKeeps(iso.view, sg, mc.cfg));
+    if (!segs.length) continue;
+    const [x, y] = k.split(",").map(Number);
+    const [cx, cy] = rotPoint(x + 0.5, y + 0.5, iso.rot);
+    const rx = cx - 0.5, ry = cy - 0.5;
+    rcols.set(rx + "," + ry, { rx, ry, segs });
+  }
+  const covered = (rx, ry, z0, z1) => {
+    const n = rcols.get(rx + "," + ry);
+    return Boolean(n) && n.segs.some((sg) => sg.z0 <= z0 && sg.z1 >= z1);
+  };
+  // A point (x, y, z) lands on the same pixel as (x + d, y + d, z + d * STUD),
+  // so a top face at height z is hidden when, at the height Z of something
+  // above it, the cells d = (Z - z) / STUD studs toward the viewer are solid
+  // across the whole face. That drops every floor under the next floor or the
+  // roof -- most of the faces in a multi-storey build -- and nothing visible.
+  const solidAt = (rx, ry, Z) => {
+    const n = rcols.get(rx + "," + ry);
+    return Boolean(n) && n.segs.some((sg) => sg.z0 < Z && sg.z1 >= Z);
+  };
+  const hiddenTop = (rx, ry, z, above) => {
+    for (const up of above) {
+      const d = (up.z1 - z) / mc.cfg.STUD;
+      const x0 = Math.floor(rx + d), x1 = Math.ceil(rx + d + 1) - 1;
+      const y0 = Math.floor(ry + d), y1 = Math.ceil(ry + d + 1) - 1;
+      let all = true;
+      for (let yy = y0; yy <= y1 && all; yy++) for (let xx = x0; xx <= x1 && all; xx++) all = solidAt(xx, yy, up.z1);
+      if (all) return true;
+    }
+    return false;
+  };
+  const order = [...rcols.values()].sort((a, b) => (a.rx + a.ry) - (b.rx + b.ry));
+  const faces = [];
+  let maxZ = 0;
+  for (const { rx, ry, segs } of order) {
+    segs.forEach((sg, i) => {
+      if (!covered(rx + 1, ry, sg.z0, sg.z1)) faces.push({ t: 1, rx, ry, z0: sg.z0, z1: sg.z1, kind: sg.kind });
+      if (!covered(rx, ry + 1, sg.z0, sg.z1)) faces.push({ t: 2, rx, ry, z0: sg.z0, z1: sg.z1, kind: sg.kind });
+      const above = segs.slice(i + 1);
+      if (!(above.length && above[0].z0 <= sg.z1) && !hiddenTop(rx, ry, sg.z1, above)) {
+        faces.push({ t: 0, rx, ry, z0: sg.z0, z1: sg.z1, kind: sg.kind });
+      }
+      maxZ = Math.max(maxZ, sg.z1);
+    });
+  }
+  facesCache = { key, faces, maxZ };
+  return facesCache;
+}
+
+function shade(hex, factor) {
+  const n = parseInt(hex.replace("#", ""), 16);
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) =>
+    Math.max(0, Math.min(255, Math.round(v * factor))));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+// Refill the view select when the storey count changes.
+function syncViewOptions(storeys) {
+  const sel = $("isoView3d");
+  const want = ["all", "noroof", "open", ...Array.from({ length: storeys }, (_, i) => "s" + (i + 1))];
+  if ([...sel.options].map((o) => o.value).join() === want.join()) return;
+  const label = { all: "whole building", noroof: "no roof", open: "no roof or ceiling" };
+  sel.innerHTML = want.map((v) => `<option value="${v}">${label[v] || "up to storey " + v.slice(1)}</option>`).join("");
+  sel.value = want.includes(iso.view) ? iso.view : "all";
+  iso.view = sel.value;
+}
+
+// Last full render, so a drag or zoom can move it instead of redrawing every face.
+const isoFrame = { canvas: document.createElement("canvas"), panX: 0, panY: 0, zoom: 1, valid: false };
+
+function drawIso() {
+  const cv = $("iso");
+  const ctx = cv.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 800, h = cv.clientHeight || 600;
+  cv.width = w * dpr; cv.height = h * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  isoFrame.valid = false;
+
+  const say = (text) => {
+    ctx.fillStyle = "#9aa4b2";
+    ctx.font = "13px 'Segoe UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(text, w / 2, h / 2);
+    ctx.textAlign = "left";
+  };
+  if (!lastRun || !lastRun.plan) return say("Generate to see the walls in 3D.");
+  if (!window.BrickLib) return say("lib.js didn't load, so there's no preview.");
+
+  const mc = previewModel();
+  syncViewOptions(Math.max(1, mc.cfg.STOREYS | 0));
+  if (mc.error) {
+    say("These settings can't be built:");
+    ctx.fillStyle = "#ffb347";
+    ctx.textAlign = "center";
+    mc.error.split("\n").slice(1).forEach((line, i) =>
+      ctx.fillText(line.replace(/^\s*-\s*/, ""), w / 2, h / 2 + 20 + i * 17));
+    ctx.textAlign = "left";
+    return;
+  }
+  const { faces, maxZ } = previewFaces(mc);
+  const zs = 1 / mc.cfg.STUD; // world units -> stud units, vertically
+  const project = (x, y, z) => [(x - y) * 0.866, (x + y) * 0.5 - z * zs];
+
+  const [gx0, gy0, gx1, gy1] = mc.ground;
+  const groundPts = [[gx0, gy0], [gx1, gy0], [gx1, gy1], [gx0, gy1]].map(([x, y]) => rotPoint(x, y, iso.rot));
+  if (!iso.fitted) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const [px, py] of groundPts) {
+      for (const z of [0, maxZ]) {
+        const [sx, sy] = project(px, py, z);
+        minX = Math.min(minX, sx); maxX = Math.max(maxX, sx);
+        minY = Math.min(minY, sy); maxY = Math.max(maxY, sy);
+      }
+    }
+    iso.zoom = Math.min((w - 60) / (maxX - minX || 1), (h - 60) / (maxY - minY || 1));
+    iso.panX = w / 2 - ((minX + maxX) / 2) * iso.zoom;
+    iso.panY = h / 2 - ((minY + maxY) / 2) * iso.zoom;
+    $("isoZoom").value = Math.max(0.2, Math.min(4, iso.zoom));
+    iso.fitted = true;
+  }
+  const Z = iso.zoom, PX = iso.panX, PY = iso.panY;
+  const toScreen = (x, y, z) => [(x - y) * 0.866 * Z + PX, ((x + y) * 0.5 - z * zs) * Z + PY];
+
+  ctx.beginPath();
+  groundPts.forEach(([x, y], i) => {
+    const [sx, sy] = toScreen(x, y, 0);
+    if (i) ctx.lineTo(sx, sy); else ctx.moveTo(sx, sy);
+  });
+  ctx.closePath();
+  ctx.fillStyle = "#171a20";
+  ctx.fill();
+  ctx.strokeStyle = "#252a33";
+  ctx.stroke();
+
+  const colour = {
+    wall: $("wallColor").value, pane: $("glassColor").value, floor: $("floorColor").value,
+    ceiling: $("ceilingColor").value, roof: $("roofColor").value, stair: $("stairsColor").value,
+  };
+  const lit = [1.0, 0.8, 0.62]; // top, +x side, +y side
+  const paneAlpha = Math.max(0.12, (Number($("glassAlpha").value) || 0) / 255);
+  const seams = Z > 6;
+  // Consecutive faces with the same fill go into one path; the draw order is
+  // unchanged, it just saves a fill() per face.
+  let style = null;
+  const flush = () => {
+    if (!style) return;
+    ctx.globalAlpha = style.startsWith("pane") ? paneAlpha : 1;
+    ctx.fill();
+    if (seams && !style.startsWith("pane")) ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  ctx.strokeStyle = "rgba(0,0,0,.22)";
+  ctx.lineWidth = 0.6;
+  const reach = 2 * Z; // a face spans at most ~2 stud-widths across
+  for (const f of faces) {
+    const { rx, ry, z0, z1 } = f;
+    const [ax, ay] = toScreen(rx, ry, z1);
+    if (ax < -reach || ax > w + reach || ay < -reach || ay > h + reach + (z1 - z0) * zs * Z) continue;
+    const s = f.kind + f.t;
+    if (s !== style) {
+      flush();
+      style = s;
+      ctx.beginPath();
+      ctx.fillStyle = shade(colour[f.kind] || "#888888", lit[f.t]);
+    }
+    let pts;
+    if (f.t === 0) pts = [[rx, ry, z1], [rx + 1, ry, z1], [rx + 1, ry + 1, z1], [rx, ry + 1, z1]];
+    else if (f.t === 1) pts = [[rx + 1, ry, z0], [rx + 1, ry + 1, z0], [rx + 1, ry + 1, z1], [rx + 1, ry, z1]];
+    else pts = [[rx, ry + 1, z0], [rx + 1, ry + 1, z0], [rx + 1, ry + 1, z1], [rx, ry + 1, z1]];
+    pts.forEach(([x, y, z], i) => {
+      const [sx, sy] = toScreen(x, y, z);
+      if (i) ctx.lineTo(sx, sy); else ctx.moveTo(sx, sy);
+    });
+    ctx.closePath();
+  }
+  flush();
+
+  const fr = isoFrame.canvas;
+  fr.width = cv.width; fr.height = cv.height;
+  fr.getContext("2d").drawImage(cv, 0, 0);
+  Object.assign(isoFrame, { panX: PX, panY: PY, zoom: Z, valid: true });
+}
+
+// Typing in a field or spinning the wheel fires many events a frame; the
+// model rebuild behind a redraw isn't free, so draw once per frame at most.
+let isoPending = false;
+function scheduleIso() {
+  if (isoPending) return;
+  isoPending = true;
+  requestAnimationFrame(() => { isoPending = false; drawIso(); });
+}
+
+// While dragging or zooming, move/scale the last render (screen = world *
+// zoom + pan, so the old frame maps onto the new view by a scale and an
+// offset); the real redraw happens on release, or once the wheel settles.
+function blitIso() {
+  if (!isoFrame.valid) return drawIso();
+  const cv = $("iso");
+  const ctx = cv.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const k = iso.zoom / isoFrame.zoom;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(isoFrame.canvas, (iso.panX - isoFrame.panX * k) * dpr, (iso.panY - isoFrame.panY * k) * dpr,
+                isoFrame.canvas.width * k, isoFrame.canvas.height * k);
+}
+let isoSettle = null;
+function zoomIso(factor, sx, sy) {
+  const z = Math.max(0.05, Math.min(40, iso.zoom * factor));
+  iso.panX = sx - (sx - iso.panX) * (z / iso.zoom);
+  iso.panY = sy - (sy - iso.panY) * (z / iso.zoom);
+  iso.zoom = z;
+  $("isoZoom").value = Math.max(0.2, Math.min(4, z));
+  blitIso();
+  clearTimeout(isoSettle);
+  isoSettle = setTimeout(drawIso, 180);
+}
+
+// ------------------------------------------------------------------ import --
+// Downscale in the browser before uploading: stage 1 is a per-row Python scan,
+// and 1 source pixel becomes 1 stud, so a full-resolution phone photo would be
+// both painfully slow and a 4000-stud-wide building.
+function importFile(file) {
+  if (!file) return;
+  const maxDim = Math.max(64, Number($("maxDimension").value) || 500);
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = async () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const cw = Math.max(1, Math.round(img.width * scale));
+      const chh = Math.max(1, Math.round(img.height * scale));
+      const cv = document.createElement("canvas");
+      cv.width = cw; cv.height = chh;
+      const ctx = cv.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, cw, chh);            // flatten transparency to white paper
+      ctx.drawImage(img, 0, 0, cw, chh);
+      setMsg(`importing ${file.name} at ${cw}×${chh}…`);
+      try {
+        const res = await fetch("/api/image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: file.name, dataUrl: cv.toDataURL("image/png") }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "import failed");
+        fillImages(data.images, data.name);
+        setMsg(`imported ${data.name} (${cw}×${chh})`, "ok");
+      } catch (err) {
+        setMsg(String(err.message), "bad");
+      }
+    };
+    img.onerror = () => setMsg("could not read that image", "bad");
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function fillImages(images, select) {
+  const sel = $("image");
+  sel.innerHTML = "";
+  for (const img of images) {
+    const opt = document.createElement("option");
+    opt.value = img.name;
+    opt.textContent = `${img.name}${img.origin === "imported" ? " (imported)" : ""}`;
+    sel.appendChild(opt);
+  }
+  if (select) selectImage(select);
+  showSource();
+}
+
+function selectImage(name) {
+  const sel = $("image");
+  if ([...sel.options].some((o) => o.value === name)) sel.value = name;
+  showSource();
+}
+
+// ----------------------------------------------------- size-aware settings --
+// The extract/plan defaults are pixel lengths tuned on a ~500px drawing (doors
+// up to ~31px, walls 5+px apart). On a small drawing they are simply wrong:
+// a 40px "max gap" bridges whole rooms, a 6px "min run" deletes every wall
+// stub beside a doorway, a 4px "line snap" chains walls 1px apart together,
+// and at SCALE 1 walls 1-2px apart can't fit 2-stud bricks. So when an image
+// is shown, the size-dependent fields are scaled to it -- but only fields
+// still at the default (or at the last value set here); anything you typed
+// yourself is left alone.
+let autoValues = {};   // "group.key" -> value this code last set
+
+function sizedSettings(w, h) {
+  const k = Math.min(1, Math.max(w, h) / 500);   // never scale UP past the tuned defaults
+  const d = DEFAULTS;
+  const r = (v, lo) => Math.max(lo, Math.round(v * k));
+  return {
+    extract: {
+      minRun: r(d.extract.minRun, 2),
+      mergeGap: r(d.extract.mergeGap, 1),
+      overlapMin: r(d.extract.overlapMin, 1),
+    },
+    plan: {
+      gapMax: r(d.plan.gapMax, 6),
+      markSearch: r(d.plan.markSearch, 2),
+      lineSnap: Math.floor(d.plan.lineSnap * k),
+      doorCutW: r(d.plan.doorCutW, 2),
+      windowCutW: r(d.plan.windowCutW, 3),
+      margin: r(d.plan.margin, 1),
+    },
+    // enlarge small drawings so walls a pixel or two apart are still >= 2
+    // studs apart in the build
+    build: { scale: Math.max(d.build.scale, Math.round(0.5 / k)) },
+  };
+}
+
+function applySizedSettings(w, h) {
+  if (!DEFAULTS || !w || !h) return;
+  const sized = sizedSettings(w, h);
+  const changed = [];
+  for (const [group, vals] of Object.entries(sized)) {
+    for (const [key, v] of Object.entries(vals)) {
+      const el = $(FIELDS[group][key]);
+      const cur = Number(el.value);
+      const tag = `${group}.${key}`;
+      const untouched = cur === Number(DEFAULTS[group][key]) || cur === autoValues[tag];
+      if (!untouched || cur === v) continue;
+      el.value = v;
+      autoValues[tag] = v;
+      changed.push(`${key} ${v}`);
+    }
+  }
+  if (changed.length) {
+    syncDerived();
+    setMsg(`${w}×${h} image — sized settings to it: ${changed.join(", ")}`, "ok");
+  }
+}
+
+function showSource() {
+  const name = $("image").value;
+  const img = $("sourceImg");
+  if (!name) { img.hidden = true; $("srcPlaceholder").hidden = false; return; }
+  img.src = `/api/image/${encodeURIComponent(name)}?t=${Date.now()}`;
+  img.hidden = false;
+  $("srcPlaceholder").hidden = true;
+}
+
+// ---------------------------------------------------------------- generate --
+async function generate() {
+  const settings = readSettings();
+  if (!settings.image) { setMsg("pick or import a plan image first", "bad"); return; }
+  $("generate").disabled = true;
+  setMsg("running pipeline…");
+  try {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    const data = await res.json();
+    renderLog(data.log, data.error);
+    if (!data.ok) {
+      setMsg(data.error || "generate failed — see the Log tab", "bad");
+      showView("logView");
+      return;
+    }
+    lastRun = data;
+    iso.fitted = false;
+    renderStats(data);
+    $("overlayImg").src = data.overlayUrl;
+    $("overlayImg").hidden = false;
+    $("planPlaceholder").hidden = true;
+    drawIso();
+    for (const id of ["dlBrs", "dlBrz", "install"]) $(id).disabled = false;
+    const warnings = [];
+    if (data.unplacedMarkers) warnings.push(`${data.unplacedMarkers} marker(s) matched no wall; raise "Marker reach"`);
+    if (data.stats && data.stats.stairsPlaced < data.stats.buildings) {
+      warnings.push(`${data.stats.buildings - data.stats.stairsPlaced} building(s) have no room that fits the stairs; see the Log tab`);
+    }
+    const warn = warnings.length ? " — " + warnings.join("; ") : "";
+    setMsg(`built ${data.stats ? data.stats.bricks.toLocaleString() : "?"} bricks${warn}`,
+           warn ? "warn" : "ok");
+    fetch("/api/preset", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+  } catch (err) {
+    setMsg(String(err.message), "bad");
+  } finally {
+    $("generate").disabled = false;
+  }
+}
+
+function renderStats(data) {
+  const s = data.stats || {};
+  $("sBricks").textContent = s.bricks != null ? s.bricks.toLocaleString() : "—";
+  $("sRuns").textContent = s.runs != null ? s.runs : "—";
+  $("sDoors").textContent = s.doors != null ? s.doors : "—";
+  $("sWindows").textContent = s.windows != null ? s.windows : "—";
+  $("sPanes").textContent = s.glassBricks != null ? s.glassBricks : "—";
+  $("sFloor").textContent = s.floorBricks != null ? s.floorBricks : "—";
+  $("sCeiling").textContent = s.ceilingBricks != null ? s.ceilingBricks : "—";
+  $("sRoof").textContent = s.roofBricks != null ? s.roofBricks : "—";
+  $("sStairs").textContent = s.stairBricks == null ? "—"
+    : s.storeys > 1 && s.buildings ? `${s.stairBricks} (${s.stairsPlaced}/${s.buildings} buildings)` : s.stairBricks;
+  $("sHeight").textContent = s.heightWorld != null
+    ? `${s.heightWorld} (${s.storeys > 1 ? `${s.storeys} × ` : ""}${s.courses} courses)` : "—";
+  const brz = (data.files || []).find((f) => f.format === "brz");
+  $("sFile").textContent = brz ? `${brz.name} · ${(brz.bytes / 1024).toFixed(0)} KB` : "—";
+}
+
+function renderLog(log, error) {
+  const parts = [];
+  for (const entry of log || []) {
+    parts.push(`$ ${entry.command}`);
+    if (entry.output) parts.push(entry.output);
+    parts.push(`  [${entry.stage}] exit ${entry.code} in ${entry.ms} ms\n`);
+  }
+  if (error) parts.push(`ERROR: ${error}`);
+  $("log").textContent = parts.join("\n") || "No output.";
+}
+
+function showView(id) {
+  for (const tab of document.querySelectorAll(".tab")) tab.classList.toggle("active", tab.dataset.view === id);
+  for (const v of document.querySelectorAll(".view")) v.classList.toggle("active", v.id === id);
+  if (id === "isoView") drawIso();
+}
+
+// -------------------------------------------------------------------- wire --
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showView(t.dataset.view)));
+
+$("drop").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", (e) => importFile(e.target.files[0]));
+["dragenter", "dragover"].forEach((ev) => $("drop").addEventListener(ev, (e) => {
+  e.preventDefault(); $("drop").classList.add("hot");
+}));
+["dragleave", "drop"].forEach((ev) => $("drop").addEventListener(ev, (e) => {
+  e.preventDefault(); $("drop").classList.remove("hot");
+}));
+$("drop").addEventListener("drop", (e) => importFile(e.dataTransfer.files[0]));
+$("image").addEventListener("change", showSource);
+$("sourceImg").addEventListener("load", () =>
+  applySizedSettings($("sourceImg").naturalWidth, $("sourceImg").naturalHeight));
+
+$("generate").addEventListener("click", generate);
+$("wallCoursesRange").addEventListener("input", () => { $("wallCourses").value = $("wallCoursesRange").value; syncDerived(); });
+for (const id of COLOR_IDS) {
+  $(id + "Text").addEventListener("change", () => {
+    if (/^#[0-9a-fA-F]{6}$/.test($(id + "Text").value)) { $(id).value = $(id + "Text").value; syncDerived(); }
+  });
+}
+for (const group of Object.values(FIELDS)) {
+  for (const id of Object.values(group)) $(id).addEventListener("input", syncDerived);
+}
+
+$("dlBrz").addEventListener("click", () => { if (lastRun) location.href = `/api/download?slug=${lastRun.slug}&format=brz`; });
+$("dlBrs").addEventListener("click", () => { if (lastRun) location.href = `/api/download?slug=${lastRun.slug}&format=brs`; });
+$("install").addEventListener("click", async () => {
+  if (!lastRun) return;
+  $("install").disabled = true;
+  try {
+    const res = await fetch("/api/install", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: lastRun.slug, format: "brz", dir: $("buildsDir").value }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    setMsg(`${data.replaced ? "replaced" : "copied"} → ${data.dest}`, "ok");
+  } catch (err) {
+    setMsg(String(err.message), "bad");
+  } finally {
+    $("install").disabled = false;
+  }
+});
+$("savePreset").addEventListener("click", async () => {
+  await fetch("/api/preset", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(readSettings()),
+  });
+  setMsg("settings saved — they load with the page next time", "ok");
+});
+$("resetDefaults").addEventListener("click", () => {
+  writeSettings(DEFAULTS);
+  autoValues = {};
+  const img = $("sourceImg");
+  if (!img.hidden && img.complete) applySizedSettings(img.naturalWidth, img.naturalHeight);
+  else setMsg("back to pipeline defaults");
+});
+
+// iso view interaction
+$("isoZoom").addEventListener("input", () => {
+  const cv = $("iso");
+  zoomIso(Number($("isoZoom").value) / iso.zoom, cv.clientWidth / 2, cv.clientHeight / 2);
+});
+$("isoRotate").addEventListener("click", () => { iso.rot++; iso.fitted = false; drawIso(); });
+$("isoFit").addEventListener("click", () => { iso.fitted = false; drawIso(); });
+$("isoView3d").addEventListener("change", () => { iso.view = $("isoView3d").value; drawIso(); });
+(() => {
+  const cv = $("iso");
+  let dragging = false, lastX = 0, lastY = 0;
+  cv.addEventListener("pointerdown", (e) => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    cv.classList.add("dragging"); cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    iso.panX += e.clientX - lastX; iso.panY += e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    blitIso();
+  });
+  cv.addEventListener("pointerup", () => { dragging = false; cv.classList.remove("dragging"); drawIso(); });
+  cv.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const box = cv.getBoundingClientRect();
+    zoomIso(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - box.left, e.clientY - box.top);
+  }, { passive: false });
+})();
+window.addEventListener("resize", () => { drawElevation(); drawIso(); });
+
+// ------------------------------------------------------------------- start --
+(async () => {
+  const res = await fetch("/api/config");
+  const cfg = await res.json();
+  DEFAULTS = cfg.defaults;
+  for (const id of ["material", "glassMaterial", "floorMaterial", "ceilingMaterial", "roofMaterial", "stairsMaterial"]) {
+    $(id).innerHTML = cfg.materials.map((m) => `<option value="${m}">${m.replace("BMC_", "")}</option>`).join("");
+  }
+  fillImages(cfg.images, (cfg.preset && cfg.preset.image) || (cfg.images[0] && cfg.images[0].name));
+  writeSettings(DEFAULTS);
+  if (cfg.preset) writeSettings(cfg.preset);
+  if (cfg.buildsDir) $("buildsDir").value = cfg.buildsDir;
+  else $("install").title = "no Brickadia builds folder found — paste one above";
+  setMsg(cfg.images.length ? "ready" : "import a floor-plan photo to start");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,190 @@
+// Roomy houses from the wallgen tool (tools/wallgen/lib.js): a generated floor
+// plan (hall along the front, rooms behind and beside it, interior doors,
+// windows all round) goes through the same lib.buildModel the floor-plan GUI
+// uses, so the walls are running-bond brickwork with real openings, glazed
+// windows, a tile floor on every storey, a ceiling under the roof and a
+// switchback stair placed where it fits. Both of wallgen's gates
+// (assertValidGeometry, validateSolids) must pass or this throws.
+//
+// planHouse({ W, D, storeys, seed }) -> { boxes, W, D, top, rooms }
+//   W, D    plan size in studs (even), across the front x depth; the walls'
+//           outer faces span W+1 x D+1 studs
+//   boxes   stud-space solids { kind, x0, y0, x1, y1, z0, z1 } (x across,
+//           y = depth from the front face, z world units up from the ground),
+//           kind: wall | glass | floor | ceiling | stair
+//   top     z of the wall top (the roof sits on it)
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const lib = require('../tools/wallgen/lib.js');
+
+export const COURSES = 13;               // per storey: 156 units (player 6 bricks + a 6-brick jump), vs the old 84
+const CONFIG = {
+  ...lib.CONFIG,
+  WALL_COURSES: COURSES,
+  DOOR_OPEN_COURSES: 8,                  // 96-unit doorways
+  WINDOW_SILL_COURSES: 4,
+  WINDOW_OPEN_COURSES: 5,
+  CORNER_SNAP: 1,                        // the plan is exact; nothing to snap
+  MARGIN: 0,
+  STAIR_WIDTH: 3,
+  STAIR_RISE: 12,                        // 1-brick steps, like the old town stairs
+  STAIR_RUN: 1,
+  FLOOR_MAX: 32,
+  CEILING_DROP: 0,
+};
+CONFIG.BASE_Z = CONFIG.COURSE_H / 2;
+
+export const H = (line, start, end, openings = []) => ({ orient: 'H', line, start, end, openings });
+export const V = (line, start, end, openings = []) => ({ orient: 'V', line, start, end, openings });
+export const door = (p, w = 4) => ({ pos0: p - w / 2, pos1: p + w / 2, type: 'door' });
+export const win = (p, w = 2) => ({ pos0: p - w / 2, pos1: p + w / 2, type: 'window' });
+export const even = v => 2 * Math.round(v / 2);
+
+// windows along [a, b] about every 8 studs, at least 3 studs from any
+// position in `avoid` (corners, junctions, doors)
+export function windows(a, b, avoid) {
+  const out = [];
+  const n = Math.max(1, Math.floor((b - a) / 8));
+  for (let i = 1; i <= n; i++) {
+    const p = even(a + ((b - a) * i) / (n + 1));
+    if (avoid.some(q => Math.abs(q - p) < 4)) continue;
+    out.push(win(p));
+  }
+  return out;
+}
+
+function plan(W, D, rnd, variant) {
+  // hall across the front, `h1` deep; behind it two rooms split at `a`;
+  // the front strip split at `b` into the entry hall and a parlour
+  const h1 = even(D * (0.36 + 0.08 * rnd(1)));
+  const a = even(W * (0.42 + 0.16 * rnd(2)));
+  const b = even(variant ? W * 0.3 : W * 0.7);
+  const fd = even(variant ? (b + W) / 2 : b / 2);           // front door, in the entry hall
+  const hallDoors = [even(a / 2), even((a + W) / 2)].map(p => Math.abs(p - b) < 4 ? p + 4 : p);
+  const runs = [
+    H(0, 0, W, [door(fd, 4), ...windows(0, W, [0, b, W, fd, fd - 2, fd + 2])]),
+    H(D, 0, W, windows(0, W, [0, a, W])),
+    V(0, 0, D, windows(0, D, [0, h1, D])),
+    V(W, 0, D, windows(0, D, [0, h1, D])),
+    H(h1, 0, W, hallDoors.map(p => door(p))),
+    V(a, h1, D, [door(even((h1 + D) / 2))]),
+    V(b, 0, h1, [door(even(h1 / 2))]),
+  ];
+  return { runs, rooms: { h1, a, b, fd } };
+}
+
+export function planHouse({ W, D, storeys = 1, seed = 1 }) {
+  return buildFromPlan((rnd, variant) => plan(W, D, rnd, variant), { W, D, storeys, seed, label: 'wallhouse' });
+}
+
+// Runs a plan function (rnd, variant) -> { runs, rooms } through wallgen until
+// a variant fits its stair, validates it, and returns the stud-space boxes.
+export function buildFromPlan(planFn, { W, D, storeys = 1, seed = 1, label = 'wallgen' }) {
+  const rnd = k => { let h = Math.imul(seed | 0, 2654435761) ^ Math.imul(k, 40503); h = Math.imul(h ^ (h >>> 15), 2246822519); return ((h ^ (h >>> 13)) >>> 0) / 4294967296; };
+  const config = { ...CONFIG, STOREYS: storeys };
+  const opts = { glass: true, floor: true, ceiling: true, roof: false, stairs: storeys > 1 };
+  let last;
+  // try both plan variants and a few splits until the stair fits
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { runs: raw, rooms } = planFn(k => rnd(k + attempt * 17), (attempt + seed) % 2);
+    const runs = lib.normalizeRuns(raw, config);
+    lib.snapEndpoints(runs, config);
+    const model = lib.buildModel(runs, config, opts);
+    if (model.stairs.unplaced.length) { last = model.warnings.join('; '); continue; }
+    lib.assertValidGeometry(runs, model.walls.map(b => lib.toWorldBrick(b, config)), config);
+    const bad = lib.validateSolids(model, config);
+    if (bad.length) throw new Error(`${label}: ${bad.length} solid violations, e.g. ${bad[0]}`);
+    const C = config.COURSE_H;
+    const cell = (b, kind) => {
+      const z0 = b.course * C;
+      return b.orient === 'H'
+        ? { kind, x0: b.a, x1: b.b, y0: b.line, y1: b.line + 1, z0, z1: z0 + C, course: b.course }
+        : { kind, x0: b.line, x1: b.line + 1, y0: b.a, y1: b.b, z0, z1: z0 + C, course: b.course };
+    };
+    const boxes = [
+      ...mergeWall(model.walls).map(b => cell(b, 'wall')),
+      ...mergeGlass(model.glass.map(b => cell(b, 'glass'))),
+      ...model.slabs.filter(s => s.kind === 'stair').map(s => ({ ...s })),
+      ...mergeSlabs(model.slabs.filter(s => s.kind !== 'stair')),
+    ];
+    return { boxes, W, D, top: storeys * COURSES * C, storeys, rooms, flights: model.stairs.flights.length };
+  }
+  throw new Error(`${label} ${W}x${D}x${storeys}: no plan fits a stair (${last})`);
+}
+
+// wallgen lays 2-stud dominoes; join them into 4-6 stud bricks along each
+// wall line, cutting only where ((n - phase) / 2 + course) % 3 == 0, so the
+// joints still stagger course to course (adjacent courses cut on opposite
+// stud parity) and the brick count drops ~3x
+function mergeWall(walls) {
+  const lines = new Map();
+  for (const b of walls) {
+    const k = `${b.orient}|${b.line}|${b.course}`;
+    (lines.get(k) ?? lines.set(k, []).get(k)).push(b);
+  }
+  const out = [];
+  for (const list of lines.values()) {
+    list.sort((p, q) => p.a - q.a);
+    let cur = null;
+    for (const b of list) {
+      const phase = b.course % 2;
+      const keepCut = ((((b.a - phase) / 2) % 3) + 3 + b.course) % 3 === 0;
+      if (cur && cur.b === b.a && !keepCut && cur.b - cur.a < 6) cur.b = b.b;
+      else { if (cur) out.push(cur); cur = { ...b }; }
+    }
+    if (cur) out.push(cur);
+  }
+  return out;
+}
+
+// one pane per window per storey instead of a domino per course: panes of a
+// storey whose footprints touch belong to one window
+function mergeGlass(panes) {
+  const out = [];
+  for (const p of panes) {
+    const st = Math.floor(p.course / COURSES);
+    const t = out.find(o => o.st === st && p.x0 <= o.x1 && o.x0 <= p.x1 && p.y0 <= o.y1 && o.y0 <= p.y1);
+    if (!t) { out.push({ ...p, st }); continue; }
+    t.x0 = Math.min(t.x0, p.x0); t.x1 = Math.max(t.x1, p.x1); t.y0 = Math.min(t.y0, p.y0); t.y1 = Math.max(t.y1, p.y1);
+    t.z0 = Math.min(t.z0, p.z0); t.z1 = Math.max(t.z1, p.z1);
+  }
+  return out;
+}
+
+// re-tile floor/ceiling plates: wallgen's tiler leaves long thin strips round
+// doorways; rasterize each layer back to cells and cover it greedily with the
+// largest rectangles (sides up to 32 studs)
+function mergeSlabs(slabs) {
+  const layers = new Map();
+  for (const sl of slabs) {
+    const k = sl.kind + '|' + sl.z0 + '|' + sl.z1;
+    const cells = layers.get(k) ?? layers.set(k, new Set()).get(k);
+    for (let x = sl.x0; x < sl.x1; x++) for (let y = sl.y0; y < sl.y1; y++) cells.add(x + ',' + y);
+  }
+  const out = [];
+  for (const [k, cells] of layers) {
+    const [kind, z0, z1] = k.split('|');
+    const has = (x, y) => cells.has(x + ',' + y);
+    const pts = [...cells].map(c => c.split(',').map(Number)).sort((p, q) => p[1] - q[1] || p[0] - q[0]);
+    for (const [x, y] of pts) {
+      if (!has(x, y)) continue;
+      // best of: widest-first and tallest-first
+      let best = null;
+      for (const wide of [true, false]) {
+        let w = 1, h = 1;
+        if (wide) {
+          while (w < 32 && has(x + w, y)) w++;
+          grow: while (h < 32) { for (let i = 0; i < w; i++) if (!has(x + i, y + h)) break grow; h++; }
+        } else {
+          while (h < 32 && has(x, y + h)) h++;
+          grow: while (w < 32) { for (let j = 0; j < h; j++) if (!has(x + w, y + j)) break grow; w++; }
+        }
+        if (!best || w * h > best[0] * best[1]) best = [w, h];
+      }
+      const [w, h] = best;
+      for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) cells.delete((x + i) + ',' + (y + j));
+      out.push({ kind, x0: x, y0: y, x1: x + w, y1: y + h, z0: +z0, z1: +z1 });
+    }
+  }
+  return out;
+}

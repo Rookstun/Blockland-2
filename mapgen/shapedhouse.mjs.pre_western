@@ -1,0 +1,356 @@
+// Rectangular, L and T houses on the wallgen framework (tools/wallgen/lib.js),
+// with a rounded roof built from stacked micro wedges and an attic under it.
+//
+//   node shapedhouse.mjs --shape L --W 40 --D 24 --E 16 --storeys 2 [--attic 0]
+//                        [--at x,y,z] [--seed n] [--job out.json] [--plan]
+//
+// Plan (studs, x across the front, y back from the front face):
+//   main body  W x D, front wall on y = 0
+//   wing       D wide (same span, so the two roofs meet in a clean valley),
+//              E deep, behind the main body: L = at the left end, T = centred
+// The front door is in the right-hand room. Walls, glass and the door/window
+// openings are wallgen's (running bond, the T-junction bridging); floors are
+// floorboards (plankRects), ceilings tile, every storey 13 courses (156: a
+// 6-brick player plus a 6-brick jump).
+//
+// Stairs: one straight flight per storey along the inside of the left gable
+// wall, stacked storey over storey (and on into the attic). Each step is a
+// 3-stud block growing out of the wall (nothing under it); every flight has a
+// clear 3 x 3 landing at the bottom and at the top, and the floor above is
+// open over the whole flight.
+//
+// Roof: ridge along each wing's long axis, a quarter-ellipse profile cut into
+// ROOF_SEGS micro wedges a side plus a 1-stud crown. The outside walls (gables
+// and the knee walls on the eaves) carry on up in running bond until they meet
+// the roof, so the attic is closed; the main roof is cut away inside the
+// wing's attic so the two attics join. Attic floor: boards on the wall tops,
+// tile ceiling under them; a glazed window in each gable.
+//
+// Everything goes through builder.mjs's overlap guard; any dropped brick throws.
+
+import fs from 'fs';
+import { createRequire } from 'module';
+import { makeBuilder } from './builder.mjs';
+import { orientFor } from './orient.mjs';
+
+const require = createRequire(import.meta.url);
+const lib = require('../tools/wallgen/lib.js');
+
+const ST = 10, C = 12, FLOOR_H = 4;
+export const COURSES = 13;
+const SH = COURSES * C;
+const STAIR_W = 3, LANDING = 3;
+const ROOF_SEGS = 6;
+// regular bricks have an ugly underside (owner): every plain block is a micro brick, ceilings and steps are tile
+const MB = 'PB_DefaultMicroBrick';
+// rustic herringbone floor tiles (owner's terracotta 224,85,75, a little variation)
+const TERRA = [[224, 85, 75], [212, 80, 70], [230, 96, 82], [204, 78, 66]];
+
+const PAL = {
+  brick: [[150, 70, 50], [135, 63, 45], [160, 75, 54], [142, 66, 47], [155, 72, 52]],
+  roof: [82, 92, 112], board: [160, 114, 72], ceiling: [226, 218, 200], step: [118, 82, 52],
+  glass: { color: [170, 210, 230], material: 'BMC_Glass' },
+};
+
+const even = v => 2 * Math.round(v / 2);
+const key = (x, y) => x + ',' + y;
+
+/** quarter-ellipse roof profile: [{u, h}] from the eave (u = span, h = 0) to the crown (u = 0, h = rise) */
+export function roofProfile(span, rise, segs = ROOF_SEGS) {
+  const pts = [{ u: span, h: 0 }];
+  for (let k = 1; k <= segs; k++) {
+    const t = (k / segs) * (Math.PI / 2);
+    let u = k === segs ? 0 : Math.round(span * Math.cos(t));
+    let h = k === segs ? rise : Math.round((rise * Math.sin(t)) / C) * C;
+    const p = pts[pts.length - 1];
+    if (u >= p.u) u = p.u - 1;
+    if (h <= p.h) h = p.h + C;
+    if (u < 0 || h > rise) continue;
+    pts.push({ u, h });
+  }
+  const last = pts[pts.length - 1];
+  if (last.u !== 0 || last.h !== rise) pts.push({ u: 0, h: Math.max(rise, last.h + C) });
+  return pts;
+}
+
+export function shapedHouse({ shape = 'L', W = 40, D = 24, E = 16, storeys = 2, attic = true, seed = 1, overhang = 1 } = {}) {
+  if (![W, D, E].every(v => Number.isInteger(v) && v % 2 === 0)) throw new Error('W, D, E must be even');
+  if (D < LANDING * 2 + COURSES + 1) throw new Error(`D must be >= ${LANDING * 2 + COURSES + 1} so a flight with both landings fits along the gable`);
+  if (shape !== 'rect' && W < D + 8) throw new Error('W must be at least D + 8 for an L or T');
+  if (shape === 'T' && (W - D) % 4) throw new Error('for a T, W - D must be a multiple of 4');
+  const wing = shape !== 'rect';
+  const wx0 = shape === 'T' ? (W - D) / 2 : 0, wx1 = wx0 + D;
+
+  // ------------------------------------------------------------- plan --
+  const H = (line, start, end, openings = []) => ({ orient: 'H', line, start, end, openings });
+  const V = (line, start, end, openings = []) => ({ orient: 'V', line, start, end, openings });
+  const door = p => ({ pos0: p - 2, pos1: p + 2, type: 'door' });
+  const win = p => ({ pos0: p - 1, pos1: p + 1, type: 'window' });
+  const wins = (a, b, avoid) => {
+    const out = [], n = Math.max(1, Math.floor((b - a) / 8));
+    for (let i = 1; i <= n; i++) {
+      const p = even(a + ((b - a) * i) / (n + 1));
+      if (!avoid.some(q => Math.abs(q - p) < 4)) out.push(win(p));
+    }
+    return out;
+  };
+  const stairTop = 1 + LANDING + COURSES + LANDING; // the strip is y in [1, stairTop), x in [1, 1 + STAIR_W)
+  const part = wing ? (shape === 'L' ? wx1 : wx0) : even(W / 2); // main partition wall
+  const fd = even((part + W) / 2);                               // front door, right-hand room
+  const outline = [], inner = [];
+  outline.push(H(0, 0, W, [door(fd), ...wins(0, W, [0, part, W, fd])]));
+  outline.push(V(W, 0, D, wins(0, D, [0, D])));
+  if (!wing) {
+    outline.push(H(D, 0, W, wins(0, W, [0, part, W])));
+    outline.push(V(0, 0, D, wins(stairTop, D, [D, stairTop])));
+  } else {
+    outline.push(V(0, 0, wx0 === 0 ? D + E : D, wins(stairTop, wx0 === 0 ? D + E : D, [D, D + E, stairTop])));
+    if (wx0 > 0) {
+      outline.push(H(D, 0, wx0, wins(0, wx0, [0, wx0])));
+      outline.push(V(wx0, D, D + E, wins(D, D + E, [D, D + E])));
+    }
+    outline.push(H(D, wx1, W, wins(wx1, W, [wx1, W, part])));
+    outline.push(V(wx1, D, D + E, wins(D, D + E, [D, D + E])));
+    outline.push(H(D + E, wx0, wx1, wins(wx0, wx1, [wx0, wx1])));
+    inner.push(H(D, wx0, wx1, [door(even((wx0 + wx1) / 2))]));
+    if (shape === 'T') inner.push(V(wx1, 0, D, [door(even(D / 2) + 2)]));
+  }
+  inner.push(V(part, 0, D, [door(even(D / 2) + 2)]));
+  const runs = lib.normalizeRuns([...outline, ...inner], { ...lib.CONFIG, MARGIN: 0 });
+  const nOut = outline.length;
+  const config = {
+    ...lib.CONFIG, WALL_COURSES: COURSES, DOOR_OPEN_COURSES: 8, WINDOW_SILL_COURSES: 4, WINDOW_OPEN_COURSES: 5,
+    CORNER_SNAP: 1, MARGIN: 0, STOREYS: storeys, FLOOR_MAX: 32, FLOOR_H,
+  };
+  config.BASE_Z = C / 2;
+  lib.snapEndpoints(runs, config);
+  const model = lib.buildModel(runs, config, { glass: true });
+  lib.assertValidGeometry(runs, model.walls.map(b => lib.toWorldBrick(b, config)), config);
+  const encl = lib.markBuildings(runs);
+
+  // ----------------------------------------------- floors, ceilings, stairs --
+  const flights = storeys - 1 + (attic ? 1 : 0);
+  const hole = new Set(); // cells open over a flight (y = first step .. last step)
+  for (let y = 1 + LANDING; y < 1 + LANDING + COURSES; y++) for (let x = 1; x < 1 + STAIR_W; x++) hole.add(key(x, y));
+  const landing = (y0) => { for (let y = y0; y < y0 + LANDING; y++) for (let x = 1; x < 1 + STAIR_W; x++) if (!encl.interior.has(key(x, y))) throw new Error(`landing cell ${x},${y} is not floor`); };
+  landing(1); landing(1 + LANDING + COURSES);
+  const partitionCells = new Set();
+  runs.slice(nOut).forEach(r => { for (let p = r.start; p <= r.end; p++) partitionCells.add(r.orient === 'H' ? key(p, r.line) : key(r.line, p)); });
+  const slabs = [];
+  for (let s = 0; s < storeys; s++) {
+    const cells = lib.floorCells(runs, config, s * COURSES, encl);
+    if (s > 0) for (const k of hole) cells.delete(k);
+    for (const r of lib.herringboneRects(cells)) slabs.push({ kind: 'floor', ...r, z0: s * SH, z1: s * SH + FLOOR_H });
+    const top = (s + 1) * SH;
+    const ceil = new Set([...encl.interior].filter(k => !(s + 1 < storeys || attic) || !hole.has(k)));
+    for (const r of lib.tileRects(ceil, 32)) slabs.push({ kind: 'ceiling', ...r, z0: top - FLOOR_H, z1: top });
+  }
+  for (let f = 0; f < flights; f++) {
+    for (let i = 1; i <= COURSES; i++) {
+      const y = 1 + LANDING + i - 1, zt = f * SH + FLOOR_H + i * C;
+      slabs.push({ kind: 'stair', x0: 1, x1: 1 + STAIR_W, y0: y, y1: y + 1, z0: zt - C, z1: zt });
+    }
+  }
+  const all = { walls: model.walls, glass: model.glass, slabs };
+  const bad = lib.validateSolids(all, config);
+  if (bad.length) throw new Error(`shapedhouse: ${bad.length} solid violations, e.g. ${bad[0]}`);
+
+  // ------------------------------------------------------------- bricks --
+  const B = makeBuilder();
+  const box = (x0, y0, z0, x1, y1, z1, m, label) => B.box(x0 * ST, y0 * ST, z0, x1 * ST, y1 * ST, z1, m, label);
+  // colours by seed: brick base (shaded per brick) and roof
+  const BASES = [[150, 70, 50], [176, 136, 98], [138, 130, 122], [162, 92, 64], [206, 186, 156]];
+  const ROOFS = [[82, 92, 112], [150, 62, 46], [70, 70, 74], [118, 72, 44], [60, 96, 70]];
+  const base = BASES[(seed - 1 + BASES.length * 9) % BASES.length], roofC = ROOFS[(seed * 3 - 1 + ROOFS.length * 9) % ROOFS.length];
+  const F = [1, 0.9, 1.07, 0.95, 1.03];
+  let k = 0;
+  const shade = () => base.map(v => Math.min(255, Math.round(v * F[(k++ * 7 + seed) % F.length])));
+  PAL.roof = roofC;
+  for (const b of model.walls) {
+    const w = lib.toWorldBrick(b, config);
+    B.add({ asset: MB, color: shade(), size: [w.sx, w.sy, w.sz], position: [w.x, w.y, w.z] }, 'wall');
+  }
+  for (const b of model.glass) {
+    const w = lib.toWorldBrick(b, config);
+    B.add({ ...PAL.glass, asset: 'PB_DefaultMicroBrick', size: [w.sx, w.sy, w.sz], position: [w.x, w.y, w.z] }, 'glass');
+  }
+  for (const s of slabs) {
+    const m = s.kind === 'floor' ? { asset: 'PB_DefaultTile', color: TERRA[(s.x0 * 7 + s.y0 * 3) % TERRA.length], rotation: (s.x0 + 2 * s.y0) % 3 ? 0 : 2 }
+      : s.kind === 'ceiling' ? { asset: 'PB_DefaultTile', color: PAL.ceiling } : { asset: 'PB_DefaultTile', color: PAL.step };
+    box(s.x0, s.y0, s.z0, s.x1, s.y1, s.z1, m, s.kind);
+  }
+  const Z0 = storeys * SH;
+
+  // ----------------------------------------------------------------- roof --
+  const span = D / 2 + overhang, rise = attic ? 14 * C : 8 * C;
+  const prof = roofProfile(span, rise);
+  const occ = new Set(); // "x,y,slot" stud cells x 12-unit slots the roof's boxes take
+  const mark = (x0, y0, x1, y1, z0, z1) => {
+    for (let x = x0; x < x1; x++) for (let y = y0; y < y1; y++) for (let z = z0; z < z1; z += C) occ.add(`${x},${y},${(z - Z0) / C}`);
+  };
+  const wedge = (x0, y0, x1, y1, z0, z1, dx, dy) => {
+    if (x1 <= x0 || y1 <= y0) return;
+    B.wedge(x0 * ST, y0 * ST, z0, x1 * ST, y1 * ST, z1, dx, dy, { color: PAL.roof }, 'roof');
+    mark(x0, y0, x1, y1, z0, z1);
+  };
+  const valley = (x0, y0, x1, y1, z0, z1, rotation) => {
+    if (x1 <= x0 || y1 <= y0) return;
+    if (x1 - x0 !== y1 - y0) throw new Error('valley square expected');
+    B.add({ asset: 'PB_DefaultMicroWedgeInnerCorner', direction: 4, rotation, color: PAL.roof,
+      size: [(x1 - x0) * ST / 2, (y1 - y0) * ST / 2, (z1 - z0) / 2], position: [(x0 + x1) * ST / 2, (y0 + y1) * ST / 2, (z0 + z1) / 2] }, 'valley');
+    mark(x0, y0, x1, y1, z0, z1);
+  };
+  const cap = (x0, y0, x1, y1, z0, z1) => { if (x1 > x0 && y1 > y0) { box(x0, y0, z0, x1, y1, z1, { asset: MB, color: PAL.roof }, 'crown'); mark(x0, y0, x1, y1, z0, z1); } };
+  const mc = D / 2;                      // main crown cell (lateral y)
+  const wc = wx0 + D / 2;                // wing crown cell (lateral x)
+  const xa = -overhang, xb = W + 1 + overhang;
+  const segs = prof.slice(0, -1).map((p, i) => ({ uo: p.u, ui: prof[i + 1].u, z0: Z0 + p.h, z1: Z0 + prof[i + 1].h }));
+  const crownZ0 = segs[segs.length - 1].z0, roofTop = Z0 + prof[prof.length - 1].h;
+  for (const g of segs) {
+    // main, ridge along x: -y side rises toward +y, +y side toward -y
+    // on the wing's side the band stops at the valley: the square where it
+    // crosses the wing's band is an inner-corner wedge (the owner's fix,
+    // 2026-10-03), and between the two squares it is cut away (that is the
+    // wing's attic, or on the top band the wing's crown)
+    wedge(xa, mc - g.uo, xb, mc - g.ui, g.z0, g.z1, 0, 1);
+    if (!wing) wedge(xa, mc + 1 + g.ui, xb, mc + 1 + g.uo, g.z0, g.z1, 0, -1);
+    else {
+      const ya = mc + 1 + g.ui, yb = mc + 1 + g.uo;
+      wedge(xa, ya, wc - g.uo, yb, g.z0, g.z1, 0, -1);
+      wedge(wc + 1 + g.uo, ya, xb, yb, g.z0, g.z1, 0, -1);
+      valley(wc - g.uo, ya, wc - g.ui, yb, g.z0, g.z1, 1);     // slopes down toward (-x, +y)
+      valley(wc + 1 + g.ui, ya, wc + 1 + g.uo, yb, g.z0, g.z1, 0); // down toward (+x, +y)
+      // the wing, ridge along y, from the valley to its own far gable
+      const y1 = D + E + 1 + overhang;
+      wedge(wc - g.uo, yb, wc - g.ui, y1, g.z0, g.z1, 1, 0);
+      wedge(wc + 1 + g.ui, yb, wc + 1 + g.uo, y1, g.z0, g.z1, -1, 0);
+    }
+  }
+  cap(xa, mc, xb, mc + 1, crownZ0, roofTop);
+  // gable overhangs (owner's detail, 2026-10-03): under each band, in the
+  // overhang stud past the gable, an upside-down wedge one band lower, and a
+  // flat course under the crown, so the edge reads as a thick curved barge
+  // with a smooth underside instead of showing the steps
+  const inv = (x0, y0, x1, y1, z0, z1, dx, dy) => {
+    if (x1 <= x0 || y1 <= y0 || z1 <= z0) return;
+    const ext = [(x1 - x0) * ST / 2, (y1 - y0) * ST / 2, (z1 - z0) / 2];
+    const o = orientFor('PB_DefaultMicroWedge', [[dx, dy]], ext);
+    B.add({ asset: 'PB_DefaultMicroWedge', ...o, rotation: (o.rotation + 2) % 4, color: PAL.roof, position: [(x0 + x1) * ST / 2, (y0 + y1) * ST / 2, (z0 + z1) / 2] }, 'barge');
+    mark(x0, y0, x1, y1, z0, z1);
+  };
+  const barge = (lat, along, alongX) => {
+    // alongX: the gable stud is x = along, lateral is y about crown cell `lat`
+    const put = (l0, l1, z0, z1, toward) => alongX
+      ? inv(along, l0, along + 1, l1, z0, z1, 0, toward) : inv(l0, along, l1, along + 1, z0, z1, toward, 0);
+    segs.forEach((g, k) => {
+      if (k === 0) return;
+      const last = k === segs.length - 1, lo = segs[k - 1].z0, hi = last ? g.z0 - C : g.z0;
+      put(lat - g.uo, lat - g.ui, lo, hi, 1);
+      put(lat + 1 + g.ui, lat + 1 + g.uo, lo, hi, -1);
+      if (last) alongX ? box(along, lat - g.uo, g.z0 - C, along + 1, lat + 1 + g.uo, g.z0, { asset: MB, color: PAL.roof }, 'barge')
+                       : box(lat - g.uo, along, g.z0 - C, lat + 1 + g.uo, along + 1, g.z0, { asset: MB, color: PAL.roof }, 'barge');
+    });
+  };
+  barge(mc, xa, true);
+  barge(mc, xb - 1, true);
+  if (wing) barge(wc, D + E + 1, false);
+  if (wing) cap(wc, mc + 1, wc + 1, D + E + 1 + overhang, crownZ0, roofTop);
+
+  // ------------------------------------------- gables, knee walls, attic --
+  // every outside-wall cell carries on up, course by course, until it meets the roof
+  const wallCells = new Map(); // cell -> 'H' | 'V' | 'X' (corner)
+  runs.slice(0, nOut).forEach(r => {
+    for (let p = r.start; p <= r.end; p++) {
+      const c = r.orient === 'H' ? key(p, r.line) : key(r.line, p);
+      wallCells.set(c, wallCells.has(c) && wallCells.get(c) !== r.orient ? 'X' : r.orient);
+    }
+  });
+  const gableGlass = new Set();
+  if (attic) {
+    const g = (x, y) => gableGlass.add(key(x, y));
+    for (const x of [0, W]) for (let y = mc - 1; y <= mc + 1; y++) g(x, y);
+    if (wing) for (let x = wc - 1; x <= wc + 1; x++) g(x, D + E);
+  }
+  const GL0 = 3, GL1 = 7; // gable window slots
+  let topSlot = 0;
+  const kneeRows = new Map(); // `${axis}|${line}|${slot}` -> positions
+  for (const [c, ax] of wallCells) {
+    const [x, y] = c.split(',').map(Number);
+    for (let slot = 0; ; slot++) {
+      if (Z0 + slot * C >= roofTop) throw new Error(`outside wall cell ${c} has no roof over it`);
+      if (occ.has(`${x},${y},${slot}`)) break;
+      topSlot = Math.max(topSlot, slot);
+      const z0 = Z0 + slot * C;
+      if (gableGlass.has(c) && slot >= GL0 && slot < GL1 && !occ.has(`${x},${y},${GL1}`)) {
+        box(x, y, z0, x + 1, y + 1, z0 + C, { ...PAL.glass, asset: 'PB_DefaultMicroBrick' }, 'gable glass');
+        continue;
+      }
+      const axis = ax === 'X' ? (slot % 2 ? 'V' : 'H') : ax;
+      const rk = `${axis}|${axis === 'H' ? y : x}|${slot}`;
+      (kneeRows.get(rk) ?? kneeRows.set(rk, []).get(rk)).push(axis === 'H' ? x : y);
+    }
+  }
+  for (const [rk, ps] of kneeRows) {
+    const [axis, line, slotS] = rk.split('|'), L = +line, slot = +slotS, z0 = Z0 + slot * C;
+    ps.sort((a, b) => a - b);
+    const pieces = [];
+    let a = ps[0];
+    for (let i = 1; i <= ps.length; i++) {
+      const p = ps[i], prev = ps[i - 1];
+      const cutHere = p !== prev + 1 || (p + (slot % 2) * 2) % 4 === 0;
+      if (i === ps.length || cutHere) { pieces.push([a, prev + 1]); a = p; }
+    }
+    for (let i = 0; i < pieces.length; i++) {           // fold 1-stud slivers into a neighbour
+      if (pieces[i][1] - pieces[i][0] !== 1) continue;
+      if (i > 0 && pieces[i - 1][1] === pieces[i][0]) { pieces[i - 1][1] = pieces[i][1]; pieces.splice(i--, 1); }
+      else if (i + 1 < pieces.length && pieces[i + 1][0] === pieces[i][1]) { pieces[i + 1][0] = pieces[i][0]; pieces.splice(i--, 1); }
+    }
+    for (const [p0, p1] of pieces) {
+      if (axis === 'H') box(p0, L, z0, p1, L + 1, z0 + C, { asset: MB, color: shade() }, 'knee');
+      else box(L, p0, z0, L + 1, p1, z0 + C, { asset: MB, color: shade() }, 'knee');
+    }
+  }
+  if (attic) {
+    const cells = new Set([...encl.interior, ...partitionCells].filter(c => !hole.has(c) && !wallCells.has(c)));
+    for (const r of lib.plankRects(cells, 12, 99)) box(r.x0, r.y0, Z0, r.x1, r.y1, Z0 + FLOOR_H, { asset: 'PB_DefaultMicroBrick', color: PAL.board }, 'attic floor');
+  }
+  if (B.dropped.length) throw new Error(`shapedhouse: ${B.dropped.length} overlapping bricks, e.g. ${B.dropped[0]}`);
+
+  // headroom on the attic flight and at its landing
+  const under = (u) => { for (const g of segs) if (u >= g.ui && u < g.uo) return g.z0; return crownZ0; };
+  const latU = y => (y < mc ? mc - 1 - y : y - mc - 1) + 0; // studs from the crown edge
+  const notes = [];
+  if (attic) {
+    const yTop = 1 + LANDING + COURSES;
+    const room = Math.min(...[yTop, yTop + 1, yTop + 2].map(y => (y === mc ? roofTop : under(Math.max(0, latU(y)) + 0.5)) - (Z0 + FLOOR_H)));
+    notes.push(`attic landing headroom ${room} (player 72, +72 jumping)`);
+  }
+  return {
+    bricks: B.bricks.map(({ label, ...b }) => b), count: B.bricks.length, shape, W, D, E: wing ? E : 0, storeys, attic,
+    door: [fd, 0], top: roofTop, profile: prof, notes,
+  };
+}
+
+// ---------------------------------------------------------------- CLI --
+if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop())) {
+  const args = process.argv.slice(2);
+  const opt = (n, d) => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : d; };
+  const h = shapedHouse({
+    shape: opt('shape', 'L'), W: +opt('W', 40), D: +opt('D', 24), E: +opt('E', 16),
+    storeys: +opt('storeys', 2), attic: opt('attic', '1') !== '0', seed: +opt('seed', 1),
+  });
+  const [ox, oy, oz] = (opt('at', '0,0,0')).split(',').map(Number);
+  const bricks = h.bricks.map(b => ({ ...b, position: [b.position[0] + ox, b.position[1] + oy, b.position[2] + oz] }));
+  console.error(`${h.shape} ${h.W}x${h.D}${h.E ? ` + wing ${h.D}x${h.E}` : ''}, ${h.storeys} storeys${h.attic ? ' + attic' : ''}: ${h.count} bricks, roof top z ${h.top}`);
+  console.error('roof profile (u studs, h units):', h.profile.map(p => `${p.u}/${p.h}`).join(' '));
+  for (const n of h.notes) console.error(n);
+  const job = opt('job');
+  if (job) {
+    const Q = '"I DONT CARE IF THE FUCKIN SERVER CRASHES JUST DO IT ALL AT ONCE"';
+    fs.writeFileSync(job, JSON.stringify({ ops: [
+      { op: 'say', msg: `<size="40"><color="ff4040"><b>${Q}</></></>` },
+      { op: 'bricks', at: [0, 0, 0], owner: opt('owner', 'Claude house'), captureMs: 8000, bricks },
+    ] }));
+    console.error('wrote', job);
+  }
+}

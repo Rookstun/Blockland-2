@@ -1,0 +1,7 @@
+{
+  "name": "bridge",
+  "description": "File-based job bridge: an outside process drops JSON jobs into ~/omegga-server/bridge/inbox to place bricks, run console commands and read player positions.",
+  "author": "pooper",
+  "config": {},
+  "commands": []
+}

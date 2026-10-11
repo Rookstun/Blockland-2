@@ -1,0 +1,695 @@
+// The spawn hub town: a walled 1000-stud town on a street grid around a big
+// market square. mapgen flattens the ground, paves it from surface() and
+// calls build() for the bricks.
+//
+// Everything here is in game units relative to the town centre (stud = 10,
+// brick = 12, plate = 4). The town is 250 cells (40 units) wide, so centre
+// 0 sits on a cell boundary. Coordinates of walls and openings stay on
+// multiples of 10 and heights on multiples of 4, so every brick lands on the
+// stud/plate grid.
+//
+// Layout, per axis: street lines every 1600 units (7 lines, the middle one a
+// wide avenue), a perimeter road just inside the wall, 6 x 6 blocks between
+// the lines. The four middle blocks are the market square. Each other block
+// is cut into 3 x 3 lots (about 48 studs); the middle lot is a garden or park, the rest hold
+// buildings whose doors face the nearest street.
+
+import { planHouse, COURSES as WH_COURSES } from './wallhouse.mjs';
+
+// shrunk 2026-10-03 (owner: too big to walk): 3 x 3 blocks, the middle one the
+// market square, perimeter road just inside the wall
+export const TOWN_CELLS = 130;
+const HALF = 2600;
+const LINES = [-2400, -800, 800, 2400];
+const halfWidth = () => 80;
+const SQUARE = 720;
+const WALL_IN = HALF - 80;
+
+/** surface kind for a point (cell centre) in town units */
+export function surface(ux, uy) {
+  if (Math.max(Math.abs(ux), Math.abs(uy)) >= WALL_IN) return 'wall';
+  if (Math.abs(ux) <= SQUARE && Math.abs(uy) <= SQUARE) return 'square';
+  for (let k = 0; k < LINES.length; k++)
+    if (Math.abs(ux - LINES[k]) <= halfWidth(k) || Math.abs(uy - LINES[k]) <= halfWidth(k))
+      return false && (Math.abs(ux) <= halfWidth(3) || Math.abs(uy) <= halfWidth(3)) ? 'avenue' : 'street';
+  return 'lot';
+}
+
+// blocks along one axis: [lo, hi, centre]
+const BLOCKS = LINES.slice(0, -1).map((l, k) => {
+  const lo = l + halfWidth(k), hi = LINES[k + 1] - halfWidth(k + 1);
+  return [lo, hi, (lo + hi) / 2];
+});
+
+const PALETTE = {
+  plaster: [[232, 222, 200], [214, 192, 160], [204, 208, 216], [226, 200, 188], [238, 230, 214], [196, 176, 150]],
+  brick: [[150, 70, 50], [132, 82, 60], [176, 136, 98], [138, 130, 122], [206, 186, 156], [162, 92, 64]],
+  timber: [[96, 66, 42], [118, 82, 52], [84, 62, 46]],
+  roof: [[150, 62, 46], [118, 72, 44], [82, 92, 112], [104, 58, 52], [70, 70, 74], [132, 96, 60]],
+  stone: [[128, 124, 118], [112, 108, 104], [146, 140, 130]],
+  cloth: [[200, 50, 50], [50, 120, 200], [230, 180, 40], [60, 160, 80], [150, 60, 170], [230, 120, 40]],
+  goods: [[220, 60, 40], [240, 200, 60], [120, 200, 70], [180, 120, 60], [90, 140, 220]],
+  shutter: [[46, 92, 70], [120, 50, 40], [50, 70, 120], [90, 70, 50], [60, 60, 64], [150, 120, 50]],
+  bloom: [[220, 50, 60], [240, 200, 50], [160, 90, 200], [240, 240, 245], [245, 140, 50], [240, 130, 170]],
+  blanket: [[140, 40, 60], [60, 90, 160], [70, 120, 70], [180, 140, 60], [120, 70, 140]],
+  rug: [[150, 40, 40], [60, 80, 130], [150, 110, 50], [90, 60, 100]],
+  books: [[150, 40, 40], [40, 80, 140], [50, 110, 60], [160, 120, 40], [90, 50, 110], [180, 160, 130]],
+};
+const GLASS = { color: [170, 210, 230], material: 'BMC_Glass' };
+const GLOW = (color, i = 5) => ({ color, material: 'BMC_Glow', material_intensity: i });
+const STOREY = 84; // 7 bricks
+const PLANKS = [[150, 104, 64], [134, 92, 56], [160, 114, 72]];
+
+/**
+ * build({ put, orientFor, rnd }) lays every town brick.
+ *   put(brick, x, y, z): brick with size (half extents) etc., positioned in town units, z up from the paving
+ *   orientFor(asset, ups, ext): wedge orientation from mapgen
+ *   rnd(a, b, c): deterministic hash in [0, 1)
+ * Returns counts for the summary.
+ */
+// Share of house lots that keep their building: the first town was packed
+// wall to wall, so most lots are left as open grass (inner ring a bit denser).
+const KEEP_INNER = 0.7, KEEP_OUTER = 0.2;
+
+export function build({ put, orientFor, rnd, village = null }) {
+  const pick = (list, a, b, c) => list[Math.floor(rnd(a, b, c) * list.length)];
+  const stats = { buildings: {}, stalls: 0, lamps: 0, trees: 0, removed: [] };
+  const count = t => (stats.buildings[t] = (stats.buildings[t] ?? 0) + 1);
+
+  // ---------------------------------------------------------- primitives --
+  const box = (x0, y0, z0, x1, y1, z1, b) =>
+    put({ ...b, size: [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2] }, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  const pole = (x, y, z0, z1, r, b) => put({ asset: 'PB_DefaultPole', ...b, size: [r, r, (z1 - z0) / 2] }, x, y, (z0 + z1) / 2);
+
+  /**
+   * A brick wall along x (or y) at cross coordinate c, thickness 10, from a to
+   * b, height h, with openings [p0, p1, z0, z1] (glazed when z0 > 0). Laid in
+   * 1-brick courses of staggered bricks in a few shades of `color`, pale
+   * stone quoins at the ends, and stone lintel and sill courses framing each
+   * opening. Opening edges sit on the 10 grid and on course lines.
+   */
+  function wall(axis, c, a, b, h, openings, color, zStart = 0) {
+    const seg = (p0, p1, z0, z1, brick) => {
+      if (p1 <= p0 || z1 <= z0) return;
+      if (axis === 'x') box(p0, c - 5, z0, p1, c + 5, z1, brick);
+      else box(c - 5, p0, z0, c + 5, p1, z1, brick);
+    };
+    const shade = (k, f) => color.map(v => Math.max(0, Math.min(255, Math.round(v * f[k % f.length]))));
+    const F = [1, 0.9, 1.07, 0.95, 1.03];
+    const STONE = [206, 198, 182], QUOIN = [[214, 208, 194], [196, 190, 176]];
+    for (let z = zStart, course = zStart / 12; z < h; z += 12, course++) {
+      const holes = openings.filter(o => o[2] <= z && o[3] >= z + 12);
+      // stone spans: the course just above an opening (lintel) and just below a window (sill)
+      const stone = openings.filter(o => o[3] === z || (o[2] > 0 && o[2] === z + 12)).map(o => [Math.max(a, o[0] - 10), Math.min(b, o[1] + 10)]);
+      let p = a;
+      const runs = [];
+      for (const o of [...holes].sort((u, v) => u[0] - v[0])) { if (o[0] > p) runs.push([p, o[0]]); p = Math.max(p, o[1]); }
+      if (p < b) runs.push([p, b]);
+      for (const [r0, r1] of runs) {
+        const breaks = [...new Set([r0, r1, ...stone.flat().filter(q => q > r0 && q < r1)])].sort((u, v) => u - v);
+        for (let i = 0; i + 1 < breaks.length; i++) {
+          const s0 = breaks[i], s1 = breaks[i + 1];
+          if (stone.some(([t0, t1]) => s0 >= t0 && s1 <= t1)) { seg(s0, s1, z, z + 12, { color: STONE }); continue; }
+          let q = s0, first = course % 2 ? 20 : 40, k = course * 3;
+          while (q < s1) {
+            let len = first || [40, 30, 40, 50][k % 4];
+            first = 0;
+            if (s1 - (q + len) < 20) len = s1 - q;
+            const quoin = (q === a || q + len === b) && len <= 40;
+            seg(q, q + len, z, z + 12, { color: quoin ? QUOIN[course % 2] : shade(k, F) });
+            q += len; k++;
+          }
+        }
+      }
+    }
+    for (const [p0, p1, z0, z1] of openings) if (z0 > 0 && z0 >= zStart && z1 <= h) seg(p0, p1, z0, z1, GLASS);
+  }
+
+  /** gable roof over the rectangle, ridge along the longer side, 1 stud overhang */
+  function gable(x0, y0, x1, y1, zBase, rise, color, ridgeAlongX = x1 - x0 >= y1 - y0) {
+    const ox0 = x0 - 10, oy0 = y0 - 10, ox1 = x1 + 10, oy1 = y1 + 10;
+    for (const sgn of [-1, 1]) {
+      if (ridgeAlongX) {
+        const ya = sgn < 0 ? oy0 : (oy0 + oy1) / 2, yb = sgn < 0 ? (oy0 + oy1) / 2 : oy1;
+        const ext = [(ox1 - ox0) / 2, (yb - ya) / 2, rise / 2];
+        put({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[0, -sgn]], ext), color }, (ox0 + ox1) / 2, (ya + yb) / 2, zBase + rise / 2);
+      } else {
+        const xa = sgn < 0 ? ox0 : (ox0 + ox1) / 2, xb = sgn < 0 ? (ox0 + ox1) / 2 : ox1;
+        const ext = [(xb - xa) / 2, (oy1 - oy0) / 2, rise / 2];
+        put({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[-sgn, 0]], ext), color }, (xa + xb) / 2, (oy0 + oy1) / 2, zBase + rise / 2);
+      }
+    }
+  }
+
+  /**
+   * A building: rectangle centred (cx, cy), `w` wide along its street front and
+   * `d` deep, door facing (fx, fy). Windows every ~60 units on each floor.
+   *
+   * Options: upperColor (plaster above the ground storey, half-timbered),
+   * stairs (a flight per storey, each through a stairwell in the floor above),
+   * shutters (colour), flowerBoxes, plain (walls without shutters or boxes:
+   * 'front', 'back', 'left', 'right'), canopy (a little roof over the door).
+   *
+   * Returns the geometry plus helpers in the building's own frame: u runs
+   * across the front (-w/2..w/2, +u is "right" seen from the street), v runs
+   * from the front face (0) to the back face (d), z up from the ground floor.
+   */
+  function building(cx, cy, fx, fy, w, d, floors, { wallColor, roofColor, rise, doorW = 40, ridge, tiles, upperColor, stairs = false, shutters = null, flowerBoxes = false, plain = [], canopy = true, s = 0 } = {}) {
+    const [ex, ey] = fx ? [d / 2, w / 2] : [w / 2, d / 2];
+    const x0 = cx - ex, x1 = cx + ex, y0 = cy - ey, y1 = cy + ey, h = floors * STOREY;
+    const lat = fx ? [0, 1] : [1, 0];
+    // local frame -> world
+    const P = (u, v) => [cx + lat[0] * u + fx * (d / 2 - v), cy + lat[1] * u + fy * (d / 2 - v)];
+    const rect = (u0, v0, u1, v1) => {
+      const [ax, ay] = P(u0, v0), [bx, by] = P(u1, v1);
+      return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)];
+    };
+    const lbox = (u0, v0, u1, v1, z0, z1, b) => { const [a, c, e, g] = rect(u0, v0, u1, v1); box(a, c, z0, e, g, z1, b); };
+    const lpole = (u, v, z0, z1, r, b) => { const [px, py] = P(u, v); pole(px, py, z0, z1, r, b); };
+    const lput = (asset, u, v, z, b = {}) => { const [px, py] = P(u, v); put({ asset, size: [0, 0, 0], ...b }, px, py, z); };
+    const windows = (lo, hi, skip) => {
+      const out = [];
+      const n = Math.max(1, Math.floor((hi - lo - 40) / 60));
+      for (let i = 0; i < n; i++) {
+        const m = Math.round((lo + ((i + 1) * (hi - lo)) / (n + 1)) / 10) * 10;
+        for (let f = 0; f < floors; f++) {
+          if (f === 0 && skip && Math.abs(m - skip) < doorW / 2 + 20) continue;
+          out.push([m - 10, m + 10, f * STOREY + 36, f * STOREY + 60]);
+        }
+      }
+      return out;
+    };
+    const doorAt = fx ? cy : cx;
+    const door = [doorAt - doorW / 2, doorAt + doorW / 2, 0, 72];
+    // x-walls (along x) at y0 and y1 span the full width; y-walls fit between them
+    const frontY = fy ? (fy > 0 ? y1 : y0) : null, frontX = fx ? (fx > 0 ? x1 : x0) : null;
+    const walls = [
+      { axis: 'x', c: y0 + 5, a: x0, b: x1, out: [0, -1], open: [...(frontY === y0 ? [door] : []), ...windows(x0, x1, frontY === y0 ? doorAt : null)] },
+      { axis: 'x', c: y1 - 5, a: x0, b: x1, out: [0, 1], open: [...(frontY === y1 ? [door] : []), ...windows(x0, x1, frontY === y1 ? doorAt : null)] },
+      { axis: 'y', c: x0 + 5, a: y0 + 10, b: y1 - 10, out: [-1, 0], open: [...(frontX === x0 ? [door] : []), ...windows(y0 + 10, y1 - 10, frontX === x0 ? doorAt : null)] },
+      { axis: 'y', c: x1 - 5, a: y0 + 10, b: y1 - 10, out: [1, 0], open: [...(frontX === x1 ? [door] : []), ...windows(y0 + 10, y1 - 10, frontX === x1 ? doorAt : null)] },
+    ];
+    for (const W of walls) {
+      const [ox, oy] = W.out;
+      W.name = ox === fx && oy === fy ? 'front' : ox === -fx && oy === -fy ? 'back' : ox === lat[0] && oy === lat[1] ? 'right' : 'left';
+      if (upperColor && floors > 1) {
+        wall(W.axis, W.c, W.a, W.b, STOREY, W.open, wallColor);
+        wall(W.axis, W.c, W.a, W.b, h, W.open, upperColor, STOREY);
+      } else wall(W.axis, W.c, W.a, W.b, h, W.open, wallColor);
+    }
+    /** a box on a wall's outer face: along [p0, p1] (world), outward [o0, o1] */
+    const faceAt = W => [W.axis === 'x' ? (W.out[1] < 0 ? y0 : y1) : (W.out[0] < 0 ? x0 : x1), W.axis === 'x' ? W.out[1] : W.out[0]];
+    const face = (W, p0, p1, o0, o1, z0, z1, b) => {
+      const [f0, sg] = faceAt(W);
+      const q0 = Math.min(f0 + sg * o0, f0 + sg * o1), q1 = Math.max(f0 + sg * o0, f0 + sg * o1);
+      if (W.axis === 'x') box(p0, q0, z0, p1, q1, z1, b); else box(q0, p0, z0, q1, p1, z1, b);
+    };
+    const facePut = (W, asset, p, o, z, b = {}) => {
+      const [f0, sg] = faceAt(W);
+      if (W.axis === 'x') put({ asset, size: [0, 0, 0], ...b }, p, f0 + sg * o, z); else put({ asset, size: [0, 0, 0], ...b }, f0 + sg * o, p, z);
+    };
+    const MICRO = { asset: 'PB_DefaultMicroBrick' };
+    const timber = PALETTE.timber[0];
+    for (const W of walls) {
+      const deco = !plain.includes(W.name);
+      for (const [p0, p1, z0, z1] of W.open) {
+        if (z0 === 0 || !deco) continue;
+        // shutters either side of each window, folded back against the wall
+        if (shutters) for (const [a, b] of [[p0 - 10, p0], [p1, p1 + 10]]) face(W, a, b, 0, 2, z0, z1, { ...MICRO, color: shutters });
+        // a flower box under each ground-floor window, one bloom in it
+        if (flowerBoxes && z0 === 36) {
+          face(W, p0 - 5, p1 + 5, 0, 10, 24, 36, { color: timber });
+          const bloom = pick(['B_Tulip', 'B_Rose', 'B_Small_Flower'], s, p0, 1);
+          const hz = { B_Tulip: 6, B_Rose: 4, B_Small_Flower: 2 }[bloom];
+          facePut(W, bloom, (p0 + p1) / 2, 6, 36 + hz, { color: pick(PALETTE.bloom, s, p0, 2) });
+        }
+      }
+      // half-timbering on the upper storeys: a band at each floor and corner posts
+      if (upperColor && floors > 1) {
+        for (let f = 1; f < floors; f++) {
+          face(W, W.axis === 'x' ? x0 - 4 : y0, W.axis === 'x' ? x1 + 4 : y1, 0, 4, f * STOREY - 2, f * STOREY + 2, { ...MICRO, color: timber });
+          const top = f + 1 === floors ? h : (f + 1) * STOREY - 2;
+          if (W.axis === 'x') for (const [a, b] of [[x0, x0 + 10], [x1 - 10, x1]]) face(W, a, b, 0, 2, f * STOREY + 2, top, { ...MICRO, color: timber });
+        }
+      }
+    }
+    // front step, and a little roof over the door
+    const front = walls.find(W => W.name === 'front');
+    face(front, doorAt - doorW / 2 - 10, doorAt + doorW / 2 + 10, 0, 20, 0, 4, { color: PALETTE.stone[2] });
+    if (canopy) face(front, doorAt - doorW / 2 - 10, doorAt + doorW / 2 + 10, 0, 20, 76, 80, { color: timber });
+
+    // stairs: a flight per storey along a side wall, rising from the back
+    // toward the front, through a stairwell in the floor above; alternate
+    // storeys use alternate sides. Six 1-brick steps, then the floor above.
+    const U = w / 2 - 10, V = d - 10, flights = [];
+    if (stairs) for (let f = 0; f + 1 < floors; f++) {
+      const side = f % 2 ? 1 : -1, ua = side < 0 ? -U : U - 30, ub = ua + 30;
+      for (let k = 0; k < 6; k++) lbox(ua, V - 20 * (k + 1), ub, V - 20 * k, f * STOREY + 4, f * STOREY + 4 + 12 * (k + 1), { color: k % 2 ? PLANKS[1] : PALETTE.timber[1] });
+      flights.push({ f, side, hole: rect(ua, V - 120, ub, V) });
+      // balustrade along the stairwell's open side upstairs
+      lbox(side < 0 ? ub : ua - 4, V - 120, side < 0 ? ub + 4 : ua, V, (f + 1) * STOREY + 4, (f + 1) * STOREY + 36, { ...MICRO, color: timber });
+    }
+    // floors: two-tone planks along the long side, or a checker of tiles, less any stairwell
+    const minus = (r, holes) => holes.reduce((pieces, [hx0, hy0, hx1, hy1]) => pieces.flatMap(([a, b, c, e]) => {
+      if (hx0 >= c || hx1 <= a || hy0 >= e || hy1 <= b) return [[a, b, c, e]];
+      return [[a, b, Math.min(c, hx0), e], [Math.max(a, hx1), b, c, e], [Math.max(a, hx0), b, Math.min(c, hx1), Math.min(e, hy0)], [Math.max(a, hx0), Math.max(b, hy1), Math.min(c, hx1), e]]
+        .filter(([p, q, p1, q1]) => p1 > p && q1 > q);
+    }), [r]);
+    const FX0 = x0 + 10, FY0 = y0 + 10, FX1 = x1 - 10, FY1 = y1 - 10, alongX = FX1 - FX0 >= FY1 - FY0;
+    for (let f = 0; f < floors; f++) {
+      const z = f * STOREY, holes = flights.filter(F => F.f + 1 === f).map(F => F.hole);
+      const lay = (r, b) => { for (const [a, c, e, g] of minus(r, holes)) box(a, c, z, e, g, z + 4, b); };
+      if (tiles && f === 0) {
+        for (let x = FX0, i = 0; x < FX1; x += 40, i++)
+          for (let y = FY0, j = 0; y < FY1; y += 40, j++)
+            lay([x, y, Math.min(FX1, x + 40), Math.min(FY1, y + 40)], { asset: 'PB_DefaultTile', color: (i + j) % 2 ? tiles[0] : tiles[1] });
+      } else if (alongX) {
+        for (let y = FY0, k = 0; y < FY1; y += 20, k++) lay([FX0, y, FX1, Math.min(FY1, y + 20)], { color: PLANKS[k % 3] });
+      } else {
+        for (let x = FX0, k = 0; x < FX1; x += 20, k++) lay([x, FY0, Math.min(FX1, x + 20), FY1], { color: PLANKS[k % 3] });
+      }
+    }
+    gable(x0, y0, x1, y1, h, rise, roofColor, ridge);
+
+    // ---- furniture, in the local frame (zf(f) = top of that floor's boards)
+    const zf = f => f * STOREY + 4, ceil = f => (f + 1) * STOREY;
+    /** a box against a wall: along [a0, a1] (v for side walls, u for the back), [b0, b1] in from its inner face */
+    const wb = (wl, a0, a1, b0, b1, z0, z1, m) =>
+      wl === 'right' ? lbox(U - b1, a0, U - b0, a1, z0, z1, m) : wl === 'left' ? lbox(-U + b0, a0, -U + b1, a1, z0, z1, m) : lbox(a0, V - b1, a1, V - b0, z0, z1, m);
+    const wput = (wl, asset, a, b, z, m) =>
+      wl === 'right' ? lput(asset, U - b, a, z, m) : wl === 'left' ? lput(asset, -U + b, a, z, m) : lput(asset, a, V - b, z, m);
+    const STONE = { color: PALETTE.stone[0] }, DARK = { color: PALETTE.stone[1] }, WOOD = { color: PALETTE.timber[1] }, WOOD2 = { color: PALETTE.timber[0] };
+    const furnish = {
+      /** fireplace centred at `a` along a wall, with its breast up to the ceiling */
+      fireplace(wl, a, f) {
+        const z0 = zf(f);
+        wb(wl, a - 20, a - 10, 0, 20, z0, z0 + 48, STONE);
+        wb(wl, a + 10, a + 20, 0, 20, z0, z0 + 48, STONE);
+        wb(wl, a - 10, a + 10, 0, 10, z0, z0 + 48, DARK);
+        wb(wl, a - 10, a + 10, 10, 20, z0, z0 + 4, DARK);
+        wput(wl, 'B_Flame', a, 15, z0 + 4 + 10, GLOW([255, 130, 40], 8));
+        wb(wl, a - 20, a + 20, 0, 20, z0 + 48, z0 + 60, WOOD);
+        wb(wl, a - 20, a + 20, 0, 10, z0 + 60, ceil(f), STONE);
+        for (const k of [-14, 14]) wput(wl, 'B_Chalice', a + k, 15, z0 + 60 + 10, { color: [200, 160, 70], material: 'BMC_Metallic' });
+      },
+      /** bed along v: head at vHead, foot toward vHead + dir * 90, u from u0 to u0 + 40 */
+      bed(u0, vHead, dir, f, blanket) {
+        const z0 = zf(f), sp = (a, b) => [Math.min(vHead + dir * a, vHead + dir * b), Math.max(vHead + dir * a, vHead + dir * b)];
+        const [h0, h1] = sp(0, 10), [f0, f1] = sp(10, 90), [p0, p1] = sp(10, 30), [b0, b1] = sp(30, 90);
+        lbox(u0, h0, u0 + 40, h1, z0, z0 + 36, WOOD);
+        lbox(u0, f0, u0 + 40, f1, z0, z0 + 12, WOOD2);
+        lbox(u0, p0, u0 + 40, p1, z0 + 12, z0 + 16, { asset: 'PB_DefaultTile', color: [236, 232, 222] });
+        lbox(u0, b0, u0 + 40, b1, z0 + 12, z0 + 16, { asset: 'PB_DefaultTile', color: blanket });
+      },
+      /** table centred (u, v) standing at height z0, stools on the floor below at `stools` */
+      table(u, v, f, rug, stools = []) {
+        const z0 = zf(f) + (rug ? 4 : 0);
+        lpole(u, v, z0, z0 + 24, 5, WOOD);
+        lbox(u - 20, v - 20, u + 20, v + 20, z0 + 24, z0 + 28, { asset: 'PB_DefaultTile', color: PALETTE.timber[1] });
+        for (const [su, sv] of stools) lpole(su, sv, zf(f), zf(f) + 16, 5, WOOD2);
+      },
+      rug(u0, v0, u1, v1, f, color) { lbox(u0, v0, u1, v1, zf(f), zf(f) + 4, { asset: 'PB_DefaultTile', color }); },
+      cupboard(wl, a0, a1, f, height = 60) {
+        wb(wl, a0, a1, 0, 20, zf(f), zf(f) + height, WOOD);
+        wb(wl, a0, a1, 0, 20, zf(f) + height, zf(f) + height + 4, WOOD2);
+      },
+      bookcase(wl, a0, a1, f) {
+        wb(wl, a0, a1, 0, 20, zf(f), zf(f) + 60, WOOD2);
+        [8, 28, 48].forEach((zz, k) => {
+          for (let a = a0 + 2, j = 0; a + 6 <= a1 - 2; a += 6, j++)
+            wb(wl, a, a + 6, 20, 24, zf(f) + zz, zf(f) + zz + 10 + ((j + k) % 2) * 2, { ...MICRO, color: pick(PALETTE.books, s, k * 31 + j, 7) });
+        });
+      },
+      chest(u0, v0, u1, v1, f) {
+        lbox(u0, v0, u1, v1, zf(f), zf(f) + 20, { color: [110, 76, 46] });
+        lbox(u0, v0, u1, v1, zf(f) + 20, zf(f) + 24, { color: [70, 66, 62], material: 'BMC_Metallic' });
+      },
+      barrel(u, v, f) { lpole(u, v, zf(f), zf(f) + 28, 10, { color: [120, 84, 50] }); },
+      crate(u, v, f, z = 0) { lbox(u - 10, v - 10, u + 10, v + 10, zf(f) + z, zf(f) + z + 20, { color: pick([[150, 110, 70], [140, 100, 64], [160, 122, 80]], s, u + z, v) }); },
+      lantern(u, v, f) { lbox(u - 5, v - 5, u + 5, v + 5, ceil(f) - 8, ceil(f), GLOW([255, 196, 120], 5)); },
+      pot(u, v, f) { lpole(u, v, zf(f), zf(f) + 12, 10, { color: [150, 80, 50] }); lput('B_Fern', u, v, zf(f) + 12 + 2, { color: [70, 130, 50] }); },
+    };
+    return { x0, y0, x1, y1, h, U, V, w, d, frontPos: [cx + fx * (fx ? ex : 0), cy + fy * (fy ? ey : 0)], lbox, lpole, lput, zf, ceil, furnish };
+  }
+
+  /**
+   * A roomy house from the wallgen tool (wallhouse.mjs): W x D studs (both
+   * multiples of 4 so the gable wedges land on the micro grid), `storeys`
+   * 120-unit storeys, centred (cx, cy), front door facing (fx, fy). Running-bond
+   * brick walls (ground storey `wallColor`, upper ones `upperColor`), glazed
+   * windows, tile floors, a ceiling under a gable roof, wallgen's stairs, and a
+   * little furniture in each room.
+   */
+  function wallHouse(cx, cy, fx, fy, W, D, storeys, s, { wallColor, upperColor = wallColor, roofColor, rise }) {
+    const h = planHouse({ W, D, storeys, seed: s });
+    const w = (W + 1) * 10, d = (D + 1) * 10;
+    const lat = fx ? [0, 1] : [1, 0];
+    const P = (u, v) => [cx + lat[0] * u + fx * (d / 2 - v), cy + lat[1] * u + fy * (d / 2 - v)];
+    // stud-space box (x across the front, y back from the front face) -> world
+    const sbox = (x0, y0, x1, y1, z0, z1, b) => {
+      const [ax, ay] = P(x0 * 10 - w / 2, y0 * 10), [bx, by] = P(x1 * 10 - w / 2, y1 * 10);
+      box(Math.min(ax, bx), Math.min(ay, by), z0, Math.max(ax, bx), Math.max(ay, by), z1, b);
+    };
+    const F = [1, 0.9, 1.07, 0.95, 1.03];
+    const shade = (c, k) => c.map(v => Math.max(0, Math.min(255, Math.round(v * F[k % F.length]))));
+    const STOREY_H = WH_COURSES * 12;
+    for (const b of h.boxes) {
+      if (b.kind === 'wall') {
+        const k = Math.floor(rnd(s, b.x0 * 131 + b.y0, b.course) * 5);
+        sbox(b.x0, b.y0, b.x1, b.y1, b.z0, b.z1, { color: shade(b.course < WH_COURSES ? wallColor : upperColor, k) });
+      } else if (b.kind === 'glass') sbox(b.x0, b.y0, b.x1, b.y1, b.z0, b.z1, GLASS);
+      else if (b.kind === 'floor') sbox(b.x0, b.y0, b.x1, b.y1, b.z0, b.z1, { asset: 'PB_DefaultMicroBrick', color: PLANKS[2] }); // floorboards (owner's method)
+      else if (b.kind === 'ceiling') sbox(b.x0, b.y0, b.x1, b.y1, b.z0, b.z1, { asset: 'PB_DefaultTile', color: [226, 218, 200] });
+      else if (b.kind === 'stair') sbox(b.x0, b.y0, b.x1, b.y1, b.z0, b.z1, { asset: 'PB_DefaultTile', color: PALETTE.timber[1] });
+    }
+    // furniture, kept off the stair (and the stairwell above it) by 2 studs
+    const stair = h.boxes.filter(b => b.kind === 'stair');
+    const clear = (x0, y0, x1, y1) => !stair.some(t => x0 < t.x1 + 2 && t.x0 - 2 < x1 && y0 < t.y1 + 2 && t.y0 - 2 < y1);
+    const { h1, a, b: split } = h.rooms;
+    const rooms = [[1, h1 + 1, a, D], [a + 1, h1 + 1, W, D]];
+    const parlour = split < W / 2 ? [1, 1, split, h1] : [split + 1, 1, W, h1];
+    const timber = PALETTE.timber[0];
+    for (let st = 0; st < storeys; st++) {
+      const f = st * STOREY_H + 4, ceil = (st + 1) * STOREY_H - (st + 1 === storeys ? 4 : 0);
+      [...rooms, parlour].forEach(([x0, y0, x1, y1], r) => {
+        const mx = Math.floor((x0 + x1) / 2), my = Math.floor((y0 + y1) / 2);
+        if (!clear(mx - 3, my - 3, mx + 3, my + 3)) return;
+        if (st > 0 && r < 2) {
+          // bedroom: bed against the back wall, a chest at its foot
+          const bx = mx - 1;
+          if (!clear(bx, D - 8, bx + 3, D)) return;
+          sbox(bx, D - 6, bx + 3, D, f, f + 12, { color: timber });
+          sbox(bx, D - 5, bx + 3, D, f + 12, f + 16, { color: pick(PALETTE.blanket, s, st, r) });
+          sbox(bx, D - 6, bx + 3, D - 5, f + 12, f + 16, { color: [236, 232, 222] });
+          sbox(bx, D - 8, bx + 3, D - 7, f, f + 12, { color: PALETTE.timber[2] });
+        } else {
+          // table on a rug, a stool either side
+          sbox(mx - 3, my - 2, mx + 3, my + 2, f, f + 4, { asset: 'PB_DefaultTile', color: pick(PALETTE.rug, s, st, r) });
+          sbox(mx, my, mx + 1, my + 1, f + 4, f + 28, { color: timber });
+          sbox(mx - 1, my - 1, mx + 2, my + 2, f + 28, f + 32, { color: PALETTE.timber[1] });
+          for (const sx of [-2, 2]) sbox(mx + sx, my, mx + sx + 1, my + 1, f + 4, f + 16, { color: timber });
+        }
+        // a lantern under the ceiling
+        if (clear(mx, my, mx + 1, my + 1)) sbox(mx, my, mx + 1, my + 1, ceil - 8, ceil, GLOW([255, 196, 120], 5));
+      });
+    }
+    // front step under the door
+    const fd = h.rooms.fd;
+    sbox(fd - 3, -2, fd + 3, 0, 0, 4, { color: PALETTE.stone[2] });
+    // gable roof, ridge along the front, 15 units of overhang all round
+    const [ax, ay] = P(-w / 2, 0), [bx, by] = P(w / 2, d);
+    const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx), y0 = Math.min(ay, by), y1 = Math.max(ay, by);
+    gable(x0 - 5, y0 - 5, x1 + 5, y1 + 5, h.top, rise, roofColor, !fx);
+    return h;
+  }
+
+  // ------------------------------------------------------- building types --
+  // each takes the lot centre, facing and a seed; footprints fit a 480 lot
+  const TYPES = {
+    cottage(cx, cy, fx, fy, s) {
+      wallHouse(cx, cy, fx, fy, 32, 24, 1, s, {
+        wallColor: pick(PALETTE.brick, s, 3), roofColor: pick(PALETTE.roof, s, 4), rise: 72 + Math.floor(rnd(s, 5) * 3) * 12,
+      });
+      count('cottage');
+    },
+    townhouse(cx, cy, fx, fy, s) {
+      wallHouse(cx, cy, fx, fy, 36, 28, 2 + (rnd(s, 1) < 0.35 ? 1 : 0), s, {
+        wallColor: pick(PALETTE.brick, s, 3), upperColor: pick(PALETTE.plaster, s, 6), roofColor: pick(PALETTE.roof, s, 4), rise: 96 + Math.floor(rnd(s, 5) * 2) * 24,
+      });
+      count('townhouse');
+    },
+    shop(cx, cy, fx, fy, s) {
+      const w = 240, d = 200;
+      const g = building(cx, cy, fx, fy, w, d, 1, {
+        wallColor: pick(PALETTE.brick, s, 3), roofColor: pick(PALETTE.roof, s, 4), rise: 48, doorW: 60, tiles: [[200, 196, 186], [120, 116, 110]],
+        shutters: pick(PALETTE.shutter, s, 8), flowerBoxes: true, plain: ['front'], canopy: false, s,
+      });
+      const cloth = pick(PALETTE.cloth, s, 5);
+      // awning over the door on two posts, below the roof overhang
+      const [ax, ay] = g.frontPos, lat = fx ? [0, 1] : [1, 0];
+      const out = 60;
+      const ax0 = fx ? (fx > 0 ? ax : ax - out) : ax - 60, ax1 = fx ? (fx > 0 ? ax + out : ax) : ax + 60;
+      const ay0 = fy ? (fy > 0 ? ay : ay - out) : ay - 60, ay1 = fy ? (fy > 0 ? ay + out : ay) : ay + 60;
+      box(ax0, ay0, 76, ax1, ay1, 80, { color: cloth });
+      for (const sgn of [-1, 1]) pole(ax + fx * (out - 5) + lat[0] * sgn * 55, ay + fy * (out - 5) + lat[1] * sgn * 55, 0, 76, 5, { color: PALETTE.timber[0] });
+      // hanging sign beside the door
+      const sx = ax + lat[0] * 80 + fx * 2, sy = ay + lat[1] * 80 + fy * 2;
+      put({ asset: 'PB_DefaultMicroBrick', size: fx ? [2, 10, 10] : [10, 2, 10], color: pick(PALETTE.cloth, s, 6) }, sx, sy, 50);
+      // counter with wares, shelves of jars on the back wall, crates and barrels
+      const F = g.furnish;
+      g.lbox(-60, 40, 60, 60, 4, 40, { color: PALETTE.timber[0] });
+      g.lput('B_Pumpkin', -30, 50, 40 + 8, { color: [230, 120, 30] });
+      g.lput('B_Chalice', 20, 50, 40 + 10, { color: [200, 160, 70], material: 'BMC_Metallic' });
+      F.cupboard('back', -100, 100, 0, 48);
+      [-80, -40, 0, 40, 80].forEach((u, k) => g.lput('B_Jar', u, g.V - 10, 4 + 52 + 12, { color: pick(PALETTE.goods, s, k, 12), material: 'BMC_Glass' }));
+      F.crate(-90, 110, 0); F.crate(-90, 130, 0); F.crate(-90, 110, 0, 20);
+      F.barrel(90, 110, 0); F.barrel(90, 140, 0);
+      F.lantern(0, 110, 0);
+      count('shop');
+    },
+    tavern(cx, cy, fx, fy, s) {
+      const g = building(cx, cy, fx, fy, 360, 240, 2, {
+        wallColor: PALETTE.brick[5], upperColor: PALETTE.plaster[1], roofColor: PALETTE.roof[0], rise: 96, doorW: 60, tiles: [[170, 120, 80], [110, 76, 50]],
+        stairs: true, shutters: PALETTE.shutter[0], flowerBoxes: true, s,
+      });
+      const lat = fx ? [0, 1] : [1, 0];
+      // big sign (clear of the timber band) and lanterns either side of the door
+      put({ asset: 'PB_DefaultMicroBrick', size: fx ? [2, 20, 12] : [20, 2, 12], color: [190, 140, 40] }, g.frontPos[0] + fx * 6, g.frontPos[1] + fy * 6, 96);
+      for (const sgn of [-1, 1])
+        put({ size: [5, 5, 4], ...GLOW([255, 190, 100], 6) }, g.frontPos[0] + fx * 5 + lat[0] * sgn * 50, g.frontPos[1] + fy * 5 + lat[1] * sgn * 50, 70);
+      // barrels by the door, outside
+      for (const sgn of [-1, 1]) pole(g.frontPos[0] + fx * 25 + lat[0] * sgn * 120, g.frontPos[1] + fy * 25 + lat[1] * sgn * 120, 0, 28, 10, { color: [120, 84, 50] });
+      const F = g.furnish, V = g.V;
+      // taproom: four tables with stools, a bar with mugs and kegs, the hearth at the back
+      for (const u of [-90, 90]) for (const v of [70, 170]) F.table(u, v, 0, false, [[u - 30, v], [u + 30, v]]);
+      g.lbox(130, 60, 150, 180, 4, 40, { color: PALETTE.timber[0] });
+      for (const v of [90, 120, 150]) g.lput('B_Chalice', 140, v, 40 + 10, { color: [200, 160, 70], material: 'BMC_Metallic' });
+      for (const v of [80, 120, 160]) F.barrel(160, v, 0);
+      F.fireplace('back', 0, 0);
+      for (const u of [-90, 0, 90]) F.lantern(u, 120, 0);
+      // upstairs: three guest beds along the back, a wardrobe, a rug
+      [[-100, 13], [-20, 14], [60, 15]].forEach(([u, k]) => {
+        F.bed(u, V, -1, 1, pick(PALETTE.blanket, s, k));
+        F.chest(u + 5, 120, u + 35, 140, 1);
+        F.lantern(u + 20, 110, 1);
+      });
+      F.cupboard('right', 60, 110, 1, 64);
+      F.rug(-60, 40, 60, 100, 1, PALETTE.rug[0]);
+      count('tavern');
+    },
+    garden(cx, cy, fx, fy, s) {
+      if (rnd(s, 1) < 0.5) {
+        // vegetable rows on soil: lettuces, pumpkins, sprouts, tomatoes, beans
+        box(cx - 160, cy - 160, 0, cx + 160, cy + 160, 4, { color: [96, 70, 48] });
+        const CROPS = [['B_Fern', [90, 160, 60], 20], ['B_Pumpkin', [230, 120, 30], 20], ['B_Small_Flower', [110, 170, 70], 20], ['B_Tulip', [220, 60, 40], 20], ['B_Bush', [120, 170, 70], 30]];
+        const HZ = { B_Fern: 2, B_Pumpkin: 8, B_Small_Flower: 2, B_Tulip: 6, B_Bush: 16 };
+        const alongY = rnd(s, 2) < 0.5;
+        for (let i = -3; i <= 3; i++) {
+          const [asset, color, step] = pick(CROPS, s, i + 10);
+          for (let t = -140 + step / 2; t <= 140 - step / 2; t += step)
+            put({ asset, size: [0, 0, 0], color }, alongY ? cx + i * 40 : cx + t, alongY ? cy + t : cy + i * 40, 4 + HZ[asset]);
+        }
+        // little fence posts at the corners
+        for (const [px, py] of [[-170, -170], [170, -170], [-170, 170], [170, 170]]) pole(cx + px, cy + py, 0, 36, 5, { color: PALETTE.timber[0] });
+        count('vegetable garden');
+      } else {
+        // park: a few round trees, a ring of flowers, bushes in the corners and a bench
+        const turn = rnd(s, 3) * Math.PI * 2;
+        for (let t = 0; t < 3; t++) {
+          const a = turn + (t * 2 * Math.PI) / 3, r = 110; // a triangle, canopies clear of each other
+          const px = cx + Math.round((Math.cos(a) * r) / 10) * 10, py = cy + Math.round((Math.sin(a) * r) / 10) * 10;
+          tree(px, py, s * 7 + t);
+        }
+        const bloom = pick(PALETTE.bloom, s, 4);
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4;
+          put({ asset: k % 2 ? 'B_Rose' : 'B_Tulip', size: [0, 0, 0], color: k % 2 ? pick(PALETTE.bloom, s, 5) : bloom }, cx + Math.round(Math.cos(a) * 25) * 2, cy + Math.round(Math.sin(a) * 25) * 2, k % 2 ? 4 : 6);
+        }
+        for (const [px, py] of [[-170, -170], [170, -170], [-170, 170], [170, 170]])
+          { const leafy = rnd(s, px, py) < 0.5; put({ asset: leafy ? "B_Leaf_Bush" : "B_Bush", size: [0, 0, 0], color: [[60, 120, 50], [80, 140, 60]][rnd(s, py, px) < 0.5 ? 0 : 1] }, cx + px, cy + py, leafy ? 20 : 16); }
+        box(cx - 30, cy + 150, 12, cx + 30, cy + 160, 16, { color: PALETTE.timber[1] });
+        for (const sgn of [-1, 1]) box(cx + sgn * 25 - 5, cy + 150, 0, cx + sgn * 25 + 5, cy + 160, 12, { color: PALETTE.timber[0] });
+        count('park');
+      }
+    },
+  };
+
+  function tree(x, y, s) {
+    const trunk = 6 + Math.floor(rnd(s, 9) * 4);
+    pole(x, y, 0, trunk * 12, 10, { color: [92, 64, 40] });
+    let z = trunk * 12 - 24;
+    for (const [r, t] of [[40, 1], [55, 2], [60, 2], [50, 2], [30, 1]]) {
+      // canopy tiers start above the trunk top so they don't overlap it
+      const z0 = Math.max(z, trunk * 12);
+      pole(x, y, z0, z0 + t * 12, r, { color: [58, 120, 48] });
+      z = z0 + t * 12;
+    }
+    stats.trees++;
+  }
+
+  function lamp(x, y) {
+    pole(x, y, 0, 96, 5, { color: [46, 44, 42], material: 'BMC_Metallic' });
+    pole(x, y, 96, 108, 10, GLOW([255, 190, 100], 6));
+    stats.lamps++;
+  }
+
+  function stall(x, y, s) {
+    box(x - 30, y - 15, 0, x + 30, y + 15, 36, { color: PALETTE.timber[1] });
+    for (const [px, py] of [[-40, -30], [40, -30], [-40, 30], [40, 30]]) pole(x + px, y + py, 0, 96, 5, { color: PALETTE.timber[0] });
+    box(x - 50, y - 40, 96, x + 50, y + 40, 100, { color: pick(PALETTE.cloth, s, 1) });
+    for (let g = -1; g <= 1; g++) put({ asset: 'B_1x1_Round', size: [0, 0, 0], color: pick(PALETTE.goods, s, g + 5) }, x + g * 20, y, 42);
+    stats.stalls++;
+  }
+
+  // -------------------------------------------------------------- village --
+  // build({ ..., village: { seed, shops } }) lays a hamlet instead of the
+  // town: a well under a little roof with a checkpoint beside it, three or
+  // four houses round a cobbled square facing in, lamps, a garden. `shops`
+  // (0..2) reserves stall spots on the square for the sword-shop prefabs,
+  // returned in stats.shopSpots (mapgen stamps them).
+  if (village) {
+    const vs = village.seed;
+    pole(0, 0, 0, 36, 30, { color: PALETTE.stone[1] });
+    pole(0, 0, 36, 40, 20, { color: [30, 40, 60] });
+    for (const sx of [-1, 1]) pole(sx * 40, 0, 0, 96, 5, { color: PALETTE.timber[0] });
+    gable(-60, -40, 60, 40, 96, 24, pick(PALETTE.roof, vs, 1), true);
+    put({ asset: 'B_CheckPoint', size: [0, 0, 0], color: [240, 200, 60] }, 0, -100, 2);
+    const sites = [[0, 420, 0, -1], [420, 0, -1, 0], [0, -420, 0, 1], [-420, 0, 1, 0]];
+    const skip = rnd(vs, 2) < 0.5 ? [0, 1, 3][Math.floor(rnd(vs, 3) * 3)] : -1; // a garden, never on the shop side
+    sites.forEach(([x, y, fx, fy], k) => {
+      if (k === skip) { TYPES.garden(x, y, 0, 0, vs * 10 + k); return; }
+      (rnd(vs, 4, k) < 0.6 ? TYPES.cottage : TYPES.townhouse)(x, y, fx, fy, vs * 10 + k);
+    });
+    // a vegetable plot or park on one diagonal, lamps on the others
+    const diag = Math.floor(rnd(vs, 5) * 3); // never the shop corner (-, -)
+    [[1, 1], [-1, 1], [1, -1]].forEach(([sx, sy], k) => {
+      if (k === diag) TYPES.garden(sx * 420, sy * 420, 0, 0, vs * 10 + 7);
+      else lamp(sx * 200, sy * 200);
+    });
+    stats.shopSpots = [];
+    for (let k = 0; k < (village.shops ?? 0); k++) stats.shopSpots.push([-160 + k * 60, -260, 12]);
+    count('village');
+    return stats;
+  }
+
+  // ------------------------------------------------------- market square --
+  // fountain and the spawn ring in the middle
+  pole(0, 0, 0, 12, 90, { color: PALETTE.stone[0] });
+  pole(0, 0, 12, 20, 75, { color: [70, 150, 210], material: 'BMC_Glass' });
+  pole(0, 0, 20, 80, 15, { color: PALETTE.stone[0] });
+  pole(0, 0, 80, 88, 30, GLOW([120, 220, 255], 4));
+  for (let k = 0; k < 8; k++) {
+    const a = (k * Math.PI) / 4;
+    put({ asset: 'B_SpawnPoint', size: [0, 0, 0], color: [240, 240, 240] }, Math.round(Math.cos(a) * 20) * 10, Math.round(Math.sin(a) * 20) * 10, 2);
+  }
+  // (the market stalls were removed 2026-10-03 at the owner's request; the square is open paving)
+  // lamps around the square's edge
+  for (const t of [-600, -300, 300, 600])
+    for (const [x, y] of [[t, 700], [t, -700], [700, t], [-700, t]]) lamp(x, y);
+
+  // ------------------------------------------------------- blocks & lots --
+  BLOCKS.forEach(([xl, xh, xc], bi) =>
+    BLOCKS.forEach(([yl, yh, yc], bj) => {
+      if (Math.abs(xc) < SQUARE && Math.abs(yc) < SQUARE) return; // the market square
+      if (bi === 0 && bj === 2) return; // reserved: the manor (house.mjs) stands on this block
+      const dist = Math.max(Math.abs(xc), Math.abs(yc));
+      // the chapel takes the whole block north of the square
+      if (bi === 1 && bj === 2) {
+        const w = 280, d = 440;
+        const g = building(xc, yc - 60, 0, -1, w, d, 1, { wallColor: [218, 212, 198], roofColor: [70, 70, 74], rise: 144, doorW: 60, ridge: false, tiles: [[226, 222, 212], [80, 80, 86]] });
+        // inside: a red aisle between two banks of pews, the altar at the back
+        g.lbox(-20, 10, 20, 370, 4, 8, { asset: 'PB_DefaultTile', color: [150, 30, 40] });
+        for (let v = 60; v <= 300; v += 40)
+          for (const [u0, u1] of [[-110, -30], [30, 110]]) {
+            g.lbox(u0, v, u1, v + 20, 4, 16, { color: PALETTE.timber[1] });
+            g.lbox(u0, v + 20, u1, v + 24, 4, 40, { asset: 'PB_DefaultMicroBrick', color: PALETTE.timber[0] });
+          }
+        g.lbox(-40, 380, 40, 400, 4, 40, { color: [236, 232, 222] });
+        for (const u of [-30, 30]) g.lput('B_Chalice', u, 390, 40 + 10, { color: [220, 180, 80], material: 'BMC_Metallic' });
+        for (const v of [120, 240, 360]) g.furnish.lantern(0, v, 0);
+        // bell tower beside the front, with a crenellated top
+        const tx = xc + w / 2 + 60, ty = g.y0 + 60;
+        box(tx - 50, ty - 50, 0, tx + 50, ty + 50, 360, { color: [210, 206, 196] });
+        for (const [mx, my] of [[-40, -40], [40, -40], [-40, 40], [40, 40]]) box(tx + mx - 10, ty + my - 10, 360, tx + mx + 10, ty + my + 10, 384, { color: [210, 206, 196] });
+        put({ size: [10, 10, 10], ...GLOW([255, 220, 140], 4) }, tx, ty - 60, 300);
+        // churchyard trees
+        tree(xc - 300, yc + 300, 4242);
+        tree(xc + 300, yc + 300, 4243);
+        count('chapel');
+        return;
+      }
+      // lots: a third of the block each way (blocks beside the avenues are a little narrower)
+      const lx = (xh - xl) / 3, ly = (yh - yl) / 3;
+      const snap = v => Math.round(v / 10) * 10;
+      for (let i = 0; i < 3; i++)
+        for (let j = 0; j < 3; j++) {
+          const x = snap(xl + lx * (i + 0.5)), y = snap(yl + ly * (j + 0.5)), s = bi * 1000 + bj * 100 + i * 10 + j;
+          if (i === 1 && j === 1) { TYPES.garden(x, y, 0, 0, s); continue; }
+          // face the street on this lot's outer side
+          let fx = i === 0 ? -1 : i === 2 ? 1 : 0, fy = j === 0 ? -1 : j === 2 ? 1 : 0;
+          if (fx && fy) (rnd(s, 50) < 0.5 ? (fy = 0) : (fx = 0));
+          // set the building back so its front is 40 units from the lot edge
+          const inner = true; void dist;
+          let type;
+          if (bi === 2 && bj === 1 && i === 0 && j === 1) type = 'tavern';
+          else if (!(xc && yc)) type = rnd(s, 51) < 0.55 ? 'shop' : 'townhouse';
+          else type = rnd(s, 52) < 0.5 ? 'townhouse' : rnd(s, 53) < 0.8 ? 'cottage' : 'shop';
+          const depth = type === 'tavern' ? 240 : type === 'shop' ? 200 : type === 'townhouse' ? 290 : type === 'cottage' ? 250 : 180;
+          const off = snap(((fx ? lx : ly) / 2) - 40 - depth / 2);
+          if (type !== 'tavern' && type !== 'garden' && rnd(s, 55) >= (inner ? KEEP_INNER : KEEP_OUTER)) {
+            // thinned out: record where it would have stood (for clearing a live
+            // world built before thinning) instead of placing it
+            const realPut = put, before = { ...stats.buildings }, lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+            put = (b, px, py, pz) => {
+              const e = b.direction || b.rotation ? Array(3).fill(Math.max(...b.size)) : b.size;
+              [px, py, pz].forEach((v, k) => { lo[k] = Math.min(lo[k], v - e[k]); hi[k] = Math.max(hi[k], v + e[k]); });
+            };
+            TYPES[type](x + fx * off, y + fy * off, fx, fy, s);
+            put = realPut;
+            stats.buildings = before;
+            stats.removed.push({ type, lo, hi });
+            continue;
+          }
+          TYPES[type](x + fx * off, y + fy * off, fx, fy, s);
+        }
+    })
+  );
+
+  // ------------------------------------------------------- street lamps --
+  // along the streets round the square, at the curb, outside the square
+  for (const l of [-800, 800])
+    for (let t = -2200; t <= 2200; t += 400)
+      if (Math.abs(t) > 800) for (const side of [-1, 1]) { lamp(l + side * 70, t); lamp(t, l + side * 70); }
+
+  // ---------------------------------------------------------- town wall --
+  const W = { color: PALETTE.stone[1] }, H = 144;
+  const gate = 200; // half-width of the gate gap on the avenues
+  for (const side of [-1, 1]) {
+    const c = side * (HALF - 40);
+    // wall runs stop at the gate towers (centred gate + 60, radius 60)
+    for (const [a, b] of [[-(HALF - 120), -gate - 120], [gate + 120, HALF - 120]]) {
+      for (let p = a; p < b; p += 640) {
+        const q = Math.min(b, p + 640);
+        box(p, c - 20, 0, q, c + 20, H, W);
+        box(c - 20, p, 0, c + 20, q, H, W);
+      }
+      // merlons along the top
+      for (let p = a + 20; p + 20 <= b; p += 80) {
+        box(p, c - 20, H, p + 20, c + 20, H + 24, W);
+        box(c - 20, p, H, c + 20, p + 20, H + 24, W);
+      }
+    }
+    // gate towers either side of each avenue
+    for (const g of [-1, 1]) {
+      pole(g * (gate + 60), c, 0, H + 72, 60, W);
+      pole(c, g * (gate + 60), 0, H + 72, 60, W);
+      put({ size: [10, 10, 6], ...GLOW([255, 160, 60], 8) }, g * (gate + 60), c, H + 84);
+      put({ size: [10, 10, 6], ...GLOW([255, 160, 60], 8) }, c, g * (gate + 60), H + 84);
+    }
+  }
+  // corner towers
+  for (const [sx, sy] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) pole(sx * (HALF - 60), sy * (HALF - 60), 0, H + 96, 60, W);
+
+  void HALF;
+  return stats;
+}

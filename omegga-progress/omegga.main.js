@@ -1,0 +1,141 @@
+// progress: keeps players' progress for good (owner 2026-10-11: "make it so
+// the progress gets saved permanently").
+//
+// The game keeps leaderboard values (coins, XP, Level, SwordTier: the
+// skeleton_drop chip's economy) only in memory: a restart or a world reload
+// wipes them. This plugin reads them for every online player every `interval`
+// seconds and keeps them in its store (Omegga's database, on disk). When a
+// player joins, or their XP is found lower than saved (XP never goes down, so
+// that means the game reset it), the saved values are written back.
+//
+// Items (owner 2026-10-11: "they NEED to keep the data"): the skeleton_drop
+// chip logs "[inv] <userId> slot0|..|slot9" (item classes) whenever a player's
+// slots change; they are kept here. The chip gives slots back itself after a
+// rejoin (it logs "[inv-restored] <userId>"); when it has nothing (a restart,
+// a new chip) the saved items are given back here (GiveItem, plain versions;
+// the arming sword is left to the chip, which gives it at the player's tier).
+//
+//   !progress        your saved values
+// Unsafe (plain node) plugin, like tpa and duel.
+
+const KEYS = ['coins', 'XP', 'Level', 'SwordTier'];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clean = s => String(s).replace(/[<>"\\;]/g, '');
+
+module.exports = class Progress {
+  constructor(omegga, config, store) {
+    this.omegga = omegga;
+    this.config = config;
+    this.store = store;
+    this.timer = null;
+    this.busy = false;
+    this.joined = new Map(); // userId -> join time (ms)
+    this.chipRestored = new Map(); // userId -> time the chip said it restored them
+  }
+
+  async init() {
+    // unsafe plugins share Omegga's emitter: drop only our own handler from an earlier load (others listen to join too)
+    if (this.omegga.__progressJoin) this.omegga.off('join', this.omegga.__progressJoin);
+    this.omegga.__progressJoin = p => this.onJoin(p).catch(err => console.error('[progress] join', err));
+    this.omegga.on('join', this.omegga.__progressJoin);
+    for (const e of ['cmd:progress', 'chatcmd:progress']) {
+      this.omegga.removeAllListeners(e);
+      this.omegga.on(e, name => this.show(name).catch(err => console.error('[progress]', err)));
+    }
+    if (this.omegga.__progressLine) this.omegga.off('line', this.omegga.__progressLine);
+    this.omegga.__progressLine = line => this.onLine(line);
+    this.omegga.on('line', this.omegga.__progressLine);
+    // catch up on slot lines logged before this load (the chip only logs changes)
+    try {
+      const fs = require('fs'), LOG = this.config?.logFile ?? '/tmp/omegga_pty2.log';
+      if (fs.existsSync(LOG)) {
+        const size = fs.statSync(LOG).size, fd = fs.openSync(LOG, 'r'), n = Math.min(size, 8e6), buf = Buffer.alloc(n);
+        fs.readSync(fd, buf, 0, n, size - n); fs.closeSync(fd);
+        for (const line of buf.toString('utf8').split('\n')) if (line.includes('[inv]') && !line.includes('WRITE')) this.onLine(line);
+      }
+    } catch (e) { console.error('[progress] log catch-up', e.message); }
+    const every = Math.max(5, this.config?.interval ?? 20) * 1000;
+    this.timer = setInterval(() => this.tick().catch(err => console.error('[progress] tick', err)), every);
+    return { registeredCommands: ['progress'] };
+  }
+
+  async stop() {
+    clearInterval(this.timer);
+    await this.tick().catch(() => {});
+  }
+
+  /** the player's current values, or null if any read failed */
+  async read(player) {
+    const out = {};
+    for (const k of KEYS) {
+      const v = await player.getLeaderboard(k);
+      if (v === null || v === undefined || Number.isNaN(+v)) return null;
+      out[k] = +v;
+    }
+    return out;
+  }
+
+  restore(player, saved) {
+    for (const k of KEYS) if (saved[k]) player.setLeaderboard(k, saved[k]);
+    console.log(`[progress] restored ${player.name}: ${JSON.stringify(saved)}`);
+  }
+
+  onLine(line) {
+    const m = /\[inv\] ([0-9a-f-]{36}) (\S+)/.exec(line);
+    if (m) {
+      const slots = m[2].split('|').map(x => (x === 'None' ? null : x.replace(/_C$/, '')));
+      if (slots.some(Boolean)) this.store.set('inv:' + m[1], { slots, at: Date.now() }).catch(() => {});
+      return;
+    }
+    const r = /\[inv-restored\] ([0-9a-f-]{36})/.exec(line);
+    if (r) this.chipRestored.set(r[1], Date.now());
+  }
+
+  async onJoin(p) {
+    const joinedAt = Date.now();
+    await sleep((this.config?.joinDelay ?? 8) * 1000); // let them spawn first
+    const player = this.omegga.getPlayer(p.id ?? p.name);
+    if (!player) return;
+    // items: only when the chip had nothing to give back since they joined
+    const inv = await this.store.get('inv:' + player.id);
+    if (inv && !((this.chipRestored.get(player.id) ?? 0) >= joinedAt)) {
+      const items = inv.slots.filter(it => it && it !== 'Weapon_ArmingSword');
+      for (const it of items) player.giveItem(it);
+      if (items.length) this.omegga.whisper(player.name, `<color="8cf">Your items are back: ${items.map(i => clean(i.replace(/^Weapon_/, ''))).join(', ')}.</>`);
+      console.log(`[progress] gave ${player.name} ${items.join(', ')}`);
+    }
+    const saved = await this.store.get('p:' + player.id);
+    if (!saved) return;
+    const now = await this.read(player);
+    if (!now || now.XP < saved.XP || (now.XP === saved.XP && now.coins === 0 && saved.coins > 0)) {
+      this.restore(player, saved);
+      this.omegga.whisper(player.name, `<color="8cf">Welcome back! Your progress is restored: level ${saved.Level}, ${saved.XP} XP, ${saved.coins} coins.</>`);
+    }
+  }
+
+  async tick() {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      for (const player of this.omegga.getPlayers()) {
+        const p = this.omegga.getPlayer(player.id);
+        if (!p) continue;
+        const now = await this.read(p);
+        if (!now) continue;
+        const key = 'p:' + p.id, saved = await this.store.get(key);
+        // the game reset them (restart, world reload): put the saved values back instead of saving the zeros
+        if (saved && now.XP < saved.XP) { this.restore(p, saved); continue; }
+        await this.store.set(key, { ...now, name: p.name, at: Date.now() });
+      }
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  async show(name) {
+    const p = this.omegga.getPlayer(name);
+    if (!p) return;
+    const s = await this.store.get('p:' + p.id);
+    this.omegga.whisper(name, s ? `<color="8cf">Saved: level ${s.Level}, ${s.XP} XP, ${s.coins} coins, sword tier ${s.SwordTier}.</>` : '<color="8cf">Nothing saved yet (it saves every few seconds).</>');
+  }
+};

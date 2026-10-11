@@ -1,0 +1,329 @@
+// wanted_system.ws — prison-mode "wanted" system with a live HUD.
+//
+// Teams: "Prisoners" / "Guards" (via GetTeamByName). Wanted = entity tag
+// "wanted" (cleared by setting the tag back to "").
+//
+// Rules:
+// - Self-damage: no effect.
+// - Attacking/killing an already-wanted person: no effect on the attacker —
+//   wanted people are unconditionally fair game, wounded or killed.
+// - Otherwise, the attacker becomes wanted when: Prisoner hits a Prisoner,
+//   Prisoner hits a Guard, or Guard hits a Prisoner. Guard-vs-Guard
+//   (friendly fire) is intentionally out of scope — no rule covers it, so
+//   it has no effect.
+// - On death: if the victim was wanted, clear their tag. If they're a
+//   Guard, demote them to Prisoner.
+//
+// This only tracks/reacts to wanted status — it never blocks damage.
+// Whether a kill was "allowed" is a social convention for players to
+// police themselves, not something this chip enforces.
+
+// ---- Scanner: contraband check ----
+//
+// "Scanner" is an item (attackerWeaponName on CharacterDamaged) guards use
+// to check a prisoner's inventory. Anything other than the four allowed
+// items is contraband. The asset keys below were pulled from the compiler's
+// embedded BRItemBase catalog, not confirmed in-game against the display
+// names in the spec — verify these line up before relying on this:
+//   "Plastic Knife" -> $BRItemBase/Weapon_Knife
+//   "Soda"          -> $BRItemBase/Weapon_SodaCan
+//   "Bandage"       -> $BRItemBase/Weapon_Bandage
+//   "Pickaxe"       -> $BRItemBase/Weapon_Pickaxe
+// Quickbar inventories have 10 slots (Slot0-Slot9), so slots 0-9 are checked.
+
+// ---- Team cache: survives death ----
+//
+// A prisoner killed in one hit never fires CharacterDamaged (per the comment
+// on CharacterDied below), so handleAggression's only source of team info
+// for that kill is CharacterDied's own `victim` -- a character that's
+// already dead by the time the handler runs. Nothing in the docs promises
+// GetTeam() still resolves correctly post-death (compare ControllerLeft,
+// which explicitly calls out that userId/userName survive teardown when
+// other fields might not), and a dead-end GetTeam() would silently make
+// becomesWanted false, which looks exactly like "prisoners can kill
+// prisoners for free." So team is cached continuously while a character is
+// known to be alive (on spawn, on every damage event, and every HUD tick),
+// and CharacterDied reads that cache instead of calling GetTeam() itself.
+var teamCache: Map<character, entity>
+
+mod cacheTeam(ch: character) {
+  teamCache.set(ch, ch.GetTeam())
+}
+
+mod knownTeam(ch: character) -> entity {
+  let cached = teamCache.get(ch)
+  if cached.Found {
+    return cached.Value
+  }
+  return ch.GetTeam()
+}
+
+mod isAllowedItem(item: entity) -> bool {
+  var empty: entity
+  return item == empty || item == $BRItemBase/Weapon_Knife || item == $BRItemBase/Weapon_SodaCan || item == $BRItemBase/Weapon_Bandage || item == $BRItemBase/Weapon_Pickaxe
+}
+
+mod hasContraband(victim: character) -> bool {
+  let has0 = !isAllowedItem(victim.GetInventoryEntry(0).Item)
+  let has1 = !isAllowedItem(victim.GetInventoryEntry(1).Item)
+  let has2 = !isAllowedItem(victim.GetInventoryEntry(2).Item)
+  let has3 = !isAllowedItem(victim.GetInventoryEntry(3).Item)
+  let has4 = !isAllowedItem(victim.GetInventoryEntry(4).Item)
+  let has5 = !isAllowedItem(victim.GetInventoryEntry(5).Item)
+  let has6 = !isAllowedItem(victim.GetInventoryEntry(6).Item)
+  let has7 = !isAllowedItem(victim.GetInventoryEntry(7).Item)
+  let has8 = !isAllowedItem(victim.GetInventoryEntry(8).Item)
+  let has9 = !isAllowedItem(victim.GetInventoryEntry(9).Item)
+  return has0 || has1 || has2 || has3 || has4 || has5 || has6 || has7 || has8 || has9
+}
+
+// Tool items guards carry that shouldn't count as aggression when they touch
+// a player — hitting someone with these has no effect on wanted status at
+// all (the Scanner still runs its own contraband check above; it just skips
+// handleAggression like the others).
+mod isNonAggressiveTool(weaponName: string) -> bool {
+  return weaponName == "Scanner" || weaponName == "Key" || weaponName == "Maintenance Key"
+}
+
+// ---- Riot mode ----
+//
+// Set at the end of every HUD walk (below) once wantedPlayers/players for
+// that cycle are both known: on when more than half of connected players
+// are wanted, off again once that drops back under half. While it's on,
+// Guards get a pass on the normal "Guard hits Prisoner -> Guard becomes
+// wanted" rule (the becomesWanted clause below), i.e. Guards can kill
+// Prisoners on sight without it costing them their own clean status.
+// Prisoner-on-Prisoner and Prisoner-on-Guard still flag the attacker as
+// usual -- riot mode only lifts the restraint on Guards.
+var riotMode: bool = false
+
+mod handleAggression(victim: character, attacker: character) {
+  if attacker == victim {
+    return
+  }
+  if victim.GetTag() == "wanted" {
+    return
+  }
+
+  let prisoners = GetTeamByName("Prisoners")
+  let guards = GetTeamByName("Guards")
+  let victimTeam = knownTeam(victim)
+  let attackerTeam = knownTeam(attacker)
+
+  let becomesWanted = (attackerTeam == prisoners && victimTeam == prisoners) || (attackerTeam == prisoners && victimTeam == guards) || (attackerTeam == guards && victimTeam == prisoners && !riotMode)
+
+  if becomesWanted {
+    attacker.SetTag("wanted")
+    // Wanted-status hints get their own screen area (center, above the
+    // status box at x=400/y=-300..-400) so they never overlap it or each
+    // other — see the HUD layout comment above the status-box loop.
+    attacker.ControllerOf().DisplayText("YOU ARE NOW WANTED", positionX = 0.0, positionY = -150.0, fontSize = 36, justify = "Center", fontColor = ColorSRGB(255, 0, 0, 255), textId = 2, lifetime = 3.0)
+  }
+}
+
+// A Guard shooting a Prisoner who turns out to be carrying a weapon flags
+// the PRISONER wanted (being armed is the offense here, independent of
+// whatever handleAggression above does to the Guard's own status). "Has a
+// weapon" reuses the same allowed-items whitelist as the Scanner check --
+// anything other than Plastic Knife/Soda/Bandage/Pickaxe counts.
+mod checkArmedVictim(victim: character, attacker: character) {
+  if attacker == victim {
+    return
+  }
+  if knownTeam(attacker) != GetTeamByName("Guards") {
+    return
+  }
+  if !hasContraband(victim) {
+    return
+  }
+  victim.SetTag("wanted")
+  victim.ControllerOf().DisplayText("ARMED — YOU ARE NOW WANTED", positionX = 0.0, positionY = -150.0, fontSize = 36, justify = "Center", fontColor = ColorSRGB(255, 0, 0, 255), textId = 2, lifetime = 3.0)
+}
+
+chip on CharacterDamaged() -> { character: victim, attacker, attackerWeaponName } {
+  // Both are alive right now -- refresh the cache CharacterDied leans on.
+  cacheTeam(victim)
+  cacheTeam(attacker)
+
+  if attackerWeaponName == "Scanner" {
+    // A scan isn't an attack -- it shouldn't flag the scanner as wanted via
+    // handleAggression, so this branch returns instead of falling through.
+    if hasContraband(victim) {
+      victim.SetTag("wanted")
+      victim.ControllerOf().DisplayText("CONTRABAND FOUND — YOU ARE NOW WANTED", positionX = 0.0, positionY = -150.0, fontSize = 36, justify = "Center", fontColor = ColorSRGB(255, 0, 0, 255), textId = 2, lifetime = 3.0)
+      // Scanner feedback is a separate hint again -- it's shown to the guard
+      // doing the scanning, not the person just marked wanted.
+      attacker.ControllerOf().DisplayText("SCAN: CONTRABAND DETECTED", positionX = 0.0, positionY = -150.0, fontSize = 30, justify = "Center", fontColor = ColorSRGB(255, 140, 0, 255), textId = 4, lifetime = 3.0)
+    } else {
+      attacker.ControllerOf().DisplayText("Scan: clean", positionX = 0.0, positionY = -150.0, fontSize = 30, justify = "Center", fontColor = ColorSRGB(40, 200, 80, 255), textId = 4, lifetime = 3.0)
+    }
+    return
+  }
+  if isNonAggressiveTool(attackerWeaponName) {
+    return
+  }
+
+  handleAggression(victim, attacker)
+  checkArmedVictim(victim, attacker)
+}
+
+chip on CharacterSpawned() -> (character) {
+  cacheTeam(character)
+}
+
+chip on ControllerJoined() -> (controller) {
+  controller.SetTeam(GetTeamByName("Prisoners"))
+}
+
+chip on CharacterDied() -> { character: victim, killer, killerWeaponName } {
+  // Also covers the kill case, in case CharacterDamaged doesn't fire for
+  // the fatal blow — SetTag("wanted") twice is harmless if it does.
+  if !isNonAggressiveTool(killerWeaponName) {
+    handleAggression(victim, killer)
+  }
+
+  if victim.GetTag() == "wanted" {
+    victim.SetTag("")
+    victim.ControllerOf().DisplayText("Wanted status cleared", positionX = 0.0, positionY = -150.0, fontSize = 36, justify = "Center", fontColor = ColorSRGB(40, 200, 80, 255), textId = 2, lifetime = 3.0)
+    if victim.GetTeam() == GetTeamByName("Guards") {
+      victim.ControllerOf().SetTeam(GetTeamByName("Prisoners"))
+      // Stacked just below the "cleared" hint (textId 2) so both can be
+      // on screen together — death can trigger both in the same tick.
+      victim.ControllerOf().DisplayText("You've been demoted to Prisoner", positionX = 0.0, positionY = -190.0, fontSize = 28, justify = "Center", fontColor = ColorSRGB(255, 140, 0, 255), textId = 3, lifetime = 3.0)
+    }
+  }
+}
+
+// ---- HUD: per-player persistent status + a shared wanted list ----
+//
+// Walks every connected player once per refresh cycle via a buffered
+// emit/await back-edge loop (Wirescript's real runtime loop construct —
+// see statements.md's "Loops" section), pushing each their own personal
+// status box and accumulating wanted names along the way. Once the walk
+// finishes, the accumulated list is broadcast to everyone in one call.
+//
+// The Guards-only wanted list box (below) shows `guardWantedList`, which is
+// only finalized at the END of a walk -- so it's necessarily one cycle
+// (<=2s) stale, same as the broadcast. Doing it live within the same walk
+// isn't possible: whether a later player in this same walk is wanted isn't
+// known yet when an earlier Guard's box is being drawn.
+
+var players: controller[]
+var wantedNames: string = ""
+var lastAnnouncedWanted: string = ""
+var guardWantedList: string = ""
+// The actual array of every player currently tagged wanted, rebuilt each
+// walk. wantedPlayers accumulates during the walk in progress; once a walk
+// finishes, it's snapshotted into guardWantedPlayers (below) for Guards'
+// DisplayText -- same one-cycle-stale reasoning as guardWantedList.
+var wantedPlayers: controller[]
+var guardWantedPlayers: controller[]
+var loopIndex: int = 0
+let refreshLoop: exec
+
+// ---- Round reset: clear all wanted tags ----
+//
+// Its own array/index/exec signal rather than reusing refreshLoop -- sharing
+// state with the Clock-driven HUD walk would let the two race on the same
+// loopIndex/players if a round starts mid-walk.
+var resetPlayers: controller[]
+var resetIndex: int = 0
+let resetLoop: exec
+
+chip on RoundStart() {
+  resetPlayers.fillFromPlayers()
+  resetIndex = 0
+  wantedNames = ""
+  lastAnnouncedWanted = ""
+  guardWantedList = ""
+  wantedPlayers.clear()
+  guardWantedPlayers.clear()
+  riotMode = false
+  emit resetLoop
+}
+
+on resetLoop {
+  await resetLoop
+  if resetIndex < resetPlayers.length() {
+    let ch = resetPlayers[resetIndex].CharacterOf()
+    if ch.GetTag() == "wanted" {
+      ch.SetTag("")
+    }
+    resetIndex = resetIndex + 1
+    buffer emit resetLoop
+  }
+}
+
+chip on Clock(interval = 2.0) {
+  players.fillFromPlayers()
+  wantedNames = ""
+  wantedPlayers.clear()
+  loopIndex = 0
+  emit refreshLoop
+}
+
+on refreshLoop {
+  await refreshLoop
+  if loopIndex < players.length() {
+    let ctrl = players[loopIndex]
+    let ch = ctrl.CharacterOf()
+    cacheTeam(ch)
+    let onGuards = ch.GetTeam() == GetTeamByName("Guards")
+    let onPrisoners = ch.GetTeam() == GetTeamByName("Prisoners")
+    let wanted = ch.GetTag() == "wanted"
+    let teamLabel = if onGuards then "Guard" else if onPrisoners then "Prisoner" else "-"
+    // "<br>" for the line break, not "\n" — matches the one proven
+    // multi-line DisplayText precedent in this codebase (examples/doom_raycaster.ws).
+    let statusLine = teamLabel .. "<br>" .. (if wanted then "WANTED" else "Clear")
+    let teamColor = if onPrisoners then ColorSRGB(255, 140, 0, 255) else if onGuards then ColorSRGB(40, 120, 255, 255) else ColorSRGB(255, 255, 255, 255)
+    // Guessed at bottom-right: this UI's coordinate system isn't documented
+    // anywhere I could find (display_score.ws's positionY = -200.0 is the
+    // only real precedent, and negative Y moving text down implies a
+    // center-origin, Y-up convention, not top-left/Y-down). Nudge these
+    // once you see it rendered — I have no way to preview this myself.
+    ctrl.DisplayText(statusLine, positionX = 400.0, positionY = -300.0, textId = 1, lifetime = 2.5, fontColor = teamColor)
+    if onGuards {
+      // Second DisplayText below the status box, Guards-only, in red: one
+      // wanted name per line, read from guardWantedPlayers (the array of
+      // every currently-wanted player from the last completed walk).
+      // Never called for non-Guards, so Prisoners never see this box at all.
+      let listText = if guardWantedList == "" then "No one wanted" else guardWantedList.Replace(", ", "<br>")
+      let listHeader = if riotMode then "WANTED LIST (RIOT MODE - KOS AUTHORIZED)" else "WANTED LIST"
+      ctrl.DisplayText(listHeader .. "<br>" .. listText, positionX = 400.0, positionY = -400.0, textId = 5, lifetime = 2.5, fontColor = ColorSRGB(255, 0, 0, 255))
+    }
+    if wanted {
+      wantedPlayers.push(ctrl)
+      wantedNames = if wantedNames == "" then ctrl.GetUserName() else wantedNames .. ", " .. ctrl.GetUserName()
+    }
+    loopIndex = loopIndex + 1
+    buffer emit refreshLoop
+  } else {
+    guardWantedList = wantedNames
+    guardWantedPlayers.copyFrom(wantedPlayers)
+
+    // Over half of connected players wanted -> riot mode. Compared as
+    // wantedPlayers.length() * 2 > players.length() to stay in integers
+    // (avoids a float divide, and "over half" of an odd count rounds the
+    // way you'd expect: 3 of 5 trips it, 2 of 5 doesn't).
+    let shouldRiot = players.length() > 0 && wantedPlayers.length() * 2 > players.length()
+    if shouldRiot != riotMode {
+      riotMode = shouldRiot
+      if riotMode {
+        BroadcastStatusMessage("RIOT MODE: over half the server is WANTED. Guards are cleared to kill on sight.")
+      } else {
+        BroadcastStatusMessage("Riot mode has ended.")
+      }
+    }
+
+    if wantedNames != lastAnnouncedWanted {
+      // Only announce when the wanted list actually changed since last time —
+      // otherwise this fires every 2s regardless of content, spamming the
+      // screen even when nothing changed (including repeating "no one is
+      // wanted" forever).
+      lastAnnouncedWanted = wantedNames
+      if wantedNames != "" {
+        BroadcastStatusMessage("WANTED: " .. wantedNames)
+      }
+    }
+  }
+}

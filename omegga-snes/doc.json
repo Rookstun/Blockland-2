@@ -1,0 +1,85 @@
+{
+  "name": "snes",
+  "description": "A Super Nintendo on a brick screen: /snes load <link>, /snes here, then play with the controller pedestal (interact) or /snes <button>.",
+  "author": "pooper",
+  "config": {
+    "width": {
+      "description": "Screen width in pixels (64, 128 or 256 = 1:1; height is 7/8 of it)",
+      "type": "number",
+      "default": 256
+    },
+    "pixel-size": {
+      "description": "Screen pixel size in units (2 = one micro brick)",
+      "type": "number",
+      "default": 2
+    },
+    "fps": {
+      "description": "Screen updates per second (the game itself runs at 60)",
+      "type": "number",
+      "default": 8
+    },
+    "press-ms": {
+      "description": "How long one controller press or /snes <button> holds the button",
+      "type": "number",
+      "default": 250
+    },
+    "merge-tolerance": {
+      "description": "Neighbouring pixels within this colour difference merge into one brick",
+      "type": "number",
+      "default": 16
+    },
+    "color-step": {
+      "description": "Colour rounding for screen pixels",
+      "type": "number",
+      "default": 8
+    },
+    "glow-intensity": {
+      "description": "Screen glow (0-10)",
+      "type": "number",
+      "default": 3
+    },
+    "bricks-per-second": {
+      "description": "Most bricks per second sent to the server",
+      "type": "number",
+      "default": 40000
+    },
+    "sound": {
+      "description": "Play the game's music/sound on synth speakers on the pedestal (pitch tracking)",
+      "type": "boolean",
+      "default": true
+    },
+    "voices": {
+      "description": "Speakers (strongest pitches played at once, max 6)",
+      "type": "number",
+      "default": 4
+    },
+    "audio-hz": {
+      "description": "Sound updates per second (each note change swaps a speaker brick)",
+      "type": "number",
+      "default": 10
+    },
+    "synth": {
+      "description": "Speaker sound: sine, square, saw or triangle",
+      "type": "string",
+      "default": "square"
+    },
+    "synth-base-hz": {
+      "description": "Pitch of the synth at pitch 1.0",
+      "type": "number",
+      "default": 440
+    },
+    "volume": {
+      "description": "Speaker loudness factor",
+      "type": "number",
+      "default": 1
+    }
+  },
+  "commands": [
+    {
+      "name": "/snes",
+      "description": "load <link|rom>, here [-x|+x|-y|+y] [64|128|256], <buttons> [seconds], hold <button>, release, sound on|off [synth], reset, pause, roms, stats, redraw, off",
+      "example": "/snes load https://example.com/game.sfc",
+      "args": []
+    }
+  ]
+}

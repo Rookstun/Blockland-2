@@ -1,0 +1,388 @@
+{
+  "width": 64,
+  "height": 64,
+  "runs": [
+    {
+      "orient": "H",
+      "line": 5,
+      "start": 3,
+      "end": 12,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 5,
+      "start": 15,
+      "end": 22,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 5,
+      "start": 25,
+      "end": 31,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 13,
+      "start": 3,
+      "end": 12,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 53,
+      "start": 7,
+      "end": 17,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 58,
+      "start": 7,
+      "end": 17,
+      "openings": [
+        {
+          "pos0": 9,
+          "pos1": 15,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 46,
+      "start": 8,
+      "end": 17,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 51,
+      "start": 8,
+      "end": 17,
+      "openings": [
+        {
+          "pos0": 10,
+          "pos1": 15,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 39,
+      "start": 9,
+      "end": 17,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 44,
+      "start": 9,
+      "end": 17,
+      "openings": [
+        {
+          "pos0": 11,
+          "pos1": 15,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 32,
+      "start": 10,
+      "end": 17,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 37,
+      "start": 10,
+      "end": 17,
+      "openings": [
+        {
+          "pos0": 12,
+          "pos1": 15,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 21,
+      "start": 15,
+      "end": 22,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 26,
+      "start": 25,
+      "end": 31,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 26,
+      "start": 34,
+      "end": 47,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 37,
+      "start": 26,
+      "end": 28,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 37,
+      "start": 34,
+      "end": 43,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 39,
+      "start": 26,
+      "end": 30,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 39,
+      "start": 34,
+      "end": 41,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 41,
+      "start": 26,
+      "end": 32,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 41,
+      "start": 34,
+      "end": 39,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 43,
+      "start": 26,
+      "end": 37,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 23,
+      "start": 34,
+      "end": 42,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 50,
+      "start": 39,
+      "end": 47,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 48,
+      "start": 41,
+      "end": 47,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 14,
+      "start": 42,
+      "end": 47,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 46,
+      "start": 43,
+      "end": 47,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 44,
+      "start": 45,
+      "end": 47,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 3,
+      "start": 5,
+      "end": 13,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 12,
+      "start": 5,
+      "end": 13,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 15,
+      "start": 5,
+      "end": 21,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 22,
+      "start": 5,
+      "end": 21,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 25,
+      "start": 5,
+      "end": 26,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 31,
+      "start": 5,
+      "end": 26,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 42,
+      "start": 14,
+      "end": 23,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 47,
+      "start": 14,
+      "end": 26,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 34,
+      "start": 23,
+      "end": 26,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 10,
+      "start": 32,
+      "end": 37,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 17,
+      "start": 32,
+      "end": 37,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 17,
+      "start": 39,
+      "end": 44,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 17,
+      "start": 46,
+      "end": 51,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 17,
+      "start": 53,
+      "end": 58,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 30,
+      "start": 37,
+      "end": 39,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 32,
+      "start": 37,
+      "end": 41,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 34,
+      "start": 37,
+      "end": 43,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 43,
+      "start": 37,
+      "end": 46,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 9,
+      "start": 39,
+      "end": 44,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 41,
+      "start": 39,
+      "end": 48,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 39,
+      "start": 41,
+      "end": 50,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 8,
+      "start": 46,
+      "end": 51,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 7,
+      "start": 53,
+      "end": 58,
+      "openings": []
+    }
+  ],
+  "unplaced_markers": []
+}

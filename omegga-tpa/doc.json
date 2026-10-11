@@ -1,0 +1,24 @@
+{
+  "name": "tpa",
+  "description": "Teleport requests: !tpa <player> asks to go to them, !tpahere <player> asks them to come to you; they answer !tpaccept or !tpdeny.",
+  "author": "pooper",
+  "config": {
+    "timeout": {
+      "description": "Seconds before an unanswered request expires",
+      "type": "number",
+      "default": 60
+    },
+    "cooldown": {
+      "description": "Seconds a player must wait between requests",
+      "type": "number",
+      "default": 5
+    }
+  },
+  "commands": [
+    { "name": "!tpa", "description": "Ask to teleport to a player", "example": "!tpa soap", "args": [{ "name": "player", "description": "name or part of it", "required": true }] },
+    { "name": "!tpahere", "description": "Ask a player to teleport to you", "example": "!tpahere soap", "args": [{ "name": "player", "description": "name or part of it", "required": true }] },
+    { "name": "!tpaccept", "description": "Accept the newest teleport request (or a named player's)", "example": "!tpaccept", "args": [{ "name": "player", "description": "whose request", "required": false }] },
+    { "name": "!tpdeny", "description": "Turn down a teleport request", "example": "!tpdeny", "args": [{ "name": "player", "description": "whose request", "required": false }] },
+    { "name": "!tpcancel", "description": "Withdraw your own request", "example": "!tpcancel", "args": [] }
+  ]
+}

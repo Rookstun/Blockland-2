@@ -1,0 +1,12 @@
+{
+  "name": "duel",
+  "description": "Duel arena in the sky: !duel <player> to challenge, !duel accept, !duel watch to spectate, !duel stats/top. Leave the pit (or die) and you lose.",
+  "author": "pooper",
+  "config": {
+    "timeout": { "description": "Seconds before a challenge expires", "type": "number", "default": 60 },
+    "maxSeconds": { "description": "Seconds before a fight is a draw", "type": "number", "default": 180 }
+  },
+  "commands": [
+    { "name": "!duel", "description": "<player> | accept | decline | watch | forfeit | stats [player] | top", "example": "!duel soap", "args": [{ "name": "sub", "description": "player or subcommand", "required": false }] }
+  ]
+}

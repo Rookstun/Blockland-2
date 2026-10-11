@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Worldgen Editor</title>
+<style>
+  :root {
+    --bg: #15171c; --panel: #1d2027; --panel2: #252933; --line: #343947; --text: #e4e6eb; --dim: #9aa1b0;
+    --accent: #e0a040; --accent2: #5fb3ff; --bad: #ff6b6b; --good: #6fd38a; --mod: #e0a040;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif; }
+  #app { display: grid; grid-template-columns: 330px 1fr; grid-template-rows: 1fr auto; height: 100vh; }
+  #side { grid-row: 1 / 3; background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 12px 12px 40px; }
+  #main { position: relative; overflow: hidden; }
+  canvas#map { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; display: block; }
+  canvas#map.drag { cursor: grabbing; }
+  canvas#map.handle { cursor: move; }
+  #bar { background: var(--panel); border-top: 1px solid var(--line); padding: 6px 12px; font: 12px ui-monospace, Consolas, monospace; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 28px; }
+  h1 { font-size: 15px; margin: 0 0 2px; }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 10px; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin: 16px 0 6px; display: flex; align-items: center; gap: 6px; }
+  .row { display: flex; gap: 6px; align-items: center; margin: 4px 0; flex-wrap: wrap; }
+  label.l { width: 64px; color: var(--dim); }
+  input, select, button, textarea { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; }
+  input[type=number] { width: 96px; }
+  input[type=checkbox] { padding: 0; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--dim); }
+  button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.on { border-color: var(--accent2); color: var(--accent2); }
+  button:disabled { opacity: .5; cursor: default; }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; margin-left: -1px; }
+  .seg button:first-child { border-radius: 5px 0 0 5px; margin-left: 0; }
+  .seg button:last-child { border-radius: 0 5px 5px 0; }
+  .stages button { flex: 1; }
+  .stages small { display: block; color: var(--dim); font-weight: 400; font-size: 10px; }
+  details { border: 1px solid var(--line); border-radius: 6px; margin: 6px 0; background: #1a1d23; }
+  summary { cursor: pointer; padding: 6px 8px; user-select: none; display: flex; justify-content: space-between; }
+  summary .cnt { color: var(--mod); font-size: 11px; }
+  .params { padding: 2px 8px 8px; }
+  .p { display: grid; grid-template-columns: 1fr 96px 18px; gap: 4px 6px; align-items: center; margin: 5px 0; }
+  .p .name { font-size: 12px; }
+  .p .note { grid-column: 1 / 4; color: var(--dim); font-size: 11px; margin-top: -3px; }
+  .p.mod .name { color: var(--mod); }
+  .p.mod input { border-color: var(--mod); }
+  .p .reset { visibility: hidden; background: none; border: 0; color: var(--dim); padding: 0; }
+  .p.mod .reset { visibility: visible; }
+  .p textarea { grid-column: 1 / 3; width: 100%; height: 44px; font: 11px ui-monospace, Consolas, monospace; resize: vertical; }
+  .stat { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 12px; }
+  .stat span:nth-child(odd) { color: var(--dim); }
+  .warn { color: var(--bad); }
+  .ok { color: var(--good); }
+  #log { position: absolute; right: 10px; bottom: 10px; width: min(560px, 60%); max-height: 40%; overflow: auto; background: rgba(20,22,27,.94); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 11px/1.45 ui-monospace, Consolas, monospace; color: #c8ccd4; display: none; white-space: pre-wrap; }
+  #log.show { display: block; }
+  #log .err { color: var(--bad); }
+  #busy { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(20,22,27,.94); border: 1px solid var(--line); border-radius: 18px; padding: 6px 14px; display: none; gap: 10px; align-items: center; }
+  #busy.show { display: flex; }
+  .spin { width: 12px; height: 12px; border: 2px solid var(--dim); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  #legend { position: absolute; left: 10px; bottom: 10px; background: rgba(20,22,27,.88); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 11px; color: var(--dim); }
+  #legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 8px; vertical-align: -1px; }
+  #legend i:first-child { margin-left: 0; }
+  .hint { color: var(--dim); font-size: 11px; margin: 4px 0; }
+  kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; font-size: 10px; }
+  .cmd { font: 11px ui-monospace, Consolas, monospace; background: #111317; border: 1px solid var(--line); border-radius: 5px; padding: 6px; word-break: break-all; color: #c8ccd4; }
+  .layers label { display: inline-flex; align-items: center; gap: 4px; margin: 2px 8px 2px 0; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <h1>Worldgen Editor</h1>
+    <div class="sub">Previews <code>mapgen.mjs</code> with your settings. It never touches the server.</div>
+
+    <h2>World</h2>
+    <div class="row"><label class="l">Seed</label><input id="seed" type="number"><button id="dice" title="random seed">🎲</button></div>
+    <div class="row"><label class="l">Scale</label><input id="scale" type="number" step="0.5" min="0.5" max="4"><span class="hint">live map: 2</span></div>
+    <div class="row"><label class="l">Preset</label><select id="preset" style="flex:1"></select><button id="load">Load</button></div>
+    <div class="row"><label class="l"></label><input id="pname" placeholder="new preset name" style="flex:1"><button id="save">Save</button></div>
+
+    <h2>Preview</h2>
+    <div class="row stages seg">
+      <button data-stage="height">Heightmap<small>~3 s</small></button>
+      <button data-stage="sites" class="primary">Sites<small>~20 s</small></button>
+      <button data-stage="full">Full<small>~1 min</small></button>
+    </div>
+    <div class="row"><label><input type="checkbox" id="auto" checked> Auto-run the heightmap when terrain settings change</label></div>
+    <div class="row"><button id="cancel" disabled>Cancel run</button><button id="logbtn">Log</button><button id="fit">Fit</button></div>
+
+    <h2>View</h2>
+    <div class="row seg" id="modes">
+      <button data-mode="surface" class="on">Surface</button>
+      <button data-mode="height">Height</button>
+      <button data-mode="bricks" title="Full stage only">Bricks</button>
+      <button data-mode="diff" title="Height change from the previous preview">Diff</button>
+    </div>
+    <div class="layers" id="layers"></div>
+    <div class="hint"><kbd>B</kbd> hold: previous preview · <kbd>F</kbd> fit · wheel zoom · drag to pan · drag the spine points, width handles and anchors</div>
+
+    <h2>Summary</h2>
+    <div class="stat" id="stats"><span>No preview yet</span><span></span></div>
+
+    <h2>Settings <button id="resetAll" style="margin-left:auto;font-size:11px;padding:1px 6px">Reset all</button></h2>
+    <div id="params"><div class="hint">Settings appear after the first run.</div></div>
+
+    <h2>Build</h2>
+    <div class="hint">A full generation into <code>mapgen/out_&lt;name&gt;</code>, ready to deploy by hand. It doesn't touch <code>mapgen/out</code> (the live copy) or the server.</div>
+    <div class="row"><input id="bname" placeholder="build name" style="flex:1"><button id="build">Build</button></div>
+    <div class="cmd" id="cli"></div>
+  </aside>
+  <main id="main">
+    <canvas id="map"></canvas>
+    <div id="busy"><div class="spin"></div><span id="busytxt">Running</span></div>
+    <div id="legend"></div>
+    <div id="log"></div>
+  </main>
+  <div id="bar">Move over the map</div>
+</div>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const BOT_CAP = 300;
+
+// --------------------------------------------------------------- state --
+const S = {
+  seed: 786559213, scale: 2, params: {},   // params: overrides only (flat keys)
+  schema: {},                               // key -> { def, note, stage }
+  pv: null, prev: null, showPrev: false,
+  mode: 'surface',
+  layers: { shade: true, roads: true, river: true, features: true, labels: true, spine: true, grid: true, contours: false, spawners: true, flags: false },
+  view: { cx: 0, cy: 0, zoom: 1 },
+  job: null, jobStage: null, logLen: 0, logLines: [],
+  drag: null, hover: null,
+};
+const LAYERS = [['shade', 'Hillshade'], ['contours', 'Contours'], ['roads', 'Roads'], ['river', 'River'], ['flags', 'Swamp/desert/trench'], ['spine', 'Island spine'], ['features', 'Sites'], ['labels', 'Labels'], ['spawners', 'Spawners/shops'], ['grid', 'Live grid']];
+// params whose effect shows in the bare heightmap
+const HEIGHT_KEYS = /^(terrain\.|island\.|sea$|deep\.)/;
+
+// ------------------------------------------------------------- preview io --
+function parsePreview(buf) {
+  const dv = new DataView(buf);
+  if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== 'MGPV') throw new Error('not a preview file');
+  const hlen = dv.getUint32(4, true);
+  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hlen)));
+  const base = 8 + hlen, T = { Int16Array, Uint8Array, Float32Array, Int32Array, Uint16Array };
+  const sec = {};
+  for (const s of header.sections) sec[s.name] = new T[s.type](buf, base + s.offset, s.length);
+  return { ...header, sec };
+}
+
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+// ------------------------------------------------------------------- runs --
+let pollT = null;
+async function run(stage) {
+  try {
+    const { id } = await api('/api/run', { seed: S.seed, scale: S.scale, params: S.params, stage });
+    S.job = id; S.jobStage = stage; S.logLen = 0;
+    S.logLines.push(`--- ${stage} run (seed ${S.seed}, scale ${S.scale}, ${Object.keys(S.params).length} changed settings)`);
+    busy(true, `Generating (${stage})`);
+    $('#cancel').disabled = false;
+    poll();
+  } catch (e) { logErr(e.message); }
+}
+async function poll() {
+  clearTimeout(pollT);
+  if (!S.job) return;
+  const id = S.job;
+  try {
+    const st = await api(`/api/status?id=${id}&since=${S.logLen}`);
+    if (id !== S.job) return;
+    S.logLen = st.logLen; S.logLines.push(...st.log); renderLog();
+    $('#busytxt').textContent = `Generating (${st.stage}) ${(st.ms / 1000).toFixed(0)} s`;
+    if (st.state === 'running') { pollT = setTimeout(poll, 500); return; }
+    busy(false); $('#cancel').disabled = true; S.job = null;
+    if (st.state === 'error') { logErr('Generation failed: see the log'); $('#log').classList.add('show'); return; }
+    if (st.state !== 'done') return;
+    const r = await fetch(`/api/preview?id=${id}`);
+    const pv = parsePreview(await r.arrayBuffer());
+    pv.runMs = st.ms;
+    accept(pv);
+  } catch (e) { busy(false); logErr(e.message); }
+}
+function accept(pv) {
+  const first = !S.pv;
+  if (S.pv) S.prev = S.pv;
+  S.pv = pv;
+  // merge the settings schema: everything this run's stage reached
+  for (const [k, v] of Object.entries(pv.params)) {
+    const stage = pv.stage === 'height' || HEIGHT_KEYS.test(k) ? 'height' : 'sites';
+    S.schema[k] = { def: v.def, note: v.note, stage: S.schema[k]?.stage === 'height' ? 'height' : stage };
+  }
+  if (pv.stage === 'height' && !Object.keys(S.schema).some(k => S.schema[k].stage === 'sites')) {
+    // the first run only reaches the heightmap: fetch the sites too, for the full settings list
+    setTimeout(() => run('sites'), 50);
+  }
+  buildParams();
+  buildBase();
+  if (first || S.prev && (S.prev.N !== pv.N)) fit();
+  stats();
+  draw();
+}
+function busy(on, txt) { $('#busy').classList.toggle('show', on); if (txt) $('#busytxt').textContent = txt; }
+function logErr(m) { S.logLines.push('!! ' + m); renderLog(); $('#log').classList.add('show'); }
+function renderLog() {
+  const el = $('#log');
+  const keep = S.logLines.slice(-300);
+  el.innerHTML = keep.map(l => `<div${/^!!|Error|error|exited with code/.test(l) ? ' class="err"' : ''}>${l.replace(/[&<]/g, c => c === '&' ? '&amp;' : '&lt;')}</div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+// ----------------------------------------------------------- base image --
+const baseCanvas = document.createElement('canvas');
+const prevCanvas = document.createElement('canvas');
+function heightColor(h, sea) {
+  if (h <= sea) { const d = Math.min(1, (sea - h) / 14); return [40 + 30 * (1 - d), 92 + 50 * (1 - d), 160 + 40 * (1 - d)]; }
+  const t = h - sea;
+  const stops = [[0, [214, 200, 146]], [3, [110, 160, 70]], [25, [84, 140, 58]], [55, [120, 128, 70]], [85, [128, 108, 84]], [115, [122, 118, 112]], [140, [200, 200, 205]], [150, [240, 242, 246]]];
+  for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) {
+    const [a, ca] = stops[i - 1], [b, cb] = stops[i], f = (t - a) / (b - a);
+    return ca.map((v, k) => v + (cb[k] - v) * f);
+  }
+  return stops[stops.length - 1][1];
+}
+function paint(pv, canvas, mode) {
+  const useBricks = mode === 'bricks' && pv.sec.topRgb;
+  const W = useBricks ? pv.raster.W : pv.N;
+  canvas.width = W; canvas.height = W;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(W, W), d = img.data;
+  const H = pv.sec.height, N = pv.N, sea = pv.SEA, rgb = pv.sec.rgb, flags = pv.sec.flags;
+  const L = S.layers;
+  // shading source: brick tops (units) or heights (voxels -> units)
+  const zAt = useBricks ? (i => pv.sec.top[i]) : (i => H[i] * pv.VZ);
+  const step = useBricks ? pv.raster.res : pv.CELL;
+  const prevH = mode === 'diff' && S.prev && S.prev.N === N ? S.prev.sec.height : null;
+  for (let y = 0; y < W; y++)
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x, o = i * 4;
+      let c;
+      if (useBricks) {
+        if (pv.sec.top[i] === -32768) c = [52, 128, 196];
+        else c = [pv.sec.topRgb[i * 3], pv.sec.topRgb[i * 3 + 1], pv.sec.topRgb[i * 3 + 2]];
+      } else if (mode === 'diff') {
+        const g = H[i];
+        if (!prevH) c = heightColor(g, sea).map(v => v * 0.5 + 60);
+        else {
+          const dz = g - prevH[i];
+          const base = g <= sea ? 70 : 105, k = Math.min(1, Math.abs(dz) / 12);
+          c = dz > 0 ? [base + 150 * k, base, base - 40 * k] : dz < 0 ? [base - 40 * k, base + 30 * k, base + 150 * k] : [base, base, base];
+        }
+      } else if (mode === 'surface' && rgb) c = [rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]];
+      else c = heightColor(H[i], sea);
+      if (!useBricks && mode !== 'diff') {
+        const f = flags ? flags[i] : 0;
+        if (L.river && (f & 1)) c = [70, 170, 230];
+        if (L.roads && (f & 2)) c = (f & 16) ? [70, 60, 50] : [196, 136, 70];
+        if (L.flags) {
+          if (f & 4) c = [c[0] * 0.6 + 90 * 0.4, c[1] * 0.6 + 70 * 0.4, c[2] * 0.6 + 40 * 0.4];
+          if (f & 32) c = [c[0] * 0.7 + 240 * 0.3, c[1] * 0.7 + 200 * 0.3, c[2] * 0.7 + 120 * 0.3];
+          if (f & 8) c = [200, 60, 60];
+        }
+      }
+      let k = 1;
+      if (L.shade) {
+        const xl = Math.max(0, x - 1), xr = Math.min(W - 1, x + 1), yu = Math.max(0, y - 1), yd = Math.min(W - 1, y + 1);
+        const dx = (zAt(y * W + xr) - zAt(y * W + xl)) / (2 * step), dy = (zAt(yd * W + x) - zAt(yu * W + x)) / (2 * step);
+        // light from the upper left
+        k = Math.max(0.45, Math.min(1.35, 1 - (dx + dy) * 0.55));
+      }
+      if (L.contours && !useBricks) {
+        const h = H[i];
+        if (h > sea && x + 1 < W && y + 1 < W && (Math.floor(h / 10) !== Math.floor(H[i + 1] / 10) || Math.floor(h / 10) !== Math.floor(H[i + W] / 10))) k *= 0.7;
+      }
+      d[o] = Math.min(255, c[0] * k); d[o + 1] = Math.min(255, c[1] * k); d[o + 2] = Math.min(255, c[2] * k); d[o + 3] = 255;
+    }
+  ctx.putImageData(img, 0, 0);
+}
+function buildBase() {
+  if (!S.pv) return;
+  const mode = S.mode === 'bricks' && !S.pv.sec.topRgb ? 'surface' : S.mode;
+  paint(S.pv, baseCanvas, mode);
+  if (S.prev) paint(S.prev, prevCanvas, mode === 'diff' ? 'surface' : (mode === 'bricks' && !S.prev.sec.topRgb ? 'surface' : mode));
+  legend();
+}
+function legend() {
+  const items = [];
+  if (S.mode === 'diff') items.push(['#e07040', 'raised'], ['#5080e0', 'lowered'], ['#696969', 'same']);
+  else {
+    if (S.layers.roads) items.push(['#c48846', 'road'], ['#463c32', 'tunnel']);
+    if (S.layers.river) items.push(['#46aae6', 'river']);
+    if (S.layers.flags) items.push(['#c83c3c', 'dungeon trench'], ['#9a8a5a', 'swamp'], ['#e8c890', 'desert']);
+  }
+  if (S.layers.features) items.push(['#ffd24a', 'town'], ['#ff5c8a', 'dungeon'], ['#7fe0ff', 'village'], ['#ff9b3d', 'outpost'], ['#c07bff', 'henge'], ['#ffffff', 'cave']);
+  $('#legend').innerHTML = items.map(([c, t]) => `<i style="background:${c}"></i>${t}`).join('');
+  $('#legend').style.display = items.length ? '' : 'none';
+}
+
+// ----------------------------------------------------------------- view --
+const cv = $('#map'), ctx = cv.getContext('2d');
+function resize() {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  draw();
+}
+const toScreen = (x, y) => { const dpr = window.devicePixelRatio || 1; return [(x - S.view.cx) * S.view.zoom + cv.width / 2 / dpr, (y - S.view.cy) * S.view.zoom + cv.height / 2 / dpr]; };
+const toCell = (sx, sy) => { const dpr = window.devicePixelRatio || 1; return [(sx - cv.width / 2 / dpr) / S.view.zoom + S.view.cx, (sy - cv.height / 2 / dpr) / S.view.zoom + S.view.cy]; };
+function fit() {
+  if (!S.pv) return;
+  const r = cv.getBoundingClientRect();
+  S.view.zoom = Math.min(r.width, r.height) / S.pv.N * 0.96;
+  S.view.cx = S.pv.N / 2; S.view.cy = S.pv.N / 2;
+  draw();
+}
+
+// --------------------------------------------------------------- overlays --
+const COL = { town: '#ffd24a', dungeon: '#ff5c8a', village: '#7fe0ff', outpost: '#ff9b3d', henge: '#c07bff', cave: '#ffffff', spine: '#ffffffcc', anchor: '#ff5c8a' };
+function handles() {
+  // draggable things, in cells: spine points, half-width handles, anchors
+  const pv = S.pv; if (!pv) return [];
+  const f = pv.features, out = [], K = pv.scale;
+  const sp = currentSpine();
+  if (S.layers.spine) sp.forEach(([x, y], i) => {
+    out.push({ kind: 'spine', i, x, y });
+    const [nx, ny] = spineNormal(sp, i), hw = currentHalf()[i] * K;
+    out.push({ kind: 'half', i, x: x + nx * hw, y: y + ny * hw, ox: x, oy: y, nx, ny });
+  });
+  if (S.layers.features) {
+    const names = { 'Hollow Crypt': 'crypt', 'Sunken Keep': 'keep', 'Mountain Deep': 'deep' };
+    for (const d of f.dungeons || []) {
+      const key = names[d.name]; if (!key) continue;
+      const a = S.drag?.kind === 'anchor' && S.drag.key === key ? S.drag.pos : anchorFor(key, d.anchor);
+      out.push({ kind: 'anchor', key, x: a[0], y: a[1], label: d.name });
+    }
+    if (f.henge || pv.stage !== 'height') {
+      const a = S.drag?.kind === 'anchor' && S.drag.key === 'henge' ? S.drag.pos : anchorFor('henge', f.henge ? [f.henge.x0 + f.henge.n / 2, f.henge.y0 + f.henge.n / 2] : null);
+      if (a) out.push({ kind: 'anchor', key: 'henge', x: a[0], y: a[1], label: 'Henge' });
+    }
+  }
+  return out;
+}
+// the spine as currently edited (absolute cells)
+function currentSpine() {
+  const pv = S.pv, f = pv.features, K = pv.scale;
+  const v = S.params['island.spine'];
+  if (!v) return f.spine;
+  const tcx = f.town.fx + f.town.cells / 2, tcy = f.town.fy + f.town.cells / 2;
+  return v.map(([a, b]) => [tcx + a * K, tcy + b * K]);
+}
+function currentHalf() {
+  const v = S.params['island.half'];
+  return v || S.pv.features.half.map(h => h / S.pv.scale);
+}
+function spineNormal(sp, i) {
+  const a = sp[Math.max(0, i - 1)], b = sp[Math.min(sp.length - 1, i + 1)];
+  const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+  return [dy / l, -dx / l]; // mapgen's "right" side
+}
+// anchor position from the (possibly edited) t/off settings, using the preview's spine
+function anchorFor(key, fallback) {
+  const t = S.params[key + '.t'], off = S.params[key + '.off'];
+  if (t === undefined && off === undefined) return fallback;
+  const sch = S.schema;
+  return spineAtCells(t ?? sch[key + '.t']?.def ?? 0.5, (off ?? sch[key + '.off']?.def ?? 0) * S.pv.scale);
+}
+function spineAtCells(t, off) {
+  const f = S.pv.features, P = f.spinePts;
+  const s = f.sTown + t * (f.L - f.sTown);
+  let i = P.findIndex(p => p[2] >= s); if (i < 1) i = Math.max(1, i < 0 ? P.length - 1 : 1);
+  const a = P[i - 1], b = P[i], len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  return [b[0] + ((b[1] - a[1]) / len) * off, b[1] - ((b[0] - a[0]) / len) * off];
+}
+// inverse: a cell position -> [t, off cells]
+function cellsToSpine(x, y) {
+  const f = S.pv.features, P = f.spinePts;
+  let bi = 1, bd = Infinity;
+  for (let i = 1; i < P.length; i++) { const d = (P[i][0] - x) ** 2 + (P[i][1] - y) ** 2; if (d < bd) { bd = d; bi = i; } }
+  const a = P[bi - 1], b = P[bi], len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const nx = (b[1] - a[1]) / len, ny = -(b[0] - a[0]) / len;
+  const off = (x - b[0]) * nx + (y - b[1]) * ny;
+  const t = Math.max(0, Math.min(1, (b[2] - f.sTown) / (f.L - f.sTown)));
+  return [t, off];
+}
+
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0e1014'; ctx.fillRect(0, 0, cv.width, cv.height);
+  if (!S.pv) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pv = S.showPrev && S.prev ? S.prev : S.pv;
+  const img = S.showPrev && S.prev ? prevCanvas : baseCanvas;
+  const [x0, y0] = toScreen(0, 0);
+  ctx.imageSmoothingEnabled = S.view.zoom < 1;
+  ctx.drawImage(img, x0, y0, pv.N * S.view.zoom, pv.N * S.view.zoom);
+  if (S.showPrev && S.prev) { ctx.fillStyle = '#ffd24a'; ctx.font = '600 13px system-ui'; ctx.fillText('PREVIOUS PREVIEW', 14, 22); }
+  if (S.layers.grid) drawGrid(pv);
+  drawFeatures(pv);
+}
+function drawGrid(pv) {
+  // live coordinates (town centre = 0,0): lines every 'g' units
+  const z = S.view.zoom, cellPx = z, unitsPerPx = pv.CELL / cellPx;
+  const g = [1000, 2000, 5000, 10000, 20000, 50000].find(v => v / unitsPerPx > 90) || 50000;
+  const r = cv.getBoundingClientRect();
+  const [ca, cb] = toCell(0, 0), [cc, cd] = toCell(r.width, r.height);
+  const liveX = x => pv.X0 + x * pv.CELL + pv.shift[0], liveY = y => pv.Y0 + y * pv.CELL + pv.shift[1];
+  const cellX = lx => (lx - pv.shift[0] - pv.X0) / pv.CELL, cellY = ly => (ly - pv.shift[1] - pv.Y0) / pv.CELL;
+  ctx.lineWidth = 1; ctx.font = '10px ui-monospace, Consolas, monospace';
+  for (let lx = Math.ceil(liveX(ca) / g) * g; lx <= liveX(cc); lx += g) {
+    const [sx] = toScreen(cellX(lx), 0);
+    ctx.strokeStyle = lx === 0 ? '#ffffff55' : '#ffffff1c'; ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, r.height); ctx.stroke();
+    ctx.fillStyle = '#ffffff88'; ctx.fillText(String(lx), sx + 3, 12);
+  }
+  for (let ly = Math.ceil(liveY(cb) / g) * g; ly <= liveY(cd); ly += g) {
+    const [, sy] = toScreen(0, cellY(ly));
+    ctx.strokeStyle = ly === 0 ? '#ffffff55' : '#ffffff1c'; ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(r.width, sy); ctx.stroke();
+    ctx.fillStyle = '#ffffff88'; ctx.fillText(String(ly), 3, sy - 3);
+  }
+}
+function label(text, x, y, color, dy = -8) {
+  if (!S.layers.labels) return;
+  ctx.font = '600 11px system-ui, sans-serif';
+  const w = ctx.measureText(text).width;
+  ctx.fillStyle = '#000000aa'; ctx.fillRect(x - w / 2 - 3, y + dy - 11, w + 6, 14);
+  ctx.fillStyle = color; ctx.fillText(text, x - w / 2, y + dy);
+}
+function drawFeatures(pv) {
+  const f = pv.features, z = S.view.zoom;
+  const rect = (x, y, w, h, color, fill) => {
+    const [a, b] = toScreen(x, y);
+    if (fill) { ctx.fillStyle = fill; ctx.fillRect(a, b, w * z, h * z); }
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.strokeRect(a, b, w * z, h * z);
+  };
+  const circle = (x, y, r, color, width = 2, dash) => {
+    const [a, b] = toScreen(x, y);
+    ctx.setLineDash(dash || []); ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.arc(a, b, Math.max(2, r * z), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  };
+  const dot = (x, y, r, color) => { const [a, b] = toScreen(x, y); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(a, b, r, 0, Math.PI * 2); ctx.fill(); };
+  if (S.layers.spine && f.spinePts) {
+    // island outline guide: spine with its half-width band (as edited)
+    const sp = currentSpine(), half = currentHalf();
+    ctx.strokeStyle = '#ffffff40'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    sp.forEach(([x, y], i) => { const [a, b] = toScreen(x, y); ctx.beginPath(); ctx.arc(a, b, half[i] * pv.scale * z, 0, Math.PI * 2); ctx.stroke(); });
+    ctx.setLineDash([]);
+    ctx.strokeStyle = COL.spine; ctx.lineWidth = 2; ctx.beginPath();
+    if (!S.params['island.spine']) f.spinePts.forEach(([x, y], i) => { const [a, b] = toScreen(x, y); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); });
+    else sp.forEach(([x, y], i) => { const [a, b] = toScreen(x, y); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); });
+    ctx.stroke();
+    // progress ticks every 0.1
+    if (!S.params['island.spine']) for (let t = 0; t <= 1.0001; t += 0.1) {
+      const [x, y] = spineAtCells(t, 0), [a, b] = toScreen(x, y);
+      ctx.fillStyle = '#ffffffcc'; ctx.fillRect(a - 2, b - 2, 4, 4);
+      if (S.layers.labels && z > 0.5) { ctx.font = '10px system-ui'; ctx.fillStyle = '#ffffffaa'; ctx.fillText(t.toFixed(1), a + 5, b + 3); }
+    }
+  }
+  if (S.layers.features) {
+    const t = f.town;
+    if (t) { rect(t.fx, t.fy, t.cells, t.cells, COL.town); const [a, b] = toScreen(t.fx + t.cells / 2, t.fy); label('Town (spawn)', a, b, COL.town); }
+    for (const d of f.dungeons || []) {
+      if (d.fx !== undefined) {
+        rect(d.fx, d.fy, d.cells, d.cells, COL.dungeon, '#ff5c8a22');
+        const [a, b] = toScreen(d.fx + d.cells / 2, d.fy); label(`${d.name} (${d.levels} floors)`, a, b, COL.dungeon);
+        if (d.mouth) dot(d.mouth[0] + 0.5, d.mouth[1] + 0.5, 3, '#ff5c8a');
+      }
+    }
+    if (f.swamp) { circle(f.swamp.x, f.swamp.y, f.swamp.r, '#b8a060', 2, [6, 4]); const [a, b] = toScreen(f.swamp.x, f.swamp.y - f.swamp.r); label('Swamp', a, b, '#d8c080'); }
+    if (f.desert) { circle(f.desert.x, f.desert.y, f.desert.r, '#f0c070', 2, [6, 4]); const [a, b] = toScreen(f.desert.x, f.desert.y - f.desert.r); label('Desert', a, b, '#f0c070'); }
+    for (const [i, v] of (f.villages || []).entries()) {
+      // the hamlet's flattened outline (36 radii, cells) or the old circle
+      const e = v.edge || Array(36).fill(22);
+      ctx.strokeStyle = COL.village; ctx.lineWidth = 2; ctx.beginPath();
+      e.forEach((r, k) => { const [a, b] = toScreen(v.x + Math.cos(k * Math.PI / 18) * r, v.y + Math.sin(k * Math.PI / 18) * r); k ? ctx.lineTo(a, b) : ctx.moveTo(a, b); });
+      ctx.closePath(); ctx.stroke();
+      const [a, b] = toScreen(v.x, v.y - Math.max(...e)); label(`Hamlet ${i + 1}${v.desert ? ' (desert)' : ''}`, a, b, COL.village);
+    }
+    for (const o of f.outposts || []) { const [a, b] = toScreen(o.x + 0.5, o.y + 0.5); ctx.fillStyle = COL.outpost; ctx.fillRect(a - 4, b - 4, 8, 8); label(`T${o.tier}`, a, b, COL.outpost, -7); }
+    if (f.henge) { rect(f.henge.x0, f.henge.y0, f.henge.n, f.henge.n, COL.henge); const [a, b] = toScreen(f.henge.x0 + f.henge.n / 2, f.henge.y0); label('Henge', a, b, COL.henge); }
+    for (const c of f.caves || []) {
+      const [a, b] = toScreen(c.x + 0.5, c.y + 0.5);
+      ctx.strokeStyle = COL.cave; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(a + c.dx * 9, b + c.dy * 9); ctx.stroke();
+      dot(c.x + 0.5, c.y + 0.5, 2.5, COL.cave);
+    }
+  }
+  if (S.layers.spawners) {
+    for (const s of f.spawners || []) dot(s.x, s.y, 2.2, s.prefab ? '#9cff6a' : '#ff3b3b');
+    for (const s of f.shops || []) dot(s.x, s.y, 2.2, '#ffe14a');
+  }
+  // handles last (on top)
+  for (const h of handles()) {
+    const [a, b] = toScreen(h.x, h.y);
+    if (h.kind === 'spine') { ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(a, b, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    else if (h.kind === 'half') {
+      const [oa, ob] = toScreen(h.ox, h.oy);
+      ctx.strokeStyle = '#ffffff70'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(oa, ob); ctx.lineTo(a, b); ctx.stroke();
+      ctx.fillStyle = '#5fb3ff'; ctx.fillRect(a - 4, b - 4, 8, 8);
+    } else if (h.kind === 'anchor') {
+      ctx.strokeStyle = h.key === 'henge' ? COL.henge : COL.anchor; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(a - 7, b); ctx.lineTo(a + 7, b); ctx.moveTo(a, b - 7); ctx.lineTo(a, b + 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(a, b, 5, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+}
+
+// --------------------------------------------------------------- input --
+function hitHandle(sx, sy) {
+  let best = null, bd = 10;
+  for (const h of handles()) { const [a, b] = toScreen(h.x, h.y), d = Math.hypot(a - sx, b - sy); if (d < bd) { bd = d; best = h; } }
+  return best;
+}
+cv.addEventListener('mousedown', e => {
+  const r = cv.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const h = S.pv && hitHandle(sx, sy);
+  if (h) { S.drag = { ...h, pos: [h.x, h.y] }; cv.classList.add('handle'); }
+  else { S.drag = { kind: 'pan', sx, sy, cx: S.view.cx, cy: S.view.cy }; cv.classList.add('drag'); }
+});
+window.addEventListener('mousemove', e => {
+  const r = cv.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const d = S.drag;
+  if (d?.kind === 'pan') {
+    S.view.cx = d.cx - (sx - d.sx) / S.view.zoom; S.view.cy = d.cy - (sy - d.sy) / S.view.zoom; draw();
+  } else if (d) {
+    const [x, y] = toCell(sx, sy), pv = S.pv, K = pv.scale, f = pv.features;
+    if (d.kind === 'spine') {
+      const tcx = f.town.fx + f.town.cells / 2, tcy = f.town.fy + f.town.cells / 2;
+      const sp = (S.params['island.spine'] || f.spine.map(([a, b]) => [(a - tcx) / K, (b - tcy) / K])).map(p => p.slice());
+      sp[d.i] = [Math.round((x - tcx) / K), Math.round((y - tcy) / K)];
+      setParam('island.spine', sp, false);
+    } else if (d.kind === 'half') {
+      const half = currentHalf().slice();
+      half[d.i] = Math.max(5, Math.round(((x - d.ox) * d.nx + (y - d.oy) * d.ny) / K));
+      setParam('island.half', half, false);
+    } else if (d.kind === 'anchor') d.pos = [x, y];
+    draw();
+  }
+  if (e.target === cv) hover(sx, sy);
+});
+window.addEventListener('mouseup', () => {
+  const d = S.drag; S.drag = null; cv.classList.remove('drag', 'handle');
+  if (!d || d.kind === 'pan') return;
+  if (d.kind === 'anchor') {
+    const [t, off] = cellsToSpine(...d.pos);
+    setParam(d.key + '.t', +t.toFixed(3), false);
+    setParam(d.key + '.off', Math.round(off / S.pv.scale), false);
+  }
+  buildParams();
+  changed(d.kind === 'anchor' && d.key !== 'deep' ? 'sites' : 'height');
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const [x, y] = toCell(sx, sy);
+  S.view.zoom = Math.max(0.2, Math.min(40, S.view.zoom * Math.exp(-e.deltaY * 0.0015)));
+  const [x2, y2] = toCell(sx, sy);
+  S.view.cx += x - x2; S.view.cy += y - y2;
+  draw();
+}, { passive: false });
+cv.addEventListener('mouseleave', () => { $('#bar').textContent = 'Move over the map'; });
+function hover(sx, sy) {
+  const pv = S.pv; if (!pv) return;
+  const h = hitHandle(sx, sy);
+  if (!S.drag) cv.classList.toggle('handle', !!h);
+  const [cx, cy] = toCell(sx, sy), x = Math.floor(cx), y = Math.floor(cy);
+  if (x < 0 || y < 0 || x >= pv.N || y >= pv.N) { $('#bar').textContent = 'Outside the map'; return; }
+  const i = y * pv.N + x, hv = pv.sec.height[i];
+  const gx = pv.X0 + (x + 0.5) * pv.CELL, gy = pv.Y0 + (y + 0.5) * pv.CELL;
+  const fl = pv.sec.flags ? pv.sec.flags[i] : 0;
+  const tags = [[1, 'river'], [2, 'road'], [16, 'tunnel'], [4, 'swamp'], [8, 'trench'], [32, 'desert'], [64, 'keep-out']].filter(([b]) => fl & b).map(([, t]) => t);
+  let top = '';
+  if (pv.sec.top) {
+    const R = pv.CELL / pv.raster.res, ri = Math.floor(cy * R) * pv.raster.W + Math.floor(cx * R);
+    if (pv.sec.top[ri] > -32768) top = `  brick top z ${pv.sec.top[ri]}`;
+  }
+  const [t, off] = pv.features.spinePts ? cellsToSpine(cx, cy) : [0, 0];
+  $('#bar').textContent = `live ${Math.round(gx + pv.shift[0])}, ${Math.round(gy + pv.shift[1])}  |  generator ${Math.round(gx)}, ${Math.round(gy)}  |  cell ${x}, ${y}  |  height ${hv} vox (z ${hv * pv.VZ + pv.VZ})${hv <= pv.SEA ? ' under water' : ''}${top}  |  progress ${t.toFixed(2)}, ${Math.round(off / pv.scale)} off${tags.length ? '  |  ' + tags.join(', ') : ''}${h ? '  |  drag: ' + (h.label || h.kind) : ''}`;
+}
+window.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea, select')) return;
+  if (e.key === 'b' || e.key === 'B') { if (!S.showPrev && S.prev) { S.showPrev = true; draw(); } }
+  if (e.key === 'f' || e.key === 'F') fit();
+});
+window.addEventListener('keyup', e => { if ((e.key === 'b' || e.key === 'B') && S.showPrev) { S.showPrev = false; draw(); } });
+window.addEventListener('resize', resize);
+
+// ------------------------------------------------------------- settings --
+const GROUPS = { terrain: 'Terrain', island: 'Island shape', sea: 'Sea', crypt: 'Hollow Crypt', keep: 'Sunken Keep', deep: 'Mountain Deep', dungeon: 'Dungeons', river: 'River', swamp: 'Swamp', village: 'Hamlets', henge: 'Henge', outposts: 'Outposts', desert: 'Desert', caves: 'Caves', smooth: 'Smoothing' };
+const openGroups = new Set(['terrain']);
+function setParam(k, v, rebuild = true) {
+  const def = S.schema[k]?.def;
+  if (v === undefined || JSON.stringify(v) === JSON.stringify(def)) delete S.params[k]; else S.params[k] = v;
+  if (rebuild) buildParams();
+  cli();
+}
+function buildParams() {
+  const el = $('#params');
+  const keys = Object.keys(S.schema);
+  if (!keys.length) return;
+  const groups = {};
+  for (const k of keys) (groups[k.split('.')[0]] ??= []).push(k);
+  el.innerHTML = '';
+  for (const g of Object.keys(GROUPS).concat(Object.keys(groups).filter(g => !GROUPS[g]))) {
+    if (!groups[g]) continue;
+    const det = document.createElement('details');
+    det.open = openGroups.has(g);
+    det.addEventListener('toggle', () => det.open ? openGroups.add(g) : openGroups.delete(g));
+    const n = groups[g].filter(k => k in S.params).length;
+    det.innerHTML = `<summary><span>${GROUPS[g] || g}</span><span class="cnt">${n ? n + ' changed' : ''}</span></summary><div class="params"></div>`;
+    const box = det.querySelector('.params');
+    for (const k of groups[g]) {
+      const sc = S.schema[k], mod = k in S.params, val = mod ? S.params[k] : sc.def;
+      const row = document.createElement('div');
+      row.className = 'p' + (mod ? ' mod' : '');
+      const short = k.includes('.') ? k.split('.').slice(1).join('.') : k;
+      const stageTag = sc.stage === 'height' ? '' : ' <span style="color:var(--dim);font-size:10px">(sites)</span>';
+      if (Array.isArray(sc.def)) {
+        row.innerHTML = `<span class="name" style="grid-column:1/3">${short}${stageTag}</span><button class="reset" title="reset">↺</button><textarea spellcheck="false"></textarea><span></span><div class="note">${sc.note || ''}</div>`;
+        const ta = row.querySelector('textarea');
+        ta.value = JSON.stringify(val);
+        ta.addEventListener('change', () => {
+          try { setParam(k, JSON.parse(ta.value)); changed(sc.stage); } catch { ta.style.borderColor = 'var(--bad)'; }
+        });
+      } else {
+        const step = Number.isInteger(sc.def) ? (Math.abs(sc.def) >= 1000 ? 100 : 1) : 0.01;
+        row.innerHTML = `<span class="name" title="default ${sc.def}">${short}${stageTag}</span><input type="number" step="${step}"><button class="reset" title="reset to ${sc.def}">↺</button><div class="note">${sc.note || ''} · default ${sc.def}</div>`;
+        const inp = row.querySelector('input');
+        inp.value = val;
+        inp.addEventListener('change', () => { const v = Number(inp.value); if (Number.isFinite(v)) { setParam(k, v); changed(sc.stage); } });
+      }
+      row.querySelector('.reset').addEventListener('click', () => { setParam(k, undefined); changed(sc.stage); });
+      box.appendChild(row);
+    }
+    el.appendChild(det);
+  }
+}
+let autoT = null;
+function changed(stage) {
+  cli(); draw();
+  if (!$('#auto').checked) return;
+  clearTimeout(autoT);
+  if (stage === 'height') autoT = setTimeout(() => run('height'), 500);
+}
+
+// ------------------------------------------------------------- summary --
+function stats() {
+  const pv = S.pv, f = pv.features;
+  const rows = [['Stage', `${pv.stage} (${((pv.runMs ?? pv.ms) / 1000).toFixed(1)} s)`], ['Map', `${pv.N} x ${pv.N} cells, ${(pv.N * pv.CELL / 10).toLocaleString()} studs across`]];
+  let land = 0, peak = 0; const H = pv.sec.height;
+  for (let i = 0; i < H.length; i++) { if (H[i] > pv.SEA) land++; if (H[i] > peak) peak = H[i]; }
+  rows.push(['Land', `${(100 * land / H.length).toFixed(1)}% of the map`], ['Highest', `${peak} voxels (z ${peak * pv.VZ})`]);
+  if (f.villages) rows.push(['Hamlets', `${f.villages.length} (${f.villages.filter(v => v.desert).length} desert)`]);
+  if (f.outposts) rows.push(['Outposts', f.outposts.length]);
+  if (f.caves) rows.push(['Caves', f.caves.length]);
+  if (f.dungeons?.[0]?.raise !== undefined) rows.push(['Dungeon hills', f.dungeons.map(d => d.raise).join(' / ') + ' vox raised']);
+  if (pv.stage === 'full') {
+    rows.push(['Bricks', pv.bricks.toLocaleString()]);
+    const bots = f.spawners.length;
+    rows.push(['Bot spawners', `<span class="${bots > BOT_CAP * 0.8 ? 'warn' : 'ok'}">${bots} / ${BOT_CAP} cap</span>`]);
+    rows.push(['Shop stands', f.shops.length]);
+  } else rows.push(['Bricks / bots', '<span style="color:var(--dim)">run Full to count</span>']);
+  $('#stats').innerHTML = rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('');
+}
+function cli() {
+  const n = Object.keys(S.params).length, name = $('#pname').value.trim() || 'NAME';
+  $('#cli').textContent = n
+    ? `Save as a preset, then:  node mapgen/mapgen.mjs --seed ${S.seed} --scale ${S.scale} --params mapgen/editor/presets/${name}.json --out mapgen/out_${name}`
+    : `node mapgen/mapgen.mjs --seed ${S.seed} --scale ${S.scale} --out mapgen/out_${name}`;
+}
+
+// -------------------------------------------------------------- wiring --
+document.querySelectorAll('[data-stage]').forEach(b => b.addEventListener('click', () => run(b.dataset.stage)));
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+  S.mode = b.dataset.mode;
+  document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('on', x === b));
+  if (S.mode === 'bricks' && S.pv && !S.pv.sec.topRgb) logErr('Bricks view needs a Full run');
+  buildBase(); draw();
+}));
+$('#layers').innerHTML = LAYERS.map(([k, t]) => `<label><input type="checkbox" data-layer="${k}"${S.layers[k] ? ' checked' : ''}>${t}</label>`).join('');
+document.querySelectorAll('[data-layer]').forEach(c => c.addEventListener('change', () => {
+  S.layers[c.dataset.layer] = c.checked;
+  if (['shade', 'roads', 'river', 'flags', 'contours'].includes(c.dataset.layer)) buildBase();
+  legend(); draw();
+}));
+$('#seed').addEventListener('change', () => { S.seed = Math.floor(Number($('#seed').value)) || 1; cli(); run('height'); });
+$('#scale').addEventListener('change', () => { S.scale = Number($('#scale').value) || 2; cli(); run('height'); });
+$('#dice').addEventListener('click', () => { S.seed = Math.floor(Math.random() * 2 ** 31); $('#seed').value = S.seed; cli(); run('height'); });
+$('#cancel').addEventListener('click', async () => { if (S.job) await api('/api/cancel', { id: S.job }); S.job = null; busy(false); $('#cancel').disabled = true; });
+$('#logbtn').addEventListener('click', () => $('#log').classList.toggle('show'));
+$('#fit').addEventListener('click', fit);
+$('#resetAll').addEventListener('click', () => { S.params = {}; buildParams(); cli(); draw(); run('height'); });
+$('#pname').addEventListener('input', cli);
+async function presets(select) {
+  const list = await api('/api/presets');
+  $('#preset').innerHTML = list.map(n => `<option${n === select ? ' selected' : ''}>${n}</option>`).join('');
+}
+$('#load').addEventListener('click', async () => {
+  const n = $('#preset').value; if (!n) return;
+  const p = await api('/api/preset?name=' + encodeURIComponent(n));
+  S.seed = p.seed; S.scale = p.scale; S.params = p.params || {};
+  $('#seed').value = S.seed; $('#scale').value = S.scale; $('#pname').value = n === 'live' ? '' : n;
+  buildParams(); cli(); run('sites');
+});
+$('#save').addEventListener('click', async () => {
+  const n = $('#pname').value.trim();
+  try { const r = await api('/api/preset', { name: n, seed: S.seed, scale: S.scale, params: S.params }); await presets(r.name); S.logLines.push(`saved preset ${r.name}`); renderLog(); cli(); }
+  catch (e) { logErr(e.message); }
+});
+$('#build').addEventListener('click', async () => {
+  const n = $('#bname').value.trim();
+  try {
+    const { id } = await api('/api/build', { name: n, seed: S.seed, scale: S.scale, params: S.params });
+    S.logLines.push(`--- build ${n}: full generation into mapgen/out_${n}`); renderLog(); $('#log').classList.add('show');
+    $('#build').disabled = true;
+    let since = 0;
+    const tick = async () => {
+      const st = await api(`/api/status?id=${id}&since=${since}`);
+      since = st.logLen; S.logLines.push(...st.log); renderLog();
+      if (st.state === 'running') return setTimeout(tick, 1000);
+      $('#build').disabled = false;
+      S.logLines.push(st.state === 'done' ? `build done in ${(st.ms / 1000).toFixed(0)} s: ${st.out}` : `!! build ${st.state}`); renderLog();
+    };
+    tick();
+  } catch (e) { logErr(e.message); }
+});
+
+(async function init() {
+  const live = await api('/api/live');
+  S.seed = live.seed; S.scale = live.scale;
+  $('#seed').value = S.seed; $('#scale').value = S.scale;
+  await presets('live');
+  cli(); resize();
+  run('height');
+})();
+</script>
+</body>
+</html>

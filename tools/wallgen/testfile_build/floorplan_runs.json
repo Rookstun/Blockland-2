@@ -1,0 +1,202 @@
+{
+  "width": 64,
+  "height": 64,
+  "runs": [
+    {
+      "orient": "H",
+      "line": 5,
+      "start": 3,
+      "end": 31,
+      "openings": [
+        {
+          "pos0": 12,
+          "pos1": 15,
+          "type": "door"
+        },
+        {
+          "pos0": 22,
+          "pos1": 25,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 14,
+      "start": 3,
+      "end": 47,
+      "openings": [
+        {
+          "pos0": 12,
+          "pos1": 42,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 22,
+      "start": 15,
+      "end": 47,
+      "openings": [
+        {
+          "pos0": 22,
+          "pos1": 34,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 26,
+      "start": 25,
+      "end": 31,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 32,
+      "start": 10,
+      "end": 17,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 40,
+      "start": 9,
+      "end": 43,
+      "openings": [
+        {
+          "pos0": 17,
+          "pos1": 26,
+          "type": "door"
+        },
+        {
+          "pos0": 37,
+          "pos1": 34,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 48,
+      "start": 8,
+      "end": 47,
+      "openings": [
+        {
+          "pos0": 17,
+          "pos1": 39,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 53,
+      "start": 7,
+      "end": 17,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 5,
+      "start": 5,
+      "end": 58,
+      "openings": [
+        {
+          "pos0": 13,
+          "pos1": 53,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 9,
+      "start": 32,
+      "end": 51,
+      "openings": [
+        {
+          "pos0": 37,
+          "pos1": 39,
+          "type": "door"
+        },
+        {
+          "pos0": 44,
+          "pos1": 46,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 16,
+      "start": 5,
+      "end": 58,
+      "openings": [
+        {
+          "pos0": 21,
+          "pos1": 32,
+          "type": "door"
+        },
+        {
+          "pos0": 37,
+          "pos1": 39,
+          "type": "door"
+        },
+        {
+          "pos0": 44,
+          "pos1": 46,
+          "type": "door"
+        },
+        {
+          "pos0": 51,
+          "pos1": 53,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 24,
+      "start": 5,
+      "end": 26,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 32,
+      "start": 5,
+      "end": 43,
+      "openings": [
+        {
+          "pos0": 26,
+          "pos1": 37,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 42,
+      "start": 14,
+      "end": 50,
+      "openings": [
+        {
+          "pos0": 23,
+          "pos1": 37,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 47,
+      "start": 14,
+      "end": 26,
+      "openings": []
+    }
+  ],
+  "unplaced_markers": []
+}

@@ -1,0 +1,16 @@
+# generated map builds and editor cache
+mapgen/out*/
+mapgen/editor/cache/
+# third-party / vendored repos
+tools/brs-js-master/
+tools/wirescript/
+heightmap2brz-master/
+*.zip
+node_modules/
+# big generated data
+corpus/viewer.html
+corpus/*.json
+corpus/out/
+# secrets / env
+.env
+*.pem

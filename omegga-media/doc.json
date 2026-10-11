@@ -1,0 +1,166 @@
+{
+  "name": "media",
+  "description": "/playvideo <link> plays a video on a brick screen (its music on a speaker device); /playaudio <link> builds a self-playing synth speaker device with heightmap2brz; /playaudio <sound> plays a built-in game sound; /stop ends yours.",
+  "author": "pooper",
+  "config": {
+    "max-minutes": {
+      "description": "Longest video or song that will be played",
+      "type": "number",
+      "default": 10
+    },
+    "video-max-minutes": {
+      "description": "Longest video /playvideo will play (frames stream, soundtrack is built in chunks)",
+      "type": "number",
+      "default": 240
+    },
+    "audio-chunk-minutes": {
+      "description": "Long video soundtracks are built and swapped in chunks this long",
+      "type": "number",
+      "default": 5
+    },
+    "merge-tolerance": {
+      "description": "Video pixels whose colours differ by at most this (0-255 per channel) merge into one brick; higher = fewer bricks and less lag, blockier picture (0 = exact)",
+      "type": "number",
+      "default": 24
+    },
+    "max-width": {
+      "description": "Widest video screen in pixels (1 stud each)",
+      "type": "number",
+      "default": 160
+    },
+    "fps": {
+      "description": "Default video frames per second",
+      "type": "number",
+      "default": 6
+    },
+    "bricks-per-second": {
+      "description": "Most bricks per second the video sends to the server; lower it if the server lags",
+      "type": "number",
+      "default": 40000
+    },
+    "color-step": {
+      "description": "Colour rounding for video pixels (bigger = fewer bricks, more banding)",
+      "type": "number",
+      "default": 8
+    },
+    "layers": {
+      "description": "1 = every frame in the same place (brief flash between frames); 2 = two alternating layers 2 units apart (no flash, the picture steps back and forth)",
+      "type": "number",
+      "default": 1
+    },
+    "keep-last-frame": {
+      "description": "Leave the last frame up when a video ends",
+      "type": "boolean",
+      "default": false
+    },
+    "audio-range": {
+      "description": "How far (game units, 10 per stud) speakers can be heard; the game caps this at 400",
+      "type": "number",
+      "default": 400
+    },
+    "synth": {
+      "description": "Synth the MIDI notes play on: sine, square, saw or triangle",
+      "type": "string",
+      "default": "sine"
+    },
+    "synth-base-hz": {
+      "description": "Pitch of the synth sound at pitch 1.0; tune this if songs sound transposed",
+      "type": "number",
+      "default": 440
+    },
+    "voices": {
+      "description": "Speakers in a song device (voice mode) / notes at once per instrument (midi mode)",
+      "type": "number",
+      "default": 32
+    },
+    "width": {
+      "description": "Default video width in pixels (1 stud each)",
+      "type": "number",
+      "default": 80
+    },
+    "pixel-size": {
+      "description": "Video pixel size in units (micro bricks; 10 units = 1 stud, even numbers)",
+      "type": "number",
+      "default": 2
+    },
+    "glow-intensity": {
+      "description": "Glow strength of video pixels (0-10)",
+      "type": "number",
+      "default": 3
+    },
+    "video-chunk-seconds": {
+      "description": "/playvideo builds its wire-prop video and speech soundtrack in pieces this long, swapped while playing",
+      "type": "number",
+      "default": 60
+    },
+    "video-audio": {
+      "description": "/playvideo soundtrack when no preset word is given: default (heightmap2brz defaults, bank mode), layered, single, speech, music, drums or mix",
+      "type": "string",
+      "default": "default"
+    },
+    "audio-fps": {
+      "description": "Audio analysis frames per second for /playaudio links (higher = finer detail)",
+      "type": "number",
+      "default": 60
+    },
+    "proxy": {
+      "description": "Force one proxy for downloads (yt-dlp --proxy), e.g. socks5://user:pass@host:1080. Empty = direct, switching to free GitHub proxies while YouTube bot-checks the server",
+      "type": "string",
+      "default": ""
+    },
+    "proxy-lists": {
+      "description": "Free proxy lists (space separated URLs, one ip:port or scheme://ip:port per line) tried while YouTube bot-checks the server",
+      "type": "string",
+      "default": "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
+    }
+  },
+  "commands": [
+    {
+      "name": "/playvideo",
+      "description": "Play a video on a brick screen next to you",
+      "example": "/playvideo https://youtu.be/dQw4w9WgXcQ 48 6",
+      "args": [
+        {
+          "name": "link",
+          "description": "video link (YouTube and most sites) or 'stop'",
+          "required": true
+        },
+        {
+          "name": "options",
+          "description": "[width] [fps] [-x|+x|-y|+y] [plastic = no glow] [mute = no music]",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "/search",
+      "description": "Search YouTube and play the first result on a video screen next to you",
+      "example": "/search never gonna give you up",
+      "args": [
+        {
+          "name": "search",
+          "description": "search words",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "/playaudio",
+      "description": "Play a song link (YouTube etc. or .mid) on a self-playing speaker device above you, or a built-in sound",
+      "example": "/playaudio https://youtu.be/kJQP7kiw5Fk voice sine",
+      "args": [
+        {
+          "name": "sound",
+          "description": "a link, built-in sound name words, or 'list [word]'. Links take [voice|bank|midi] (voice = tracks pitches, bank = one speaker per note, good for speech, midi = transcribe to notes first) and [sine|square|saw|triangle]",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "/stop",
+      "description": "Stop your video and audio; with nothing playing it clears leftover screens/speakers (host: /stop all). /stopmedia does the same.",
+      "example": "/stop",
+      "args": []
+    }
+  ]
+}

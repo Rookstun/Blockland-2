@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brickadia Editor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f5f5f5;
+        }
+        .sidebar {
+            width: 300px;
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        .sidebar h2 {
+            margin-top: 0;
+            color: #ecf0f1;
+            text-align: center;
+        }
+        .sidebar h3 {
+            color: #ecf0f1;
+            border-bottom: 1px solid #34495e;
+            padding-bottom: 5px;
+            margin-top: 25px;
+        }
+        .sidebar label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: 500;
+        }
+        .sidebar input, .sidebar select, .sidebar textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+        .sidebar button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            width: 100%;
+        }
+        .sidebar button:hover {
+            background-color: #2980b9;
+        }
+        .sidebar button.danger {
+            background-color: #e74c3c;
+        }
+        .sidebar button.danger:hover {
+            background-color: #c0392b;
+        }
+        .sidebar button.success {
+            background-color: #27ae60;
+        }
+        .sidebar button.success:hover {
+            background-color: #219a52;
+        }
+        .sidebar button.warning {
+            background-color: #f39c12;
+        }
+        .sidebar button.warning:hover {
+            background-color: #e67e22;
+        }
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            overflow: hidden;
+        }
+        .editor-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .file-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .file-path {
+            font-size: 0.8em;
+            color: #7f8c8d;
+        }
+        .editor-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        .btn.save {
+            background-color: #27ae60;
+        }
+        .btn.save:hover {
+            background-color: #219a52;
+        }
+        .btn.warning {
+            background-color: #f39c12;
+        }
+        .btn.warning:hover {
+            background-color: #e67e22;
+        }
+        #canvasContainer {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+            background-color: #ecf0f1;
+        }
+        #brickCanvas {
+            background-color: white;
+            border: 1px solid #bdc3c7;
+            display: block;
+            margin: 20px auto;
+        }
+        .status-bar {
+            padding: 10px 20px;
+            background-color: #ecf0f1;
+            border-top: 1px solid #ddd;
+            font-size: 0.9em;
+            color: #7f8c8d;
+            display: flex;
+            justify-content: space-between;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+        }
+        .control-group label {
+            font-size: 0.9em;
+            margin-bottom: 3px;
+        }
+        .properties-panel {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .property-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+        }
+        .property-label {
+            font-weight: 500;
+        }
+        .property-value {
+            font-family: monospace;
+            background-color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+            min-width: 80px;
+            text-align: center;
+        }
+        .help-text {
+            font-size: 0.85em;
+            color: #95a5a6;
+            font-style: italic;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+        .brick-info {
+            background-color: #f8f9fa;
+            border-left: 3px solid #3498db;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        .validation-status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .validation-status.valid {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .validation-status.invalid {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .validation-status.warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .loading, .error {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+        .error {
+            color: #e74c3c;
+            background-color: #fdeaea;
+            border-radius: 4px;
+            margin: 20px;
+        }
+        .instructions {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        .course-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .course-selector label {
+            min-width: 60px;
+        }
+        .brick-dimensions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+        .dimension-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 80px;
+        }
+        .dimension-group label {
+            font-size: 0.9em;
+            margin-bottom: 3px;
+        }
+        .dimension-group input {
+            width: 60px;
+            padding: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>🧱 Brickadia Editor</h2>
+
+        <div class="file-section">
+            <h3>📁 File</h3>
+            <div class="controls">
+                <input type="file" id="fileInput" accept=".json,.brs,.brz,.debug.json">
+                <button id="loadBtn">Load File</button>
+                <button id="saveBtn">Save Changes</button>
+            </div>
+            <div id="fileInfo">
+                <div class="file-name">No file loaded</div>
+                <div class="file-path"></div>
+            </div>
+        </div>
+
+        <div class="view-section">
+            <h3>👁️ View</h3>
+            <div class="controls">
+                <label>Zoom:
+                    <input type="range" id="zoomSlider" min="25" max="200" value="100">
+                    <span id="zoomValue">100%</span>
+                </label>
+            </div>
+            <button id="resetViewBtn">Reset View</button>
+            <button id="gridToggleBtn">Show Grid</button>
+        </div>
+
+        <div class="tool-section">
+            <h3>🛠️ Tools</h3>
+            <div class="controls">
+                <div>
+                    <input type="radio" name="tool" id="selectTool" value="select" checked>
+                    <label for="selectTool">Select</label>
+                </div>
+                <div>
+                    <input type="radio" name="tool" id="addTool" value="add">
+                    <label for="addTool">Add Brick</label>
+                </div>
+                <div>
+                    <input type="radio" name="tool" id="deleteTool" value="delete">
+                    <label for="deleteTool">Delete</label>
+                </div>
+                <div>
+                    <input type="radio" name="tool" id="doorTool" value="door">
+                    <label for="doorTool">Add Door</label>
+                </div>
+                <div>
+                    <input type="radio" name="tool" id="windowTool" value="window">
+                    <label for="windowTool">Add Window</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="course-selector">
+            <label for="courseSelect">Course:</label>
+            <select id="courseSelect">
+                <option value="0">Course 0 (Bottom)</option>
+                <option value="1">Course 1</option>
+                <option value="2">Course 2</option>
+                <option value="3">Course 3</option>
+                <option value="4">Course 4</option>
+                <option value="5" selected>Course 5 (Top)</option>
+            </select>
+        </div>
+
+        <div class="brick-info" id="selectedBrickInfo">
+            <strong>Selected:</strong> None
+        </div>
+
+        <div class="validation-status" id="validationStatus">
+            Validation: No file loaded
+        </div>
+
+        <div class="help-text">
+            <strong>How to use:</strong><br>
+            • Select tool to choose bricks<br>
+            • Add tool to place new bricks<br>
+            • Door/Window tools to create openings<br>
+            • Drag to move selected bricks<br>
+            • Click properties to edit values<br>
+            • Use mouse wheel to zoom<br>
+            • Hold space to pan<br>
+            • Brick positions snap to even studs<br>
+            • Wall thickness: 1 stud<br>
+            • Courses: 0-5 (6 total)<br>
+            • Doors: courses 0-2 open<br>
+            • Windows: courses 2-3 sill, 4-5 open
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="editor-header">
+            <div class="file-info">
+                <span class="file-name" id="displayFileName">No file loaded</span>
+                <span class="file-path" id="displayFilePath"></span>
+            </div>
+            <div class="editor-actions">
+                <button class="btn" id="exportJsonBtn">Export JSON</button>
+                <button class="btn save" id="saveJsonBtn">Save to File</button>
+                <button class="btn warning" id="validateBtn">Validate Geometry</button>
+            </div>
+        </div>
+
+        <div id="canvasContainer">
+            <div class="loading">Loading editor...</div>
+            <canvas id="brickCanvas" width="800" height="600"></canvas>
+        </div>
+
+        <div class="status-bar">
+            <div id="status">Ready - Load a file to begin</div>
+            <div id="canvasInfo">Canvas: 800×600 | Zoom: 100%</div>
+            <div id="mousePos">X: 0, Y: 0 | Stud: 0, 0</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { CONFIG, validateGeometry, toStud, toWorldBrick } from './lib_frontend.js';
+
+        let canvas, ctx;
+        let bricks = []; // Array of brick objects in internal format
+        let selectedBrick = null;
+        let isDragging = false;
+        let dragStartX, dragStartY;
+        let canvasOffsetX = 0, canvasOffsetY = 0;
+        let zoomLevel = 1.0;
+        let gridVisible = false;
+        let currentFile = null;
+        let currentFileName = '';
+        let currentTool = 'select'; // select, add, delete, door, window
+        let currentCourse = 5; // Currently selected course (0-5)
+
+        // Brick dimensions in studs (will be converted to pixels for rendering)
+        const STANDARD_BRICK_WIDTH_STUDS = 1; // 1 stud wide
+        const STANDARD_BRICK_LENGTH_STUDS = 2; // 2 studs long (standard brick)
+        const BRICK_HEIGHT_STUDS = 1; // 1 stud high (course height)
+        const STUD_SIZE_PIXELS = 20; // Rendering: 1 stud = 20 pixels
+        const WALL_THICKNESS_PIXELS = STUD_SIZE_PIXELS * CONFIG.WALL_THICKNESS;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCanvas();
+            setupEventListeners();
+            loadFileList(); // Show available files in directory
+        });
+
+        function initCanvas() {
+            canvas = document.getElementById('brickCanvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            drawBricks();
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvasContainer');
+            canvas.width = container.clientWidth - 20; // Account for padding
+            canvas.height = container.clientHeight - 20;
+            drawBricks();
+        }
+
+        function setupEventListeners() {
+            // File loading
+            document.getElementById('loadBtn').addEventListener('click', () => {
+                document.getElementById('fileInput').click();
+            });
+
+            document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+            // Save functionality
+            document.getElementById('saveBtn').addEventListener('click', saveCurrentFile);
+            document.getElementById('saveJsonBtn').addEventListener('click', saveCurrentFile);
+            document.getElementById('exportJsonBtn').addEventListener('click', exportAsJson);
+            document.getElementById('validateBtn').addEventListener('click', validateGeometryHandler);
+
+            // View controls
+            document.getElementById('zoomSlider').addEventListener('input', (e) => {
+                zoomLevel = parseFloat(e.target.value) / 100;
+                document.getElementById('zoomValue').textContent = e.target.value + '%';
+                updateCanvasInfo();
+                drawBricks();
+            });
+
+            document.getElementById('resetViewBtn').addEventListener('click', resetView);
+            document.getElementById('gridToggleBtn').addEventListener('click', toggleGrid);
+
+            // Tool selection
+            document.querySelectorAll('input[name="tool"]').forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    currentTool = e.target.value;
+                });
+            });
+
+            // Course selection
+            document.getElementById('courseSelect').addEventListener('change', (e) => {
+                currentCourse = parseInt(e.target.value);
+                updateSelectedBrickInfo();
+            });
+
+            // Canvas events
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseLeave);
+            canvas.addEventListener('wheel', handleMouseWheel);
+
+            // Window resize
+            window.addEventListener('resize', resizeCanvas);
+
+            // Space bar to pan
+            let isPanning = false;
+            let panStartX, panStartY;
+
+            canvas.addEventListener('mousedown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    isPanning = true;
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    canvas.style.cursor = 'grabbing';
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (isPanning) {
+                    const dx = e.clientX - panStartX;
+                    const dy = e.clientY - panStartY;
+                    canvasOffsetX += dx;
+                    canvasOffsetY += dy;
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    drawBricks();
+                }
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (e.code === 'Space') {
+                    isPanning = false;
+                    canvas.style.cursor = '';
+                }
+            });
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    let content = event.target.result;
+                    let parsedData;
+
+                    // Try to parse as JSON
+                    if (file.name.endsWith('.json') || file.name.endsWith('.debug.json')) {
+                        parsedData = JSON.parse(content);
+                    } else {
+                        // For .brs/.brz files, we need to convert them to our internal format
+                        // For now, we'll treat them as JSON or create a simple representation
+                        try {
+                            parsedData = JSON.parse(content);
+                        } catch (parseError) {
+                            // If not JSON, create a simple representation
+                            parsedData = {
+                                rawContent: content,
+                                format: file.name.endsWith('.brs') ? 'brs' : 'brz',
+                                name: file.name.replace(/\.[^/.]+$/, "")
+                            };
+                        }
+                    }
+
+                    loadFileData(parsedData, file);
+                } catch (error) {
+                    showError(`Failed to load file: ${error.message}`);
+                }
+            };
+            reader.onerror = function() {
+                showError('Failed to read file');
+            };
+            reader.readAsText(file);
+        }
+
+        function loadFileData(data, file) {
+            currentFile = data;
+            currentFileName = file.name;
+
+            document.getElementById('displayFileName').textContent = file.name;
+            document.getElementById('displayFilePath').textContent = file.name;
+            document.getElementById('fileInfo').innerHTML =
+                `<div class="file-name">${file.name}</div><div class="file-path">${file.name}</div>`;
+
+            // Convert file data to bricks representation
+            bricks = convertDataToBricks(data);
+
+            // Reset view and draw
+            resetView();
+            drawBricks();
+
+            document.getElementById('status').textContent = `Loaded ${file.name}`;
+            updateCanvasInfo();
+            updateValidationStatus();
+        }
+
+        function convertDataToBricks(data) {
+            // Convert various data formats to our internal brick format
+            if (!data) return [];
+
+            // Handle bricks_debug.json format (array of world bricks)
+            if (Array.isArray(data)) {
+                return data.map((item, index) => {
+                    if (typeof item === 'object' && item !== null) {
+                        // Convert world brick to internal brick representation
+                        return {
+                            id: item.id || `brick_${index}`,
+                            x: item.x !== undefined ? item.x : 0,
+                            y: item.y !== undefined ? item.y : 0,
+                            z: item.z !== undefined ? item.z : 0,
+                            sx: item.sx !== undefined ? item.sx : STUD_SIZE_PIXELS / 2, // half-width
+                            sy: item.sy !== undefined ? item.sy : STUD_SIZE_PIXELS / 2, // half-height
+                            sz: item.sz !== undefined ? item.sz : STUD_SIZE_PIXELS / 2, // half-depth
+                            course: item.course !== undefined ? item.course : 0,
+                            orient: item.orient || 'H',
+                            a: item.a !== undefined ? item.a : 0,
+                            b: item.b !== undefined ? item.b : 1,
+                            line: item.line !== undefined ? item.line : 0,
+                            color: item.color || '#8B4513',
+                            label: item.label || `Brick ${index}`,
+                            data: item // Store original data
+                        };
+                    }
+                    return null;
+                }).filter(Boolean);
+            }
+
+            // Handle other array formats
+            if (Array.isArray(data)) {
+                return data.map((item, index) => {
+                    if (typeof item === 'object' && item !== null) {
+                        return {
+                            id: item.id || `brick_${index}`,
+                            x: item.x !== undefined ? item.x : (index * 50),
+                            y: item.y !== undefined ? item.y : 0,
+                            z: item.z !== undefined ? item.z : 0,
+                            sx: item.sx !== undefined ? item.sx : STUD_SIZE_PIXELS / 2,
+                            sy: item.sy !== undefined ? item.sy : STUD_SIZE_PIXELS / 2,
+                            sz: item.sz !== undefined ? item.sz : STUD_SIZE_PIXELS / 2,
+                            course: item.course !== undefined ? item.course : 0,
+                            orient: item.orient || 'H',
+                            a: item.a !== undefined ? item.a : 0,
+                            b: item.b !== undefined ? item.b : 1,
+                            line: item.line !== undefined ? item.line : 0,
+                            color: item.color || '#8B4513',
+                            label: item.label || `Item ${index}`,
+                            data: item
+                        };
+                    }
+                    return null;
+                }).filter(Boolean);
+            }
+
+            // Single object - look for arrays or create a representation
+            if (typeof data === 'object' && data !== null) {
+                const bricks = [];
+
+                // Look for common array properties that might contain brick data
+                const arrayProps = ['bricks', 'walls', 'segments', 'elements', 'items'];
+                let foundArray = false;
+
+                for (const prop of arrayProps) {
+                    if (Array.isArray(data[prop])) {
+                        data[prop].forEach((item, index) => {
+                            if (typeof item === 'object' && item !== null) {
+                                bricks.push({
+                                    id: item.id || `${prop}_${index}`,
+                                    x: item.x !== undefined ? item.x : (index * 50),
+                                    y: item.y !== undefined ? item.y : 0,
+                                    z: item.z !== undefined ? item.z : 0,
+                                    sx: item.sx !== undefined ? item.sx : STUD_SIZE_PIXELS / 2,
+                                    sy: item.sy !== undefined ? item.sy : STUD_SIZE_PIXELS / 2,
+                                    sz: item.sz !== undefined ? item.sz : STUD_SIZE_PIXELS / 2,
+                                    course: item.course !== undefined ? item.course : 0,
+                                    orient: item.orient || 'H',
+                                    a: item.a !== undefined ? item.a : 0,
+                                    b: item.b !== undefined ? item.b : 1,
+                                    line: item.line !== undefined ? item.line : 0,
+                                    color: item.color || '#8B4513',
+                                    label: item.label || `${prop} ${index}`,
+                                    data: item
+                                });
+                            }
+                        });
+                        foundArray = true;
+                        break;
+                    }
+                }
+
+                if (!foundArray) {
+                    // Treat the whole object as a single brick
+                    bricks.push({
+                        id: 'root_object',
+                        x: 100,
+                        y: 100,
+                        z: 0,
+                        sx: STUD_SIZE_PIXELS,
+                        sy: STUD_SIZE_PIXELS,
+                        sz: STUD_SIZE_PIXELS / 2,
+                        course: 0,
+                        orient: 'H',
+                        a: 0,
+                        b: 1,
+                        line: 0,
+                        color: '#3498db',
+                        label: 'Root Object',
+                        data: data
+                    });
+                }
+
+                return bricks;
+            }
+
+            return [];
+        }
+
+        function convertBricksToWorldFormat() {
+            // Convert our internal brick format to world brick format (for saving/export)
+            return bricks.map(brick => {
+                // Convert internal representation to world brick stud coordinates
+                // Internal: x,y in pixels, sx,sy,sz in half-pixels
+                // World: stud coordinates for .brs/.brz format
+
+                const studX = Math.round(brick.x / STUD_SIZE_PIXELS);
+                const studY = Math.round(brick.y / STUD_SIZE_PIXELS);
+                const studZ = Math.round(brick.z / STUD_SIZE_PIXELS);
+                const halfWidthStuds = Math.round(brick.sx / (STUD_SIZE_PIXELS / 2));
+                const halfHeightStuds = Math.round(brick.sy / (STUD_SIZE_PIXELS / 2));
+                const halfDepthStuds = Math.round(brick.sz / (STUD_SIZE_PIXELS / 2));
+
+                return {
+                    x: studX,
+                    y: studY,
+                    z: studZ,
+                    sx: halfWidthStuds,
+                    sy: halfHeightStuds,
+                    sz: halfDepthStuds,
+                    course: brick.course,
+                    orient: brick.orient,
+                    a: brick.a,
+                    b: brick.b,
+                    line: brick.line,
+                    color: brick.color
+                };
+            });
+        }
+
+        function convertWorldBricksToInternal(worldBricks) {
+            // Convert world brick format to our internal representation
+            return worldBricks.map((brick, index) => {
+                // Convert world stud coordinates to internal pixel coordinates
+                const x = brick.x * STUD_SIZE_PIXELS;
+                const y = brick.y * STUD_SIZE_PIXELS;
+                const z = brick.z * STUD_SIZE_PIXELS;
+                const sx = brick.sx * (STUD_SIZE_PIXELS / 2);
+                const sy = brick.sy * (STUD_SIZE_PIXELS / 2);
+                const sz = brick.sz * (STUD_SIZE_PIXELS / 2);
+
+                return {
+                    id: `brick_${index}`,
+                    x: x,
+                    y: y,
+                    z: z,
+                    sx: sx,
+                    sy: sy,
+                    sz: sz,
+                    course: brick.course,
+                    orient: brick.orient,
+                    a: brick.a,
+                    b: brick.b,
+                    line: brick.line,
+                    color: brick.color || '#8B4513',
+                    label: `Brick ${index}`,
+                    data: brick
+                };
+            });
+        }
+
+        function handleMouseDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left - canvasOffsetX) / zoomLevel;
+            const mouseY = (e.clientY - rect.top - canvasOffsetY) / zoomLevel;
+
+            if (currentTool === 'select') {
+                selectedBrick = getBrickAtPosition(mouseX, mouseY);
+                if (selectedBrick) {
+                    isDragging = true;
+                    dragStartX = mouseX - selectedBrick.x;
+                    dragStartY = mouseY - selectedBrick.y;
+                    updateSelectedBrickInfo();
+                } else {
+                    selectedBrick = null;
+                    updateSelectedBrickInfo();
+                }
+            } else if (currentTool === 'add') {
+                addBrickAtPosition(mouseX, mouseY);
+            } else if (currentTool === 'delete') {
+                const brickToDelete = getBrickAtPosition(mouseX, mouseY);
+                if (brickToDelete) {
+                    deleteBrick(brickToDelete);
+                }
+            } else if (currentTool === 'door') {
+                addDoorAtPosition(mouseX, mouseY);
+            } else if (currentTool === 'window') {
+                addWindowAtPosition(mouseX, mouseY);
+            }
+        }
+
+        function handleMouseMove(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left - canvasOffsetX) / zoomLevel;
+            const mouseY = (e.clientY - rect.top - canvasOffsetY) / zoomLevel;
+
+            document.getElementById('mousePos').textContent =
+                `X: ${Math.round(mouseX)}, Y: ${Math.round(mouseY)} | Stud: ${Math.round(mouseX / STUD_SIZE_PIXELS)}, ${Math.round(mouseY / STUD_SIZE_PIXELS)}`;
+
+            if (isDragging && selectedBrick) {
+                selectedBrick.x = mouseX - dragStartX;
+                selectedBrick.y = mouseY - dragStartY;
+                // Snap to even studs for Brickadia compatibility
+                if (gridVisible) {
+                    selectedBrick.x = Math.round(selectedBrick.x / (STUD_SIZE_PIXELS * 2)) * (STUD_SIZE_PIXELS * 2);
+                    selectedBrick.y = Math.round(selectedBrick.y / (STUD_SIZE_PIXELS * 2)) * (STUD_SIZE_PIXELS * 2);
+                }
+                drawBricks();
+                updateSelectedBrickInfo();
+                updateValidationStatus();
+            }
+        }
+
+        function handleMouseUp(e) {
+            isDragging = false;
+        }
+
+        function handleMouseLeave(e) {
+            isDragging = false;
+        }
+
+        function handleMouseWheel(e) {
+            e.preventDefault();
+            const zoomChange = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoom = zoomLevel * zoomChange;
+
+            // Clamp zoom level
+            if (newZoom >= 0.1 && newZoom <= 5.0) {
+                zoomLevel = newZoom;
+                document.getElementById('zoomSlider').value = zoomLevel * 100;
+                document.getElementById('zoomValue').textContent = Math.round(zoomLevel * 100) + '%';
+                updateCanvasInfo();
+                drawBricks();
+            }
+        }
+
+        function getBrickAtPosition(x, y) {
+            // Check bricks in reverse order (topmost first)
+            for (let i = bricks.length - 1; i >= 0; i--) {
+                const brick = bricks[i];
+                if (x >= brick.x && x <= brick.x + brick.sx * 2 &&
+                    y >= brick.y && y <= brick.y + brick.sy * 2) {
+                    return brick;
+                }
+            }
+            return null;
+        }
+
+        function addBrickAtPosition(x, y) {
+            // Add a standard brick (1x1x1 stud) at the snapped position
+            const snappedX = Math.round(x / (STUD_SIZE_PIXELS * 2)) * (STUD_SIZE_PIXELS * 2);
+            const snappedY = Math.round(y / (STUD_SIZE_PIXELS * 2)) * (STUD_SIZE_PIXELS * 2);
+
+            const newBrick = {
+                id: `brick_${Date.now()}`,
+                x: snappedX,
+                y: snappedY,
+                z: currentCourse * STUD_SIZE_PIXELS * BRICK_HEIGHT_STUDS, // Position at selected course
+                sx: STUD_SIZE_PIXELS * STANDARD_BRICK_WIDTH_STUDS / 2, // Half-width in pixels
+                sy: STUD_SIZE_PIXELS * STANDARD_BRICK_LENGTH_STUDS / 2, // Half-length in pixels
+                sz: STUD_SIZE_PIXELS * BRICK_HEIGHT_STUDS / 2, // Half-height in pixels
+                course: currentCourse,
+                orient: 'H', // Default horizontal orientation
+                a: 0,
+                b: STANDARD_BRICK_LENGTH_STUDS, // 2 studs long
+                line: Math.round(snappedY / STUD_SIZE_PIXELS), // Line in studs
+                color: getRandomColor(),
+                label: `New Brick`,
+                data: {}
+            };
+
+            bricks.push(newBrick);
+            selectedBrick = newBrick;
+            drawBricks();
+            updateSelectedBrickInfo();
+            updateValidationStatus();
+        }
+
+        function addDoorAtPosition(x, y) {
+            // Add a door opening (requires special handling in validation)
+            const snappedX = Math.round(x / (STUD_SIZE_PIXELS * 2)) * (STUD_SIZE_PIXELS * 2);
+            const snappedY = Math.round(y / (STUD_SIZE_PIXELS * 2)) * (STUD_SIZE_PIXELS * 2);
+
+            // Door: 1 stud wide, 2 studs tall, opens in courses 0-2
+            const newBrick = {
+                id: `door_${Date.now()}`,
+                x: snappedX,
+                y: snappedY,
+                z: 0, // Doors start at ground level
+                sx: STUD_SIZE_PIXELS * 0.5, // Half-width: 0.5 stud
+                sy: STUD_SIZE_PIXELS, // Half-length: 1 stud
+                sz: STUD_SIZE_PIXELS, // Height: 2 studs (half is 1 stud)
+                course: 0, // Will be validated against door courses
+                orient: 'H',
+                a: 0,
+                b: 2, // 2 studs wide
+                line: Math.round(snappedY / STUD_SIZE_PIXELS),
+                color: '#8B0000', // Dark red for doors
+                label: `Door`,
+                data: { isDoor: true }
+            };
+
+            bricks.push(newBrick);
+            selectedBrick = newBrick;
+            drawBricks();
+            updateSelectedBrickInfo();
+            updateValidationStatus();
+        }
+
+        function addWindowAtPosition(x, y) {
+            // Add a window opening
+            const snappedX = Math.round(x / (STUD_SIZE_PIXELS * 2)) * (STUD_SIZE_PIXELS * 2);
+            const snappedY = Math.round(y / (STUD_SIZE_PIXELS * 2)) * (STUD_SIZE_PIXELS * 2);
+
+            // Window: 2 studs wide, 2 studs tall, sill at course 2, opening in courses 4-5
+            const newBrick = {
+                id: `window_${Date.now()}`,
+                x: snappedX,
+                y: snappedY,
+                z: STUD_SIZE_PIXELS * 2 * BRICK_HEIGHT_STUDS, // Sill at course 2
+                sx: STUD_SIZE_PIXELS, // Half-width: 1 stud
+                sy: STUD_SIZE_PIXELS, // Half-length: 1 stud
+                sz: STUD_SIZE_PIXELS, // Height: 2 studs (half is 1 stud)
+                course: 4, // Will be validated against window courses
+                orient: 'H',
+                a: 0,
+                b: 2, // 2 studs wide
+                line: Math.round(snappedY / STUD_SIZE_PIXELS),
+                color: '#1E90FF', // Dodger blue for windows
+                label: `Window`,
+                data: { isWindow: true }
+            };
+
+            bricks.push(newBrick);
+            selectedBrick = newBrick;
+            drawBricks();
+            updateSelectedBrickInfo();
+            updateValidationStatus();
+        }
+
+        function deleteBrick(brick) {
+            const index = bricks.indexOf(brick);
+            if (index !== -1) {
+                bricks.splice(index, 1);
+                if (selectedBrick === brick) {
+                    selectedBrick = null;
+                    updateSelectedBrickInfo();
+                }
+                drawBricks();
+                updateValidationStatus();
+            }
+        }
+
+        function getRandomColor() {
+            const colors = [
+                '#8B4513', '#A0522D', '#CD853F', '#DEB887',  // Brown/tan colors for bricks
+                '#FF4500', '#FF8C00', '#FFA500',             // Orange/red
+                '#8B0000', '#A52A2A', '#B22222',             // Dark reds
+                '#696969', '#808080', '#A9A9A9'              // Greys
+            ];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function drawBricks() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Save context state
+            ctx.save();
+
+            // Apply transformations
+            ctx.translate(canvasOffsetX, canvasOffsetY);
+            ctx.scale(zoomLevel, zoomLevel);
+
+            // Draw grid if enabled
+            if (gridVisible) {
+                drawGrid();
+            }
+
+            // Draw bricks
+            bricks.forEach((brick, index) => {
+                // Determine color based on brick type
+                let fillColor = brick.color;
+                if (brick.data && brick.data.isDoor) {
+                    fillColor = '#8B0000';
+                } else if (brick.data && brick.data.isWindow) {
+                    fillColor = '#1E90FF';
+                }
+
+                // Brick body
+                ctx.fillStyle = fillColor;
+                ctx.fillRect(brick.x, brick.y, brick.sx * 2, brick.sy * 2);
+
+                // Brick border
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(brick.x, brick.y, brick.sx * 2, brick.sy * 2);
+
+                // Brick label
+                ctx.fillStyle = '#000';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(brick.label, brick.x + brick.sx, brick.y + brick.sy);
+
+                // Selection indicator
+                if (brick === selectedBrick) {
+                    ctx.strokeStyle = '#3498db';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(brick.x - 2, brick.y - 2, brick.sx * 2 + 4, brick.sy * 2 + 4);
+                }
+            });
+
+            // Restore context state
+            ctx.restore();
+        }
+
+        function drawGrid() {
+            ctx.save();
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 0.5;
+
+            // Vertical lines (every stud)
+            for (let x = 0; x * STUD_SIZE_PIXELS < canvas.width / zoomLevel; x += STUD_SIZE_PIXELS) {
+                ctx.beginPath();
+                ctx.moveTo(x * STUD_SIZE_PIXELS, 0);
+                ctx.lineTo(x * STUD_SIZE_PIXELS, (canvas.height / zoomLevel) + 1000);
+                ctx.stroke();
+            }
+
+            // Horizontal lines (every stud)
+            for (let y = 0; y * STUD_SIZE_PIXELS < canvas.height / zoomLevel; y += STUD_SIZE_PIXELS) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * STUD_SIZE_PIXELS);
+                ctx.lineTo((canvas.width / zoomLevel) + 1000, y * STUD_SIZE_PIXELS);
+                ctx.stroke();
+            }
+
+            // Even stud lines (highlighted for snapping)
+            ctx.strokeStyle = '#bbb';
+            ctx.lineWidth = 0.7;
+            for (let x = 0; x * STUD_SIZE_PIXELS * 2 < canvas.width / zoomLevel; x += STUD_SIZE_PIXELS * 2) {
+                ctx.beginPath();
+                ctx.moveTo(x * STUD_SIZE_PIXELS * 2, 0);
+                ctx.lineTo(x * STUD_SIZE_PIXELS * 2, (canvas.height / zoomLevel) + 1000);
+                ctx.stroke();
+            }
+
+            for (let y = 0; y * STUD_SIZE_PIXELS * 2 < canvas.height / zoomLevel; y += STUD_SIZE_PIXELS * 2) {
+                ctx.beginPath();
+                ctx.moveTo(0, y * STUD_SIZE_PIXELS * 2);
+                ctx.lineTo((canvas.width / zoomLevel) + 1000, y * STUD_SIZE_PIXELS * 2);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        function updateSelectedBrickInfo() {
+            const infoDiv = document.getElementById('selectedBrickInfo');
+            if (selectedBrick) {
+                const studX = Math.round(selectedBrick.x / STUD_SIZE_PIXELS);
+                const studY = Math.round(selectedBrick.y / STUD_SIZE_PIXELS);
+                const studZ = Math.round(selectedBrick.z / STUD_SIZE_PIXELS);
+                infoDiv.innerHTML = `
+                    <strong>Selected:</strong> ${selectedBrick.label}<br>
+                    <small>Position: (${studX}, ${studY}, ${studZ}) studs<br>
+                    Course: ${selectedBrick.course}<br>
+                    Orientation: ${selectedBrick.orient}<br>
+                    Size: ${selectedBrick.sx * 2 / STUD_SIZE_PIXELS}×${selectedBrick.sy * 2 / STUD_SIZE_PIXELS} studs<br>
+                    A/B: ${selectedBrick.a}/${selectedBrick.b}<br>
+                    Line: ${selectedBrick.line}</small>
+                `;
+            } else {
+                infoDiv.innerHTML = '<strong>Selected:</strong> None';
+            }
+        }
+
+        function resetView() {
+            canvasOffsetX = 0;
+            canvasOffsetY = 0;
+            zoomLevel = 1.0;
+            document.getElementById('zoomSlider').value = 100;
+            document.getElementById('zoomValue').textContent = '100%';
+            drawBricks();
+            updateCanvasInfo();
+        }
+
+        function toggleGrid() {
+            gridVisible = !gridVisible;
+            document.getElementById('gridToggleBtn').textContent =
+                gridVisible ? 'Hide Grid' : 'Show Grid';
+            drawBricks();
+        }
+
+        function updateCanvasInfo() {
+            document.getElementById('canvasInfo').textContent =
+                `Canvas: ${canvas.width}×${canvas.height} | Zoom: ${Math.round(zoomLevel * 100)}%`;
+        }
+
+        function showError(message) {
+            document.getElementById('status').textContent = `Error: ${message}`;
+            // Also show in sidebar for visibility
+            const existingError = document.querySelector('.error');
+            if (!existingError) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error';
+                errorDiv.textContent = message;
+                document.querySelector('.sidebar').appendChild(errorDiv);
+
+                // Remove error after 5 seconds
+                setTimeout(() => {
+                    if (errorDiv.parentNode) {
+                        errorDiv.parentNode.removeChild(errorDiv);
+                    }
+                }, 5000);
+            }
+        }
+
+        function saveCurrentFile() {
+            if (!currentFileName) {
+                showError('No file loaded to save');
+                return;
+            }
+
+            // Convert to world format for saving
+            const worldBricks = convertBricksToWorldFormat();
+            const dataToSave = {
+                bricks: worldBricks,
+                metadata: {
+                    author: { id: "editor-user", name: "Brickadia Editor" },
+                    map: "Edited Map",
+                    description: "Edited with Brickadia Editor",
+                    version: 10,
+                    game_version: 1000
+                }
+            };
+
+            const content = JSON.stringify(dataToSave, null, 2);
+
+            // In a real app, we would send this to a server endpoint
+            // For now, we'll create a download link
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = currentFileName.endsWith('.json') ? currentFileName : currentFileName + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            document.getElementById('status').textContent = `Saved ${currentFileName}`;
+        }
+
+        function exportAsJson() {
+            const worldBricks = convertBricksToWorldFormat();
+            const data = {
+                bricks: worldBricks
+            };
+            const content = JSON.stringify(data, null, 2);
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'export.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            document.getElementById('status').textContent = 'Exported as JSON';
+        }
+
+        function validateGeometryHandler() {
+            if (bricks.length === 0) {
+                document.getElementById('validationStatus').textContent = 'Validation: No bricks to validate';
+                document.getElementById('validationStatus').className = 'validation-status warning';
+                return;
+            }
+
+            try {
+                // Convert to world brick format for validation
+                const worldBricks = convertBricksToWorldFormat();
+
+                // Create mock runs for validation (simplified)
+                const mockRuns = [];
+                // Group bricks by orientation and approximate runs
+                const hBricks = worldBricks.filter(b => b.orient === 'H');
+                const vBricks = worldBricks.filter(b => b.orient === 'V');
+
+                // Create simple runs from brick clusters (this is a simplification)
+                if (hBricks.length > 0) {
+                    const yPositions = [...new Set(hBricks.map(b => Math.round(b.y / (CONFIG.STUD * CONFIG.SCALE))))];
+                    yPositions.forEach(y => {
+                        const bricksAtY = hBricks.filter(b => Math.round(b.y / (CONFIG.STUD * CONFIG.SCALE)) === y);
+                        if (bricksAtY.length > 0) {
+                            const xs = bricksAtY.map(b => Math.round(b.x / (CONFIG.STUD * CONFIG.SCALE)));
+                            mockRuns.push({
+                                orient: 'H',
+                                line: y,
+                                start: Math.min(...xs),
+                                end: Math.max(...xs),
+                                openings: []
+                            });
+                        }
+                    });
+                }
+
+                if (vBricks.length > 0) {
+                    const xPositions = [...new Set(vBricks.map(b => Math.round(b.x / (CONFIG.STUD * CONFIG.SCALE))))];
+                    xPositions.forEach(x => {
+                        const bricksAtX = vBricks.filter(b => Math.round(b.x / (CONFIG.STUD * CONFIG.SCALE)) === x);
+                        if (bricksAtX.length > 0) {
+                            const ys = bricksAtX.map(b => Math.round(b.y / (CONFIG.STUD * CONFIG.SCALE)));
+                            mockRuns.push({
+                                orient: 'V',
+                                line: x,
+                                start: Math.min(...ys),
+                                end: Math.max(...ys),
+                                openings: []
+                            });
+                        }
+                    });
+                }
+
+                // Validate geometry
+                const violations = validateGeometry(mockRuns, worldBricks, CONFIG);
+
+                if (violations.length === 0) {
+                    document.getElementById('validationStatus').textContent = 'Validation: PASSED - Geometry is valid';
+                    document.getElementById('validationStatus').className = 'validation-status valid';
+                } else {
+                    let message = `Validation: FAILED - ${violations.length} violation(s)`;
+                    if (violations.length <= 3) {
+                        message += ': ' + violations.map(v => v.split(':')[0]).join(', ');
+                    }
+                    document.getElementById('validationStatus').textContent = message;
+                    document.getElementById('validationStatus').className = 'validation-status invalid';
+                }
+            } catch (error) {
+                document.getElementById('validationStatus').textContent = `Validation Error: ${error.message}`;
+                document.getElementById('validationStatus').className = 'validation-status invalid';
+            }
+        }
+
+        function updateValidationStatus() {
+            validateGeometryHandler();
+        }
+
+        // Mock function to list files in directory (in real app, this would come from server)
+        function loadFileList() {
+            // In a real implementation, this would fetch from /api/files
+            // For demo, we'll show some common file types from this project
+            const commonFiles = [
+                'bricks_debug.json',
+                'jail_walls.brs',
+                'jail_walls.brz',
+                'floorplan_runs.json',
+                'openings.json',
+                'wall_segments.json'
+            ];
+
+            // Check which files actually exist (this is simplified)
+            const fileListDiv = document.createElement('div');
+            fileListDiv.innerHTML = '<h3>📂 Common Files</h3>';
+
+            commonFiles.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `📄 ${file}`;
+                fileItem.style.cursor = 'pointer';
+                fileItem.style.padding = '5px';
+                fileItem.style.margin = '2px 0';
+                fileItem.style.borderRadius = '3px';
+                fileItem.style.backgroundColor = '#34495e';
+                fileItem.onclick = () => {
+                    // In real app, this would load the file
+                    // For demo, we'll simulate loading
+                    loadDemoFile(file);
+                };
+                fileListDiv.appendChild(fileItem);
+            });
+
+            // Insert after the help text
+            const helpText = document.querySelector('.help-text');
+            helpText.parentNode.insertBefore(fileListDiv, helpText.nextSibling);
+        }
+
+        function loadDemoFile(filename) {
+            // Simulate loading a file - in real app, this would fetch from server
+            document.getElementById('status').textContent = `Loading ${filename}...`;
+
+            // Create some demo data based on filename
+            let demoData;
+            if (filename === 'bricks_debug.json') {
+                demoData = Array.from({length: 10}, (_, i) => ({
+                    id: `brick_${i}`,
+                    x: i * 20,
+                    y: i % 2 * 30,
+                    z: 0,
+                    sx: 10,
+                    sy: 20,
+                    sz: 10,
+                    course: i % 6,
+                    orient: i % 2 === 0 ? 'H' : 'V',
+                    a: 0,
+                    b: 2,
+                    line: Math.floor(i * 20 / 20),
+                    color: ['#8B4513', '#A0522D', '#CD853F'][i % 3],
+                    label: `Wall Segment ${i}`
+                }));
+            } else if (filename === 'jail_walls.brs' || filename === 'jail_walls.brz') {
+                demoData = Array.from({length: 20}, (_, i) => ({
+                    id: `wall_${i}`,
+                    x: (i % 5) * 40,
+                    y: Math.floor(i / 5) * 40,
+                    z: 0,
+                    sx: 10,
+                    sy: 20,
+                    sz: 10,
+                    course: i % 6,
+                    orient: i % 2 === 0 ? 'H' : 'V',
+                    a: 0,
+                    b: 2,
+                    line: Math.floor(((i % 5) * 40) / 20),
+                    color: '#654321',
+                    label: `Wall ${i}`
+                }));
+            } else {
+                demoData = [{
+                    id: 'demo_item',
+                    x: 100,
+                    y: 100,
+                    z: 0,
+                    sx: 20,
+                    sy: 40,
+                    sz: 20,
+                    course: 0,
+                    orient: 'H',
+                    a: 0,
+                    b: 2,
+                    line: 5,
+                    color: '#3498db',
+                    label: 'Demo Item'
+                }];
+            }
+
+            loadFileData(demoData, {name: filename});
+        }
+    </script>
+</body>
+</html>

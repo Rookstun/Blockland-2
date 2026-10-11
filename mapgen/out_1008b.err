@@ -1,0 +1,1130 @@
+Mountain Deep: site cells 624,700 (anchor 652,723), ground raised 2.7 voxels on average
+Sunken Keep: site cells 512,704 (anchor 530,717), ground raised 17.4 voxels on average
+Hollow Crypt: site cells 474,580 (anchor 491,592), ground raised 2.5 voxels on average
+river: 886 cells long, 9 wide, level NaN -> NaN (town 46)
+villages: 1555 candidate sites {"town":3844,"dungeon":2925,"swamp":2808,"wet":28615,"high":654}
+outpost 1 (t 0.30) found no flat open ground near 490,478
+outpost 10 (t 0.75) found no flat open ground near 543,729
+outposts: T1 T1 T2 T3 T3 T4 T4 T5 T5 T6 T7 T7 T7
+spawn ring 5 found no flat open ground near 275,439
+spawn ring: 11 of 12 spots
+henge: site cells 296,505, ground 27
+ruins: 3 abandoned settlements of 60 sites
+camps: 5 goblin camps of 119 sites
+tunnels: 123 cells
+caves: 21 of 363254 candidate sites
+Hollow Crypt: 3 floors, 17550 bricks, 1 atriums, 7 spawners
+Sunken Keep: 4 floors, 29011 bricks, 2 atriums, 13 spawners
+Mountain Deep: 5 floors, 35746 bricks, 2 atriums, 18 spawners
+signs: 16 (Lumbrick, Lumbrick, Lumbrick, Lumbrick, Millwell, Fenvale, Rookfield, Ashhollow, Pikemere, Kingate, Larkstead, Wynby, Rookfield, Ruins of, Ruins of, Ruins of)
+settlements 3 (7 goblins), camps 5 (11 goblins), details 375 {"cairn":80,"mushrooms":22,"bones":103,"firering":40,"log":31,"stump":44,"cart":31,"shrine":18,"signpost":6}
+bridges: 67 deck cells
+{
+ "seed": 635752986,
+ "cells": 864,
+ "mapStuds": 3456,
+ "waterHeight": 270,
+ "town": {
+  "center": [
+   -17420,
+   -13980,
+   576
+  ],
+  "bricks": 47767,
+  "buildings": {
+   "castle": 1,
+   "chapel": 1,
+   "bank": 1,
+   "tavern": 1,
+   "bridge": 1,
+   "windmill": 1,
+   "cottage": 5,
+   "townhouse": 3,
+   "vegetable garden": 1,
+   "shop": 1,
+   "shop: general": 1
+  },
+  "stalls": 15,
+  "lamps": 21,
+  "trees": 14,
+  "houseShops": [
+   {
+    "at": [
+     -1035,
+     330,
+     16
+    ],
+    "orient": 18,
+    "tier": "bronze"
+   },
+   {
+    "at": [
+     -1905,
+     190,
+     16
+    ],
+    "orient": 16,
+    "tier": "iron"
+   },
+   {
+    "at": [
+     -2375,
+     60,
+     16
+    ],
+    "orient": 16,
+    "tier": "iron"
+   },
+   {
+    "at": [
+     -930,
+     15,
+     16
+    ],
+    "orient": 19,
+    "tier": "iron"
+   }
+  ],
+  "potSpots": [
+   [
+    -1540,
+    160
+   ],
+   [
+    -1500,
+    160
+   ],
+   [
+    -2060,
+    190
+   ],
+   [
+    -2020,
+    190
+   ],
+   [
+    -840,
+    1710
+   ],
+   [
+    -840,
+    1750
+   ],
+   [
+    320,
+    -980
+   ],
+   [
+    320,
+    -940
+   ],
+   [
+    140,
+    -1950
+   ],
+   [
+    140,
+    -1910
+   ],
+   [
+    -130,
+    890
+   ],
+   [
+    -130,
+    930
+   ]
+  ],
+  "props": {
+   "crates": 8,
+   "pots": 6,
+   "planter": 3,
+   "bench": 4,
+   "board": 1,
+   "hay": 2,
+   "barrels": 2
+  },
+  "taken": [
+   [
+    3,
+    10,
+    7,
+    12
+   ],
+   [
+    3,
+    14,
+    7,
+    16
+   ],
+   [
+    2,
+    5,
+    4,
+    7
+   ],
+   [
+    4,
+    5,
+    6,
+    7
+   ],
+   [
+    2,
+    3,
+    4,
+    5
+   ],
+   [
+    32,
+    5,
+    34,
+    7
+   ],
+   [
+    32,
+    3,
+    34,
+    5
+   ],
+   [
+    30,
+    5,
+    32,
+    7
+   ],
+   [
+    2,
+    25,
+    4,
+    27
+   ],
+   [
+    4,
+    25,
+    6,
+    27
+   ],
+   [
+    2,
+    23,
+    4,
+    25
+   ],
+   [
+    15,
+    25,
+    17,
+    27
+   ],
+   [
+    25,
+    26,
+    29,
+    28
+   ]
+  ],
+  "rejects": {
+   "taken": 304,
+   "path": 24,
+   "river": 17,
+   "edge": 37
+  },
+  "townShops": [
+   {
+    "at": [
+     130,
+     380,
+     12
+    ],
+    "tier": "bronze_dagger",
+    "orient": 16
+   },
+   {
+    "at": [
+     170,
+     360,
+     12
+    ],
+    "tier": "iron_dagger",
+    "orient": 16
+   },
+   {
+    "at": [
+     210,
+     340,
+     12
+    ],
+    "tier": "bronze",
+    "orient": 16
+   },
+   {
+    "at": [
+     250,
+     320,
+     12
+    ],
+    "tier": "iron",
+    "orient": 16
+   },
+   {
+    "at": [
+     280,
+     290,
+     12
+    ],
+    "tier": "bronze_longsword",
+    "orient": 16
+   },
+   {
+    "at": [
+     310,
+     250,
+     12
+    ],
+    "tier": "iron_longsword",
+    "orient": 19
+   },
+   {
+    "at": [
+     330,
+     220,
+     12
+    ],
+    "tier": "bow",
+    "orient": 19,
+    "prefab": "bow_bow"
+   },
+   {
+    "at": [
+     360,
+     180,
+     12
+    ],
+    "tier": "oak",
+    "orient": 19,
+    "prefab": "bow_oak"
+   }
+  ],
+  "gables": [
+   {
+    "box": [
+     1310,
+     570,
+     1590,
+     1010
+    ],
+    "zBase": 168,
+    "rise": 144,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     440,
+     -940,
+     680,
+     -580
+    ],
+    "zBase": 216,
+    "rise": 96,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     -1330,
+     290,
+     -990,
+     550
+    ],
+    "zBase": 156,
+    "rise": 96,
+    "ridgeAlongX": true,
+    "fill": true
+   },
+   {
+    "box": [
+     -1950,
+     -30,
+     -1610,
+     230
+    ],
+    "zBase": 156,
+    "rise": 72,
+    "ridgeAlongX": true,
+    "fill": true
+   },
+   {
+    "box": [
+     -2420,
+     -160,
+     -2080,
+     100
+    ],
+    "zBase": 156,
+    "rise": 72,
+    "ridgeAlongX": true,
+    "fill": true
+   },
+   {
+    "box": [
+     -1190,
+     -320,
+     -890,
+     60
+    ],
+    "zBase": 312,
+    "rise": 120,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     520,
+     -500,
+     900,
+     -200
+    ],
+    "zBase": 312,
+    "rise": 108,
+    "ridgeAlongX": true,
+    "fill": true
+   }
+  ],
+  "thinnedOut": 0,
+  "restoredAfterClear": 0
+ },
+ "caves": 21,
+ "carvedVoxels": 112669,
+ "terrainBricks": 442934,
+ "dungeonBricks": 82307,
+ "decorBricks": 337604,
+ "total": 862845,
+ "trees": 231,
+ "boulders": 60,
+ "ramps": 179739,
+ "plants": {
+  "B_Lotus_1x1": 680,
+  "B_Lotus_2x2": 637,
+  "B_Tulip": 872,
+  "B_Fern": 5963,
+  "B_Small_Flower": 2551,
+  "B_Flower": 722,
+  "B_Rose": 810,
+  "B_Branch": 734,
+  "B_Bush": 1252,
+  "B_Pine_Tree": 133,
+  "B_Leaf_Bush": 4,
+  "B_Pumpkin": 3
+ },
+ "desert": {
+  "centre": [
+   -12780,
+   -540
+  ],
+  "r": 4800,
+  "cacti": 1076,
+  "villages": 2
+ },
+ "swamp": {
+  "center": [
+   -21720,
+   -7120
+  ],
+  "gate": [
+   0,
+   1
+  ],
+  "zombieSpawners": 18,
+  "deadTrees": 27,
+  "turds": 45
+ },
+ "villages": [
+  {
+   "name": "Millwell",
+   "center": [
+    -19580,
+    -19180,
+    516
+   ],
+   "shops": [
+    "shop_steel_dagger",
+    "shop_steel",
+    "shop_steel_longsword",
+    "bow_willow"
+   ],
+   "buildings": {
+    "cottage": 2,
+    "townhouse": 1,
+    "village": 1
+   }
+  },
+  {
+   "name": "Fenvale",
+   "center": [
+    -23420,
+    -13580,
+    444
+   ],
+   "shops": [
+    "shop_steel_dagger",
+    "shop_steel",
+    "shop_steel_longsword",
+    "bow_willow"
+   ],
+   "buildings": {
+    "cottage": 1,
+    "field": 1,
+    "watchtower": 1,
+    "village": 1
+   }
+  },
+  {
+   "name": "Rookfield",
+   "center": [
+    -17820,
+    -7340,
+    408
+   ],
+   "shops": [
+    "shop_steel_dagger",
+    "shop_steel",
+    "shop_steel_longsword",
+    "bow_willow",
+    "shop_black_dagger",
+    "shop_black",
+    "shop_black_longsword"
+   ],
+   "buildings": {
+    "cottage": 1,
+    "field": 1,
+    "pen": 1,
+    "village": 1
+   }
+  },
+  {
+   "name": "Ashhollow",
+   "center": [
+    -10780,
+    -15660,
+    696
+   ],
+   "shops": [
+    "shop_steel_dagger",
+    "shop_steel",
+    "shop_steel_longsword",
+    "bow_willow",
+    "shop_black_dagger",
+    "shop_black",
+    "shop_black_longsword"
+   ],
+   "buildings": {
+    "field": 2,
+    "village": 1
+   }
+  },
+  {
+   "name": "Pikemere",
+   "center": [
+    -12220,
+    -8460,
+    960
+   ],
+   "shops": [
+    "shop_black_dagger",
+    "shop_black",
+    "shop_black_longsword",
+    "bow_willow",
+    "shop_mithril_dagger",
+    "shop_mithril",
+    "shop_mithril_longsword",
+    "bow_maple"
+   ],
+   "buildings": {
+    "cottage": 3,
+    "pen": 1,
+    "watchtower": 1,
+    "village": 1
+   }
+  },
+  {
+   "name": "Kingate",
+   "center": [
+    -6460,
+    -9420,
+    624
+   ],
+   "shops": [
+    "shop_black_dagger",
+    "shop_black",
+    "shop_black_longsword",
+    "bow_willow",
+    "shop_mithril_dagger",
+    "shop_mithril",
+    "shop_mithril_longsword",
+    "bow_maple"
+   ],
+   "buildings": {
+    "townhouse": 1,
+    "cottage": 2,
+    "field": 1,
+    "watchtower": 1,
+    "village": 1
+   }
+  },
+  {
+   "name": "Larkstead",
+   "center": [
+    -14460,
+    -1100,
+    852
+   ],
+   "shops": [
+    "shop_mithril_dagger",
+    "shop_mithril",
+    "shop_mithril_longsword",
+    "bow_maple",
+    "shop_adamant_dagger",
+    "shop_adamant",
+    "shop_adamant_longsword",
+    "bow_yew"
+   ],
+   "buildings": {
+    "gun store": 1,
+    "western": 2,
+    "watchtower": 1,
+    "village": 1
+   }
+  },
+  {
+   "name": "Wynby",
+   "center": [
+    -9340,
+    2100,
+    852
+   ],
+   "shops": [
+    "shop_mithril_dagger",
+    "shop_mithril",
+    "shop_mithril_longsword",
+    "bow_maple",
+    "shop_adamant_dagger",
+    "shop_adamant",
+    "shop_adamant_longsword",
+    "bow_yew"
+   ],
+   "buildings": {
+    "gun store": 1,
+    "pen": 2,
+    "windmill": 1,
+    "village": 1
+   }
+  },
+  {
+   "name": "Rookfield",
+   "center": [
+    -3100,
+    -1900,
+    924
+   ],
+   "shops": [
+    "shop_adamant_dagger",
+    "shop_adamant",
+    "shop_adamant_longsword",
+    "bow_yew",
+    "shop_rune_dagger",
+    "shop_rune",
+    "shop_rune_longsword",
+    "bow_magic"
+   ],
+   "buildings": {
+    "cottage": 2,
+    "field": 1,
+    "village": 1
+   }
+  }
+ ],
+ "townName": "Lumbrick",
+ "checkpoints": [
+  {
+   "at": [
+    -11080,
+    -6370,
+    866
+   ],
+   "where": "Hollow Crypt"
+  },
+  {
+   "at": [
+    -11160,
+    -1410,
+    1058
+   ],
+   "where": "Sunken Keep"
+  },
+  {
+   "at": [
+    -6680,
+    -1570,
+    1250
+   ],
+   "where": "Mountain Deep"
+  },
+  {
+   "at": [
+    -19800,
+    -9320,
+    338
+   ],
+   "where": "Swamp road"
+  },
+  {
+   "at": [
+    -19580,
+    -19280,
+    518
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -23420,
+    -13680,
+    446
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -17820,
+    -7440,
+    410
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -10780,
+    -15760,
+    698
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -12220,
+    -8560,
+    962
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -6460,
+    -9520,
+    626
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -14460,
+    -1200,
+    854
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -9340,
+    2000,
+    854
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -3100,
+    -2000,
+    926
+   ],
+   "where": "village"
+  }
+ ],
+ "bounds": {
+  "x": [
+   -31660,
+   2900
+  ],
+  "y": [
+   -29660,
+   4900
+  ]
+ },
+ "spawners": {
+  "Handaxe": 13,
+  "Arming Sword": 8,
+  "Spear": 15,
+  "Longsword": 10,
+  "Bow": 13,
+  "Zweihander": 5,
+  "Battleaxe": 11
+ },
+ "caveDoors": [
+  [
+   -14040,
+   -9120,
+   816
+  ],
+  [
+   -6920,
+   -12600,
+   1236
+  ],
+  [
+   -25360,
+   -17160,
+   1044
+  ],
+  [
+   -4320,
+   -4120,
+   1020
+  ],
+  [
+   -10920,
+   -7240,
+   1104
+  ],
+  [
+   -14120,
+   -13080,
+   1332
+  ],
+  [
+   -1360,
+   -600,
+   1116
+  ],
+  [
+   -11200,
+   -14320,
+   1332
+  ],
+  [
+   -21280,
+   -12920,
+   816
+  ],
+  [
+   -7560,
+   680,
+   864
+  ],
+  [
+   -7600,
+   3320,
+   444
+  ],
+  [
+   -22040,
+   -16840,
+   972
+  ],
+  [
+   -9000,
+   -13720,
+   1260
+  ],
+  [
+   -3080,
+   1480,
+   1248
+  ],
+  [
+   -11680,
+   -11240,
+   1200
+  ],
+  [
+   -9560,
+   -4480,
+   1380
+  ],
+  [
+   -15080,
+   -17280,
+   960
+  ],
+  [
+   -24400,
+   -19680,
+   1104
+  ],
+  [
+   -7920,
+   -9840,
+   1344
+  ],
+  [
+   -21520,
+   -19400,
+   1008
+  ],
+  [
+   -7800,
+   -1800,
+   1224
+  ]
+ ],
+ "henge": [
+  -19480,
+  -9120,
+  336
+ ],
+ "ruins": [
+  {
+   "at": [
+    -14680,
+    -7240,
+    408
+   ],
+   "goblins": 3
+  },
+  {
+   "at": [
+    -17560,
+    -4520,
+    408
+   ],
+   "goblins": 2
+  },
+  {
+   "at": [
+    -13880,
+    1720,
+    876
+   ],
+   "goblins": 2
+  }
+ ],
+ "camps": [
+  {
+   "at": [
+    -15680,
+    -5400,
+    456
+   ],
+   "goblins": 2
+  },
+  {
+   "at": [
+    -9800,
+    -17280,
+    348
+   ],
+   "goblins": 2
+  },
+  {
+   "at": [
+    -18560,
+    -3120,
+    492
+   ],
+   "goblins": 3
+  },
+  {
+   "at": [
+    -16880,
+    -8640,
+    336
+   ],
+   "goblins": 2
+  },
+  {
+   "at": [
+    -7160,
+    -6120,
+    828
+   ],
+   "goblins": 2
+  }
+ ],
+ "details": {
+  "count": 375,
+  "kinds": {
+   "cairn": 80,
+   "mushrooms": 22,
+   "bones": 103,
+   "firering": 40,
+   "log": 31,
+   "stump": 44,
+   "cart": 31,
+   "shrine": 18,
+   "signpost": 6
+  }
+ },
+ "outposts": [
+  {
+   "at": [
+    -15760,
+    -9360,
+    696
+   ],
+   "tier": 1,
+   "progress": 0.25
+  },
+  {
+   "at": [
+    -15800,
+    -7000,
+    468
+   ],
+   "tier": 1,
+   "progress": 0.35
+  },
+  {
+   "at": [
+    -11280,
+    -9160,
+    792
+   ],
+   "tier": 2,
+   "progress": 0.4
+  },
+  {
+   "at": [
+    -14400,
+    -5920,
+    480
+   ],
+   "tier": 3,
+   "progress": 0.45
+  },
+  {
+   "at": [
+    -9480,
+    -7280,
+    840
+   ],
+   "tier": 3,
+   "progress": 0.5
+  },
+  {
+   "at": [
+    -12760,
+    -3640,
+    840
+   ],
+   "tier": 4,
+   "progress": 0.55
+  },
+  {
+   "at": [
+    -9760,
+    -6240,
+    840
+   ],
+   "tier": 4,
+   "progress": 0.6
+  },
+  {
+   "at": [
+    -12360,
+    -1440,
+    852
+   ],
+   "tier": 5,
+   "progress": 0.65
+  },
+  {
+   "at": [
+    -8400,
+    -3560,
+    1212
+   ],
+   "tier": 5,
+   "progress": 0.7
+  },
+  {
+   "at": [
+    -6800,
+    -3920,
+    1464
+   ],
+   "tier": 6,
+   "progress": 0.8
+  },
+  {
+   "at": [
+    -8120,
+    -120,
+    960
+   ],
+   "tier": 7,
+   "progress": 0.85
+  },
+  {
+   "at": [
+    -5440,
+    -3200,
+    1056
+   ],
+   "tier": 7,
+   "progress": 0.9
+  },
+  {
+   "at": [
+    -6400,
+    2600,
+    780
+   ],
+   "tier": 7,
+   "progress": 0.95
+  }
+ ],
+ "dungeons": [
+  {
+   "name": "Hollow Crypt",
+   "levels": 3,
+   "entrance": [
+    -10880,
+    -8560,
+    1500
+   ],
+   "center": [
+    -11680,
+    -5440
+   ]
+  },
+  {
+   "name": "Sunken Keep",
+   "levels": 4,
+   "entrance": [
+    -11280,
+    -1400,
+    1092
+   ],
+   "center": [
+    -10160,
+    -480
+   ]
+  },
+  {
+   "name": "Mountain Deep",
+   "levels": 5,
+   "entrance": [
+    -7760,
+    -1560,
+    1560
+   ],
+   "center": [
+    -5680,
+    -640
+   ]
+  }
+ ]
+}
+shifted by 17420,13980,0: town centre now at 0,0
+wrote 173 chunks to C:\Users\pooper\Documents\claudeBS\brickadia\mapgen\out_1008b

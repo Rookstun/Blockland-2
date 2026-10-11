@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple File Editor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            background-color: #f5f5f5;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .sidebar h2 {
+            margin-top: 0;
+            color: #ecf0f1;
+        }
+        .file-tree {
+            margin-top: 20px;
+        }
+        .file-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .file-item:hover {
+            background-color: #34495e;
+        }
+        .file-item.active {
+            background-color: #3498db;
+        }
+        .file-item.folder {
+            font-weight: bold;
+        }
+        .editor-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+        }
+        .editor-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .file-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .file-path {
+            font-size: 0.8em;
+            color: #7f8c8d;
+        }
+        .editor-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        .btn.save {
+            background-color: #27ae60;
+        }
+        .btn.save:hover {
+            background-color: #219a52;
+        }
+        #editor {
+            flex: 1;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            border: none;
+            resize: none;
+            outline: none;
+            background-color: #f8f9fa;
+            color: #2c3e50;
+        }
+        .status-bar {
+            padding: 10px 20px;
+            background-color: #ecf0f1;
+            border-top: 1px solid #ddd;
+            font-size: 0.9em;
+            color: #7f8c8d;
+            display: flex;
+            justify-content: space-between;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+        .error {
+            color: #e74c3c;
+            padding: 20px;
+            background-color: #fdeaea;
+            border-radius: 4px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>File Explorer</h2>
+        <div class="file-tree" id="fileTree">
+            <div class="loading">Loading files...</div>
+        </div>
+    </div>
+
+    <div class="editor-pane">
+        <div class="editor-header">
+            <div class="file-info">
+                <span class="file-name" id="fileName">No file selected</span>
+                <span class="file-path" id="filePath"></span>
+            </div>
+            <div class="editor-actions">
+                <button class="btn" id="saveBtn">Save</button>
+                <button class="btn" id="reloadBtn">Reload</button>
+            </div>
+        </div>
+        <textarea id="editor" placeholder="Select a file to edit..."></textarea>
+        <div class="status-bar">
+            <div id="status">Ready</div>
+            <div id="cursorInfo">Line: 1, Col: 1</div>
+        </div>
+    </div>
+
+    <script>
+        let currentFile = null;
+        let fileContent = '';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFileTree();
+            setupEditor();
+        });
+
+        function loadFileTree() {
+            const fileTree = document.getElementById('fileTree');
+
+            // Fetch file list from the server
+            fetch('/api/files')
+                .then(response => response.json())
+                .then(files => {
+                    displayFileTree(files, fileTree);
+                })
+                .catch(error => {
+                    fileTree.innerHTML = `<div class="error">Error loading files: ${error.message}</div>`;
+                });
+        }
+
+        function displayFileTree(files, container) {
+            container.innerHTML = '';
+
+            // Sort files: directories first, then files
+            const sortedFiles = [...files].sort((a, b) => {
+                if (a.isDirectory && !b.isDirectory) return -1;
+                if (!a.isDirectory && b.isDirectory) return 1;
+                return a.name.localeCompare(b.name);
+            });
+
+            sortedFiles.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = `file-item ${file.isDirectory ? 'folder' : ''}`;
+                fileItem.dataset.path = file.path;
+                fileItem.dataset.isDirectory = file.isDirectory;
+
+                const icon = file.isDirectory ? '📁' : '📄';
+                fileItem.innerHTML = `<span>${icon}</span> <span>${file.name}</span>`;
+
+                if (!file.isDirectory) {
+                    fileItem.addEventListener('click', () => {
+                        selectFile(file);
+                    });
+                } else {
+                    // For directories, we could expand/collapse, but keeping it simple for now
+                    fileItem.style.cursor = 'default';
+                }
+
+                container.appendChild(fileItem);
+            });
+        }
+
+        function selectFile(file) {
+            currentFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('filePath').textContent = file.path;
+            document.getElementById('status').textContent = `Loading ${file.name}...`;
+
+            // Highlight selected file
+            document.querySelectorAll('.file-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.file-item').classList.add('active');
+
+            // Load file content
+            fetch(`/api/file?path=${encodeURIComponent(file.path)}`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.text();
+                })
+                .then(content => {
+                    fileContent = content;
+                    document.getElementById('editor').value = content;
+                    document.getElementById('status').textContent = `Loaded ${file.name}`;
+                    updateCursorInfo();
+                })
+                .catch(error => {
+                    document.getElementById('editor').value = `Error loading file: ${error.message}`;
+                    document.getElementById('status').textContent = `Error loading ${file.name}`;
+                });
+        }
+
+        function setupEditor() {
+            const editor = document.getElementById('editor');
+            const saveBtn = document.getElementById('saveBtn');
+            const reloadBtn = document.getElementById('reloadBtn');
+
+            // Save button
+            saveBtn.addEventListener('click', () => {
+                if (!currentFile) return;
+
+                const newContent = editor.value;
+                document.getElementById('status').textContent = `Saving ${currentFile.name}...`;
+
+                fetch(`/api/file?path=${encodeURIComponent(currentFile.path)}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'text/plain'
+                    },
+                    body: newContent
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    fileContent = newContent;
+                    document.getElementById('status').textContent = `Saved ${currentFile.name}`;
+                })
+                .catch(error => {
+                    document.getElementById('status').textContent = `Error saving ${currentFile.name}`;
+                    console.error('Save error:', error);
+                });
+            });
+
+            // Reload button
+            reloadBtn.addEventListener('click', () => {
+                if (currentFile) {
+                    selectFile(currentFile);
+                }
+            });
+
+            // Update cursor position
+            editor.addEventListener('keyup', updateCursorInfo);
+            editor.addEventListener('click', updateCursorInfo);
+        }
+
+        function updateCursorInfo() {
+            const editor = document.getElementById('editor');
+            const cursorInfo = document.getElementById('cursorInfo');
+
+            const text = editor.value.substring(0, editor.selectionStart);
+            const lines = text.split('\n');
+            const line = lines.length;
+            const col = lines[lines.length - 1].length + 1;
+
+            cursorInfo.textContent = `Line: ${line}, Col: ${col}`;
+        }
+    </script>
+</body>
+</html>

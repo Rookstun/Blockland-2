@@ -1,0 +1,602 @@
+{
+  "width": 500,
+  "height": 500,
+  "runs": [
+    {
+      "orient": "H",
+      "line": 4,
+      "start": 132,
+      "end": 276,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 48,
+      "start": 152,
+      "end": 239,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 79,
+      "start": 152,
+      "end": 176,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 79,
+      "start": 207,
+      "end": 239,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 96,
+      "start": 152,
+      "end": 176,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 95,
+      "start": 207,
+      "end": 239,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 111,
+      "start": 152,
+      "end": 176,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 108,
+      "start": 207,
+      "end": 239,
+      "openings": [
+        {
+          "pos0": 211,
+          "pos1": 235,
+          "type": "window"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 127,
+      "start": 152,
+      "end": 239,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 71,
+      "start": 176,
+      "end": 207,
+      "openings": [
+        {
+          "pos0": 187,
+          "pos1": 192,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 40,
+      "start": 276,
+      "end": 499,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 128,
+      "start": 292,
+      "end": 307,
+      "openings": [
+        {
+          "pos0": 297,
+          "pos1": 302,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 144,
+      "start": 292,
+      "end": 307,
+      "openings": [
+        {
+          "pos0": 297,
+          "pos1": 302,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 144,
+      "start": 320,
+      "end": 363,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 188,
+      "start": 292,
+      "end": 363,
+      "openings": [
+        {
+          "pos0": 343,
+          "pos1": 348,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 188,
+      "start": 376,
+      "end": 447,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 56,
+      "start": 307,
+      "end": 435,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 91,
+      "start": 307,
+      "end": 344,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 104,
+      "start": 320,
+      "end": 447,
+      "openings": [
+        {
+          "pos0": 367,
+          "pos1": 372,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 120,
+      "start": 320,
+      "end": 363,
+      "openings": [
+        {
+          "pos0": 351,
+          "pos1": 356,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 175,
+      "start": 320,
+      "end": 423,
+      "openings": [
+        {
+          "pos0": 343,
+          "pos1": 348,
+          "type": "door"
+        },
+        {
+          "pos0": 388,
+          "pos1": 397,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 219,
+      "start": 320,
+      "end": 363,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 271,
+      "start": 320,
+      "end": 411,
+      "openings": [
+        {
+          "pos0": 339,
+          "pos1": 344,
+          "type": "door"
+        },
+        {
+          "pos0": 355,
+          "pos1": 360,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 282,
+      "start": 320,
+      "end": 335,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 293,
+      "start": 320,
+      "end": 335,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 304,
+      "start": 320,
+      "end": 335,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 315,
+      "start": 320,
+      "end": 347,
+      "openings": [
+        {
+          "pos0": 339,
+          "pos1": 344,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "H",
+      "line": 75,
+      "start": 328,
+      "end": 344,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 207,
+      "start": 328,
+      "end": 347,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 327,
+      "start": 335,
+      "end": 363,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 68,
+      "start": 363,
+      "end": 423,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 231,
+      "start": 376,
+      "end": 411,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 211,
+      "start": 411,
+      "end": 447,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 251,
+      "start": 411,
+      "end": 447,
+      "openings": []
+    },
+    {
+      "orient": "H",
+      "line": 160,
+      "start": 423,
+      "end": 447,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 132,
+      "start": 4,
+      "end": 126,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 276,
+      "start": 4,
+      "end": 40,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 152,
+      "start": 48,
+      "end": 127,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 176,
+      "start": 48,
+      "end": 127,
+      "openings": [
+        {
+          "pos0": 73,
+          "pos1": 78,
+          "type": "door"
+        },
+        {
+          "pos0": 87,
+          "pos1": 92,
+          "type": "door"
+        },
+        {
+          "pos0": 103,
+          "pos1": 108,
+          "type": "door"
+        },
+        {
+          "pos0": 119,
+          "pos1": 124,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 207,
+      "start": 48,
+      "end": 95,
+      "openings": [
+        {
+          "pos0": 73,
+          "pos1": 78,
+          "type": "door"
+        },
+        {
+          "pos0": 87,
+          "pos1": 92,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 207,
+      "start": 108,
+      "end": 127,
+      "openings": [
+        {
+          "pos0": 119,
+          "pos1": 124,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 239,
+      "start": 48,
+      "end": 127,
+      "openings": [
+        {
+          "pos0": 96,
+          "pos1": 101,
+          "type": "door"
+        },
+        {
+          "pos0": 102,
+          "pos1": 107,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 307,
+      "start": 56,
+      "end": 144,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 344,
+      "start": 56,
+      "end": 91,
+      "openings": [
+        {
+          "pos0": 59,
+          "pos1": 64,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 363,
+      "start": 56,
+      "end": 175,
+      "openings": [
+        {
+          "pos0": 154,
+          "pos1": 163,
+          "type": "window"
+        },
+        {
+          "pos0": 164,
+          "pos1": 173,
+          "type": "window"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 363,
+      "start": 188,
+      "end": 327,
+      "openings": [
+        {
+          "pos0": 275,
+          "pos1": 280,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 435,
+      "start": 56,
+      "end": 104,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 384,
+      "start": 68,
+      "end": 104,
+      "openings": [
+        {
+          "pos0": 71,
+          "pos1": 76,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 423,
+      "start": 68,
+      "end": 175,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 320,
+      "start": 104,
+      "end": 175,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 320,
+      "start": 188,
+      "end": 315,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 335,
+      "start": 104,
+      "end": 120,
+      "openings": [
+        {
+          "pos0": 111,
+          "pos1": 116,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 447,
+      "start": 104,
+      "end": 251,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 292,
+      "start": 128,
+      "end": 188,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 328,
+      "start": 188,
+      "end": 207,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 376,
+      "start": 188,
+      "end": 231,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 411,
+      "start": 188,
+      "end": 271,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 347,
+      "start": 207,
+      "end": 219,
+      "openings": []
+    },
+    {
+      "orient": "V",
+      "line": 335,
+      "start": 271,
+      "end": 327,
+      "openings": [
+        {
+          "pos0": 272,
+          "pos1": 277,
+          "type": "door"
+        },
+        {
+          "pos0": 283,
+          "pos1": 288,
+          "type": "door"
+        },
+        {
+          "pos0": 294,
+          "pos1": 299,
+          "type": "door"
+        },
+        {
+          "pos0": 305,
+          "pos1": 310,
+          "type": "door"
+        }
+      ]
+    },
+    {
+      "orient": "V",
+      "line": 347,
+      "start": 271,
+      "end": 315,
+      "openings": []
+    }
+  ],
+  "unplaced_markers": []
+}

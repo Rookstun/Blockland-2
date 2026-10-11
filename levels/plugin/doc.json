@@ -1,0 +1,13 @@
+{
+  "name": "levels",
+  "description": "Levels from the XP leaderboard value (XP orbs from the skeleton_drop chip). !level shows yours, !levels the top 5.",
+  "author": "pooper",
+  "config": {
+    "xp-scale": { "description": "level = floor(sqrt(XP / xp-scale)) + 1", "type": "number", "default": 25 },
+    "poll-seconds": { "description": "How often to read players' XP", "type": "number", "default": 4 }
+  },
+  "commands": [
+    { "name": "!level", "description": "Your level and XP", "example": "!level", "args": [] },
+    { "name": "!levels", "description": "Top 5 levels", "example": "!levels", "args": [] }
+  ]
+}

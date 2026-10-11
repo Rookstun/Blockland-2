@@ -1,0 +1,1157 @@
+Mountain Deep: site cells 998,700 (anchor 998,728), ground raised 7.6 voxels on average
+Sunken Keep: site cells 910,836 (anchor 888,862), ground raised 1.8 voxels on average
+Hollow Crypt: site cells 628,704 (anchor 649,731), ground raised 0.5 voxels on average
+Hollow Crypt: surface keep 6 rooms, 1933 bricks, 3 spawners, gate -1,0
+Sunken Keep: surface keep 7 rooms, 2431 bricks, 5 spawners, gate 0,-1
+Mountain Deep: surface keep 8 rooms, 2739 bricks, 3 spawners, gate 0,1
+river: 1037 cells long, 10 wide, level 84 -> 21 (town 46)
+swamp: no site ({"far":17086,"edge":6166,"town":6480,"dungeon":9030,"water":13222}), relaxing to land 0.45, clearance x0.75
+desert: no site, relaxing to land 0.65, gap x0.7
+volcano: no site, relaxing to land 0.6, gaps x0.75
+volcano: cells 356,344, foot 36, rim 105, lava lake 91, road 1964 cells, 1.5 turns, 4 lava runs
+snow: no site ({"town":4257,"swamp":3652,"desert":5472,"volcano":2790,"river":0,"land":16953}), relaxing to land 0.55, gaps x0.7
+nordic valley: cells 1012,744, ground rough 36 before the peaks
+snow: cells 1008,708, r 100, highest peak 160
+shrubland: cells 624,678, r 76
+villages: 973 candidate sites {"town":3844,"dungeon":6163,"swamp":3866,"wet":59503,"high":180}
+nordic hamlet: cells 1012,744, ground 107, rough 37, snow 1.00
+outpost 3 (t 0.36) found no flat open ground near 638,690
+outposts: T1 T1 T1 T2 T2 T3 T3 T4 T4 T4 T5 T5 T5 T6 T6 T7 T7 T7 T7
+spawn ring 11 found no flat open ground near 555,475
+spawn ring: 11 of 12 spots
+henge: site cells 494,614, ground 30
+route: expanded 4340941, start stop=false town=10, goal H 24
+road 447,596 -> 418,693: no route, laid straight
+route: expanded 1, start stop=true town=94, goal H 62
+road 632,541 -> 766,853: no route, laid straight
+ruins: 4 abandoned settlements of 220 sites
+camps: 4 goblin camps of 104 sites
+holy places and roadside buildings: {"temple":2,"shrine":8,"tavern":2,"warehouse":2,"chapel":2,"library":1,"dininghall":1}
+river valley cap: 35465 cells cut, 379860 voxels
+tunnels: 293 cells
+caves: 12 of 287744 candidate sites
+Hollow Crypt: 3 floors, 19080 bricks, 1 atriums, 8 spawners
+Sunken Keep: 4 floors, 28079 bricks, 2 atriums, 15 spawners
+Mountain Deep: 5 floors, 34045 bricks, 2 atriums, 21 spawners
+gods: temple of Nishen the Frozen Root; temple of Tobtar the Sunken Ember; shrine of Edzib the Iron Mirror; shrine of Mistar the Weeping Anvil; shrine of Astber the Bleeding Mirror; shrine of Agist the Velvet Coil; shrine of Thobid the Velvet Coil; shrine of Misid the Thundering Hammer; shrine of Astath the Hollow Gate; shrine of Abaval the Bitter Anvil
+signs: 12 (Lumbrick, Lumbrick, Lumbrick, Lumbrick, Millford, Stanstead, Oakwick, Stanby, Ruins of, Ruins of, Ruins of, Ruins of)
+settlements 4 (12 goblins), camps 4 (10 goblins), details 500 {"firering":61,"bones":151,"cairn":141,"shrine":18,"cart":40,"stump":35,"log":17,"mushrooms":33,"signpost":4}, 44 off-grid pieces dropped
+bridges: 619 deck cells
+{
+ "seed": 487675143,
+ "cells": 1152,
+ "mapStuds": 4608,
+ "waterHeight": 270,
+ "town": {
+  "center": [
+   -24220,
+   -20300,
+   576
+  ],
+  "bricks": 61648,
+  "buildings": {
+   "castle": 1,
+   "chapel": 1,
+   "bank": 1,
+   "tavern": 1,
+   "bridge": 1,
+   "windmill": 1,
+   "townhouse": 9,
+   "cottage": 10,
+   "shop": 3,
+   "shop: bakery": 2,
+   "shop: smithy": 1
+  },
+  "stalls": 14,
+  "lamps": 28,
+  "trees": 9,
+  "houseShops": [
+   {
+    "at": [
+     -1495,
+     440,
+     16
+    ],
+    "orient": 18,
+    "tier": "bronze"
+   },
+   {
+    "at": [
+     -2015,
+     80,
+     16
+    ],
+    "orient": 16,
+    "tier": "iron"
+   },
+   {
+    "at": [
+     -810,
+     1655,
+     16
+    ],
+    "orient": 17,
+    "tier": "bronze"
+   },
+   {
+    "at": [
+     -1140,
+     1405,
+     16
+    ],
+    "orient": 19,
+    "tier": "bronze"
+   },
+   {
+    "at": [
+     -900,
+     2085,
+     16
+    ],
+    "orient": 17,
+    "tier": "iron"
+   },
+   {
+    "at": [
+     -205,
+     -880,
+     16
+    ],
+    "orient": 18,
+    "tier": "iron"
+   },
+   {
+    "at": [
+     -1600,
+     -575,
+     16
+    ],
+    "orient": 19,
+    "tier": "bronze"
+   },
+   {
+    "at": [
+     1900,
+     -855,
+     16
+    ],
+    "orient": 17,
+    "tier": "bronze"
+   }
+  ],
+  "potSpots": [
+   [
+    1420,
+    0
+   ],
+   [
+    1460,
+    0
+   ],
+   [
+    -1990,
+    360
+   ],
+   [
+    -1950,
+    360
+   ],
+   [
+    -460,
+    550
+   ],
+   [
+    -460,
+    590
+   ],
+   [
+    -930,
+    1100
+   ],
+   [
+    -930,
+    1140
+   ],
+   [
+    -1000,
+    1210
+   ],
+   [
+    -1000,
+    1250
+   ],
+   [
+    -1490,
+    30
+   ],
+   [
+    -1490,
+    70
+   ],
+   [
+    -1230,
+    -620
+   ],
+   [
+    -1230,
+    -580
+   ]
+  ],
+  "props": {
+   "barrels": 5,
+   "bench": 3,
+   "pots": 7,
+   "crates": 7,
+   "planter": 4,
+   "hay": 8,
+   "board": 4
+  },
+  "taken": [
+   [
+    3,
+    10,
+    7,
+    12
+   ],
+   [
+    3,
+    14,
+    7,
+    16
+   ],
+   [
+    13,
+    10,
+    33,
+    12
+   ],
+   [
+    13,
+    14,
+    33,
+    16
+   ],
+   [
+    30,
+    5,
+    33,
+    8
+   ],
+   [
+    11,
+    3,
+    16,
+    7
+   ],
+   [
+    1,
+    3,
+    2,
+    11
+   ],
+   [
+    2,
+    25,
+    4,
+    27
+   ],
+   [
+    4,
+    25,
+    6,
+    27
+   ],
+   [
+    2,
+    23,
+    4,
+    25
+   ],
+   [
+    15,
+    25,
+    17,
+    27
+   ],
+   [
+    25,
+    26,
+    29,
+    28
+   ]
+  ],
+  "rejects": {
+   "taken": 1529,
+   "path": 147,
+   "edge": 183,
+   "river": 166
+  },
+  "townShops": [
+   {
+    "at": [
+     130,
+     380,
+     12
+    ],
+    "tier": "bronze_dagger",
+    "orient": 16
+   },
+   {
+    "at": [
+     170,
+     360,
+     12
+    ],
+    "tier": "iron_dagger",
+    "orient": 16
+   },
+   {
+    "at": [
+     210,
+     340,
+     12
+    ],
+    "tier": "bronze",
+    "orient": 16
+   },
+   {
+    "at": [
+     250,
+     320,
+     12
+    ],
+    "tier": "iron",
+    "orient": 16
+   },
+   {
+    "at": [
+     280,
+     290,
+     12
+    ],
+    "tier": "bronze_longsword",
+    "orient": 16
+   },
+   {
+    "at": [
+     310,
+     250,
+     12
+    ],
+    "tier": "iron_longsword",
+    "orient": 19
+   },
+   {
+    "at": [
+     330,
+     220,
+     12
+    ],
+    "tier": "bow",
+    "orient": 19,
+    "prefab": "bow_bow"
+   },
+   {
+    "at": [
+     360,
+     180,
+     12
+    ],
+    "tier": "oak",
+    "orient": 19,
+    "prefab": "bow_oak"
+   }
+  ],
+  "gables": [
+   {
+    "box": [
+     1310,
+     570,
+     1590,
+     1010
+    ],
+    "zBase": 168,
+    "rise": 144,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     440,
+     -940,
+     680,
+     -580
+    ],
+    "zBase": 216,
+    "rise": 96,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     -1830,
+     400,
+     -1450,
+     700
+    ],
+    "zBase": 312,
+    "rise": 120,
+    "ridgeAlongX": true,
+    "fill": true
+   },
+   {
+    "box": [
+     -2060,
+     -180,
+     -1680,
+     120
+    ],
+    "zBase": 468,
+    "rise": 96,
+    "ridgeAlongX": true,
+    "fill": true
+   },
+   {
+    "box": [
+     -850,
+     1360,
+     -590,
+     1700
+    ],
+    "zBase": 156,
+    "rise": 84,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     -1360,
+     1360,
+     -1100,
+     1700
+    ],
+    "zBase": 156,
+    "rise": 84,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     -940,
+     1750,
+     -640,
+     2130
+    ],
+    "zBase": 468,
+    "rise": 120,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     130,
+     490,
+     430,
+     870
+    ],
+    "zBase": 156,
+    "rise": 108,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     -500,
+     -920,
+     -160,
+     -660
+    ],
+    "zBase": 156,
+    "rise": 72,
+    "ridgeAlongX": true,
+    "fill": true
+   },
+   {
+    "box": [
+     550,
+     -410,
+     850,
+     -30
+    ],
+    "zBase": 156,
+    "rise": 108,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     -1860,
+     -910,
+     -1560,
+     -530
+    ],
+    "zBase": 312,
+    "rise": 96,
+    "ridgeAlongX": false,
+    "fill": true
+   },
+   {
+    "box": [
+     890,
+     1270,
+     1270,
+     1570
+    ],
+    "zBase": 156,
+    "rise": 108,
+    "ridgeAlongX": true,
+    "fill": true
+   },
+   {
+    "box": [
+     1860,
+     -900,
+     2160,
+     -520
+    ],
+    "zBase": 312,
+    "rise": 96,
+    "ridgeAlongX": false,
+    "fill": true
+   }
+  ],
+  "thinnedOut": 0,
+  "restoredAfterClear": 0
+ },
+ "caves": 12,
+ "carvedVoxels": 38497,
+ "terrainBricks": 391748,
+ "dungeonBricks": 88307,
+ "decorBricks": 332474,
+ "total": 812529,
+ "trees": 217,
+ "boulders": 65,
+ "ramps": 168042,
+ "plants": {
+  "B_Lotus_2x2": 1051,
+  "B_Lotus_1x1": 1088,
+  "B_Fern": 6007,
+  "B_Small_Flower": 2862,
+  "B_Branch": 967,
+  "B_Rose": 785,
+  "B_Tulip": 1097,
+  "B_Pine_Tree": 145,
+  "B_Flower": 927,
+  "B_Bush": 1567,
+  "B_Leaf_Bush": 5,
+  "B_Pumpkin": 2
+ },
+ "desert": {
+  "centre": [
+   -11500,
+   -5660
+  ],
+  "r": 6400,
+  "cacti": 1312,
+  "villages": 1
+ },
+ "volcano": {
+  "centre": [
+   -28920,
+   -27400,
+   1260
+  ],
+  "foot": 36,
+  "rim": 105,
+  "lake": 91,
+  "roadCells": 1964,
+  "lead": [
+   -26560,
+   -23880,
+   324
+  ]
+ },
+ "snow": {
+  "centre": [
+   -2840,
+   -12840
+  ],
+  "r": 4000
+ },
+ "swamp": {
+  "center": [
+   -26440,
+   -13440
+  ],
+  "gate": [
+   0,
+   1
+  ],
+  "zombieSpawners": 18,
+  "deadTrees": 29,
+  "turds": 60
+ },
+ "villages": [
+  {
+   "name": "Millford",
+   "center": [
+    -17180,
+    -19340,
+    684
+   ],
+   "shops": [
+    "shop_steel_dagger",
+    "shop_steel",
+    "shop_steel_longsword",
+    "bow_willow"
+   ],
+   "buildings": {
+    "dining hall": 1,
+    "warehouse": 1,
+    "cottage": 1,
+    "watchtower": 1,
+    "village": 1
+   },
+   "rejects": {
+    "path": 37,
+    "taken": 166,
+    "edge": 38
+   },
+   "desert": false
+  },
+  {
+   "name": "Stanstead",
+   "center": [
+    -32380,
+    -21740,
+    432
+   ],
+   "shops": [
+    "shop_steel_dagger",
+    "shop_steel",
+    "shop_steel_longsword",
+    "bow_willow",
+    "shop_black_dagger",
+    "shop_black",
+    "shop_black_longsword"
+   ],
+   "buildings": {
+    "tavern": 1,
+    "cottage": 3,
+    "dining hall": 1,
+    "watchtower": 1,
+    "village": 1
+   },
+   "rejects": {
+    "path": 18,
+    "taken": 204,
+    "edge": 15
+   },
+   "desert": false
+  },
+  {
+   "name": "Oakwick",
+   "center": [
+    -12220,
+    -6540,
+    756
+   ],
+   "shops": [
+    "shop_mithril_dagger",
+    "shop_mithril",
+    "shop_mithril_longsword",
+    "bow_maple",
+    "shop_adamant_dagger",
+    "shop_adamant",
+    "shop_adamant_longsword",
+    "bow_yew"
+   ],
+   "buildings": {
+    "gun store": 1,
+    "western": 1,
+    "pen": 1,
+    "village": 1
+   },
+   "rejects": {
+    "taken": 110,
+    "path": 97,
+    "edge": 65
+   },
+   "desert": true
+  },
+  {
+   "name": "Stanby",
+   "center": [
+    -2700,
+    -11420,
+    1296
+   ],
+   "shops": [],
+   "buildings": {
+    "mead hall": 1,
+    "longhouse": 3,
+    "watchtower": 1,
+    "village": 1
+   },
+   "rejects": {
+    "taken": 194,
+    "edge": 43,
+    "path": 20
+   },
+   "desert": false
+  }
+ ],
+ "townName": "Lumbrick",
+ "checkpoints": [
+  {
+   "at": [
+    -18040,
+    -12930,
+    866
+   ],
+   "where": "Hollow Crypt"
+  },
+  {
+   "at": [
+    -5160,
+    -7650,
+    1058
+   ],
+   "where": "Sunken Keep"
+  },
+  {
+   "at": [
+    -1640,
+    -11230,
+    1250
+   ],
+   "where": "Mountain Deep"
+  },
+  {
+   "at": [
+    -26360,
+    -13600,
+    314
+   ],
+   "where": "Swamp road"
+  },
+  {
+   "at": [
+    -17180,
+    -19440,
+    686
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -32380,
+    -21840,
+    434
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -12220,
+    -6640,
+    758
+   ],
+   "where": "village"
+  },
+  {
+   "at": [
+    -2700,
+    -11520,
+    1298
+   ],
+   "where": "village"
+  }
+ ],
+ "bounds": {
+  "x": [
+   -43180,
+   2900
+  ],
+  "y": [
+   -41180,
+   4900
+  ]
+ },
+ "spawners": {
+  "Handaxe": 20,
+  "Arming Sword": 14,
+  "Spear": 17,
+  "Longsword": 15,
+  "Bow": 14,
+  "Zweihander": 8,
+  "Battleaxe": 16
+ },
+ "caveDoors": [
+  [
+   -4080,
+   -14200,
+   1020
+  ],
+  [
+   -10400,
+   -12560,
+   900
+  ],
+  [
+   -24840,
+   -25400,
+   1008
+  ],
+  [
+   -15160,
+   -13480,
+   1368
+  ],
+  [
+   -15760,
+   -16440,
+   348
+  ],
+  [
+   -5360,
+   -9720,
+   840
+  ],
+  [
+   -16680,
+   -21480,
+   1104
+  ],
+  [
+   -19680,
+   -18560,
+   336
+  ],
+  [
+   -20800,
+   -14640,
+   420
+  ],
+  [
+   -2000,
+   -9880,
+   1044
+  ],
+  [
+   -18640,
+   -23400,
+   1212
+  ],
+  [
+   -3240,
+   -7320,
+   720
+  ]
+ ],
+ "henge": [
+  -23080,
+  -16280,
+  372
+ ],
+ "ruins": [
+  {
+   "at": [
+    -14840,
+    -8200,
+    576
+   ],
+   "goblins": 4
+  },
+  {
+   "at": [
+    -29560,
+    -19080,
+    504
+   ],
+   "goblins": 3
+  },
+  {
+   "at": [
+    -8760,
+    -6600,
+    780
+   ],
+   "goblins": 3
+  },
+  {
+   "at": [
+    -10360,
+    -11080,
+    732
+   ],
+   "goblins": 2
+  }
+ ],
+ "camps": [
+  {
+   "at": [
+    -17960,
+    -7440,
+    576
+   ],
+   "goblins": 2
+  },
+  {
+   "at": [
+    -22760,
+    -9600,
+    408
+   ],
+   "goblins": 3
+  },
+  {
+   "at": [
+    -20600,
+    -13200,
+    504
+   ],
+   "goblins": 3
+  },
+  {
+   "at": [
+    -12560,
+    -12000,
+    588
+   ],
+   "goblins": 2
+  }
+ ],
+ "details": {
+  "count": 500,
+  "kinds": {
+   "firering": 61,
+   "bones": 151,
+   "cairn": 141,
+   "shrine": 18,
+   "cart": 40,
+   "stump": 35,
+   "log": 17,
+   "mushrooms": 33,
+   "signpost": 4
+  }
+ },
+ "outposts": [
+  {
+   "at": [
+    -22520,
+    -14120,
+    324
+   ],
+   "tier": 1,
+   "progress": 0.25
+  },
+  {
+   "at": [
+    -18560,
+    -14680,
+    612
+   ],
+   "tier": 1,
+   "progress": 0.29
+  },
+  {
+   "at": [
+    -22720,
+    -10320,
+    360
+   ],
+   "tier": 1,
+   "progress": 0.33
+  },
+  {
+   "at": [
+    -19360,
+    -9280,
+    348
+   ],
+   "tier": 2,
+   "progress": 0.4
+  },
+  {
+   "at": [
+    -15600,
+    -14080,
+    1776
+   ],
+   "tier": 2,
+   "progress": 0.44
+  },
+  {
+   "at": [
+    -17280,
+    -8200,
+    612
+   ],
+   "tier": 3,
+   "progress": 0.47
+  },
+  {
+   "at": [
+    -13600,
+    -12000,
+    576
+   ],
+   "tier": 3,
+   "progress": 0.51
+  },
+  {
+   "at": [
+    -16200,
+    -5720,
+    768
+   ],
+   "tier": 4,
+   "progress": 0.55
+  },
+  {
+   "at": [
+    -12680,
+    -10800,
+    576
+   ],
+   "tier": 4,
+   "progress": 0.59
+  },
+  {
+   "at": [
+    -13480,
+    -5640,
+    756
+   ],
+   "tier": 4,
+   "progress": 0.63
+  },
+  {
+   "at": [
+    -10800,
+    -12120,
+    1320
+   ],
+   "tier": 5,
+   "progress": 0.66
+  },
+  {
+   "at": [
+    -10640,
+    -5960,
+    780
+   ],
+   "tier": 5,
+   "progress": 0.7
+  },
+  {
+   "at": [
+    -9600,
+    -10920,
+    732
+   ],
+   "tier": 5,
+   "progress": 0.74
+  },
+  {
+   "at": [
+    -6920,
+    -4520,
+    792
+   ],
+   "tier": 6,
+   "progress": 0.78
+  },
+  {
+   "at": [
+    -8000,
+    -10040,
+    780
+   ],
+   "tier": 6,
+   "progress": 0.81
+  },
+  {
+   "at": [
+    -3880,
+    -7520,
+    1428
+   ],
+   "tier": 7,
+   "progress": 0.85
+  },
+  {
+   "at": [
+    -7960,
+    -12400,
+    540
+   ],
+   "tier": 7,
+   "progress": 0.89
+  },
+  {
+   "at": [
+    -3600,
+    -9040,
+    1476
+   ],
+   "tier": 7,
+   "progress": 0.92
+  },
+  {
+   "at": [
+    -5800,
+    -13320,
+    1128
+   ],
+   "tier": 7,
+   "progress": 0.96
+  }
+ ],
+ "dungeons": [
+  {
+   "name": "Hollow Crypt",
+   "levels": 3,
+   "entrance": [
+    -18520,
+    -12920,
+    960
+   ],
+   "center": [
+    -17040,
+    -12000
+   ]
+  },
+  {
+   "name": "Sunken Keep",
+   "levels": 4,
+   "entrance": [
+    -4920,
+    -8000,
+    1092
+   ],
+   "center": [
+    -5760,
+    -6720
+   ]
+  },
+  {
+   "name": "Mountain Deep",
+   "levels": 5,
+   "entrance": [
+    -1400,
+    -10920,
+    1272
+   ],
+   "center": [
+    -2240,
+    -12160
+   ]
+  }
+ ]
+}
+flowers removed: 7885
+smashable bushes: 390
+shifted by 24220,20300,0: town centre now at 0,0
+wrote 161 chunks to C:\Users\pooper\Documents\claudeBS\brickadia\mapgen\out_holy

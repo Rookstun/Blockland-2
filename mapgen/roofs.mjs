@@ -1,0 +1,84 @@
+// Roofs, one module (owner 2026-10-05: one source per piece, like floors.mjs).
+//
+// Every roof is coursed (owner's sample roof, 2026-10-03): bands from the eave
+// up to the crown, each a 1-plate lip with a micro wedge on top, so every
+// course steps out over the one below. A roof STYLE is the shape of that run
+// of courses, as a profile: [{ u, h }] from the eave (u = half-span, h = 0) to
+// the crown (u = 0, h = rise). Generators lay the bands themselves (stud grid
+// in shapedhouse.mjs, world units in town.mjs gable()), but the profile comes
+// from here.
+//
+// Styles:
+//   gable        straight slope (live everywhere)
+//   barrel       quarter ellipse: steep at the eave, flat at the crown
+//   gambrel      barn roof: a steep lower slope, a shallow upper one
+//   dormer       gable with 1-2 dormers on the front slope (shapedhouse only)
+//   clerestory   TODO, awaiting the owner's sample build: two sheds at different
+//                heights with a glazed wall between them
+//   cross        cross-gabled: a second ridge across the main one, valleys where
+//                they meet. shapedhouse L / T plans already build this (wing
+//                roof + inner-corner valley wedges); a rect cross gable is TODO,
+//                awaiting the owner's sample
+// Any style may be refined from the owner's hand-built samples: change it here.
+
+const C = 12; // a brick: course heights are whole bricks
+
+// the roofs houses are drawn from (town.mjs shapedSpec): [style, weight]
+export const ROOF_POOL = [['gable', 0.6], ['dormer', 0.4]];
+export const pickRoof = u => { let a = 0; for (const [st, w] of ROOF_POOL) if (u < (a += w)) return st; return ROOF_POOL[0][0]; };
+
+export const ROOF_STYLES = {
+  gable: { ready: true },
+  barrel: { ready: true },
+  gambrel: { ready: true },
+  dormer: { ready: true, note: 'gable profile + dormers on the front slope (shapedhouse roof: "dormer"), owner 2026-10-06' },
+  clerestory: { ready: false, note: 'awaiting the owner\'s sample build' },
+  cross: { ready: false, note: 'L / T plans in shapedhouse already cross-gable; rect version awaiting the owner\'s sample' },
+};
+
+/**
+ * Stud-grid profile (shapedhouse.mjs): span in studs (eave to crown), rise in
+ * world units. Courses about 2 studs deep, each a whole number of bricks.
+ */
+export function roofProfile(span, rise, style = 'gable') {
+  const n = Math.max(2, Math.round(span / 2));
+  const u = k => (k === n ? 0 : span - Math.round((k * span) / n));
+  if (style === 'gable') {
+    const per = Math.max(C, Math.round(rise / n / C) * C);
+    const pts = [];
+    for (let k = 0; k <= n; k++) pts.push({ u: u(k), h: k * per });
+    return pts;
+  }
+  // barrel / gambrel: height at each course edge from a shape curve, snapped to
+  // whole bricks and kept rising by at least one brick per course
+  const shape = style === 'barrel'
+    ? t => Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t)))        // quarter ellipse, t = 0 eave .. 1 crown
+    : style === 'gambrel'
+      ? t => (t < 0.4 ? (t / 0.4) * 0.7 : 0.7 + ((t - 0.4) / 0.6) * 0.3) // 70% of the rise in the first 40% of the span
+      : null;
+  if (!shape) throw new Error(`roofs: style ${style} is not available yet (${ROOF_STYLES[style]?.note ?? 'unknown style'})`);
+  const pts = [];
+  let last = -C;
+  for (let k = 0; k <= n; k++) {
+    const h = Math.max(last + C, Math.round((shape(k / n) * rise) / C) * C);
+    pts.push({ u: u(k), h });
+    last = h;
+  }
+  return pts;
+}
+
+/**
+ * World-unit courses (town.mjs gable()): S = half-span in units (eave edge to
+ * ridge), rise in units, lip = the lip height. Returns { widths, per }: n
+ * course depths (even, summing to S) and the per-course rise, at least lip + 4.
+ * Gable only for now (the town's wallgen and building() roofs).
+ */
+export function townCourses(S, rise, lip = 4, style = 'gable') {
+  if (style !== 'gable') throw new Error(`roofs: town roofs only do gable so far (asked for ${style})`);
+  let n = Math.max(2, Math.round(S / 30));
+  while (n > 2 && Math.floor(rise / n / 2) * 2 < lip + 4) n--;
+  const per = Math.max(lip + 4, Math.floor(rise / n / 2) * 2);
+  const base = Math.floor(S / n / 2) * 2, widths = Array(n).fill(base);
+  for (let k = 0, left = S - base * n; left > 0; k = (k + 1) % n, left -= 2) widths[k] += 2;
+  return { widths, per };
+}
