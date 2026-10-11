@@ -27,6 +27,7 @@ const { pathToFileURL } = require('url');
 const SOUNDS = require('./sounds.json');
 const TTS = require('./tts.js');
 const AT = require('./autotune.js');
+const AF = require('./audiofix.js');
 const YTDLP = path.join(__dirname, 'bin', 'yt-dlp');
 const PYTHON = path.join(__dirname, 'venv', 'bin', 'python');
 const HEIGHTMAP = path.join(__dirname, 'bin', 'heightmap');
@@ -94,19 +95,10 @@ const LAYERS = [
 // retuned 2026-10-11 (loopback, mel band-envelope + spectral-shape score vs a speech clip):
 // explicit --leveling 0 + release 60 / attack 5 lifted 1.27 -> 1.52; gain 3 keeps the old loudness
 const SPEECH_FLAGS = ['--max-voices', '32', '--voice-release', '15', '--attack', '5', '--release', '60', '--leveling', '0', '--gain', '3'];
-// auto-tuning candidates (voice mode only: the simulator ranked voice configs like
-// the in-game recordings, Spearman 0.91 over 22 configs, but rated bank/noise
-// devices far above how they actually sounded in game). Each is built on a
-// 15 s excerpt, re-synthesized and scored against it; the best one builds the
-// real soundtrack. Base = the hand-tuned speech settings (SPEECH_FLAGS).
-const AUTOTUNE_CANDIDATES = [
-  ['--max-voices', '32', '--voice-release', '15', '--attack', '5', '--release', '60', '--leveling', '0', '--gain', '3'],
-  ['--max-voices', '32', '--voice-release', '50', '--attack', '5', '--release', '60', '--leveling', '0', '--gain', '3'],
-  ['--max-voices', '32', '--voice-release', '15', '--attack', '5', '--release', '150', '--leveling', '0', '--gain', '3'],
-  ['--max-voices', '32', '--voice-release', '15', '--attack', '5', '--release', '60', '--leveling', '0.3', '--gain', '3'],
-  ['--max-voices', '32', '--voice-release', '15', '--attack', '5', '--release', '60', '--leveling', '0', '--gain', '3', '--window', '2048'],
-  ['--max-voices', '32', '--voice-release', '30', '--attack', '5', '--release', '100', '--leveling', '0', '--gain', '3', '--pitch-snap', '50'],
-];
+// auto-tuning: cleanup chains + voice-mode flag sets live in audiofix.js
+// (voice only: the simulator ranked voice configs like the in-game
+// recordings, Spearman 0.91 over 22 configs on ONE clip, but rated bank/noise
+// devices far above how they actually sounded in game).
 const PRESETS = {
   // pick the best candidate per soundtrack (owner 2026-10-11: "automatically tunes audio")
   auto: { auto: true },
@@ -1114,7 +1106,10 @@ module.exports = class Media {
    */
   /** One device, or (layered) one per frequency range; always an array. */
   async buildAudioSet(file, opts = {}) {
-    if (opts.auto) return [await this.buildAudioDevice(file, { mode: 'voice', flags: await this.autoTune(file, opts.tuneKey) })];
+    if (opts.auto) {
+      const t = await this.autoTune(file, opts.tuneKey);
+      return [await this.buildAudioDevice(file, { mode: 'voice', flags: t.flags, filter: t.filter })];
+    }
     if (!opts.layered && !opts.layers) return [await this.buildAudioDevice(file, opts)];
     const out = [];
     for (const L of opts.layers ?? LAYERS) {
@@ -1134,6 +1129,13 @@ module.exports = class Media {
   async autoTune(file, tuneKey) {
     this.tuneCache ??= new Map();
     if (tuneKey && this.tuneCache.has(tuneKey)) return this.tuneCache.get(tuneKey);
+    // choices survive reloads: the store keeps them per link
+    const storeKey = tuneKey && 'tune:' + crypto.createHash('sha1').update(tuneKey).digest('hex').slice(0, 16);
+    const stored = storeKey && await this.store.get(storeKey).catch(() => null);
+    if (stored?.flags) {
+      this.tuneCache.set(tuneKey, stored);
+      return stored;
+    }
     const t0 = Date.now();
     const base = file.replace(/\.[^.]+$/, '') + `.tune`;
     const dur = Number(String(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file])).trim()) || 15;
@@ -1142,35 +1144,32 @@ module.exports = class Media {
     const raw = await run('ffmpeg', ['-v', 'error', '-i', base + '.wav', '-ac', '1', '-ar', String(AT.SR), '-f', 'f32le', '-'], 60_000, 1 << 28);
     const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw, 'binary');
     const src = new Float32Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length - (buf.length % 4)));
-    let best = { score: -Infinity, flags: AUTOTUNE_CANDIDATES[0] }, scores = [];
+    let best, n = 0;
     try {
       // candidates in parallel, each from its own copy (devices are written next to their input)
-      const results = await Promise.all(AUTOTUNE_CANDIDATES.map(async (flags, i) => {
-        const wav = `${base}${i}.wav`;
-        fs.copyFileSync(base + '.wav', wav);
-        try {
-          const dev = await this.buildAudioDevice(wav, { mode: 'voice', flags });
-          const sim = AT.render(AT.decodeDevice(this.brs, dev.buf), src.length / AT.SR);
-          return { flags, score: AT.score(src, sim).score };
-        } catch (e) {
-          console.error('[media] autotune candidate', i, e.message);
-          return { flags, score: -Infinity };
-        } finally { fs.rmSync(wav, { force: true }); }
-      }));
-      scores = results.map(r => r.score.toFixed(3));
-      for (const r of results) if (r.score > best.score) best = r;
+      best = await AF.tune({
+        src, brs: this.brs, log: m => console.error('[media] autotune', m),
+        build: async (filter, flags) => {
+          const wav = `${base}${n++}.wav`;
+          fs.copyFileSync(base + '.wav', wav);
+          try { return (await this.buildAudioDevice(wav, { mode: 'voice', flags, filter })).buf; }
+          finally { fs.rmSync(wav, { force: true }); }
+        },
+      });
     } finally {
       fs.rmSync(base + '.wav', { force: true });
     }
-    console.log(`[media] autotune ${path.basename(file)}: scores ${scores.join(' ')} -> #${AUTOTUNE_CANDIDATES.indexOf(best.flags)} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    console.log(`[media] autotune ${path.basename(file)}: fix ${JSON.stringify(best.scores.fix)} flags ${best.scores.flags.join(' ')} -> ${best.fix} #${best.flagIndex} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    const choice = { fix: best.fix, filter: best.filter, flags: best.flags };
     if (tuneKey) {
-      this.tuneCache.set(tuneKey, best.flags);
+      this.tuneCache.set(tuneKey, choice);
       while (this.tuneCache.size > 20) this.tuneCache.delete(this.tuneCache.keys().next().value);
+      await this.store.set(storeKey, { ...choice, at: Date.now() }).catch(() => {});
     }
-    return best.flags;
+    return choice;
   }
 
-  async buildAudioDevice(file, { synth, mode, flags = [], raw } = {}) {
+  async buildAudioDevice(file, { synth, mode, flags = [], raw, filter } = {}) {
     if (!fs.existsSync(HEIGHTMAP)) throw new Error('heightmap2brz is missing from the plugin (bin/heightmap)');
     const maxMin = this.config['max-minutes'] ?? 10;
     const out = file.replace(/\.[^.]+$/, '') + '.device.brz';
@@ -1205,7 +1204,8 @@ module.exports = class Media {
       mode = mode === 'bank' ? 'bank' : 'voice';
       // trim to the length limit; heightmap reads the wav directly
       const wav = file + '.wav';
-      await run('ffmpeg', ['-v', 'error', '-y', '-i', file, '-t', String(maxMin * 60), '-vn', '-ac', '1', '-ar', '44100', wav], 300_000);
+      // filter = the per-video cleanup chain autoTune picked (audiofix.js)
+      await run('ffmpeg', ['-v', 'error', '-y', '-i', file, '-t', String(maxMin * 60), '-vn', '-ac', '1', '-ar', '44100', ...(filter ? ['-af', filter] : []), wav], 300_000);
       try {
         seconds = Number(String(await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', wav])).trim()) || 60;
         // a preset's own --max-voices replaces the default (heightmap rejects a repeated flag)

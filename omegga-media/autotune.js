@@ -11,7 +11,7 @@
 // plugin can build a few candidate devices per soundtrack and keep the one
 // that sounds closest to the original, with no game client in the loop.
 // Checked against the in-game loopback recordings of 2026-10-11 (calibrate in
-// /tmp/tune/calib.mjs): see AUTOTUNE_CANDIDATES in omegga.main.js.
+// /tmp/tune/calib.mjs): candidates in audiofix.js.
 
 const SR = 16000;
 const BASE_HZ = 440; // game synth pitch at PitchMultiplier 1 (measured 2026-10-05)
