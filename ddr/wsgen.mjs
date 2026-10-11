@@ -101,7 +101,7 @@ ${eachL(k => `out lane${k}: string = scr${k}
 out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
 ${eachV(v => `out P${v}: float = vp${v}
-out V${v}: float = Dampen(vv${v}, 0.025)`)}   // smoothed: no clicks between notes
+out V${v}: float = min(vv${v}, Dampen(vv${v}, 0.025))`)}   // tween only incoming: smooth attack, instant release
 
 mod silence() {
 ${eachV(v => `  vv${v} = 0.0`)}

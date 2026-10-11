@@ -177,19 +177,19 @@ out lane3: string = scr3
 out rec3: color = rcol3
 out pad3: color = pcol3
 out P0: float = vp0
-out V0: float = Dampen(vv0, 0.025)
+out V0: float = min(vv0, Dampen(vv0, 0.025))
 out P1: float = vp1
-out V1: float = Dampen(vv1, 0.025)
+out V1: float = min(vv1, Dampen(vv1, 0.025))
 out P2: float = vp2
-out V2: float = Dampen(vv2, 0.025)
+out V2: float = min(vv2, Dampen(vv2, 0.025))
 out P3: float = vp3
-out V3: float = Dampen(vv3, 0.025)
+out V3: float = min(vv3, Dampen(vv3, 0.025))
 out P4: float = vp4
-out V4: float = Dampen(vv4, 0.025)
+out V4: float = min(vv4, Dampen(vv4, 0.025))
 out P5: float = vp5
-out V5: float = Dampen(vv5, 0.025)
+out V5: float = min(vv5, Dampen(vv5, 0.025))
 out P6: float = vp6
-out V6: float = Dampen(vv6, 0.025)   // smoothed: no clicks between notes
+out V6: float = min(vv6, Dampen(vv6, 0.025))   // tween only incoming: smooth attack, instant release
 
 mod silence() {
   vv0 = 0.0
