@@ -11,13 +11,17 @@ export const LANES = ['←', '↓', '↑', '→'];
 // the speakers: [synth, group]; ddr.ws gets one P/V out pair per voice
 // soft tones (owner: square was "very beepy")
 export const VOICES = [['Triangle', 'melody'], ['Triangle', 'melody'], ['Triangle', 'bass'], ['Triangle', 'bass'],
-  ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other']];
+  ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other'],
+  ['Square', 'click'], ['Square', 'click'], ['Square', 'click']];   // clicky: hard attack, no smoothing
+// percussive GM patches (piano, chromatic perc, guitar, pizzicato/harp, square/saw leads, ethnic plucks, percussive)
+const CLICK_PROGS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 24, 25, 26, 27, 28, 45, 46, 80, 81, 104, 105, 106, 107, 108, 112, 113, 114, 115]);
+const median = xs => { const a = [...xs].sort((p, q) => p - q); return a[a.length >> 1] ?? 0; };
 const LEVELS = { easy: 4, normal: 2, hard: 1 }; // minimum gap between steps, in 16ths
 
 const pitchOf = key => { let p = 2 ** ((key - 69) / 12); while (p > 9.5) p /= 2; while (p < 0.11) p *= 2; return p; };
 const r3 = x => Math.round(x * 1000) / 1000;
 
-export function makeSong(midi, { name, level = 'normal', track, bpm } = {}) {
+export function makeSong(midi, { name, level = 'normal', track, bpm, click } = {}) {
   const notes = midi.notes.filter(n => n.t < 600);
   const tonal = notes.filter(n => n.ch !== 9);
   const tempo = bpm ?? midi.bpm;
@@ -53,14 +57,18 @@ export function makeSong(midi, { name, level = 'normal', track, bpm } = {}) {
   // music: allocate notes to the voices by group
   const bassTracks = new Set([...byTrack.entries()].filter(([tr, ns]) => tr !== melTrack &&
     (ns.reduce((s, n) => s + n.key, 0) / ns.length < 52 || ns.every(n => n.prog >= 32 && n.prog <= 39))).map(([tr]) => tr));
+  // clicky instruments: a track of mostly short (staccato) notes, a percussive patch (when the file
+  // names one; program 0 alone says nothing), or listed in the song's json "click"
+  const clickTracks = new Set(click ?? [...byTrack.entries()].filter(([, ns]) =>
+    median(ns.map(n => n.dur)) < 0.18 || ns.some(n => n.prog > 0 && CLICK_PROGS.has(n.prog))).map(([tr]) => tr));
   const voices = VOICES.map(([synth, group]) => ({ synth, group, notes: [], end: -1 }));
   for (const n of tonal) {
-    const group = n.track === melTrack ? 'melody' : bassTracks.has(n.track) ? 'bass' : 'other';
+    const group = clickTracks.has(n.track) ? 'click' : n.track === melTrack ? 'melody' : bassTracks.has(n.track) ? 'bass' : 'other';
     let pool = voices.filter(v => v.group === group);
     let v = pool.find(v => v.end <= n.t + 0.001) ?? voices.find(v => v.group === 'other' && v.end <= n.t + 0.001);
     if (!v) v = pool.reduce((a, b) => (a.end < b.end ? a : b)); // steal the voice that frees soonest
     if (v.notes.length) { const p = v.notes[v.notes.length - 1]; p.end = Math.min(p.end, n.t - 0.03); if (p.end <= p.t + 0.02) v.notes.pop(); }
-    const gain = group === 'melody' ? 1.0 : group === 'bass' ? 0.9 : 0.55;
+    const gain = group === 'melody' ? 1.0 : group === 'bass' ? 0.9 : group === 'click' ? 0.7 : 0.55;
     v.notes.push({ t: r3(n.t), end: r3(n.t + n.dur), pitch: r3(pitchOf(n.key)), vol: r3(gain * (0.35 + 0.65 * n.vel / 127)) });
     v.end = n.t + n.dur;
   }

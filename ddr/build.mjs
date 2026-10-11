@@ -20,7 +20,7 @@ const songs = fs.readdirSync(songDir).filter(f => /\.midi?$/i.test(f)).sort().ma
   const base = f.replace(/\.midi?$/i, ''), cfgFile = join(songDir, base + '.json');
   const cfg = fs.existsSync(cfgFile) ? JSON.parse(fs.readFileSync(cfgFile, 'utf8')) : {};
   const title = cfg.title ?? base.replace(/\s*\([^)]*\)?/g, '').replace(/^Cave Story - /, '').replace(/[_-]+/g, ' ').trim().toUpperCase();
-  const s = makeSong(readMidi(fs.readFileSync(join(songDir, f))), { name: title, level: cfg.level ?? level, track: cfg.track, bpm: cfg.bpm });
+  const s = makeSong(readMidi(fs.readFileSync(join(songDir, f))), { name: title, level: cfg.level ?? level, track: cfg.track, bpm: cfg.bpm, click: cfg.click });
   console.log(`${title}: ${s.bpm} bpm, ${s.length}s, ${s.steps} steps, voices ${s.voices.map(v => v.notes.length).join('/')}`);
   return s;
 });
@@ -28,9 +28,10 @@ if (!songs.length) throw new Error(`no .mid files in ${songDir}`);
 // keep only voices some song uses
 const used = VOICES.map((_, v) => songs.some(s => s.voices[v].notes.length));
 for (const s of songs) s.voices = s.voices.filter((_, v) => used[v]);
-const synths = VOICES.filter((_, v) => used[v]).map(([synth]) => synth);
+const voiceDefs = VOICES.filter((_, v) => used[v]);
+const synths = voiceDefs.map(([synth]) => synth);
 
-const src = generate(songs, synths);
+const src = generate(songs, voiceDefs);
 fs.writeFileSync(join(here, 'ddr.gen.ws'), src);
 const sdk = join(here, '..', 'pikmin', 'tools', 'wirescript', 'pkg');
 const wasm = await import(pathToFileURL(join(sdk, 'wasm.js')).href);

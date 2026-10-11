@@ -21,8 +21,8 @@ const q = s => JSON.stringify(s);
 const arr = (type, xs) => `[${xs.map(type === 'float' ? f : type === 'string' ? q : String).join(', ')}]`;
 const col = ([r, g, b]) => `ColorSRGB(${r}, ${g}, ${b}, 255)`;
 
-export function generate(songs, voiceSynths) {
-  const S = songs.length, V = voiceSynths.length, L = [0, 1, 2, 3];
+export function generate(songs, voiceDefs) {
+  const S = songs.length, V = voiceDefs.length, CLICK = voiceDefs.map(([, g]) => g === 'click'), L = [0, 1, 2, 3];
   const lead = songs.map(s => Math.ceil(LEAD_SEC / s.rowDur) + 1);
   // lane strings: lead blanks + one 2-char cell (glyph or space, newline) per row + WIN blanks
   const laneStr = songs.map((s, i) => L.map(k => {
@@ -105,7 +105,7 @@ ${eachL(k => `out lane${k}: string = scr${k}
 out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
 ${eachV(v => `out P${v}: float = vp${v}
-out V${v}: float = min(vv${v}, Dampen(vv${v}, 0.025))`)}   // tween only incoming: smooth attack, instant release
+out V${v}: float = ${CLICK[v] ? `vv${v}` : `min(vv${v}, Dampen(vv${v}, 0.025))`}`)}   // smooth voices tween only incoming; clicky ones snap
 
 mod silence() {
 ${eachV(v => `  vv${v} = 0.0`)}
@@ -317,7 +317,7 @@ ${eachV(v => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
       } else if t >= vo${v} {
         vv${v} = 0.0
       } else {
-        vv${v} = va${v} * max(0.7, 1.0 - (t - vs${v}) * 1.0)    // pluck: decay to a 70% sustain
+        vv${v} = va${v} * ${CLICK[v] ? `max(0.3, 1.0 - (t - vs${v}) * 5.0)    // clicky: fast decay` : `max(0.7, 1.0 - (t - vs${v}) * 1.0)    // pluck: decay to a 70% sustain`}
       }`)}
       // the BPM light: a flash at each beat that fades over a quarter beat
       let beats = tc * BPM[song] / 60.0
