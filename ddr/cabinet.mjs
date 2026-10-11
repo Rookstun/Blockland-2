@@ -125,28 +125,40 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
   box(-70, 0, 14, 70, 2, 16, GLOW(CYAN, 3));
   box(-70, 0, 120, 70, 2, 122, GLOW(CYAN, 3));
   box(-70, 0, 16, 70, 2, 120, { color: [4, 4, 6] });
-  // the screen, in front of the black back: title on top, receptors, 4 lanes in the middle,
-  // score/combo on the dancer's left (+x), judgement on the right
-  const title = panel(-68, 68, 100, 118, { Text: 'SIT DOWN TO DANCE', Color: rgba([255, 120, 230]), LineHeight: 3 });
+  // the screen, in front of the black back, panels edge to edge (no gaps): title on top,
+  // receptors + 4 lanes in the middle, score/combo on the dancer's left (+x), judgement on the right
+  const title = panel(70, -70, 98, 120, { Text: 'SIT DOWN TO DANCE', Color: rgba([255, 120, 230]), LineHeight: 3 });
   wireOut('title_t', title, TD, 'Text');
-  const info = panel(66, 34, 74, 84, { Text: '', LineHeight: 4, Color: rgba([255, 255, 255]) });
+  const info = panel(70, 32, 78, 98, { Text: '', LineHeight: 4, Color: rgba([255, 255, 255]) });
   wireOut('info_t', info, TD, 'Text');
-  const combo = panel(66, 34, 62, 72, { Text: '', LineHeight: 3.5, Color: rgba([255, 225, 60]) });
+  const combo = panel(70, 32, 58, 78, { Text: '', LineHeight: 3.5, Color: rgba([255, 225, 60]) });
   wireOut('combo_t', combo, TD, 'Text');
-  const judge = panel(-34, -66, 70, 84, { Text: '', LineHeight: 5, Color: rgba([255, 255, 255]) });
+  panel(70, 32, 16, 58, { Text: '' });
+  const judge = panel(-32, -70, 74, 98, { Text: '', LineHeight: 5, Color: rgba([255, 255, 255]) });
   wireOut('judge_t', judge, TD, 'Text');
   wireOut('judge_c', judge, TD, 'Color');
-  const LANE_W = 14, GAP = 2;
+  const LANE_W = 16;
   for (let k = 0; k < 4; k++) {
-    const x = 31 - LANE_W / 2 - k * (LANE_W + GAP);                  // LEFT lane at +x (the dancer's left)
-    const rec = panel(x + LANE_W / 2, x - LANE_W / 2, 92, 98, { Text: ARROWS[k], LineHeight: 5, Color: rgba([70, 70, 80]) });
+    const x0 = 32 - k * LANE_W, x1 = x0 - LANE_W;                      // LEFT lane at +x (the dancer's left)
+    const rec = panel(x0, x1, 90, 98, { Text: ARROWS[k], LineHeight: 5, Color: rgba([70, 70, 80]) });
     wireOut(`rec${k}`, rec, TD, 'Color');
-    const lane = panel(x + LANE_W / 2, x - LANE_W / 2, 18, 90, { Text: '', LineHeight: 4, Color: rgba(LANE_COL[k]) });
+    const lane = panel(x0, x1, 16, 90, { Text: '', LineHeight: 4, Color: rgba(LANE_COL[k]) });
     wireOut(`lane${k}`, lane, TD, 'Text');
   }
   // Offset test markers (which axis moves text on the face?): none / X / Y / Z by 8 units
   [[0, 0, 0], [8, 0, 0], [0, 8, 0], [0, 0, 8]].forEach(([X, Y, Z], i) =>
-    panel(-36, -66, 20 + i * 12, 28 + i * 12, { Text: ['O', 'X', 'Y', 'Z'][i], LineHeight: 5, Offset: { X, Y, Z }, Color: rgba([255, 255, 255]) }));
+    panel(-32, -70, [16, 30, 44, 58][i], [30, 44, 58, 74][i], { Text: ['O', 'X', 'Y', 'Z'][i], LineHeight: 5, Offset: { X, Y, Z }, Color: rgba([255, 255, 255]) }));
+  // beat lamps: dots above the screen + one on each marquee end, colour + real light pulse on the beat
+  const LIGHT = { type: 'Component_PointLight', data: { bMatchBrickShape: false, bEnabled: true, Brightness: 0, Radius: 220, Color: rgba(PINK), bUseBrickColor: false, bCastShadows: false, RayTracingVisibility: 0 } };
+  const lamp = (x0, x1, z0, z1, y, text) => {
+    const b = w.addBrick({ asset: MB, color: [10, 4, 14], direction: FACE_MINUS_Y >> 2, rotation: FACE_MINUS_Y & 3, size: [Math.abs(x1 - x0) / 2, (z1 - z0) / 2, 1],
+      position: [(x0 + x1) / 2, y, (z0 + z1) / 2], owner_index: owner, components: [{ type: TD, data: { ...TEXT, Text: text, LineHeight: z1 - z0 - 2, Color: rgba([60, 20, 50]) } }, LIGHT] });
+    wireOut('beat_c', b, TD, 'Color');
+    wireOut('beat_b', b, 'Component_PointLight', 'Brightness');
+  };
+  lamp(60, -60, 126, 136, -1, '● ● ● ● ● ● ● ●');
+  lamp(92, 82, 146, 158, -7, '●');
+  lamp(-82, -92, 146, 158, -7, '●');
   for (const f of later) f();
 
   // ---- speaker towers

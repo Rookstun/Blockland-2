@@ -77,6 +77,8 @@ var judge: string = ""
 var jcol: color = ColorSRGB(255, 255, 255, 255)
 var info: string = ""
 var comboTxt: string = ""
+var beatC: color = ColorSRGB(60, 20, 50, 255)
+var beatB: float = 0.0
 ${eachL(k => `var live${k}: string = ""
 var scr${k}: string = ""
 var ni${k}: int = 0
@@ -97,6 +99,8 @@ out judge_t: string = judge
 out judge_c: color = jcol
 out info_t: string = info
 out combo_t: string = comboTxt
+out beat_c: color = beatC
+out beat_b: float = beatB
 ${eachL(k => `out lane${k}: string = scr${k}
 out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
@@ -113,6 +117,8 @@ ${eachL(k => `  scr${k} = live${k}.Substring(base, ${WIN * 2})`)}
 }
 
 mod clearScreen() {
+  beatC = ColorSRGB(60, 20, 50, 255)
+  beatB = 0.0
 ${eachL(k => `  scr${k} = ""`)}
   judge = ""
   info = ""
@@ -313,6 +319,12 @@ ${eachV(v => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
       } else {
         vv${v} = va${v} * max(0.7, 1.0 - (t - vs${v}) * 1.0)    // pluck: decay to a 70% sustain
       }`)}
+      // the BPM light: a flash at each beat that fades over a quarter beat
+      let beats = tc * BPM[song] / 60.0
+      let ph = beats - floor(beats)
+      let pulse = max(0.0, 1.0 - ph * 4.0)
+      beatB = pulse * 60.0
+      beatC = if ph < 0.25 then ColorSRGB(255, 90, 220, 255) else ColorSRGB(60, 20, 50, 255)
       if t < 0.0 {
         let c: int = ceil(-t)
         title = "\${NAMES[song]}\\nGET READY  \${c}"
