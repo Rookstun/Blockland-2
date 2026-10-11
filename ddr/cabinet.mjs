@@ -21,7 +21,7 @@ const LANE_COL = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]
 const ARROWS = ['←', '↓', '↑', '→'];
 const FONT = 'IosevkaTerm'; // monospace, has the arrow glyphs
 const TEXT = { // Font = index of FONT in the externalAssets (set per build). LineHeight = glyph height in units.
-  Font: 0, Rotation: -90, Skew: 0, Kerning: 0, LineHeight: 4, WidthScale: 1, LineOffset: 0, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },
+  Font: 0, Rotation: -90, Skew: 0, Kerning: 0, LineHeight: 4, WidthScale: 1, LineOffset: -20, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },  // LineOffset -20 = owner's line spacing
   Color: { R: 255, G: 255, B: 255, A: 255 }, MaterialSlider: 10, ShadingWidth: 2, OutlineColor: { R: 0, G: 0, B: 0, A: 255 }, OutlineWidth: 1,
   ScuffWidth: 0, GraffitiDepthLimit: 5, GraffitiAngleLimit: 45, GraffitiLayer: 0, bEnabled: true, Face: 4, bAlignToWedge: false, bOverrideColor: true,
   Typeface: 0, Billboard: 0, Material: 1, Shading: 0, bFlipShading: false, Outline: 2, bSharpCorners: true, bSharpOutlines: true, bOverrideOutlineColor: true, bForeground: false,
@@ -99,7 +99,7 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
       box(x - 13, y - 13, 6, x + 13, y + 13, 8, METAL([150, 150, 160]));   // steel frame
       if (k < 0) { box(x - 11, y - 11, 8, x + 11, y + 11, 10, METAL(cx === 1 && cy === 1 ? [60, 60, 70] : [110, 110, 120])); continue; }
       const pad = w.addBrick({ asset: MB, color: LANE_COL[k].map(c => Math.round(c * 0.35)), size: [11, 11, 1], position: [x, y, 9], owner_index: owner,
-        components: [{ type: TD, data: { ...TEXT, Text: ARROWS[k], Rotation: 0, LineHeight: 17, Color: rgba([40, 40, 50]), OutlineWidth: 2 } }] });
+        components: [{ type: TD, data: { ...TEXT, Text: ARROWS[k], Rotation: 0, LineHeight: 22, Color: rgba([40, 40, 50]), OutlineWidth: 2 } }] });
       later.push(() => { wireOut(`pad${k}`, pad, TD, 'Color'); wireOut('rainbow_c', pad, TD, 'OutlineColor'); });
     }
     // the seat on the centre panel: W/A/S/D go through the chip's input splitter
@@ -130,29 +130,29 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
   box(-70, 0, 16, 70, 2, 120, { color: [4, 4, 6] });
   // the screen, in front of the black back, panels edge to edge (no gaps): title on top,
   // receptors + 4 lanes in the middle, score/combo on the dancer's left (+x), judgement on the right
-  const title = panel(70, -70, 98, 120, { Text: 'SIT DOWN TO DANCE', Color: rgba([255, 120, 230]), LineHeight: 3 });
+  const title = panel(70, -70, 98, 120, { Text: 'SIT DOWN TO DANCE', Color: rgba([255, 120, 230]), LineHeight: 4.5 });
   wireOut('title_t', title, TD, 'Text');
-  const info = panel(70, 32, 78, 98, { Text: '', LineHeight: 4, Color: rgba([255, 255, 255]) });
+  const info = panel(70, 32, 78, 98, { Text: '', LineHeight: 6, Color: rgba([255, 255, 255]) });
   wireOut('info_t', info, TD, 'Text');
-  const combo = panel(70, 32, 58, 78, { Text: '', LineHeight: 3.5, Color: rgba([255, 225, 60]) });
+  const combo = panel(70, 32, 58, 78, { Text: '', LineHeight: 5.2, Color: rgba([255, 225, 60]) });
   wireOut('combo_t', combo, TD, 'Text');
   panel(70, 32, 16, 58, { Text: '' });
-  const judge = panel(-32, -70, 74, 98, { Text: '', LineHeight: 5, Color: rgba([255, 255, 255]) });
+  const judge = panel(-32, -70, 74, 98, { Text: '', LineHeight: 7.5, Color: rgba([255, 255, 255]) });
   wireOut('judge_t', judge, TD, 'Text');
   wireOut('judge_c', judge, TD, 'Color');
   const LANE_W = 16;
   for (let k = 0; k < 4; k++) {
     const x0 = 32 - k * LANE_W, x1 = x0 - LANE_W;                      // LEFT lane at +x (the dancer's left)
-    const rec = panel(x0, x1, 90, 98, { Text: ARROWS[k], LineHeight: 5, OutlineWidth: 2, Color: rgba([70, 70, 80]) });
+    const rec = panel(x0, x1, 90, 98, { Text: ARROWS[k], LineHeight: 7.5, OutlineWidth: 2, Color: rgba([70, 70, 80]) });
     wireOut(`rec${k}`, rec, TD, 'Color');
     wireOut('rainbow_c', rec, TD, 'OutlineColor');
-    const lane = panel(x0, x1, 16, 90, { Text: '', LineHeight: 4, OutlineWidth: 2, Color: rgba(LANE_COL[k]) });
+    const lane = panel(x0, x1, 16, 90, { Text: '', LineHeight: 6, OutlineWidth: 2, Color: rgba(LANE_COL[k]) });
     wireOut(`lane${k}`, lane, TD, 'Text');
     wireOut('rainbow_c', lane, TD, 'OutlineColor');
   }
   // Offset test markers (which axis moves text on the face?): none / X / Y / Z by 8 units
   [[0, 0, 0], [8, 0, 0], [0, 8, 0], [0, 0, 8]].forEach(([X, Y, Z], i) =>
-    panel(-32, -70, [16, 30, 44, 58][i], [30, 44, 58, 74][i], { Text: ['O', 'X', 'Y', 'Z'][i], LineHeight: 5, Offset: { X, Y, Z }, Color: rgba([255, 255, 255]) }));
+    panel(-32, -70, [16, 30, 44, 58][i], [30, 44, 58, 74][i], { Text: ['O', 'X', 'Y', 'Z'][i], LineHeight: 7.5, Offset: { X, Y, Z }, Color: rgba([255, 255, 255]) }));
   // beat lamps: dots above the screen + one on each marquee end, colour + real light pulse on the beat
   const LIGHT = { type: 'Component_PointLight', data: { bMatchBrickShape: false, bEnabled: true, Brightness: 0, Radius: 220, Color: rgba(PINK), bUseBrickColor: false, bCastShadows: false, RayTracingVisibility: 0 } };
   const lamp = (x0, x1, z0, z1, y, text) => {
