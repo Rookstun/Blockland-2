@@ -7,7 +7,7 @@
 import { LANES } from './chart.mjs';
 
 export const WIN = 12;          // rows on screen
-const NBSP = '00a0';
+const NBSP = ' ';
 export const LEAD_SEC = 4;      // countdown before the first row
 const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
 const RAINBOW_COMBO = 10;      // combo that turns the arrow outlines rainbow
