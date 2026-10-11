@@ -287,6 +287,13 @@ ${eachL(k => `      ne${p}${k} = ni${p}${k}`)}
       judge${p} = "LEFT"
       redraw()
     }`)}
+    if ${P.map(p => `!act${p}`).join(' && ')} {
+      menu()                  // nobody dancing is still seated (e.g. P1 hopped into P2's seat): back to song select
+    } else {
+${eachP(p => `      if player${p} != none && !act${p} {
+        info${p} = "NEXT SONG"
+      }`)}
+    }
   } else {
     menu()
   }

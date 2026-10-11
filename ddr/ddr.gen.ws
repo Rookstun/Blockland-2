@@ -642,6 +642,16 @@ mod seats() {
       judge1 = "LEFT"
       redraw()
     }
+    if !act0 && !act1 {
+      menu()                  // nobody dancing is still seated (e.g. P1 hopped into P2's seat): back to song select
+    } else {
+      if player0 != none && !act0 {
+        info0 = "NEXT SONG"
+      }
+      if player1 != none && !act1 {
+        info1 = "NEXT SONG"
+      }
+    }
   } else {
     menu()
   }
