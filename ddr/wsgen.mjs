@@ -269,7 +269,7 @@ ${eachL(k => { const [ax, op, th] = KEYS[k]; return `on inp.${ax} ${op} ${th} {
 }`; })}
 on ChatCommand("ddrsync", "DDR: shift the arrows vs the music, in ms (+ = arrows later)") -> (ctrl, args) {
   sync = args.Trim().ParseNumber() / 1000.0
-  BroadcastChatMessage("<color=\"ff60d0\">DDR sync now \${floor(sync * 1000.0 + 0.5)} ms</>")
+  BroadcastChatMessage("<color=\\"ff60d0\\">DDR sync now \${floor(sync * 1000.0 + 0.5)} ms</>")
 }
 
 // Q or E: stop the song, back to song select
