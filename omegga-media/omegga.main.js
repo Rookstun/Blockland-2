@@ -885,7 +885,9 @@ module.exports = class Media {
     const fps = Math.max(1, Math.min(30, Number(fpsM?.[1] ?? fpsM?.[2] ?? nums[1] ?? this.config['fps'] ?? 10)));
     const facing = rest.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !rest.includes('mute');
-    const preset = { ...PRESETS[rest.find(a => PRESETS[a]) ?? 'auto'], tuneKey: args[0] };
+    // default = speech (owner's in-game A/B 2026-10-11 on a rock song: preferred it
+    // over auto, which the simulator and loopback score both ranked higher)
+    const preset = { ...PRESETS[rest.find(a => PRESETS[a]) ?? 'speech'], tuneKey: args[0] };
     const ext = Math.max(1, Math.round((this.config['pixel-size'] ?? 2) / 2));
 
     const session = { stopped: false, kind: 'video' };
@@ -1028,7 +1030,7 @@ module.exports = class Media {
         this.whisper(name, '<color="999">Downloading audio...</>');
         file = await this.download(args[0], 'audio');
         if (session.stopped) return;
-        const preset = PRESETS[args.find(a => PRESETS[a]) ?? (args.some(a => ['voice', 'bank', 'midi'].includes(a)) ? null : 'auto')];
+        const preset = PRESETS[args.find(a => PRESETS[a]) ?? (args.some(a => ['voice', 'bank', 'midi'].includes(a)) ? null : 'speech')];
         const opts = { synth: args.find(a => SYNTHS[a]), mode: args.find(a => ['voice', 'bank', 'midi'].includes(a)) ?? preset?.mode, flags: preset?.flags ?? [], layered: preset?.layered, layers: preset?.layers, auto: preset?.auto && !args.some(a => SYNTHS[a] || ['voice', 'bank', 'midi'].includes(a)), tuneKey: args[0] };
         this.whisper(name, `<color="999">Building the speaker device${opts.mode === 'midi' ? ' (converting to MIDI first)' : ''}...</>`);
         const devices = await this.buildAudioSet(file, opts);
