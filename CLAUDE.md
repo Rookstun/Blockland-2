@@ -5,6 +5,9 @@ Owner = renderman (in-game soapstain22). Terse, token-limited: act, don't ask, s
 ## Git
 - Workspace is a LOCAL git repo (2026-10-11, no remote = private; core.autocrlf false). Commit after each change; prefer git over new `.pre_*` backups. .gitignore drops mapgen/out*, editor cache, vendored tools, corpus data.
 
+## Eyes
+- `powershell -NoProfile -ExecutionPolicy Bypass -File eyes/gamecap.ps1 [out.png] [-Front]` captures the owner's Brickadia client window (PrintWindow, works while it is behind other windows; -Front focuses it first), then Read the PNG. To look at a spot: `br.Chat.Command /TP "soapstain22" x y z 0` then capture (moves the owner: ask if they're playing). No desktop computer-use tools in the VS Code session.
+
 ## Server
 - `ssh pzedlo.hopto.org` (user max). Node `~/node22/bin/node`. Omegga 1.20.0 (upgraded from 1.2.6 on 2026-10-07; its auto-restart is on: daily 2 h, 48 h max uptime, auto-update hourly; after ANY restart load the world by hand) in `~/omegga-server`, log `/tmp/omegga_pty2.log` (filter `LogBRRemoteBundle`).
 - Bridge job: `node ~/omegga-server/bridge/tools/job.mjs < job.json` (60 s limit; long jobs: write `bridge/inbox/<id>.tmp`, mv to `<id>`, poll `bridge/outbox/<id>`). Ops: `players`, `cmd {line, captureMs}`, `bricks {at, bricks, owner?, captureMs, externalAssets?}`, `say`, `sleep {ms}`, `clear`, `emit`.

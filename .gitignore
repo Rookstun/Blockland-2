@@ -14,3 +14,4 @@ corpus/out/
 # secrets / env
 .env
 *.pem
+eyes/*.png
