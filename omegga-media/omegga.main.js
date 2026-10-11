@@ -1107,7 +1107,11 @@ module.exports = class Media {
   /** One device, or (layered) one per frequency range; always an array. */
   async buildAudioSet(file, opts = {}) {
     if (opts.auto) {
-      const t = await this.autoTune(file, opts.tuneKey);
+      // a tuning failure must never cost the video its sound: fall back to the base settings
+      const t = await this.autoTune(file, opts.tuneKey).catch(e => {
+        console.error('[media] autotune failed, using base settings', e);
+        return { flags: AF.FLAGSETS[0], filter: AF.FIXES.plain };
+      });
       return [await this.buildAudioDevice(file, { mode: 'voice', flags: t.flags, filter: t.filter })];
     }
     if (!opts.layered && !opts.layers) return [await this.buildAudioDevice(file, opts)];
@@ -1130,7 +1134,7 @@ module.exports = class Media {
     this.tuneCache ??= new Map();
     if (tuneKey && this.tuneCache.has(tuneKey)) return this.tuneCache.get(tuneKey);
     // choices survive reloads: the store keeps them per link
-    const storeKey = tuneKey && 'tune:' + crypto.createHash('sha1').update(tuneKey).digest('hex').slice(0, 16);
+    const storeKey = tuneKey && 'tune:' + require('crypto').createHash('sha1').update(tuneKey).digest('hex').slice(0, 16);
     const stored = storeKey && await this.store.get(storeKey).catch(() => null);
     if (stored?.flags) {
       this.tuneCache.set(tuneKey, stored);
