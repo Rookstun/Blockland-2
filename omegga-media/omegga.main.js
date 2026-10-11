@@ -33,7 +33,10 @@ const PYTHON = path.join(__dirname, 'venv', 'bin', 'python');
 const HEIGHTMAP = path.join(__dirname, 'bin', 'heightmap');
 const TMP = path.join(__dirname, 'tmp');
 const CACHE = path.join(TMP, 'cache');
-const MERGE_AUDIO = true; // one prefab with shared buttons (mergeDevices); verified audible by loopback 2026-10-11
+// OFF 2026-10-11: merged soundtracks sounded far worse in game (loopback score 1.08/1.09 merged vs 1.42
+// as separate chips, 1.45 for the same device alone; owner: "it sucks ingame"). Separate chips keep
+// their own clocks and buttons. Likely cause: the video clock drives the audio chip once merged.
+const MERGE_AUDIO = false;
 const CACHE_MAX = 4; // owner 2026-10-11: keep the last 4 downloads
 const OWNER = { id: '3f9b2d71-6c4e-4a8b-9e15-7d20c1a4b5e7', name: 'Claude Media' };
 
