@@ -62,6 +62,7 @@ var t0: float = 0.0
 var lastRow: int = -99999
 var lead: int = 0
 var rowD: float = 0.1
+var sync: float = 0.0       // /ddrsync: chart delay vs the music, seconds
 var title: string = "SIT DOWN TO DANCE"
 var best: Map<string, int>
 var score: int = 0
@@ -227,7 +228,7 @@ mod menuKey(k: int) {
 ${eachL(k => `mod press${k}() {
   if state == 2 {
     if ni${k} < ne${k} {
-      let t = ServerUptime() - t0
+      let t = ServerUptime() - t0 - sync
       let dt = abs(t - NT${k}[ni${k}])
       if dt <= ${f(W.good)} {
         judgeHit(dt)
@@ -266,6 +267,11 @@ ${eachL(k => { const [ax, op, th] = KEYS[k]; return `on inp.${ax} ${op} ${th} {
     pcol${k} = ${DIM_PAD}
   }
 }`; })}
+on ChatCommand("ddrsync", "DDR: shift the arrows vs the music, in ms (+ = arrows later)") -> (ctrl, args) {
+  sync = args.Trim().ParseNumber() / 1000.0
+  BroadcastChatMessage("<color=\"ff60d0\">DDR sync now \${floor(sync * 1000.0 + 0.5)} ms</>")
+}
+
 // Q or E: stop the song, back to song select
 on inp.PressedQ || inp.PressedE {
   if (inp.PressedQ || inp.PressedE) && state == 2 {
@@ -278,19 +284,20 @@ ${dbg('stopped')}
 on Clock(interval = 0.02) {
   if state == 2 {
     let t = ServerUptime() - t0
+    let tc = t - sync
     if t > LEN[song] + 1.5 {
       finish()
     } else {
-      let row: int = floor(t / rowD)
+      let row: int = floor(tc / rowD + 0.5)   // rounded: an arrow sits on the receptor row centred on its time
       if row != lastRow {
         lastRow = row
         redraw()
       }
-${eachL(k => `      if ni${k} < ne${k} && t > NT${k}[ni${k}] + ${f(W.good)} {
+${eachL(k => `      if ni${k} < ne${k} && tc > NT${k}[ni${k}] + ${f(W.good)} {
         missed()
         ni${k} = ni${k} + 1
       }
-      rcol${k} = if t - flash${k} < 0.12 then ${col(LANE_ON[k])} else ${DIM_REC}`)}
+      rcol${k} = if tc - flash${k} < 0.12 then ${col(LANE_ON[k])} else ${DIM_REC}`)}
 ${eachV(v => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
         vp${v} = VP${v}[vi${v}]
         vo${v} = VE${v}[vi${v}]

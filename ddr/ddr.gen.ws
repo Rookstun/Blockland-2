@@ -67,6 +67,7 @@ var t0: float = 0.0
 var lastRow: int = -99999
 var lead: int = 0
 var rowD: float = 0.1
+var sync: float = 0.0       // /ddrsync: chart delay vs the music, seconds
 var title: string = "SIT DOWN TO DANCE"
 var best: Map<string, int>
 var score: int = 0
@@ -337,7 +338,7 @@ mod menuKey(k: int) {
 mod press0() {
   if state == 2 {
     if ni0 < ne0 {
-      let t = ServerUptime() - t0
+      let t = ServerUptime() - t0 - sync
       let dt = abs(t - NT0[ni0])
       if dt <= 0.16 {
         judgeHit(dt)
@@ -358,7 +359,7 @@ mod press0() {
 mod press1() {
   if state == 2 {
     if ni1 < ne1 {
-      let t = ServerUptime() - t0
+      let t = ServerUptime() - t0 - sync
       let dt = abs(t - NT1[ni1])
       if dt <= 0.16 {
         judgeHit(dt)
@@ -379,7 +380,7 @@ mod press1() {
 mod press2() {
   if state == 2 {
     if ni2 < ne2 {
-      let t = ServerUptime() - t0
+      let t = ServerUptime() - t0 - sync
       let dt = abs(t - NT2[ni2])
       if dt <= 0.16 {
         judgeHit(dt)
@@ -400,7 +401,7 @@ mod press2() {
 mod press3() {
   if state == 2 {
     if ni3 < ne3 {
-      let t = ServerUptime() - t0
+      let t = ServerUptime() - t0 - sync
       let dt = abs(t - NT3[ni3])
       if dt <= 0.16 {
         judgeHit(dt)
@@ -463,6 +464,11 @@ on inp.Right > 0.5 {
     pcol3 = ColorSRGB(40, 40, 50, 255)
   }
 }
+on ChatCommand("ddrsync", "DDR: shift the arrows vs the music, in ms (+ = arrows later)") -> (ctrl, args) {
+  sync = args.Trim().ParseNumber() / 1000.0
+  BroadcastChatMessage("<color="ff60d0">DDR sync now ${floor(sync * 1000.0 + 0.5)} ms</>")
+}
+
 // Q or E: stop the song, back to song select
 on inp.PressedQ || inp.PressedE {
   if (inp.PressedQ || inp.PressedE) && state == 2 {
@@ -475,34 +481,35 @@ on inp.PressedQ || inp.PressedE {
 on Clock(interval = 0.02) {
   if state == 2 {
     let t = ServerUptime() - t0
+    let tc = t - sync
     if t > LEN[song] + 1.5 {
       finish()
     } else {
-      let row: int = floor(t / rowD)
+      let row: int = floor(tc / rowD + 0.5)   // rounded: an arrow sits on the receptor row centred on its time
       if row != lastRow {
         lastRow = row
         redraw()
       }
-      if ni0 < ne0 && t > NT0[ni0] + 0.16 {
+      if ni0 < ne0 && tc > NT0[ni0] + 0.16 {
         missed()
         ni0 = ni0 + 1
       }
-      rcol0 = if t - flash0 < 0.12 then ColorSRGB(255, 70, 210, 255) else ColorSRGB(70, 70, 80, 255)
-      if ni1 < ne1 && t > NT1[ni1] + 0.16 {
+      rcol0 = if tc - flash0 < 0.12 then ColorSRGB(255, 70, 210, 255) else ColorSRGB(70, 70, 80, 255)
+      if ni1 < ne1 && tc > NT1[ni1] + 0.16 {
         missed()
         ni1 = ni1 + 1
       }
-      rcol1 = if t - flash1 < 0.12 then ColorSRGB(60, 210, 255, 255) else ColorSRGB(70, 70, 80, 255)
-      if ni2 < ne2 && t > NT2[ni2] + 0.16 {
+      rcol1 = if tc - flash1 < 0.12 then ColorSRGB(60, 210, 255, 255) else ColorSRGB(70, 70, 80, 255)
+      if ni2 < ne2 && tc > NT2[ni2] + 0.16 {
         missed()
         ni2 = ni2 + 1
       }
-      rcol2 = if t - flash2 < 0.12 then ColorSRGB(90, 255, 120, 255) else ColorSRGB(70, 70, 80, 255)
-      if ni3 < ne3 && t > NT3[ni3] + 0.16 {
+      rcol2 = if tc - flash2 < 0.12 then ColorSRGB(90, 255, 120, 255) else ColorSRGB(70, 70, 80, 255)
+      if ni3 < ne3 && tc > NT3[ni3] + 0.16 {
         missed()
         ni3 = ni3 + 1
       }
-      rcol3 = if t - flash3 < 0.12 then ColorSRGB(255, 170, 40, 255) else ColorSRGB(70, 70, 80, 255)
+      rcol3 = if tc - flash3 < 0.12 then ColorSRGB(255, 170, 40, 255) else ColorSRGB(70, 70, 80, 255)
       if vi0 < ve0 && t >= VT0[vi0] {
         vp0 = VP0[vi0]
         vo0 = VE0[vi0]
