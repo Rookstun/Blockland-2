@@ -9,7 +9,7 @@
 import { LANES } from './chart.mjs';
 
 export const WIN = 12;          // rows on screen
-export const LEAD_SEC = 3;      // countdown before the first row
+export const LEAD_SEC = 4;      // countdown before the first row
 export const PLAYERS = 2;
 const W = { perfect: 0.05, great: 0.1, good: 0.16 };
 export const LANE_ON = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]];
@@ -69,6 +69,7 @@ var frac: float = 0.0
 var title: string = "SIT DOWN TO DANCE\\n1 OR 2 PLAYERS"
 var best: Map<string, int>
 ${eachP(p => `var act${p}: bool = false
+var rdy${p}: bool = false
 var score${p}: int = 0
 var combo${p}: int = 0
 var maxCombo${p}: int = 0
@@ -122,6 +123,11 @@ ${eachP(p => `  judge${p} = ""
   frac = 0.0
 }
 
+// the ready-up: every seated dancer presses UP, then the song starts
+mod readyInfo() {
+${eachP(p => `  info${p} = if player${p} == none then "P${p + 1} SIT DOWN" else if rdy${p} then "P${p + 1} READY!" else "P${p + 1} PRESS ↑"`)}
+}
+
 mod menu() {
   state = 1
   silence()
@@ -131,8 +137,10 @@ mod menu() {
   let b = best.get(key)
   let bestTxt = if b.Found then "BEST \${b.Value}" else "NO SCORE YET"
   title = "◄ \${NAMES[song]} ►\\n\${BPM[song]} BPM  \${STEPS[song]} STEPS  \${bestTxt}\\n← → PICK   ↑ START"
-${eachP(p => `  info${p} = if player${p} != none then "P${p + 1} READY" else "P${p + 1} SIT DOWN"`)}
+${eachP(p => `  rdy${p} = false`)}
+  readyInfo()
 }
+
 
 mod start() {
   rowD = ROWD[song]
@@ -226,17 +234,24 @@ ${eachP(p => `  result${p}()`)}
   title = "\${NAMES[song]}\\nCLEARED!\\n↑ NEXT"
 }
 
-mod menuKey(k: int) {
+${eachP(p => `mod menuKey${p}(k: int) {
   if k == 0 {
     song = (song + ${S - 1}) % ${S}
     menu()
   } else if k == 3 {
     song = (song + 1) % ${S}
     menu()
+  } else if k == 1 {
+    rdy${p} = false
+    readyInfo()
   } else if k == 2 {
-    start()
+    rdy${p} = true
+    readyInfo()
+    if ${P.map(q => `(player${q} == none || rdy${q})`).join(' && ')} {
+      start()
+    }
   }
-}
+}`, '\n\n')}
 
 ${eachPL((p, k) => `mod press${p}${k}() {
   if state == 2 {
@@ -253,7 +268,7 @@ ${eachPL((p, k) => `mod press${p}${k}() {
       }
     }
   } else if state == 1 {
-    menuKey(${k})
+    menuKey${p}(${k})
   } else if state == 3 {
     menu()
   }
@@ -315,6 +330,14 @@ ${eachV(v => `    if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
     } else if t >= vo${v} {
       vv${v} = 0.0
     }`)}
+    if t < 0.0 {
+      let c: int = ceil(-t)
+      title = "\${NAMES[song]}\\nGET READY\\n\${c}"
+    } else if t < 1.0 {
+      title = "\${NAMES[song]}\\nGO!"
+    } else if title != NAMES[song] {
+      title = NAMES[song]
+    }
 ${eachP(p => `    if act${p} && t < 0.0 {
       judge${p} = "READY"
     } else if act${p} && t < 1.0 && judge${p} == "READY" {

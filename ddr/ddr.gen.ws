@@ -6,22 +6,22 @@
 var NAMES: string[] = ["MOUNTAIN KING", "ODE TO JOY"]
 var LEN: float[] = [51.619, 48.449]
 var ROWD: float[] = [0.1, 0.125]
-var LEAD: int[] = [31, 25]
+var LEAD: int[] = [41, 33]
 var BPM: int[] = [150, 120]
 var STEPS: int[] = [208, 92]
-var LS0: string[] = [" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n", " \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n"]
+var LS0: string[] = [" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n←\n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n", " \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n←\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n"]
 var NT0: float[] = [1.0, 1.6, 2.4, 4.2, 4.8, 5.2, 6.4, 7.4, 8.0, 8.8, 10.6, 11.2, 11.6, 13.8, 14.4, 15.2, 17.0, 17.6, 18.0, 19.2, 20.2, 20.8, 21.6, 23.4, 24.0, 24.4, 26.6, 27.2, 28.0, 29.8, 30.4, 30.8, 32.0, 33.0, 33.6, 34.4, 36.2, 36.8, 37.2, 39.4, 40.0, 40.8, 42.6, 43.2, 43.6, 44.8, 45.8, 46.4, 47.2, 49.0, 49.6, 50.0, 2.5, 3.5, 6.75, 7.0, 10.5, 11.5, 14.0, 17.5, 19.0, 21.0, 22.0, 26.5, 27.5, 30.0, 34.5, 35.5, 38.75, 39.0, 42.5, 43.5, 46.0]
 var NR0: int[] = [10, 16, 24, 42, 48, 52, 64, 74, 80, 88, 106, 112, 116, 138, 144, 152, 170, 176, 180, 192, 202, 208, 216, 234, 240, 244, 266, 272, 280, 298, 304, 308, 320, 330, 336, 344, 362, 368, 372, 394, 400, 408, 426, 432, 436, 448, 458, 464, 472, 490, 496, 500, 20, 28, 54, 56, 84, 92, 112, 140, 152, 168, 176, 212, 220, 240, 276, 284, 310, 312, 340, 348, 368]
 var NO0: int[] = [0, 52, 73]
-var LS1: string[] = [" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n", " \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n"]
+var LS1: string[] = [" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n", " \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n \n \n \n \n \n \n↓\n \n \n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↓\n \n↓\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n"]
 var NT1: float[] = [1.8, 2.6, 3.2, 5.0, 8.2, 9.0, 9.6, 11.4, 12.8, 14.6, 15.4, 16.0, 17.8, 21.0, 21.8, 22.4, 24.2, 25.6, 27.4, 28.2, 28.8, 30.6, 33.8, 34.6, 35.2, 37.0, 38.4, 40.2, 41.0, 41.6, 43.4, 46.6, 47.4, 48.0, 49.8, 3.0, 4.0, 4.5, 11.0, 12.0, 12.5, 14.75, 15.0, 19.5, 21.5, 23.0, 27.0, 28.0, 28.5, 30.75, 31.0, 35.0, 36.0, 36.5, 43.0, 44.0, 44.5, 46.75, 47.0]
 var NR1: int[] = [18, 26, 32, 50, 82, 90, 96, 114, 128, 146, 154, 160, 178, 210, 218, 224, 242, 256, 274, 282, 288, 306, 338, 346, 352, 370, 384, 402, 410, 416, 434, 466, 474, 480, 498, 24, 32, 36, 88, 96, 100, 118, 120, 156, 172, 184, 216, 224, 228, 246, 248, 280, 288, 292, 344, 352, 356, 374, 376]
 var NO1: int[] = [0, 35, 59]
-var LS2: string[] = [" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n", " \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n"]
+var LS2: string[] = [" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n", " \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n↑\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n"]
 var NT2: float[] = [0.0, 0.4, 0.8, 3.6, 4.0, 4.6, 5.6, 6.8, 7.2, 10.0, 10.4, 11.0, 12.0, 13.2, 13.6, 16.4, 16.8, 17.4, 18.4, 19.6, 20.0, 22.8, 23.2, 23.8, 24.8, 26.0, 26.4, 29.2, 29.6, 30.2, 31.2, 32.4, 32.8, 35.6, 36.0, 36.6, 37.6, 38.8, 39.2, 42.0, 42.4, 43.0, 44.0, 45.2, 45.6, 48.4, 48.8, 49.4, 50.4, 0.0, 0.5, 1.5, 2.0, 5.5, 6.0, 9.0, 13.5, 17.0, 18.5, 20.5, 24.0, 24.5, 25.5, 26.0, 29.5, 32.0, 32.5, 33.5, 34.0, 37.5, 38.0, 41.0, 45.5]
 var NR2: int[] = [0, 4, 8, 36, 40, 46, 56, 68, 72, 100, 104, 110, 120, 132, 136, 164, 168, 174, 184, 196, 200, 228, 232, 238, 248, 260, 264, 292, 296, 302, 312, 324, 328, 356, 360, 366, 376, 388, 392, 420, 424, 430, 440, 452, 456, 484, 488, 494, 504, 0, 4, 12, 16, 44, 48, 72, 108, 136, 148, 164, 192, 196, 204, 208, 236, 256, 260, 268, 272, 300, 304, 328, 364]
 var NO2: int[] = [0, 49, 73]
-var LS3: string[] = [" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n", " \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n"]
+var LS3: string[] = [" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n", " \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n→\n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n→\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n"]
 var NT3: float[] = [0.2, 0.6, 1.2, 2.0, 2.8, 3.4, 3.8, 4.4, 5.4, 6.6, 7.0, 7.6, 8.4, 9.2, 9.8, 10.2, 10.8, 11.8, 13.0, 13.4, 14.0, 14.8, 15.6, 16.2, 16.6, 17.2, 18.2, 19.4, 19.8, 20.4, 21.2, 22.0, 22.6, 23.0, 23.6, 24.6, 25.8, 26.2, 26.8, 27.6, 28.4, 29.0, 29.4, 30.0, 31.0, 32.2, 32.6, 33.2, 34.0, 34.8, 35.4, 35.8, 36.4, 37.4, 38.6, 39.0, 39.6, 40.4, 41.2, 41.8, 42.2, 42.8, 43.8, 45.0, 45.4, 46.0, 46.8, 47.6, 48.2, 48.6, 49.2, 50.2, 1.0, 5.0, 8.0, 8.5, 9.5, 10.0, 13.0, 16.0, 16.5, 18.0, 18.75, 20.0, 20.75, 22.5, 25.0, 29.0, 33.0, 37.0, 40.0, 40.5, 41.5, 42.0, 45.0]
 var NR3: int[] = [2, 6, 12, 20, 28, 34, 38, 44, 54, 66, 70, 76, 84, 92, 98, 102, 108, 118, 130, 134, 140, 148, 156, 162, 166, 172, 182, 194, 198, 204, 212, 220, 226, 230, 236, 246, 258, 262, 268, 276, 284, 290, 294, 300, 310, 322, 326, 332, 340, 348, 354, 358, 364, 374, 386, 390, 396, 404, 412, 418, 422, 428, 438, 450, 454, 460, 468, 476, 482, 486, 492, 502, 8, 40, 64, 68, 76, 80, 104, 128, 132, 144, 150, 160, 166, 180, 200, 232, 264, 296, 320, 324, 332, 336, 360]
 var NO3: int[] = [0, 72, 95]
@@ -47,6 +47,7 @@ var frac: float = 0.0
 var title: string = "SIT DOWN TO DANCE\n1 OR 2 PLAYERS"
 var best: Map<string, int>
 var act0: bool = false
+var rdy0: bool = false
 var score0: int = 0
 var combo0: int = 0
 var maxCombo0: int = 0
@@ -59,6 +60,7 @@ var jcol0: color = ColorSRGB(255, 255, 255, 255)
 var info0: string = ""
 var comboTxt0: string = ""
 var act1: bool = false
+var rdy1: bool = false
 var score1: int = 0
 var combo1: int = 0
 var maxCombo1: int = 0
@@ -211,6 +213,12 @@ mod clearScreen() {
   frac = 0.0
 }
 
+// the ready-up: every seated dancer presses UP, then the song starts
+mod readyInfo() {
+  info0 = if player0 == none then "P1 SIT DOWN" else if rdy0 then "P1 READY!" else "P1 PRESS ↑"
+  info1 = if player1 == none then "P2 SIT DOWN" else if rdy1 then "P2 READY!" else "P2 PRESS ↑"
+}
+
 mod menu() {
   state = 1
   silence()
@@ -220,9 +228,11 @@ mod menu() {
   let b = best.get(key)
   let bestTxt = if b.Found then "BEST ${b.Value}" else "NO SCORE YET"
   title = "◄ ${NAMES[song]} ►\n${BPM[song]} BPM  ${STEPS[song]} STEPS  ${bestTxt}\n← → PICK   ↑ START"
-  info0 = if player0 != none then "P1 READY" else "P1 SIT DOWN"
-  info1 = if player1 != none then "P2 READY" else "P2 SIT DOWN"
+  rdy0 = false
+  rdy1 = false
+  readyInfo()
 }
+
 
 mod start() {
   rowD = ROWD[song]
@@ -279,7 +289,7 @@ mod start() {
   ve0 = VO0[song + 1]
   vi1 = VO1[song]
   ve1 = VO1[song + 1]
-  t0 = ServerUptime() + 3.0
+  t0 = ServerUptime() + 4.0
   lastRow = -99999
   title = NAMES[song]
   state = 2
@@ -409,15 +419,40 @@ mod finish() {
   title = "${NAMES[song]}\nCLEARED!\n↑ NEXT"
 }
 
-mod menuKey(k: int) {
+mod menuKey0(k: int) {
   if k == 0 {
     song = (song + 1) % 2
     menu()
   } else if k == 3 {
     song = (song + 1) % 2
     menu()
+  } else if k == 1 {
+    rdy0 = false
+    readyInfo()
   } else if k == 2 {
-    start()
+    rdy0 = true
+    readyInfo()
+    if (player0 == none || rdy0) && (player1 == none || rdy1) {
+      start()
+    }
+  }
+}
+mod menuKey1(k: int) {
+  if k == 0 {
+    song = (song + 1) % 2
+    menu()
+  } else if k == 3 {
+    song = (song + 1) % 2
+    menu()
+  } else if k == 1 {
+    rdy1 = false
+    readyInfo()
+  } else if k == 2 {
+    rdy1 = true
+    readyInfo()
+    if (player0 == none || rdy0) && (player1 == none || rdy1) {
+      start()
+    }
   }
 }
 
@@ -436,7 +471,7 @@ mod press00() {
       }
     }
   } else if state == 1 {
-    menuKey(0)
+    menuKey0(0)
   } else if state == 3 {
     menu()
   }
@@ -456,7 +491,7 @@ mod press01() {
       }
     }
   } else if state == 1 {
-    menuKey(1)
+    menuKey0(1)
   } else if state == 3 {
     menu()
   }
@@ -476,7 +511,7 @@ mod press02() {
       }
     }
   } else if state == 1 {
-    menuKey(2)
+    menuKey0(2)
   } else if state == 3 {
     menu()
   }
@@ -496,7 +531,7 @@ mod press03() {
       }
     }
   } else if state == 1 {
-    menuKey(3)
+    menuKey0(3)
   } else if state == 3 {
     menu()
   }
@@ -516,7 +551,7 @@ mod press10() {
       }
     }
   } else if state == 1 {
-    menuKey(0)
+    menuKey1(0)
   } else if state == 3 {
     menu()
   }
@@ -536,7 +571,7 @@ mod press11() {
       }
     }
   } else if state == 1 {
-    menuKey(1)
+    menuKey1(1)
   } else if state == 3 {
     menu()
   }
@@ -556,7 +591,7 @@ mod press12() {
       }
     }
   } else if state == 1 {
-    menuKey(2)
+    menuKey1(2)
   } else if state == 3 {
     menu()
   }
@@ -576,7 +611,7 @@ mod press13() {
       }
     }
   } else if state == 1 {
-    menuKey(3)
+    menuKey1(3)
   } else if state == 3 {
     menu()
   }
@@ -752,6 +787,14 @@ on Clock(interval = 0.02, enabled = state == 2) {
       vi1 = vi1 + 1
     } else if t >= vo1 {
       vv1 = 0.0
+    }
+    if t < 0.0 {
+      let c: int = ceil(-t)
+      title = "${NAMES[song]}\nGET READY\n${c}"
+    } else if t < 1.0 {
+      title = "${NAMES[song]}\nGO!"
+    } else if title != NAMES[song] {
+      title = NAMES[song]
     }
     if act0 && t < 0.0 {
       judge0 = "READY"
