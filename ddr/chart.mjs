@@ -9,8 +9,9 @@
 
 export const LANES = ['←', '↓', '↑', '→'];
 // the speakers: [synth, group]; ddr.ws gets one P/V out pair per voice
-export const VOICES = [['Square', 'melody'], ['Square', 'melody'], ['Triangle', 'bass'], ['Triangle', 'bass'],
-  ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other'], ['Sawtooth', 'other']];
+// soft tones (owner: square was "very beepy")
+export const VOICES = [['Triangle', 'melody'], ['Triangle', 'melody'], ['Triangle', 'bass'], ['Triangle', 'bass'],
+  ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other']];
 const LEVELS = { easy: 4, normal: 2, hard: 1 }; // minimum gap between steps, in 16ths
 
 const pitchOf = key => { let p = 2 ** ((key - 69) / 12); while (p > 9.5) p /= 2; while (p < 0.11) p *= 2; return p; };

@@ -114,36 +114,50 @@ var ve0: int = 0
 var vp0: float = 1.0
 var vv0: float = 0.0
 var vo0: float = 0.0
+var va0: float = 0.0
+var vs0: float = 0.0
 var vi1: int = 0
 var ve1: int = 0
 var vp1: float = 1.0
 var vv1: float = 0.0
 var vo1: float = 0.0
+var va1: float = 0.0
+var vs1: float = 0.0
 var vi2: int = 0
 var ve2: int = 0
 var vp2: float = 1.0
 var vv2: float = 0.0
 var vo2: float = 0.0
+var va2: float = 0.0
+var vs2: float = 0.0
 var vi3: int = 0
 var ve3: int = 0
 var vp3: float = 1.0
 var vv3: float = 0.0
 var vo3: float = 0.0
+var va3: float = 0.0
+var vs3: float = 0.0
 var vi4: int = 0
 var ve4: int = 0
 var vp4: float = 1.0
 var vv4: float = 0.0
 var vo4: float = 0.0
+var va4: float = 0.0
+var vs4: float = 0.0
 var vi5: int = 0
 var ve5: int = 0
 var vp5: float = 1.0
 var vv5: float = 0.0
 var vo5: float = 0.0
+var va5: float = 0.0
+var vs5: float = 0.0
 var vi6: int = 0
 var ve6: int = 0
 var vp6: float = 1.0
 var vv6: float = 0.0
 var vo6: float = 0.0
+var va6: float = 0.0
+var vs6: float = 0.0
 
 out title_t: string = title
 out judge_t: string = judge
@@ -163,19 +177,19 @@ out lane3: string = scr3
 out rec3: color = rcol3
 out pad3: color = pcol3
 out P0: float = vp0
-out V0: float = vv0
+out V0: float = Dampen(vv0, 0.025)
 out P1: float = vp1
-out V1: float = vv1
+out V1: float = Dampen(vv1, 0.025)
 out P2: float = vp2
-out V2: float = vv2
+out V2: float = Dampen(vv2, 0.025)
 out P3: float = vp3
-out V3: float = vv3
+out V3: float = Dampen(vv3, 0.025)
 out P4: float = vp4
-out V4: float = vv4
+out V4: float = Dampen(vv4, 0.025)
 out P5: float = vp5
-out V5: float = vv5
+out V5: float = Dampen(vv5, 0.025)
 out P6: float = vp6
-out V6: float = vv6
+out V6: float = Dampen(vv6, 0.025)   // smoothed: no clicks between notes
 
 mod silence() {
   vv0 = 0.0
@@ -513,58 +527,86 @@ on Clock(interval = 0.02) {
       if vi0 < ve0 && t >= VT0[vi0] {
         vp0 = VP0[vi0]
         vo0 = VE0[vi0]
-        vv0 = VV0[vi0]
+        va0 = VV0[vi0]
+        vs0 = t
+        vv0 = va0
         vi0 = vi0 + 1
       } else if t >= vo0 {
         vv0 = 0.0
+      } else {
+        vv0 = va0 * max(0.45, 1.0 - (t - vs0) * 1.5)   // pluck: decay to a 45% sustain
       }
       if vi1 < ve1 && t >= VT1[vi1] {
         vp1 = VP1[vi1]
         vo1 = VE1[vi1]
-        vv1 = VV1[vi1]
+        va1 = VV1[vi1]
+        vs1 = t
+        vv1 = va1
         vi1 = vi1 + 1
       } else if t >= vo1 {
         vv1 = 0.0
+      } else {
+        vv1 = va1 * max(0.45, 1.0 - (t - vs1) * 1.5)   // pluck: decay to a 45% sustain
       }
       if vi2 < ve2 && t >= VT2[vi2] {
         vp2 = VP2[vi2]
         vo2 = VE2[vi2]
-        vv2 = VV2[vi2]
+        va2 = VV2[vi2]
+        vs2 = t
+        vv2 = va2
         vi2 = vi2 + 1
       } else if t >= vo2 {
         vv2 = 0.0
+      } else {
+        vv2 = va2 * max(0.45, 1.0 - (t - vs2) * 1.5)   // pluck: decay to a 45% sustain
       }
       if vi3 < ve3 && t >= VT3[vi3] {
         vp3 = VP3[vi3]
         vo3 = VE3[vi3]
-        vv3 = VV3[vi3]
+        va3 = VV3[vi3]
+        vs3 = t
+        vv3 = va3
         vi3 = vi3 + 1
       } else if t >= vo3 {
         vv3 = 0.0
+      } else {
+        vv3 = va3 * max(0.45, 1.0 - (t - vs3) * 1.5)   // pluck: decay to a 45% sustain
       }
       if vi4 < ve4 && t >= VT4[vi4] {
         vp4 = VP4[vi4]
         vo4 = VE4[vi4]
-        vv4 = VV4[vi4]
+        va4 = VV4[vi4]
+        vs4 = t
+        vv4 = va4
         vi4 = vi4 + 1
       } else if t >= vo4 {
         vv4 = 0.0
+      } else {
+        vv4 = va4 * max(0.45, 1.0 - (t - vs4) * 1.5)   // pluck: decay to a 45% sustain
       }
       if vi5 < ve5 && t >= VT5[vi5] {
         vp5 = VP5[vi5]
         vo5 = VE5[vi5]
-        vv5 = VV5[vi5]
+        va5 = VV5[vi5]
+        vs5 = t
+        vv5 = va5
         vi5 = vi5 + 1
       } else if t >= vo5 {
         vv5 = 0.0
+      } else {
+        vv5 = va5 * max(0.45, 1.0 - (t - vs5) * 1.5)   // pluck: decay to a 45% sustain
       }
       if vi6 < ve6 && t >= VT6[vi6] {
         vp6 = VP6[vi6]
         vo6 = VE6[vi6]
-        vv6 = VV6[vi6]
+        va6 = VV6[vi6]
+        vs6 = t
+        vv6 = va6
         vi6 = vi6 + 1
       } else if t >= vo6 {
         vv6 = 0.0
+      } else {
+        vv6 = va6 * max(0.45, 1.0 - (t - vs6) * 1.5)   // pluck: decay to a 45% sustain
       }
       if t < 0.0 {
         let c: int = ceil(-t)

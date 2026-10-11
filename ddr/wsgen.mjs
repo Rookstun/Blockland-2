@@ -87,7 +87,9 @@ ${eachV(v => `var vi${v}: int = 0
 var ve${v}: int = 0
 var vp${v}: float = 1.0
 var vv${v}: float = 0.0
-var vo${v}: float = 0.0`)}
+var vo${v}: float = 0.0
+var va${v}: float = 0.0
+var vs${v}: float = 0.0`)}
 
 out title_t: string = title
 out judge_t: string = judge
@@ -98,7 +100,7 @@ ${eachL(k => `out lane${k}: string = scr${k}
 out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
 ${eachV(v => `out P${v}: float = vp${v}
-out V${v}: float = vv${v}`)}
+out V${v}: float = Dampen(vv${v}, 0.025)`)}   // smoothed: no clicks between notes
 
 mod silence() {
 ${eachV(v => `  vv${v} = 0.0`)}
@@ -301,10 +303,14 @@ ${eachL(k => `      if ni${k} < ne${k} && tc > NT${k}[ni${k}] + ${f(W.good)} {
 ${eachV(v => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
         vp${v} = VP${v}[vi${v}]
         vo${v} = VE${v}[vi${v}]
-        vv${v} = VV${v}[vi${v}]
+        va${v} = VV${v}[vi${v}]
+        vs${v} = t
+        vv${v} = va${v}
         vi${v} = vi${v} + 1
       } else if t >= vo${v} {
         vv${v} = 0.0
+      } else {
+        vv${v} = va${v} * max(0.45, 1.0 - (t - vs${v}) * 1.5)   // pluck: decay to a 45% sustain
       }`)}
       if t < 0.0 {
         let c: int = ceil(-t)
