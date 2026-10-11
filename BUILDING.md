@@ -145,3 +145,8 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
 5. Player geometry: step height a player walks up without jumping, crouch
    height, how wide a gap a player fits through, BMX climb limits.
 6. Graphical quirks you've seen in our builds that should become rules here.
+
+## Text bricks & handedness (learned on the DDR cabinet, 2026-10-11)
+- Component_TextDisplay does NOT auto-fit: `LineHeight` is the glyph height in world units (1 = specks). Text, Color, LineOffset are wireable (cross-grid wires from a chip work).
+- The world is left-handed: a player facing +y has +x on their LEFT. Mirror x for anything laid out left-to-right for a viewer.
+- Seat B_Seat direction 4 rotation 0 faces +y.
