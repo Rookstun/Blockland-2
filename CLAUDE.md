@@ -2,6 +2,9 @@
 
 Owner = renderman (in-game soapstain22). Terse, token-limited: act, don't ask, short replies. Test world. Geometry rules: `BUILDING.md` (read before generating bricks; add new rules there). Full old notes (history, old coords): `CLAUDE.md.pre_trim`.
 
+## Git
+- Workspace is a LOCAL git repo (2026-10-11, no remote = private; core.autocrlf false). Commit after each change; prefer git over new `.pre_*` backups. .gitignore drops mapgen/out*, editor cache, vendored tools, corpus data.
+
 ## Server
 - `ssh pzedlo.hopto.org` (user max). Node `~/node22/bin/node`. Omegga 1.20.0 (upgraded from 1.2.6 on 2026-10-07; its auto-restart is on: daily 2 h, 48 h max uptime, auto-update hourly; after ANY restart load the world by hand) in `~/omegga-server`, log `/tmp/omegga_pty2.log` (filter `LogBRRemoteBundle`).
 - Bridge job: `node ~/omegga-server/bridge/tools/job.mjs < job.json` (60 s limit; long jobs: write `bridge/inbox/<id>.tmp`, mv to `<id>`, poll `bridge/outbox/<id>`). Ops: `players`, `cmd {line, captureMs}`, `bricks {at, bricks, owner?, captureMs, externalAssets?}`, `say`, `sleep {ms}`, `clear`, `emit`.
