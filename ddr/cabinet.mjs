@@ -1,4 +1,4 @@
-// cabinet.mjs: the physical 2-player DDR machine (half scale) around the chip.
+// cabinet.mjs: the physical DDR machine (half scale, 1 player) around the chip.
 //   buildCabinet(compiledChipBrz, voiceSynths) -> prefab .brz bytes
 //
 // Prefab local, ground z = 0, the dancers face +y. The world is left-handed:
@@ -31,7 +31,7 @@ const METAL = c => ({ color: c, material: 'BMC_Metallic' });
 const TD = 'Component_TextDisplay';
 const PINK = [255, 60, 200], CYAN = [60, 200, 255], BODY = [18, 18, 24];
 
-export function buildCabinet(compiled, synths, { range = 3000, inner = 600, players = 2 } = {}) {
+export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {}) {
   const r = brs.WorldReader.from(compiled);
   const assets = r.brickAssets(), ext = r.externalAssets();
   const comps = g => { const out = new Map(); for (const { index } of r.brickChunkIndex(g)) for (const c of r.componentChunk(g, index).components) (out.get(c.brickIndex) ?? out.set(c.brickIndex, []).get(c.brickIndex)).push({ type: c.typeName, data: c.data }); return out; };
@@ -79,11 +79,11 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600, play
   });
 
   // ---- the floor: walkway to the cabinet, then a stage per player
-  box(-96, -38, 0, 96, -4, 6, METAL([40, 40, 46]));
+  box(-50, -38, 0, 50, -4, 6, METAL([40, 40, 46]));
   const later = []; // wires into stage bricks after the screen's
   const CY = [-106, -80, -54];                                     // rows: DOWN, seat, UP
-  for (let p = 0; p < players; p++) {
-    const sx = p === 0 ? 48 : -48, trim = p === 0 ? PINK : CYAN;
+  {
+    const sx = 0, trim = PINK;
     const CX = [sx + 26, sx, sx - 26];                               // cols: LEFT (+x), centre, RIGHT
     box(sx - 41, -124, 0, sx + 41, -38, 6, METAL([40, 40, 46]));
     box(sx - 41, -124, 6, sx + 41, -122, 8, GLOW(trim, 3));
@@ -97,20 +97,18 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600, play
       if (k < 0) { box(x - 11, y - 11, 8, x + 11, y + 11, 10, METAL(cx === 1 && cy === 1 ? [60, 60, 70] : [110, 110, 120])); continue; }
       const pad = w.addBrick({ asset: MB, color: LANE_COL[k].map(c => Math.round(c * 0.35)), size: [11, 11, 1], position: [x, y, 9], owner_index: owner,
         components: [{ type: TD, data: { ...TEXT, Text: ARROWS[k], Rotation: 0, LineHeight: 17, Color: rgba([40, 40, 50]), OutlineWidth: 2 } }] });
-      later.push(() => wireOut(`pad${p}${k}`, pad, TD, 'Color'));
+      later.push(() => wireOut(`pad${k}`, pad, TD, 'Color'));
     }
     // the seat on the centre panel: W/A/S/D go through the chip's input splitter
     const seat = w.addBrick({ asset: 'B_Seat', position: [sx, -80, 21], direction: 4, rotation: 0, color: [20, 20, 24], owner_index: owner,
-      components: [{ type: 'Component_Internal_Seat', data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: `Dance P${p + 1}` } }] });
-    const ig = inGate.get(`player${p}`);
-    if (ig === undefined) throw new Error(`chip has no "player${p}" input`);
+      components: [{ type: 'Component_Internal_Seat', data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: 'Dance' } }] });
+    const ig = inGate.get('player');
+    if (ig === undefined) throw new Error('chip has no "player" input');
     w.addWire({ brick: seat, component_type: 'Component_Internal_Seat', port: 'SittingCharacter' }, { brick: ref[ig], component_type: 'BrickComponentType_Internal_MicrochipInput', port: 'RER_Input' });
     // safety bar behind, with a P1/P2 sign
     for (const x of [sx - 38, sx + 38]) box(x - 2, -122, 8, x + 2, -118, 54, METAL([200, 200, 210]));
     box(sx - 40, -122, 54, sx + 40, -118, 58, METAL([200, 200, 210]));
     box(sx - 40, -122, 58, sx + 40, -118, 60, GLOW(trim, 3));
-    w.addBrick({ asset: MB, ...GLOW([20, 6, 30], 1), direction: FACE_MINUS_Y >> 2, rotation: FACE_MINUS_Y & 3, size: [10, 6, 1], position: [sx, -126, 46], owner_index: owner,
-      components: [{ type: TD, data: { ...TEXT, Text: `P${p + 1}`, LineHeight: 9, Color: rgba(trim) } }] });
   }
 
   // ---- cabinet body
@@ -127,31 +125,28 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600, play
   box(-70, 0, 14, 70, 2, 16, GLOW(CYAN, 3));
   box(-70, 0, 120, 70, 2, 122, GLOW(CYAN, 3));
   box(-70, 0, 16, 70, 2, 120, { color: [4, 4, 6] });
-  // the screen, in front of the black back
-  const title = panel(-68, 68, 100, 118, { Text: 'SIT DOWN TO DANCE\n1 OR 2 PLAYERS', Color: rgba([255, 120, 230]), LineHeight: 4.5 });
+  // the screen, in front of the black back: title on top, receptors, 4 lanes in the middle,
+  // score/combo on the dancer's left (+x), judgement on the right
+  const title = panel(-68, 68, 100, 118, { Text: 'SIT DOWN TO DANCE', Color: rgba([255, 120, 230]), LineHeight: 3 });
   wireOut('title_t', title, TD, 'Text');
+  const info = panel(66, 34, 74, 84, { Text: '', LineHeight: 4, Color: rgba([255, 255, 255]) });
+  wireOut('info_t', info, TD, 'Text');
+  const combo = panel(66, 34, 62, 72, { Text: '', LineHeight: 3.5, Color: rgba([255, 225, 60]) });
+  wireOut('combo_t', combo, TD, 'Text');
+  const judge = panel(-34, -66, 70, 84, { Text: '', LineHeight: 5, Color: rgba([255, 255, 255]) });
+  wireOut('judge_t', judge, TD, 'Text');
+  wireOut('judge_c', judge, TD, 'Color');
   const LANE_W = 14, GAP = 2;
-  for (let p = 0; p < players; p++) {
-    // P1 lanes from +68 toward +6, P2 from -6 toward -68 (both LEFT..RIGHT for the dancers)
-    const edge = p === 0 ? 68 : -6;
-    const lx = k => edge - LANE_W / 2 - k * (LANE_W + GAP);
-    const hx0 = edge, hx1 = edge - 62, mid = (hx0 + hx1) / 2;
-    const info = panel(hx0, mid + 1, 92, 98, { Text: '', LineHeight: 4.5, Color: rgba([255, 255, 255]) });
-    wireOut(`info${p}_t`, info, TD, 'Text');
-    const combo = panel(mid - 1, hx1, 92, 98, { Text: '', LineHeight: 4.5, Color: rgba([255, 225, 60]) });
-    wireOut(`combo${p}_t`, combo, TD, 'Text');
-    const judge = panel(hx0, hx1, 84, 90, { Text: '', LineHeight: 5.5, Color: rgba([255, 255, 255]) });
-    wireOut(`judge${p}_t`, judge, TD, 'Text');
-    wireOut(`judge${p}_c`, judge, TD, 'Color');
-    for (let k = 0; k < 4; k++) {
-      const x = lx(k);
-      const rec = panel(x + LANE_W / 2, x - LANE_W / 2, 76, 82, { Text: ARROWS[k], LineHeight: 5.5, Color: rgba([70, 70, 80]) });
-      wireOut(`rec${p}${k}`, rec, TD, 'Color');
-      const lane = panel(x + LANE_W / 2, x - LANE_W / 2, 18, 74, { Text: '', LineHeight: 4.5, Color: rgba(LANE_COL[k]) });
-      wireOut(`lane${p}${k}`, lane, TD, 'Text');
-      wireOut('scroll', lane, TD, 'LineOffset');
-    }
+  for (let k = 0; k < 4; k++) {
+    const x = 31 - LANE_W / 2 - k * (LANE_W + GAP);                  // LEFT lane at +x (the dancer's left)
+    const rec = panel(x + LANE_W / 2, x - LANE_W / 2, 92, 98, { Text: ARROWS[k], LineHeight: 5, Color: rgba([70, 70, 80]) });
+    wireOut(`rec${k}`, rec, TD, 'Color');
+    const lane = panel(x + LANE_W / 2, x - LANE_W / 2, 18, 90, { Text: '', LineHeight: 4, Color: rgba(LANE_COL[k]) });
+    wireOut(`lane${k}`, lane, TD, 'Text');
   }
+  // Offset test markers (which axis moves text on the face?): none / X / Y / Z by 8 units
+  [[0, 0, 0], [8, 0, 0], [0, 8, 0], [0, 0, 8]].forEach(([X, Y, Z], i) =>
+    panel(-36, -66, 20 + i * 12, 28 + i * 12, { Text: ['O', 'X', 'Y', 'Z'][i], LineHeight: 5, Offset: { X, Y, Z }, Color: rgba([255, 255, 255]) }));
   for (const f of later) f();
 
   // ---- speaker towers

@@ -19,7 +19,7 @@ const songDir = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--le
 const songs = fs.readdirSync(songDir).filter(f => /\.midi?$/i.test(f)).sort().map(f => {
   const base = f.replace(/\.midi?$/i, ''), cfgFile = join(songDir, base + '.json');
   const cfg = fs.existsSync(cfgFile) ? JSON.parse(fs.readFileSync(cfgFile, 'utf8')) : {};
-  const title = cfg.title ?? base.replace(/[_-]+/g, ' ').toUpperCase();
+  const title = cfg.title ?? base.replace(/\s*\([^)]*\)?/g, '').replace(/^Cave Story - /, '').replace(/[_-]+/g, ' ').trim().toUpperCase();
   const s = makeSong(readMidi(fs.readFileSync(join(songDir, f))), { name: title, level: cfg.level ?? level, track: cfg.track, bpm: cfg.bpm });
   console.log(`${title}: ${s.bpm} bpm, ${s.length}s, ${s.steps} steps, voices ${s.voices.map(v => v.notes.length).join('/')}`);
   return s;
