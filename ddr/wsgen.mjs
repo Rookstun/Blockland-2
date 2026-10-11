@@ -108,7 +108,9 @@ ${eachV(v => `out P${v}: float = vp${v}
 out V${v}: float = ${CLICK[v] ? `vv${v}` : `min(vv${v}, Dampen(vv${v}, 0.025))`}`)}   // smooth voices tween only incoming; clicky ones snap
 
 mod silence() {
-${eachV(v => `  vv${v} = 0.0`)}
+${eachV(v => `  vv${v} = 0.0
+  va${v} = 0.0
+  vo${v} = -9999.0`)}
 }
 
 mod redraw() {
@@ -154,7 +156,10 @@ ${eachL(k => `  live${k} = LS${k}[song]
   ni${k} = NO${k}[song]
   ne${k} = NO${k}[song + 1]`)}
 ${eachV(v => `  vi${v} = VO${v}[song]
-  ve${v} = VO${v}[song + 1]`)}
+  ve${v} = VO${v}[song + 1]
+  vv${v} = 0.0
+  va${v} = 0.0
+  vo${v} = -9999.0`)}   // fresh voices: a stale note end kept the old note droning
   t0 = ServerUptime() + ${f(LEAD_SEC)}
   lastRow = -99999
   title = NAMES[song]
