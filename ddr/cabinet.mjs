@@ -9,7 +9,7 @@
 //           centre (Sitting Character -> the chip's player<p> port), bar behind.
 //   cabinet x -78..78, y 0..35: the screen = TextDisplay bricks on its front
 //           (y -2..0) wired from chip outs: title across the top, per player a
-//           score/combo row, judgement, 4 receptors, 4 lanes (LineOffset <- scroll).
+//           score/combo, judgement, 4 receptors, 4 lanes of Offset-driven arrow sprites.
 //   towers, marquee; the chip (with its synth speakers) behind the cabinet.
 import * as brs from '../mapgen/lib/brs.mjs';
 import { K, STRIP_Z0, STRIP_H } from './wsgen.mjs';
