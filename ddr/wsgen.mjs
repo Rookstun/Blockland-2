@@ -8,6 +8,7 @@ import { LANES } from './chart.mjs';
 
 export const WIN = 12;          // rows on screen
 export const LEAD_SEC = 4;      // countdown before the first row
+const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
 const DEBUG = true;             // [ddr] lines in chat (owner: use chat for logs)
 const W = { perfect: 0.05, great: 0.1, good: 0.16 };
 export const LANE_ON = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]];
@@ -303,14 +304,14 @@ ${eachL(k => `      if ni${k} < ne${k} && tc > NT${k}[ni${k}] + ${f(W.good)} {
 ${eachV(v => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
         vp${v} = VP${v}[vi${v}]
         vo${v} = VE${v}[vi${v}]
-        va${v} = VV${v}[vi${v}]
+        va${v} = VV${v}[vi${v}] * ${f(GAIN)}
         vs${v} = t
         vv${v} = va${v}
         vi${v} = vi${v} + 1
       } else if t >= vo${v} {
         vv${v} = 0.0
       } else {
-        vv${v} = va${v} * max(0.45, 1.0 - (t - vs${v}) * 1.5)   // pluck: decay to a 45% sustain
+        vv${v} = va${v} * max(0.7, 1.0 - (t - vs${v}) * 1.0)    // pluck: decay to a 70% sustain
       }`)}
       if t < 0.0 {
         let c: int = ceil(-t)

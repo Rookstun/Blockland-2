@@ -527,86 +527,86 @@ on Clock(interval = 0.02) {
       if vi0 < ve0 && t >= VT0[vi0] {
         vp0 = VP0[vi0]
         vo0 = VE0[vi0]
-        va0 = VV0[vi0]
+        va0 = VV0[vi0] * 2.0
         vs0 = t
         vv0 = va0
         vi0 = vi0 + 1
       } else if t >= vo0 {
         vv0 = 0.0
       } else {
-        vv0 = va0 * max(0.45, 1.0 - (t - vs0) * 1.5)   // pluck: decay to a 45% sustain
+        vv0 = va0 * max(0.7, 1.0 - (t - vs0) * 1.0)    // pluck: decay to a 70% sustain
       }
       if vi1 < ve1 && t >= VT1[vi1] {
         vp1 = VP1[vi1]
         vo1 = VE1[vi1]
-        va1 = VV1[vi1]
+        va1 = VV1[vi1] * 2.0
         vs1 = t
         vv1 = va1
         vi1 = vi1 + 1
       } else if t >= vo1 {
         vv1 = 0.0
       } else {
-        vv1 = va1 * max(0.45, 1.0 - (t - vs1) * 1.5)   // pluck: decay to a 45% sustain
+        vv1 = va1 * max(0.7, 1.0 - (t - vs1) * 1.0)    // pluck: decay to a 70% sustain
       }
       if vi2 < ve2 && t >= VT2[vi2] {
         vp2 = VP2[vi2]
         vo2 = VE2[vi2]
-        va2 = VV2[vi2]
+        va2 = VV2[vi2] * 2.0
         vs2 = t
         vv2 = va2
         vi2 = vi2 + 1
       } else if t >= vo2 {
         vv2 = 0.0
       } else {
-        vv2 = va2 * max(0.45, 1.0 - (t - vs2) * 1.5)   // pluck: decay to a 45% sustain
+        vv2 = va2 * max(0.7, 1.0 - (t - vs2) * 1.0)    // pluck: decay to a 70% sustain
       }
       if vi3 < ve3 && t >= VT3[vi3] {
         vp3 = VP3[vi3]
         vo3 = VE3[vi3]
-        va3 = VV3[vi3]
+        va3 = VV3[vi3] * 2.0
         vs3 = t
         vv3 = va3
         vi3 = vi3 + 1
       } else if t >= vo3 {
         vv3 = 0.0
       } else {
-        vv3 = va3 * max(0.45, 1.0 - (t - vs3) * 1.5)   // pluck: decay to a 45% sustain
+        vv3 = va3 * max(0.7, 1.0 - (t - vs3) * 1.0)    // pluck: decay to a 70% sustain
       }
       if vi4 < ve4 && t >= VT4[vi4] {
         vp4 = VP4[vi4]
         vo4 = VE4[vi4]
-        va4 = VV4[vi4]
+        va4 = VV4[vi4] * 2.0
         vs4 = t
         vv4 = va4
         vi4 = vi4 + 1
       } else if t >= vo4 {
         vv4 = 0.0
       } else {
-        vv4 = va4 * max(0.45, 1.0 - (t - vs4) * 1.5)   // pluck: decay to a 45% sustain
+        vv4 = va4 * max(0.7, 1.0 - (t - vs4) * 1.0)    // pluck: decay to a 70% sustain
       }
       if vi5 < ve5 && t >= VT5[vi5] {
         vp5 = VP5[vi5]
         vo5 = VE5[vi5]
-        va5 = VV5[vi5]
+        va5 = VV5[vi5] * 2.0
         vs5 = t
         vv5 = va5
         vi5 = vi5 + 1
       } else if t >= vo5 {
         vv5 = 0.0
       } else {
-        vv5 = va5 * max(0.45, 1.0 - (t - vs5) * 1.5)   // pluck: decay to a 45% sustain
+        vv5 = va5 * max(0.7, 1.0 - (t - vs5) * 1.0)    // pluck: decay to a 70% sustain
       }
       if vi6 < ve6 && t >= VT6[vi6] {
         vp6 = VP6[vi6]
         vo6 = VE6[vi6]
-        va6 = VV6[vi6]
+        va6 = VV6[vi6] * 2.0
         vs6 = t
         vv6 = va6
         vi6 = vi6 + 1
       } else if t >= vo6 {
         vv6 = 0.0
       } else {
-        vv6 = va6 * max(0.45, 1.0 - (t - vs6) * 1.5)   // pluck: decay to a 45% sustain
+        vv6 = va6 * max(0.7, 1.0 - (t - vs6) * 1.0)    // pluck: decay to a 70% sustain
       }
       if t < 0.0 {
         let c: int = ceil(-t)
