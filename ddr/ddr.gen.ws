@@ -98,6 +98,8 @@ var info: string = ""
 var comboTxt: string = ""
 var beatC: color = ColorSRGB(60, 20, 50, 255)
 var beatB: float = 0.0
+var rainbow: color = ColorSRGB(0, 0, 0, 255)
+var lampC: color = ColorSRGB(255, 60, 200, 255)
 var live0: string = ""
 var scr0: string = ""
 var ni0: int = 0
@@ -204,6 +206,8 @@ out info_t: string = info
 out combo_t: string = comboTxt
 out beat_c: color = beatC
 out beat_b: float = beatB
+out rainbow_c: color = rainbow
+out lamp_c: color = lampC
 out lane0: string = scr0
 out rec0: color = rcol0
 out pad0: color = pcol0
@@ -279,6 +283,8 @@ mod redraw() {
 }
 
 mod clearScreen() {
+  rainbow = ColorSRGB(0, 0, 0, 255)
+  lampC = ColorSRGB(255, 60, 200, 255)
   beatC = ColorSRGB(60, 20, 50, 255)
   beatB = 0.0
   scr0 = ""
@@ -757,6 +763,18 @@ on Clock(interval = 0.02) {
       let pulse = max(0.0, 1.0 - ph * 4.0)
       beatB = pulse * 60.0
       beatC = if ph < 0.25 then ColorSRGB(255, 90, 220, 255) else ColorSRGB(60, 20, 50, 255)
+      // combo of 10+: every arrow outline (lanes, receptors, pads) and the lamps' light cycle the rainbow
+      if combo >= 10 {
+        let h = t * 5.0
+        let cr: int = floor(127.5 + 127.5 * sin(h))
+        let cg: int = floor(127.5 + 127.5 * sin(h + 2.094))
+        let cb: int = floor(127.5 + 127.5 * sin(h + 4.189))
+        rainbow = ColorSRGB(cr, cg, cb, 255)
+        lampC = rainbow
+      } else if combo == 0 && lampC != ColorSRGB(255, 60, 200, 255) {
+        rainbow = ColorSRGB(0, 0, 0, 255)
+        lampC = ColorSRGB(255, 60, 200, 255)
+      }
       if t < 0.0 {
         let c: int = ceil(-t)
         title = "${NAMES[song]}\nGET READY  ${c}"

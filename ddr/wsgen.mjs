@@ -9,6 +9,7 @@ import { LANES } from './chart.mjs';
 export const WIN = 12;          // rows on screen
 export const LEAD_SEC = 4;      // countdown before the first row
 const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
+const RAINBOW_COMBO = 10;      // combo that turns the arrow outlines rainbow
 const DEBUG = true;             // [ddr] lines in chat (owner: use chat for logs)
 const W = { perfect: 0.05, great: 0.1, good: 0.16 };
 export const LANE_ON = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]];
@@ -79,6 +80,8 @@ var info: string = ""
 var comboTxt: string = ""
 var beatC: color = ColorSRGB(60, 20, 50, 255)
 var beatB: float = 0.0
+var rainbow: color = ColorSRGB(0, 0, 0, 255)
+var lampC: color = ColorSRGB(255, 60, 200, 255)
 ${eachL(k => `var live${k}: string = ""
 var scr${k}: string = ""
 var ni${k}: int = 0
@@ -101,6 +104,8 @@ out info_t: string = info
 out combo_t: string = comboTxt
 out beat_c: color = beatC
 out beat_b: float = beatB
+out rainbow_c: color = rainbow
+out lamp_c: color = lampC
 ${eachL(k => `out lane${k}: string = scr${k}
 out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
@@ -119,6 +124,8 @@ ${eachL(k => `  scr${k} = live${k}.Substring(base, ${WIN * 2})`)}
 }
 
 mod clearScreen() {
+  rainbow = ColorSRGB(0, 0, 0, 255)
+  lampC = ColorSRGB(255, 60, 200, 255)
   beatC = ColorSRGB(60, 20, 50, 255)
   beatB = 0.0
 ${eachL(k => `  scr${k} = ""`)}
@@ -330,6 +337,18 @@ ${eachV(v => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
       let pulse = max(0.0, 1.0 - ph * 4.0)
       beatB = pulse * 60.0
       beatC = if ph < 0.25 then ColorSRGB(255, 90, 220, 255) else ColorSRGB(60, 20, 50, 255)
+      // combo of 10+: every arrow outline (lanes, receptors, pads) and the lamps' light cycle the rainbow
+      if combo >= ${RAINBOW_COMBO} {
+        let h = t * 5.0
+        let cr: int = floor(127.5 + 127.5 * sin(h))
+        let cg: int = floor(127.5 + 127.5 * sin(h + 2.094))
+        let cb: int = floor(127.5 + 127.5 * sin(h + 4.189))
+        rainbow = ColorSRGB(cr, cg, cb, 255)
+        lampC = rainbow
+      } else if combo == 0 && lampC != ColorSRGB(255, 60, 200, 255) {
+        rainbow = ColorSRGB(0, 0, 0, 255)
+        lampC = ColorSRGB(255, 60, 200, 255)
+      }
       if t < 0.0 {
         let c: int = ceil(-t)
         title = "\${NAMES[song]}\\nGET READY  \${c}"

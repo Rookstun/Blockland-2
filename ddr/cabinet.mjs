@@ -19,11 +19,12 @@ const MB = 'PB_DefaultMicroBrick';
 const FACE_MINUS_Y = 13;  // orientation: text face toward -y (casinogen/ruins)
 const LANE_COL = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]];
 const ARROWS = ['←', '↓', '↑', '→'];
-const TEXT = { // Font 0 = the chip's own font (IosevkaTerm). LineHeight = glyph height in units.
+const FONT = 'IosevkaTerm'; // monospace, has the arrow glyphs
+const TEXT = { // Font = index of FONT in the externalAssets (set per build). LineHeight = glyph height in units.
   Font: 0, Rotation: -90, Skew: 0, Kerning: 0, LineHeight: 4, WidthScale: 1, LineOffset: 0, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },
   Color: { R: 255, G: 255, B: 255, A: 255 }, MaterialSlider: 10, ShadingWidth: 2, OutlineColor: { R: 0, G: 0, B: 0, A: 255 }, OutlineWidth: 1,
   ScuffWidth: 0, GraffitiDepthLimit: 5, GraffitiAngleLimit: 45, GraffitiLayer: 0, bEnabled: true, Face: 4, bAlignToWedge: false, bOverrideColor: true,
-  Typeface: 1, Billboard: 0, Material: 1, Shading: 0, bFlipShading: false, Outline: 2, bSharpCorners: true, bSharpOutlines: true, bOverrideOutlineColor: true, bForeground: false,
+  Typeface: 0, Billboard: 0, Material: 1, Shading: 0, bFlipShading: false, Outline: 2, bSharpCorners: true, bSharpOutlines: true, bOverrideOutlineColor: true, bForeground: false,
 };
 const rgba = ([R, G, B]) => ({ R, G, B, A: 255 });
 const GLOW = (c, i = 4) => ({ color: c, material: 'BMC_Glow', material_intensity: i });
@@ -34,6 +35,8 @@ const PINK = [255, 60, 200], CYAN = [60, 200, 255], BODY = [18, 18, 24];
 export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {}) {
   const r = brs.WorldReader.from(compiled);
   const assets = r.brickAssets(), ext = r.externalAssets();
+  if (!ext.some(e => e.type === 'BrickFontDescriptor' && e.name === FONT)) ext.push({ type: 'BrickFontDescriptor', name: FONT });
+  TEXT.Font = ext.findIndex(e => e.type === 'BrickFontDescriptor' && e.name === FONT);
   const comps = g => { const out = new Map(); for (const { index } of r.brickChunkIndex(g)) for (const c of r.componentChunk(g, index).components) (out.get(c.brickIndex) ?? out.set(c.brickIndex, []).get(c.brickIndex)).push({ type: c.typeName, data: c.data }); return out; };
   const wires = g => { const out = []; for (const { index } of r.brickChunkIndex(g)) { try { out.push(...r.wireChunk(g, index).local); } catch {} } return out; };
 
@@ -97,7 +100,7 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
       if (k < 0) { box(x - 11, y - 11, 8, x + 11, y + 11, 10, METAL(cx === 1 && cy === 1 ? [60, 60, 70] : [110, 110, 120])); continue; }
       const pad = w.addBrick({ asset: MB, color: LANE_COL[k].map(c => Math.round(c * 0.35)), size: [11, 11, 1], position: [x, y, 9], owner_index: owner,
         components: [{ type: TD, data: { ...TEXT, Text: ARROWS[k], Rotation: 0, LineHeight: 17, Color: rgba([40, 40, 50]), OutlineWidth: 2 } }] });
-      later.push(() => wireOut(`pad${k}`, pad, TD, 'Color'));
+      later.push(() => { wireOut(`pad${k}`, pad, TD, 'Color'); wireOut('rainbow_c', pad, TD, 'OutlineColor'); });
     }
     // the seat on the centre panel: W/A/S/D go through the chip's input splitter
     const seat = w.addBrick({ asset: 'B_Seat', position: [sx, -80, 21], direction: 4, rotation: 0, color: [20, 20, 24], owner_index: owner,
@@ -140,10 +143,12 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
   const LANE_W = 16;
   for (let k = 0; k < 4; k++) {
     const x0 = 32 - k * LANE_W, x1 = x0 - LANE_W;                      // LEFT lane at +x (the dancer's left)
-    const rec = panel(x0, x1, 90, 98, { Text: ARROWS[k], LineHeight: 5, Color: rgba([70, 70, 80]) });
+    const rec = panel(x0, x1, 90, 98, { Text: ARROWS[k], LineHeight: 5, OutlineWidth: 2, Color: rgba([70, 70, 80]) });
     wireOut(`rec${k}`, rec, TD, 'Color');
-    const lane = panel(x0, x1, 16, 90, { Text: '', LineHeight: 4, Color: rgba(LANE_COL[k]) });
+    wireOut('rainbow_c', rec, TD, 'OutlineColor');
+    const lane = panel(x0, x1, 16, 90, { Text: '', LineHeight: 4, OutlineWidth: 2, Color: rgba(LANE_COL[k]) });
     wireOut(`lane${k}`, lane, TD, 'Text');
+    wireOut('rainbow_c', lane, TD, 'OutlineColor');
   }
   // Offset test markers (which axis moves text on the face?): none / X / Y / Z by 8 units
   [[0, 0, 0], [8, 0, 0], [0, 8, 0], [0, 0, 8]].forEach(([X, Y, Z], i) =>
@@ -155,6 +160,7 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
       position: [(x0 + x1) / 2, y, (z0 + z1) / 2], owner_index: owner, components: [{ type: TD, data: { ...TEXT, Text: text, LineHeight: z1 - z0 - 2, Color: rgba([60, 20, 50]) } }, LIGHT] });
     wireOut('beat_c', b, TD, 'Color');
     wireOut('beat_b', b, 'Component_PointLight', 'Brightness');
+    wireOut('lamp_c', b, 'Component_PointLight', 'Color');
   };
   lamp(60, -60, 126, 136, -1, '● ● ● ● ● ● ● ●');
   lamp(92, 82, 146, 158, -7, '●');
