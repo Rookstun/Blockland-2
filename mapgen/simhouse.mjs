@@ -749,6 +749,100 @@ function basement(X0, HY, w, d, well, s) {
   box(x0, yi + 3, LAWN_Z + 32, x1, yi + 7, LAWN_Z + 36, { color: [60, 60, 64] }, 'rail');
 }
 
+// (owner 2026-10-11: "make the streets more dynamic") street life: lamp posts along the
+// pavement, cars parked at the kerb (never across a driveway or near the street ends), a hydrant
+function parkedCar(cx, cy, s) {
+  const car = pick([[200, 40, 40], [40, 80, 170], [230, 230, 230], [30, 30, 34], [60, 130, 80], [240, 190, 40], [120, 60, 150]], s, 71);
+  const x0 = cx - 80, x1 = cx + 80, y0 = cy - 36, y1 = cy + 36;
+  box(x0, y0, 16, x1, y1, 40, { color: car, material: 'BMC_Metallic' }, 'car body');
+  box(x0 + 30, y0 + 4, 40, x1 - 50, y1 - 4, 64, { ...GLASS }, 'car glass');
+  box(x0 + 30, y0 + 4, 64, x1 - 50, y1 - 4, 68, { color: car, material: 'BMC_Metallic' }, 'car roof');
+  for (const wx of [x0 + 30, x1 - 30]) for (const [a, b] of [[y0 - 6, y0], [y1, y1 + 6]]) box(wx - 14, a, 4, wx + 14, b, 30, { color: [24, 24, 26] }, 'car wheel');
+}
+function streetLife() {
+  const drives = LOTPLAN.filter(p => p.garage).map(p => p.garage);
+  const clear = (x, r) => x - r > PAD[0] + 150 && x + r < PAD[2] - 150 && !drives.some(([g0, g1]) => x + r > g0 - 20 && x - r < g1 + 20);
+  for (let x = PAD[0] + 200; x < PAD[2] - 150; x += 400) {
+    pole(x, WALK[0] + 14, 8, 108, 3, { color: [60, 62, 66], material: 'BMC_Metallic' }, 'lamp post');
+    box(x - 2, WALK[0] - 26, 108, x + 2, WALK[0] + 12, 112, { color: [60, 62, 66], material: 'BMC_Metallic' }, 'lamp arm');
+    box(x - 8, WALK[0] - 34, 100, x + 8, WALK[0] - 18, 108, GLOW([255, 236, 190], 5), 'lamp');
+  }
+  for (const [i, pl] of LOTPLAN.entries()) {
+    if (rnd(SIM_SEED, i, 81) > 0.45) continue;
+    const cx = Math.round((pl.Lx + (rnd(SIM_SEED, i, 82) < 0.5 ? -1 : 1) * 180) / 10) * 10;
+    if (clear(cx, 90)) parkedCar(cx, ROAD[1] - 42, SIM_SEED * 10 + i);
+  }
+  const hx = Math.round((PAD[0] + 400 + rnd(SIM_SEED, 83) * (PAD[2] - PAD[0] - 800)) / 20) * 20 + 10;
+  if (!LOTPLAN.some(p => p.garage && hx > p.garage[0] - 30 && hx < p.garage[1] + 30) && (hx - PAD[0] - 200) % 400 > 40) {
+    pole(hx, WALK[1] - 16, 8, 32, 5, { color: [210, 40, 40] }, 'hydrant');
+    pole(hx, WALK[1] - 16, 32, 40, 3, { color: [210, 40, 40] }, 'hydrant cap'); // 8 tall: even half height
+  }
+}
+
+// (owner 2026-10-11: "grand theft auto roads") a double yellow centre line, a white edge line
+// on the far side (the kerb lane is for parking), zebra crossings and stop lines at both street
+// ends (where the avenues cross), a manhole in the far lane
+function roadMarkings() {
+  const W = { color: [240, 240, 236] }, Y = { color: [236, 196, 50] }, mid = (ROAD[0] + ROAD[1]) / 2;
+  const ends = [PAD[0] + 30, PAD[2] - 150];
+  box(ends[0] + 120, mid - 10, 4, ends[1], mid - 6, 6, Y, 'double yellow');
+  box(ends[0] + 120, mid + 2, 4, ends[1], mid + 6, 6, Y, 'double yellow');
+  box(ends[0] + 120, ROAD[0] + 2, 4, ends[1], ROAD[0] + 6, 6, W, 'edge line');
+  for (const x0 of ends) {
+    for (let y = ROAD[0] + 10; y + 16 <= ROAD[1] - 6; y += 32) box(x0, y, 4, x0 + 80, y + 16, 6, W, 'zebra');
+  }
+  // stop lines: across the lane that drives into each end (traffic keeps right: +x in the low lane)
+  box(PAD[2] - 170, ROAD[0] + 10, 4, PAD[2] - 160, mid - 14, 6, W, 'stop line');
+  box(PAD[0] + 140, mid + 10, 4, PAD[0] + 150, ROAD[1] - 6, 6, W, 'stop line');
+  const mx = Math.round((PAD[0] + PAD[2]) / 20) * 10 + 60;
+  box(mx - 14, ROAD[0] + 30, 4, mx + 14, ROAD[0] + 58, 6, { color: [44, 44, 46], material: 'BMC_Metallic' }, 'manhole');
+}
+
+// a park lot: lawn, a path up the middle, a playground (sand, swings, a slide) on one side,
+// a pond with a stone rim on the other, benches by the path, trees, a picket fence with a gate
+function park(Lx, L0, L1, s) {
+  const Y0 = LOT_Y[0], Y1 = LOT_Y[1], grass = { asset: 'PB_DefaultBrick', color: [84, 156, 66] };
+  const side = rnd(s, 90) < 0.5 ? -1 : 1, px = [Lx - 20, Lx + 20];
+  boxCut(L0, Y0, 0, px[0], Y1, LAWN_Z, grass, 'park lawn');
+  boxCut(px[1], Y0, 0, L1, Y1, LAWN_Z, grass, 'park lawn');
+  box(px[0], Y0, 0, px[1], Y1 - 120, LAWN_Z, { asset: TILE, color: [186, 176, 150] }, 'park path');
+  boxCut(px[0], Y1 - 120, 0, px[1], Y1, LAWN_Z, grass, 'park lawn');
+  // playground
+  const gx0 = side < 0 ? L0 + 40 : Lx + 60, gx1 = gx0 + 260, gy0 = Y0 + 180, gy1 = gy0 + 300;
+  box(gx0, gy0, LAWN_Z, gx1, gy1, LAWN_Z + 2, { asset: TILE, color: [222, 200, 150] }, 'sandpit');
+  const SW = [200, 60, 50], z0 = LAWN_Z + 2;
+  for (const x of [gx0 + 30, gx0 + 150]) for (const y of [gy0 + 40, gy0 + 50]) box(x, y, z0, x + 4, y + 4, z0 + 90, { color: SW }, 'swing frame');
+  box(gx0 + 30, gy0 + 40, z0 + 90, gx0 + 154, gy0 + 54, z0 + 94, { color: SW }, 'swing bar');
+  for (const x of [gx0 + 60, gx0 + 110]) {
+    for (const dx of [0, 16]) box(x + dx, gy0 + 46, z0 + 30, x + dx + 2, gy0 + 48, z0 + 90, { color: [80, 80, 84] }, 'swing chain');
+    box(x - 2, gy0 + 40, z0 + 26, x + 20, gy0 + 54, z0 + 30, { color: [40, 40, 44] }, 'swing seat');
+  }
+  // the slide: a four-post tower with a ladder, a wedge chute running down behind it
+  const sx = gx0 + 40, sy = gy0 + 160;
+  for (const [x, y] of [[sx, sy], [sx + 36, sy], [sx, sy + 36], [sx + 36, sy + 36]]) box(x, y, z0, x + 4, y + 4, z0 + 60, { color: [60, 120, 200] }, 'slide post');
+  box(sx, sy, z0 + 60, sx + 40, sy + 40, z0 + 64, { color: [60, 120, 200] }, 'slide deck');
+  for (let k = 0; k < 5; k++) box(sx + 4, sy - 2, z0 + 10 + k * 12, sx + 36, sy, z0 + 12 + k * 12, { color: [240, 200, 60] }, 'ladder rung');
+  const ext = [20, 50, 30];
+  B.add({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[0, -1]], ext), color: [240, 200, 60], position: [sx + 20, sy + 40 + 50, z0 + 30] }, 'slide chute');
+  // pond
+  const qx0 = side < 0 ? Lx + 80 : L0 + 60, qx1 = qx0 + 240, qy0 = Y0 + 220, qy1 = qy0 + 200;
+  box(qx0, qy0, LAWN_Z, qx1, qy1, LAWN_Z + 4, { color: [130, 128, 124] }, 'pond rim');
+  box(qx0 + 10, qy0 + 10, LAWN_Z + 4, qx1 - 10, qy1 - 10, LAWN_Z + 6, { color: [70, 140, 200], material: 'BMC_Glass' }, 'pond');
+  for (const x of [qx0 + 20, qx1 - 40]) box(x, qy0 + 30, LAWN_Z + 6, x + 20, qy0 + 50, LAWN_Z + 8, { color: [70, 150, 60] }, 'lily pad');
+  // benches along the path, trees in the corners
+  for (const y of [Y0 + 600, Y0 + 660]) for (const sg of [-1, 1]) {
+    const bx = sg < 0 ? px[0] - 30 : px[1] + 10;
+    if (sg < 0 ? bx < L0 + 20 : bx + 20 > L1 - 20) continue;
+    box(bx, y - 30, LAWN_Z, bx + 20, y + 30, LAWN_Z + 16, { color: WOOD }, 'bench seat');
+    box(sg < 0 ? bx : bx + 16, y - 30, LAWN_Z + 16, sg < 0 ? bx + 4 : bx + 20, y + 30, LAWN_Z + 34, { color: WOOD }, 'bench back');
+  }
+  for (const [x, y] of [[L0 + 80, Y0 + 80], [L1 - 80, Y0 + 80], [L0 + 80, Y1 - 80], [L1 - 80, Y1 - 80]]) tree(x, y, s + x);
+  picketRun(L0, Y0 + 10, L1, Y0 + 10, [[px[0] - 10, px[1] + 10]]);
+  picketRun(L0, Y0 + 30, L0, Y1);
+  picketRun(L1 - 4, Y0 + 30, L1 - 4, Y1);
+  picketRun(L0 + 20, Y1 - 4, L1 - 20, Y1 - 4);
+}
+
 // ------------------------------------------------------------------ house --
 const SIDING = [[214, 226, 236], [236, 222, 190], [200, 222, 200], [240, 214, 214], [232, 230, 222], [250, 238, 206]];
 const ROOFS = [[70, 70, 76], [104, 64, 50], [72, 88, 110], [140, 60, 46], [96, 84, 70]];
@@ -979,7 +1073,8 @@ const randomLot = i => {
   const [W, D] = pick([[48, 40], [44, 44], [52, 40], [48, 44]], s, 2);
   return { plan: pick(['open', 'centre', 'cross'], s, 1), W, D, storeys: rnd(s, 4) < 0.45 ? 1 : 2, s, win: Math.floor(rnd(s, 5) * WINDOW_STYLES.length),
     job: pick(Object.keys(JOBS), s, 6), roof: process.env.SIM_ROOF || pick(ROOF_TYPES, s, 7),
-    garage: W <= 48 && rnd(s, 8) < 0.5 ? (rnd(s, 9) < 0.5 ? -1 : 1) : 0, bsmt: rnd(s, 10) < 0.5, stairSide: rnd(s, 11) < 0.5 ? -1 : 1 };
+    garage: W <= 48 && rnd(s, 8) < 0.5 ? (rnd(s, 9) < 0.5 ? -1 : 1) : 0, bsmt: rnd(s, 10) < 0.5, stairSide: rnd(s, 11) < 0.5 ? -1 : 1,
+    park: rnd(s, 12) < 0.12 };   // (owner 2026-10-11 "make the streets more dynamic") some lots are parks
 };
 const LOT_W = 780, LOTS = (SIM_SEED ? [0, 1, 2, 3].map(randomLot) : [
   { plan: 'open', W: 48, D: 40, storeys: 1, s: 111, win: 3, job: 'baker', roof: 'shed' },
@@ -1011,6 +1106,7 @@ const boxCut = (x0, y0, z0, x1, y1, z1, b, label) => {
 };
 const LOTPLAN = LOTS.map((lot, i) => {
   const Lx = XS[i], L0 = Lx - LOT_W / 2, L1 = Lx + LOT_W / 2;
+  if (lot.park) return { Lx, L0, L1, park: true, garage: null, well: null };
   const w = (lot.W + 1) * 10, d = (lot.D + 1) * 10, half = Math.floor(w / 20) * 10;
   let X0 = Lx - half, garage = null;
   if (lot.garage > 0) { X0 = L0 + 40; garage = [X0 + w + 20, X0 + w + 20 + GW]; } // 20 clear: window boxes stick out 12
@@ -1042,13 +1138,16 @@ const LOTPLAN = LOTS.map((lot, i) => {
 }
 // road, centre dashes, pavement with a curb
 box(PAD[0], ROAD[0], 0, PAD[2], ROAD[1], 4, { color: [58, 58, 62] }, 'road');
-for (let x = PAD[0] + 40; x + 60 < PAD[2]; x += 120) box(x, (ROAD[0] + ROAD[1]) / 2 - 4, 4, x + 60, (ROAD[0] + ROAD[1]) / 2 + 4, 6, { color: [236, 200, 60] }, 'dash');
+if (SIM_SEED) roadMarkings();
+else for (let x = PAD[0] + 40; x + 60 < PAD[2]; x += 120) box(x, (ROAD[0] + ROAD[1]) / 2 - 4, 4, x + 60, (ROAD[0] + ROAD[1]) / 2 + 4, 6, { color: [236, 200, 60] }, 'dash');
 box(PAD[0], WALK[0], 0, PAD[2], WALK[1], 8, { asset: TILE, color: [196, 194, 188] }, 'pavement');
+if (SIM_SEED) streetLife();
 let furnished = 0;
 const summary = [];
 for (const [i, lot] of LOTS.entries()) {
   const pl = LOTPLAN[i], { Lx, L0, L1 } = pl;
   seed = lot.s;
+  if (pl.park) { park(Lx, L0, L1, lot.s); summary.push('park'); continue; }
   const ctx = house(pl.HLx, HOUSE_Y, lot);
   ctx.HY = HOUSE_Y;
   const { rooms, typeOf, X0, w, d } = ctx;
