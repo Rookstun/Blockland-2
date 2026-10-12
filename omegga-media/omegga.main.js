@@ -240,6 +240,9 @@ module.exports = class Media {
       try { old.stop?.(); old.clear?.(); } catch {}
     }
     global.__mediaSessions = this.sessions;
+    // a reload forgets the old instance's screens but their bricks stay, and the next video at
+    // that spot was refused as overlapping (2026-10-12: 2774 pixels): wipe the media owner's bricks
+    this.omegga.writeln(`br.Bricks.Clear ${OWNER.id} 1`);
     this.prefabDir = path.join(path.dirname(this.omegga.savePath), 'Prefabs');
     fs.mkdirSync(this.prefabDir, { recursive: true });
     // never wipe tmp on load: a reload left the previous instance's videos
@@ -893,6 +896,8 @@ module.exports = class Media {
     const preset = { ...PRESETS[rest.find(a => PRESETS[a]) ?? 'speech'], tuneKey: args[0] };
     const ext = Math.max(1, Math.round((this.config['pixel-size'] ?? 2) / 2));
 
+    // nothing else playing: clear any leftover screens and speakers first (they block the new ones)
+    if (!this.sessions.size) this.omegga.writeln(`br.Bricks.Clear ${OWNER.id} 1`);
     const session = { stopped: false, kind: 'video' };
     session.stop = () => (session.stopped = true);
     this.sessions.set(key, session);
@@ -1017,17 +1022,24 @@ module.exports = class Media {
       const mins = Math.floor(seconds / 60), secs = Math.round(seconds % 60);
       this.broadcast(`<color="9cf">${sanitize(name)} is playing a video (${width}x${height}, ${mins}:${String(secs).padStart(2, '0')} at ${fps} fps). /stop to end.</>`);
       this.whisper(name, `<color="999">The screen is ${dist / STUD} studs to your ${facing === '-x' ? '+x' : facing === '+x' ? '-x' : facing === '-y' ? '+y' : '-y'} side. Pick the side with -x, +x, -y or +y.</>`);
-      const start = Date.now();
+      // (owner 2026-10-12: "loading new videos in segments but the timing is wrong") each piece
+      // goes in when the one before it has actually played its length, timed from when that one
+      // was loaded: a fixed schedule (start + k * chunkSec) cut a late piece short and kept every
+      // later piece off. A piece that is still building when its turn comes loads the moment it
+      // is ready, and the schedule carries on from there.
+      const durOf = k => Math.min(chunkSec, seconds - k * chunkSec);
+      let loadedAt = Date.now();
       loadSet(first);
-      const waitUntil = async t => { while (!session.stopped && Date.now() < t) await sleep(Math.min(1000, t - Date.now())); };
+      const waitUntil = async t => { while (!session.stopped && Date.now() < t) await sleep(Math.min(250, t - Date.now())); };
       for (let k = 1; k < chunks && !session.stopped; k++) {
         const set = await tryBuild(k);
-        await waitUntil(start + k * chunkSec * 1000);
+        await waitUntil(loadedAt + durOf(k - 1) * 1000);
         if (session.stopped) break;
+        loadedAt = Date.now();
         if (set) loadSet(set, k);
         else clearCur();
       }
-      await waitUntil(start + seconds * 1000 + 1000);
+      await waitUntil(loadedAt + durOf(chunks - 1) * 1000 + 1000);
       if (!session.stopped && !this.config['keep-last-frame']) session.clear?.();
     } finally {
       session.stopped = true;
