@@ -21,6 +21,8 @@ import { planSurfaceDungeon } from './surfacedungeon.mjs';
 import { writePreview, rasterBricks } from './preview.mjs';
 import { buildSettlement, buildCamp, buildDetail, buildSign, placeName, EXTERNAL_ASSETS } from './ruins.mjs';
 import { FIXED as BUILDER_FIXED } from './builder.mjs';
+import { treeVoxels } from '../trees/tree.mjs';
+import { makeOccupancy, placeVoxelProp } from './props.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -2575,7 +2577,9 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
   }
   console.error(`settlements ${ruins.length} (${ruins.reduce((a, v) => a + (v.goblins || 0), 0)} goblins), camps ${camps.length} (${camps.reduce((a, c) => a + c.goblins, 0)} goblins), details ${details.count} ${JSON.stringify(details.kinds)}${offGridDrops ? `, ${offGridDrops} off-grid pieces dropped` : ''}`);
 }
-let trees = 0;
+let trees = 0, treeBricks = 0;
+let forestStats = {};
+const treeKinds = {}, forestWood = new Map(), forestLeaves = new Map(), forestColors = [];
 const treeAt = []; // [x, y] world, to keep canopies (up to 60 units across) apart
 // trees: at most one per 4x4 block of cells
 for (let bx = 0; bx < N; bx += 4)
@@ -2600,24 +2604,51 @@ for (let bx = 0; bx < N; bx += 4)
     const [tx, ty] = at(x, y, 0);
     if (treeAt.some(([px, py]) => Math.max(Math.abs(px - tx), Math.abs(py - ty)) < 130)) crowded = true;
     if (crowded) continue;
+    // (owner 2026-10-12: "put those new trees in", "greedy remesh into the
+    // geometry") grown trees from trees/tree.mjs: every tree's voxels go into one
+    // world grid (wood 4 units, leaves 8), clipped against the ground and kept
+    // low clear of built things, then the whole forest is greedy-merged below.
+    // Pines up high and in the snow, willows by the river, else a mix.
     const [wx, wy, wz] = at(x, y, h + 1);
-    const pine = h > 60 || snowy;
-    bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, wz + trunk * 6], size: [10, 10, trunk * 6], color: [92, 64, 40] });
-    const leaf = pine ? [46, 86, 52] : [58, 120, 48];
-    // round tiers [radius, bricks tall]: a cone for pines, a rounded blob otherwise
-    const tiers = pine
-      ? [[55, 2], [45, 2], [35, 2], [25, 2], [15, 2], [5, 2]]
-      : [[40, 1], [55, 2], [60, 2], [50, 2], [30, 1]];
-    let z = wz + trunk * 12; // canopy starts at the trunk top so the two don't overlap
-    tiers.forEach(([r, t], k) => {
-      // snowy pines: every other tier and the tip snow-laden
-      const c = snowy && (k % 2 === 1 || k === tiers.length - 1) ? [232, 238, 244] : leaf;
-      bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, z + t * 6], size: [r, r, t * 6], color: c });
-      z += t * 12;
-    });
+    let wet = false;
+    for (let dx = -4; dx <= 4 && !wet; dx++) for (let dy = -4; dy <= 4; dy++) if (inMap(x + dx, y + dy) && riverCell[(x + dx) * N + y + dy]) { wet = true; break; }
+    const roll = hash(x, y, 5);
+    const kind = h > 60 || snowy ? 'pine' : wet && roll < 0.6 ? 'willow' : roll < 0.4 ? 'oak' : roll < 0.6 ? 'birch' : roll < 0.8 ? 'autumn' : roll < 0.9 ? 'cherry' : 'pine';
+    const tv = treeVoxels(kind, 1 + Math.floor(hash(x, y, 6) * 1e6), 0.7 + hash(x, y, 7) * 0.3);
+    // origin on the 8-unit grid so every tree's leaves share one lattice
+    const ox = Math.round(wx / 8) * 8, oy = Math.round(wy / 8) * 8, oz = Math.floor(wz / 8) * 8;
+    const ci = tv.colors.map(c => { const k = c.join(); let i = forestColors.findIndex(f => f.join() === k); if (i < 0) i = forestColors.push(c) - 1; return i; });
+    let R = 0;
+    for (const [key, c] of tv.wood) { const [i, j, k] = key.split(',').map(Number); const g = (ox / 4 + i) + ',' + (oy / 4 + j) + ',' + (oz / 4 + k); if (!forestWood.has(g)) forestWood.set(g, ci[c]); }
+    for (const [key, c] of tv.leaves) { const [i, j, k] = key.split(',').map(Number); R = Math.max(R, Math.abs(i * 8 + 4), Math.abs(j * 8 + 4)); const g = (ox / 8 + i) + ',' + (oy / 8 + j) + ',' + (oz / 8 + k); if (!forestLeaves.has(g)) forestLeaves.set(g, ci[c]); }
+    treeKinds[kind] = (treeKinds[kind] ?? 0) + 1;
     trees++;
-    treeAt.push([wx, wy]);
+    treeAt.push([wx, wy, R]);
   }
+// the forest: every tree's voxels pooled (see the tree loop above) and placed
+// through props.mjs in 'smooth' mode: parts inside anything already built (terrain,
+// smoothing pieces) are cut away, trunks get fillers down to sloping ground, and
+// low down (within 10 bricks of the ground) the forest stays clear of built-up cells
+const canopyLow = new Uint8Array(N * N); // tree bricks near the ground here: no boulders / plants
+{
+  const groundTop = c => (H[c] + 1 + (rampCol[c] ? rampK[c] : 0) + (capCol[c] ? 1 : 0)) * VZ;
+  const builtUp = (cx, cy) => { const c = cx * N + cy; return pathCell[c] || townNear[c] || keepOut[c] || reserved[c] || villageDist(cx, cy) <= VILLAGE.r + 1 || hengeDist(cx, cy) <= 2; };
+  const cellsOf = (lo, hi, fn) => { for (let cx = Math.floor((lo[0] - X0) / CELL); cx <= Math.floor((hi[0] - 1 - X0) / CELL); cx++) for (let cy = Math.floor((lo[1] - Y0) / CELL); cy <= Math.floor((hi[1] - 1 - Y0) / CELL); cy++) if (fn(cx, cy) === false) return false; return true; };
+  const occ = makeOccupancy(bricks);
+  const placed = placeVoxelProp(occ, { grids: [{ vox: forestWood, V: 4, colors: forestColors, wood: true }, { vox: forestLeaves, V: 8, colors: forestColors }] }, {
+    mode: 'smooth', skirt: 24, skirtGrid: g => g.wood,
+    keep: (lo, hi) => cellsOf(lo, hi, (cx, cy) => inMap(cx, cy) && !(lo[2] < groundTop(cx * N + cy) + 120 && builtUp(cx, cy))),
+    // nothing but terrain and its smoothing pieces stands in the forest, all below this
+    mayHit: (lo, hi) => !cellsOf(lo, hi, (cx, cy) => lo[2] >= (H[cx * N + cy] + 2 + MAX_RISE) * VZ),
+  });
+  for (const b of placed) {
+    bricks.push(b);
+    treeBricks++;
+    const lo = b.position.map((v, a) => v - b.size[a]), hi = b.position.map((v, a) => v + b.size[a]);
+    cellsOf(lo, hi, (cx, cy) => { if (inMap(cx, cy) && lo[2] < groundTop(cx * N + cy) + 40) canopyLow[cx * N + cy] = 1; });
+  }
+  forestStats = { ...placed.stats };
+}
 // boulders: round rocks on grass and rock
 let boulders = 0;
 const boulderCells = [];
@@ -2628,7 +2659,7 @@ for (let bx = 2; bx < N; bx += 7)
     const s = surfaceMat[x * N + y];
     const h = H[x * N + y];
     if (!(GRASS.includes(s) || ROCK.includes(s)) || V[vi(x, y, h)] === 0) continue;
-    if (rampCol[x * N + y] || townNear[x * N + y] || keepOut[x * N + y] || villageDist(x, y) <= VILLAGE.r + 2 || hengeDist(x, y) <= 2 || reserved[x * N + y]) continue;
+    if (rampCol[x * N + y] || canopyLow[x * N + y] || townNear[x * N + y] || keepOut[x * N + y] || villageDist(x, y) <= VILLAGE.r + 2 || hengeDist(x, y) <= 2 || reserved[x * N + y]) continue;
     const [wx, wy, wz] = at(x, y, h + 1);
     const grey = [[118, 114, 108], [100, 98, 94]][Math.floor(hash(x, y, 14) * 2)];
     bricks.push({ asset: 'B_4x4_Round', position: [wx, wy, wz + 6], size: [0, 0, 0], color: grey });
@@ -2651,12 +2682,14 @@ const PLANT = {
 };
 const blocked = new Uint8Array(N * N); // something stands here
 const canopy = new Uint8Array(N * N);  // under a tree: short plants only
-for (const [tx, ty] of treeAt) {
+for (const [tx, ty, tr] of treeAt) {
   const cx = Math.floor((tx - X0) / CELL), cy = Math.floor((ty - Y0) / CELL);
   blocked[cx * N + cy] = 1;
-  for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) if (inMap(cx + dx, cy + dy)) canopy[(cx + dx) * N + cy + dy] = 1;
+  const rc = Math.ceil((tr ?? 60) / CELL);
+  for (let dx = -rc; dx <= rc; dx++) for (let dy = -rc; dy <= rc; dy++) if (inMap(cx + dx, cy + dy)) canopy[(cx + dx) * N + cy + dy] = 1;
 }
 for (const c of boulderCells) blocked[c] = 1;
+for (let c = 0; c < N * N; c++) if (canopyLow[c]) blocked[c] = 1; // low leaves / roots of the grown trees
 for (const c of caves)
   for (let dx = -8; dx <= 8; dx++) for (let dy = -8; dy <= 8; dy++) if (inMap(c.x + dx, c.y + dy)) blocked[(c.x + dx) * N + c.y + dy] = 1;
 const plantCount = {};
@@ -3282,7 +3315,7 @@ console.error(JSON.stringify({
   town: { center: [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN.cells / 2) * CELL, (town.h + 1) * VZ], bricks: townCount, ...townStats, thinnedOut: townRemoved.length, restoredAfterClear: swallowed.length },
   caves: caves.length, carvedVoxels: carved,
   terrainBricks: terrainCount, dungeonBricks: dungeonCount, decorBricks: decorCount, total: bricks.length,
-  trees, boulders, ramps, terrace: terraceStats,
+  trees, treeKinds, treeBricks, forestStats, boulders, ramps, terrace: terraceStats,
   plants: plantCount,
   desert: { centre: [X0 + desert.x * CELL, Y0 + desert.y * CELL], r: DESERT.r * CELL, cacti, villages: villages.filter(v => v.desert).length },
   volcano: { centre: at(volcano.x, volcano.y, volcano.rim).map(Math.round), foot: volcano.foot, rim: volcano.rim, lake: volcano.lake, roadCells: volcano.road.length, lead: at(...volcano.lead, H[volcano.lead[0] * N + volcano.lead[1]] + 1).map(Math.round) },

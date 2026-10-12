@@ -269,6 +269,13 @@ function merge(vox) {
   return out;
 }
 
+// raw voxels (local, trunk base at the origin) for callers that merge many trees
+// into one grid (mapgen): { wood, leaves: Map "i,j,k" -> colour index, colors, WV, LV }
+export function treeVoxels(kind, seed, size = 1) {
+  return { ...voxelize(grow(kind, seed, size), seed), WV, LV };
+}
+export { merge as mergeVoxels };
+
 export function buildTree(kind, seed, size = 1) {
   const g = grow(kind, seed, size);
   const { wood, leaves, colors } = voxelize(g, seed);
