@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makeBuilder } from './builder.mjs';
+import { planSewer, buildSewer, SEW } from './sewer.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i < 0 ? d : process.argv[i + 1]; };
@@ -244,13 +245,19 @@ if (towerAt) {
   write(out.ops.find(o => o.op === 'bricks').bricks);
 }
 
+// ---- the sewer under spawn (its own random stream: the town above stays identical)
+const SEWP = arg('nosewer', null) ? null : planSewer({ cls, ci, cx, cy, NX, NY, C, roads, K: { LOT, TOWER, SEA, ROAD, PAVE } }, { seed: SEED });
+const sewAt = i => SEWP && i >= 0 ? SEWP.sew[i] : 0;
+if (SEWP) console.error(`sewer: ${SEWP.lines} stretches, ${SEWP.chambers.length} chambers, ${SEWP.rooms.length} side rooms (${SEWP.rooms.map(o => o.kind).join(', ')}), ${SEWP.stairs.length} stairways, ${SEWP.rats.length} rats`);
+
 // ---- --preview FILE.bmp: the cell plan as a picture (one pixel per cell)
 if (arg('preview', null)) {
   const COL = { [SEA]: [40, 90, 160], [EMPTY]: [92, 156, 68], [ROAD]: [50, 50, 54], [PAVE]: [200, 200, 196], [LOT]: [200, 120, 80], [TOWER]: [120, 60, 160], [PATH]: [230, 220, 150], [DRIVE]: [150, 150, 150], [BEACH]: [226, 210, 160] };
   const row = (NX * 3 + 3) & ~3, buf = Buffer.alloc(54 + row * NY);
   buf.write('BM'); buf.writeUInt32LE(buf.length, 2); buf.writeUInt32LE(54, 10); buf.writeUInt32LE(40, 14); buf.writeInt32LE(NX, 18); buf.writeInt32LE(NY, 22);
   buf.writeUInt16LE(1, 26); buf.writeUInt16LE(24, 28); buf.writeUInt32LE(row * NY, 34);
-  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const c = COL[cls[j * NX + i]] ?? [255, 0, 255], o = 54 + j * row + i * 3; buf[o] = c[2]; buf[o + 1] = c[1]; buf[o + 2] = c[0]; }
+  const SCOL = { 1: [60, 120, 60], 2: [150, 90, 200], 3: [90, 40, 120], 4: [200, 120, 230], 5: [150, 90, 200], 7: [255, 230, 0], 8: [255, 140, 0] };
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const sw = sewAt(j * NX + i), c = (sw && SCOL[sw]) || COL[cls[j * NX + i]] || [255, 0, 255], o = 54 + j * row + i * 3; buf[o] = c[2]; buf[o + 1] = c[1]; buf[o + 2] = c[0]; }
   fs.writeFileSync(arg('preview', null), buf);
 }
 
@@ -271,17 +278,33 @@ function rects(test, maxCells) { // greedy: runs along x, grown down while the r
   }
   return out;
 }
-// sand + pad under everything that is not a lot (lots carry their own ground, basements and all)
-for (const [x0, y0, x1, y1] of rects(k => cls[k] !== SEA && cls[k] !== LOT, 14)) {
-  box(x0, y0, -12 - PAD_H, x1, y1, -12, { asset: 'PB_DefaultBrick', color: [190, 172, 128] }, 'pad');
-  box(x0, y0, -12, x1, y1, 0, { asset: 'PB_DefaultBrick', color: [214, 196, 142] }, 'sand');
+// a rect minus hole cells (greedy inside the rect): keeps every untouched rect as it was
+function splitRect(r, hole) {
+  const [x0, y0, x1, y1] = r, w = (x1 - x0) / C, h = (y1 - y0) / C, i0 = (x0 - OX0) / C, j0 = (y0 - OY0) / C;
+  let any = false; for (let b = 0; b < h && !any; b++) for (let a = 0; a < w; a++) if (hole((j0 + b) * NX + i0 + a)) { any = true; break; }
+  if (!any) return [r];
+  const used = new Uint8Array(w * h), out = [], ok = (a, b) => !used[b * w + a] && !hole((j0 + b) * NX + i0 + a);
+  for (let b = 0; b < h; b++) for (let a = 0; a < w; a++) {
+    if (!ok(a, b)) continue;
+    let rw = 1; while (a + rw < w && ok(a + rw, b)) rw++;
+    let rh = 1; grow: while (b + rh < h) { for (let q = 0; q < rw; q++) if (!ok(a + q, b + rh)) break grow; rh++; }
+    for (let v = 0; v < rh; v++) for (let q = 0; q < rw; q++) used[(b + v) * w + a + q] = 1;
+    out.push([x0 + a * C, y0 + b * C, x0 + (a + rw) * C, y0 + (b + rh) * C]);
+  }
+  return out;
+}
+const sewHole = k => sewAt(k) !== 0, pitHole = k => sewAt(k) === SEW.OPEN;
+// sand + pad under everything that is not a lot (lots carry their own ground, basements and all); the sewer cuts the pad
+for (const R0 of rects(k => cls[k] !== SEA && cls[k] !== LOT, 14)) {
+  for (const [x0, y0, x1, y1] of splitRect(R0, sewHole)) box(x0, y0, -12 - PAD_H, x1, y1, -12, { asset: 'PB_DefaultBrick', color: [190, 172, 128] }, 'pad');
+  for (const [x0, y0, x1, y1] of splitRect(R0, pitHole)) box(x0, y0, -12, x1, y1, 0, { asset: 'PB_DefaultBrick', color: [214, 196, 142] }, 'sand');
 }
 const SURF = {
   [ROAD]: [0, 4, { color: [58, 58, 62] }], [PAVE]: [0, 8, { asset: 'PB_DefaultTile', color: [196, 194, 188] }],
   [PATH]: [0, 4, { asset: 'PB_DefaultTile', color: [176, 170, 160] }], [DRIVE]: [0, 4, { asset: 'PB_DefaultTile', color: [150, 148, 144] }],
   [EMPTY]: [0, 4, { asset: 'PB_DefaultBrick', color: [92, 156, 68] }], [BEACH]: [0, 4, { asset: 'PB_DefaultBrick', color: [226, 210, 160] }],
 };
-for (const [k, [z0, z1, b]] of Object.entries(SURF)) for (const r of rects(q => cls[q] === +k, 25)) box(r[0], r[1], z0, r[2], r[3], z1, b, 'surface');
+for (const [k, [z0, z1, b]] of Object.entries(SURF)) for (const r0 of rects(q => cls[q] === +k, 25)) for (const r of splitRect(r0, pitHole)) box(r[0], r[1], z0, r[2], r[3], z1, b, 'surface');
 
 // ---- lane lines along the roads (dashed yellow; clear of junctions), lamp posts on the pavements
 for (const road of roads) {
@@ -300,7 +323,7 @@ for (const road of roads) {
       }
       if (along >= lampNext) {
         const nx = -Math.sin(h) * side, ny = Math.cos(h) * side, lx = snap(x + nx * (hw + 20), 10), ly = snap(y + ny * (hw + 20), 10), i = ci(lx, ly);
-        if (i >= 0 && cls[i] === PAVE) {
+        if (i >= 0 && cls[i] === PAVE && sewAt(i) !== SEW.OPEN && sewAt(i) !== SEW.RAIL) {
           pole(lx, ly, 8, 108, 3, { color: [60, 62, 66], material: 'BMC_Metallic' }, 'lamp post');
           box(lx - 6, ly - 6, 108, lx + 6, ly + 6, 118, { color: [255, 236, 190], material: 'BMC_Glow', material_intensity: 5 }, 'lamp');
           lampNext = along + R(360, 480); side = -side;
@@ -310,7 +333,7 @@ for (const road of roads) {
   }
 }
 // ---- trees on the open lawn (only where a 160 x 160 patch is all lawn)
-const lawnPatch = (x, y) => { for (let a = -80; a <= 80; a += C) for (let b = -80; b <= 80; b += C) { const i = ci(x + a, y + b); if (i < 0 || cls[i] !== EMPTY) return false; } return true; };
+const lawnPatch = (x, y) => { for (let a = -80; a <= 80; a += C) for (let b = -80; b <= 80; b += C) { const i = ci(x + a, y + b); if (i < 0 || cls[i] !== EMPTY || sewAt(i) === SEW.OPEN || sewAt(i) === SEW.RAIL) return false; } return true; };
 let trees = 0;
 for (let tries = 0; tries < 9000; tries++) {
   const x = snap(R(-RX, RX), 10), y = snap(R(-RY, RY), 10);
@@ -321,6 +344,7 @@ for (let tries = 0; tries < 9000; tries++) {
   for (let a = -80; a <= 80; a += C) for (let b = -80; b <= 80; b += C) { const i = ci(x + a, y + b); if (i >= 0) cls[i] = 99; } // keep trees apart
   trees++;
 }
+if (SEWP) buildSewer(SEWP, { box, pole, rects, cls, ci, K: { PAVE }, add: (b, l) => B.add({ ...b, position: [b.position[0], b.position[1], BASE + b.position[2]] }, l) });
 if (B.dropped.length) console.error(`${B.dropped.length} town pieces dropped for overlapping, e.g.\n${B.dropped.slice(0, 5).join('\n')}`);
 write(B.bricks.map(({ label, ...b }) => b));
 fs.writeFileSync(join(OUT, 'town2.json'), JSON.stringify({ seed: SEED, roads: roads.length, lots: lots.length, trees, bricks: total, chunks: nChunk }));
