@@ -7,6 +7,7 @@
 //   - GTA-style avenues between the columns (owner: "grand theft auto roads"): four lanes, a double
 //     yellow centre line, dashed white lane lines, stop lines, zebra crossings and traffic lights
 //     at every street, lamp posts
+//   - a skyscraper (skyscraper.mjs) on a plaza island south of the first row
 //   node suburb.mjs [--cols 5] [--rows 15] [--seed 1] [--out out_suburb]
 // -> OUT/chunk_NNN.json (bridge jobs, world coordinates), loaded by the server's
 //    chunk loader (one bricks op, see CLAUDE.md map uploads).
@@ -130,5 +131,8 @@ for (let r = 1; r + 1 < ROWS; r += 2) {
   }
 }
 write(out);
+// the skyscraper (owner 2026-10-12) on its own plaza island just south of the first row, centred on x 0
+const tower = execFileSync(process.execPath, [join(here, 'skyscraper.mjs'), 0, rowY(0) - 750, BASE, GROUND], { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] });
+write(JSON.parse(tower).ops.find(o => o.op === 'bricks').bricks);
 fs.writeFileSync(join(OUT, 'suburb.json'), JSON.stringify({ cols: COLS, rows: ROWS, seed: SEED, streets: COLS * ROWS, chunks: n, bricks: total, base: BASE, avenues: COLS - 1 }));
 console.log(JSON.stringify({ streets: COLS * ROWS, bricks: total, out: OUT }));
