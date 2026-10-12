@@ -86,6 +86,101 @@ function rasterize(side, paths, extra) {
   return { side, kind, at: (ux, uy) => { const i = Math.floor(ux / 40 + h), j = Math.floor(uy / 40 + h); return i < 0 || j < 0 || i >= side || j >= side ? null : kind[i * side + j]; } };
 }
 
+// ------------------------------------------------------------- terraces --
+// (owner 2026-10-12: "make towns have layered heights, with retaining walls
+// and sewers") The town stands on terraces TIER_V voxels (bricks) apart.
+// field(ux, uy) gives a fractional tier; forced(ux, uy) pins a tier (plaza,
+// castle, church, the river corridor). Each 40-unit cell gets a tier, specks
+// are voted away and neighbouring cells never differ by more than one tier
+// (one retaining wall high). Lots and the square sit flat on their tier;
+// streets ramp a brick per cell between tiers (sunken lanes cut into the
+// higher terrace), never lowering the square. plan.levelAt(ux, uy) = the
+// cell's top over tier 0 (units), plan.tierAt = its tier; mapgen raises the
+// ground, lines the steps with retaining walls and puts wedges on the ramps.
+export const TIER_V = 4;
+function terrace(plan, side, inside, field, forced, maxTier) {
+  const h = side / 2, C = 40, I = (i, j) => i * side + j;
+  const u = i => (i - h + 0.5) * C;
+  const t = new Int8Array(side * side).fill(-1), pin = new Uint8Array(side * side);
+  for (let i = 0; i < side; i++)
+    for (let j = 0; j < side; j++) {
+      if (!inside(u(i), u(j))) continue;
+      const f = forced(u(i), u(j));
+      if (f != null) { t[I(i, j)] = f; pin[I(i, j)] = 1; } else t[I(i, j)] = Math.max(0, Math.min(maxTier, Math.floor(field(u(i), u(j)))));
+    }
+  // vote away specks: 5 x 5 majority, three passes
+  for (let pass = 0; pass < 3; pass++) {
+    const next = t.slice();
+    for (let i = 0; i < side; i++)
+      for (let j = 0; j < side; j++) {
+        if (t[I(i, j)] < 0 || pin[I(i, j)]) continue;
+        const votes = new Array(maxTier + 1).fill(0);
+        for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const x = i + a, y = j + b; if (x >= 0 && y >= 0 && x < side && y < side && t[I(x, y)] >= 0) votes[t[I(x, y)]]++; }
+        next[I(i, j)] = votes.indexOf(Math.max(...votes));
+      }
+    t.set(next);
+  }
+  // one tier per step at most (lower the higher side)
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let i = 0; i < side; i++)
+      for (let j = 0; j < side; j++) {
+        const c = t[I(i, j)]; if (c < 0) continue;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          const x = i + a, y = j + b; if (x < 0 || y < 0 || x >= side || y >= side) continue;
+          const n = t[I(x, y)]; if (n >= 0 && c > n + 1 && !pin[I(i, j)]) { t[I(i, j)] = n + 1; changed = true; }
+        }
+      }
+  }
+  // heights in voxels: lots and the square on their tier, streets ramped
+  const kind = (i, j) => plan.surfaceAt(u(i), u(j));
+  const road = (i, j) => { const k = kind(i, j); return k === 'street' || k === 'square'; };
+  const v = new Int16Array(side * side).fill(-1);
+  for (let c = 0; c < side * side; c++) if (t[c] >= 0) v[c] = t[c] * TIER_V;
+  const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  // lower envelope over the street graph (ramps cut down into higher terraces) ...
+  const lo = new Int16Array(side * side).fill(9999), up = new Int16Array(side * side).fill(-9999);
+  for (let i = 0; i < side; i++) for (let j = 0; j < side; j++) if (t[I(i, j)] >= 0 && road(i, j)) { lo[I(i, j)] = v[I(i, j)]; if (kind(i, j) === 'square') up[I(i, j)] = v[I(i, j)]; }
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let i = 0; i < side; i++)
+      for (let j = 0; j < side; j++) {
+        const c = I(i, j); if (lo[c] === 9999) continue;
+        for (const [a, b] of N8) {
+          const x = i + a, y = j + b; if (x < 0 || y < 0 || x >= side || y >= side) continue;
+          const n = I(x, y); if (lo[n] === 9999) continue;
+          if (lo[n] + 1 < lo[c]) { lo[c] = lo[n] + 1; changed = true; }
+          if (up[n] - 1 > up[c]) { up[c] = up[n] - 1; changed = true; }
+        }
+      }
+  }
+  // ... raised again near the square (it never moves): max of the two stays one brick per cell
+  for (let c = 0; c < side * side; c++) if (lo[c] !== 9999) v[c] = Math.max(lo[c], up[c]);
+  const at = (arr, ux, uy) => { const i = Math.floor(ux / C + h), j = Math.floor(uy / C + h); return i < 0 || j < 0 || i >= side || j >= side ? -1 : arr[I(i, j)]; };
+  // building sites claim their lot (town.mjs build): its lot cells take the
+  // site's tier; reset() goes back to the planned terraces before a build
+  const t0 = t.slice(), v0 = v.slice();
+  plan.reset = () => { t.set(t0); v.set(v0); };
+  plan.claim = (r, tier) => {
+    for (let i = Math.max(0, Math.floor(r[0] / C + h)); i < Math.min(side, Math.ceil(r[2] / C + h)); i++)
+      for (let j = Math.max(0, Math.floor(r[1] / C + h)); j < Math.min(side, Math.ceil(r[3] / C + h)); j++)
+        if (t[I(i, j)] >= 0 && !road(i, j) && !pin[I(i, j)]) { t[I(i, j)] = tier; v[I(i, j)] = tier * TIER_V; }
+  };
+  plan.pinnedAt = (ux, uy) => at(pin, ux, uy) === 1;
+  plan.levelAt = (ux, uy) => Math.max(0, at(v, ux, uy)) * 12;
+  plan.tierAt = (ux, uy) => at(t, ux, uy);
+  plan.terraceIn = (ux, uy) => at(t, ux, uy) >= 0;
+  plan.maxTier = maxTier;
+  return plan;
+}
+// smooth-ish value noise for the terrace fields
+const tnoise = (x, y, k) => {
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, s = q => q * q * (3 - 2 * q);
+  const hh = (a, b) => { let n = Math.imul(a * 374761393 + b * 668265263 + k * 982451653, 1274126177); n ^= n >>> 15; return ((n >>> 0) % 10000) / 10000; };
+  const L = (a, b, q) => a + (b - a) * q;
+  return L(L(hh(xi, yi), hh(xi + 1, yi), s(fx)), L(hh(xi, yi + 1), hh(xi + 1, yi + 1), s(fx)), s(fy));
+};
+
 export function planTown(rnd) {
   const ph = k => rnd(4242, k) * Math.PI * 2;
   // town edge: a ragged circle
@@ -128,7 +223,27 @@ export function planTown(rnd) {
   const paths = [...main, ...lanes];
   const r = rasterize(TOWN_CELLS, paths, (ux, uy) =>
     Math.hypot(ux, uy) <= PLAZA_R ? 'square' : Math.hypot(ux, uy) <= edgeR(ux, uy) ? 'lot' : null);
-  return { kind: 'town', exits, paths, main, lanes, edgeR, castle: CASTLE, church: CHURCH, surfaceAt: r.at };
+  const plan = { kind: 'town', exits, paths, main, lanes, edgeR, castle: CASTLE, church: CHURCH, surfaceAt: r.at };
+  // terraces: the castle on its hill, the church on a rise, the ground climbing
+  // away from the river, a little noise; the river corridor stays at tier 0
+  const ph7 = rnd(4242, 7) * 100;
+  const field = (ux, uy) => 0.35
+    + 2.4 * Math.exp(-((ux - CASTLE[0]) ** 2 + (uy - CASTLE[1]) ** 2) / 1100 ** 2)
+    + 1.2 * Math.exp(-((ux - CHURCH[0]) ** 2 + (uy - CHURCH[1]) ** 2) / 700 ** 2)
+    + Math.max(0, distToLine(ux, uy, RIVER_LOCAL) - 500) / 1500
+    + (tnoise(ux / 700 + ph7, uy / 700, 1) - 0.5) * 1.1;
+  const tierOf = p => Math.max(0, Math.min(3, Math.floor(field(...p))));
+  const PLAZA_T = tierOf([0, 0]);
+  const forced = (ux, uy) => {
+    if (distToLine(ux, uy, RIVER_LOCAL) < 460) return 0;
+    if (Math.hypot(ux, uy) <= PLAZA_R + 120) return PLAZA_T;
+    if (Math.abs(ux - CASTLE[0]) <= 620 && Math.abs(uy - CASTLE[1]) <= 600) return tierOf(CASTLE);
+    if (ux >= CHURCH[0] - 700 && ux <= CHURCH[0] + 340 && uy >= CHURCH[1] - 620 && uy <= CHURCH[1] + 440) return tierOf(CHURCH);
+    if (ux >= -740 && ux <= -310 && uy >= -440 && uy <= 40) return PLAZA_T; // the bank by the square
+    if (ux >= 360 && ux <= 760 && uy >= -1020 && uy <= -500) return tierOf([560, -760]); // the tavern
+    return null;
+  };
+  return terrace(plan, TOWN_CELLS, (ux, uy) => r.at(ux, uy) != null, field, forced, 3);
 }
 
 /** surface kind of a town cell centre (town units): 'square' | 'street' | 'lot' | null (natural ground) */
@@ -162,7 +277,13 @@ export function planVillage(seed, rnd) {
   const paths = spokes.map(s => s.path);
   const side = 2 * Math.ceil(VILLAGE_R / 40) + 2;
   const r = rasterize(side, paths, (ux, uy) => (Math.hypot(ux, uy) <= greenAt(Math.atan2(uy, ux)) ? 'square' : null));
-  return { kind: 'village', spokes, paths, edgeR, surfaceAt: r.at };
+  const plan = { kind: 'village', spokes, paths, edgeR, surfaceAt: r.at };
+  // terraces (2026-10-12): the green on tier 1, the ground tilting away to 0
+  // on one side and up to 2 on the other, with a wobble
+  const tilt = ph(9), ph8 = rnd(seed, 88) * 100;
+  const field = (ux, uy) => 1.5 + (Math.cos(tilt) * ux + Math.sin(tilt) * uy) / 520 + (tnoise(ux / 380 + ph8, uy / 380, 2) - 0.5) * 0.9;
+  const forced = (ux, uy) => (Math.hypot(ux, uy) <= greenAt(Math.atan2(uy, ux)) + 120 ? 1 : null);
+  return terrace(plan, side, (ux, uy) => Math.hypot(ux, uy) <= edgeR(ux, uy), field, forced, 2);
 }
 
 const PALETTE = {
@@ -217,7 +338,7 @@ const KEEP_INNER = 0.7, KEEP_OUTER = 0.2;
 export const FURNITURE = false;
 
 // plan: planTown(rnd) or planVillage(seed, rnd); riverAt(x, y): is that point (local units) river water
-export function build({ put, orientFor, rnd, village = null, plan, riverAt = () => false, free = () => true, shopTiers = HOUSE_SHOP_TIERS, single = null }) {
+export function build({ put, orientFor, rnd, village = null, plan, riverAt = () => false, free = () => true, shopTiers = HOUSE_SHOP_TIERS, single = null, sewerDepth = 0 }) {
   const pick = (list, a, b, c) => list[Math.floor(rnd(a, b, c) * list.length)];
   const stats = { buildings: {}, stalls: 0, lamps: 0, trees: 0, removed: [], houseShops: [] };
   const count = t => (stats.buildings[t] = (stats.buildings[t] ?? 0) + 1);
@@ -225,6 +346,17 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // furniture switch: while FURN > 0 every piece is furniture and is only laid when FURNITURE is on
   let FURN = 0;
   { const layAll = put; put = (b, x, y, z) => { if (FURN > 0 && !FURNITURE) return; layAll(b, x, y, z); }; }
+  // terraces (2026-10-12): a brick stands on its cell's level, or inside a
+  // site (onSite) on the site's level, so a building never splits
+  let zCtx = null;
+  const lv = (x, y) => (plan?.levelAt ? plan.levelAt(x, y) : 0);
+  { const lay = put; put = (b, x, y, z) => lay(b, x, y, z + (zCtx ?? lv(x, y))); }
+  { const fr = free; free = (x0, y0, z0, x1, y1, z1) => { const o = zCtx ?? lv((x0 + x1) / 2, (y0 + y1) / 2); return fr(x0, y0, z0 + o, x1, y1, z1 + o); }; }
+  const onSite = (r, fn) => {
+    if (r.claim) plan.claim(r.claim, r.claim[4]);
+    const prev = zCtx; zCtx = lv((r[0] + r[2]) / 2, (r[1] + r[3]) / 2); try { return fn(); } finally { zCtx = prev; }
+  };
+  plan?.reset?.(); // every build starts from the planned terraces (mapgen runs trial builds)
 
   // ---------------------------------------------------------- primitives --
   const box = (x0, y0, z0, x1, y1, z1, b) =>
@@ -693,7 +825,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const [px, py] = at(sx, sy);
         // local +y (into the house) in world terms is (-fx, -fy)
         const orient = fx ? (fx > 0 ? 19 : 17) : (fy > 0 ? 16 : 18);
-        stats.houseShops.push({ at: [px, py, 16], orient, tier: pick(shopTiers, s, 78) }); // the tiers sold where it stands (spawn low, deeper higher)
+        stats.houseShops.push({ at: [px, py, 16 + (zCtx ?? 0)], orient, tier: pick(shopTiers, s, 78) }); // the tiers sold where it stands (spawn low, deeper higher)
       }
     }
     if (smith) {
@@ -1080,7 +1212,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       const GUNS = ['derringer', 'revolver', 'huntingshotgun', 'leveraction', 'boltaction', 'magnum'];
       [50, 100, 150, 230, 280, 330].forEach((x, k) => {
         const [px, py] = h.at(x, 24 * 10 - 30); // 3 studs off the back wall (they poked through at 1.5)
-        stats.houseShops.push({ at: [px, py, 16], orient: h.frontOrient, tier: GUNS[k], prefab: 'gun_' + GUNS[k] });
+        stats.houseShops.push({ at: [px, py, 16 + (zCtx ?? 0)], orient: h.frontOrient, tier: GUNS[k], prefab: 'gun_' + GUNS[k] });
       });
       count('gun store');
     },
@@ -1440,7 +1572,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         if (!r) continue;
         taken.push(r);
         const kind = pick(kinds, s, 3);
-        PROPS[kind](cx, cy, s, Math.abs(qx - x) >= Math.abs(qy - y));
+        onSite(r, () => PROPS[kind](cx, cy, s, Math.abs(qx - x) >= Math.abs(qy - y)));
         prop(kind);
       }
     });
@@ -1459,7 +1591,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const r = [cx - 50, cy - 40, cx + 50, cy + 40];
           if (!rectClear(r, { margin: 20 })) continue;
           taken.push(r);
-          stall(cx, cy, seed * 100 + pi * 10 + k++);
+          onSite(r, () => stall(cx, cy, seed * 100 + pi * 10 + k++));
         }
       }
     });
@@ -1537,6 +1669,66 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     pole(cx, cy, 176, 184, 5, GLOW([255, 190, 100], 6));
     count('watchtower');
   }
+  /**
+   * a sewer access (2026-10-12): a stone kiosk over a 5 x 5-cell shaft whose
+   * ring of cells carries a square spiral of micro-brick treads, one brick per
+   * cell, down to the sewer floor (sewerDepth under tier 0); the middle 3 x 3
+   * is the ground's own pillar. Door toward (fx, fy). mapgen carves the ring and
+   * a passage to the sewer from stats.sewerShafts. cx, cy sit on a cell centre
+   * offset (20 mod 40) so the ring is whole cells.
+   */
+  function sewerKiosk(cx, cy, fx, fy, s) {
+    const stoneC = pick(PALETTE.stone, s, 1), dark = PALETTE.stone[2], roofC = pick(PALETTE.roof, s, 2), MB = 'PB_DefaultMicroBrick';
+    const ring = [];
+    for (let i = -2; i <= 2; i++) ring.push([i, -2]);
+    for (let j = -1; j <= 2; j++) ring.push([2, j]);
+    for (let i = 1; i >= -2; i--) ring.push([i, 2]);
+    for (let j = 1; j >= -1; j--) ring.push([-2, j]);
+    const front = ring.findIndex(([i, j]) => i === 2 * fx && j === 2 * fy);
+    const k0 = (front + 2) % 16, n = (sewerDepth + zCtx) / 12;
+    const cellBox = ([i, j], z0, z1, b) => box(cx + i * 40 - 20, cy + j * 40 - 20, z0, cx + i * 40 + 20, cy + j * 40 + 20, z1, b);
+    // treads: step k at ring cell k0 + k, top 12 (k + 1) down; the last step is the sewer floor
+    for (let k = 0; k <= n - 2; k++) cellBox(ring[(k0 + k) % 16], -12 * (k + 1) - 12, -12 * (k + 1), { asset: MB, color: k % 2 ? stoneC : dark });
+    // the kiosk floor over the ring, open over the first seven steps (headroom)
+    for (let q = 7; q < 16; q++) cellBox(ring[(k0 + q) % 16], -4, 0, { asset: MB, color: PALETTE.stone[0] });
+    // walls round the shaft, a door in the front, a lintel, a gable roof, a lamp
+    const H = 96, DOOR = 72, R = 100;
+    for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const isFront = ax === fx && ay === fy;
+      const seg = (a0, a1, z0, z1, b) => (ax ? box(cx + ax * R + (ax > 0 ? 0 : -10), cy + a0, z0, cx + ax * R + (ax > 0 ? 10 : 0), cy + a1, z1, b) : box(cx + a0, cy + ay * R + (ay > 0 ? 0 : -10), z0, cx + a1, cy + ay * R + (ay > 0 ? 10 : 0), z1, b));
+      const a0 = ax ? -R : -R - 10, a1 = ax ? R : R + 10; // x walls run the corners
+      if (!isFront) { seg(a0, a1, 0, H, { color: stoneC }); continue; }
+      seg(a0, -20, 0, H, { color: stoneC }); seg(20, a1, 0, H, { color: stoneC });
+      seg(-20, 20, DOOR, H, { asset: MB, color: dark });
+    }
+    gable(cx - R - 10, cy - R - 10, cx + R + 10, cy + R + 10, H, 36, roofC);
+    put({ size: [5, 5, 4], asset: MB, ...GLOW([255, 190, 100], 5) }, cx, cy, H - 4);
+    stats.sewerShafts.push({ x: cx, y: cy, fx, fy, level: zCtx });
+    count('sewer access');
+  }
+  /** sewer kiosks beside the main roads, part way out from the square */
+  function sewerAccess(paths) {
+    stats.sewerShafts = [];
+    if (!sewerDepth) return;
+    paths.forEach((p, pi) => {
+      for (const f of [0.45, 0.55, 0.35, 0.65]) {
+        const i = Math.floor(p.length * f), [x, y] = p[i], [qx, qy] = p[i + 1], tl = Math.hypot(qx - x, qy - y) || 1;
+        let done = false;
+        for (const side of [1, -1]) {
+          const nx = (-(qy - y) / tl) * side, ny = ((qx - x) / tl) * side;
+          const [fx, fy] = Math.abs(nx) >= Math.abs(ny) ? [-Math.sign(nx), 0] : [0, -Math.sign(ny)];
+          const off = PATH_W / 2 + 40 + 110;
+          const cx = Math.round((x - fx * off - 20) / 40) * 40 + 20, cy = Math.round((y - fy * off - 20) / 40) * 40 + 20;
+          const r = [cx - 120, cy - 120, cx + 120, cy + 120];
+          if (!rectClear(r, { margin: 30, claim: true, edge: plan.edgeR })) continue;
+          taken.push(r);
+          onSite(r, () => sewerKiosk(cx, cy, fx, fy, 900 + pi));
+          done = true; break;
+        }
+        if (done) break;
+      }
+    });
+  }
   /** a landmark on open ground: try rings of spots round the centre, outermost first */
   function landmark(build, half, radii, edge, seed) {
     for (const rad of radii)
@@ -1544,9 +1736,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const a = rnd(seed, 300) * Math.PI * 2 + (k * Math.PI * 2) / 24;
         const cx = Math.round((Math.cos(a) * rad) / 10) * 10, cy = Math.round((Math.sin(a) * rad) / 10) * 10;
         const r = [cx - half[0], cy - half[1], cx + half[0], cy + half[1]];
-        if (!rectClear(r, { margin: 40, edge })) continue;
+        if (!rectClear(r, { margin: 40, edge, claim: true })) continue;
         taken.push(r);
-        build(cx, cy, seed);
+        onSite(r, () => build(cx, cy, seed));
         return true;
       }
     return false;
@@ -1597,7 +1789,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   const why = stats.rejects = {};
   let cur = null;
   const no = k => ((why[k] = (why[k] ?? 0) + 1), (process.env.TOWN_DEBUG && (stats.rejectAt ??= []).push([k, ...cur])), false);
-  const rectClear = (r, { margin = 40, river = 120, edge = null } = {}) => {
+  const rectClear = (r, { margin = 40, river = 120, edge = null, claim = false } = {}) => {
     cur = r;
     if (hits(r, margin)) return no('taken');
     // the footprint itself must stay off the paths (the path raster is whole 40-unit cells)
@@ -1606,6 +1798,27 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         if (onPath(x, y)) return no('path');
         if (edge && Math.hypot(x, y) > edge(x, y)) return no('edge');
       }
+    // one terrace under the site and round it (the street in front included)
+    // claim: the lot may be one tier off here and there (it is levelled to the
+    // centre's tier, the ring round it one tier off at most, so walls stay one tier high)
+    if (plan?.levelAt) {
+      const want = lv((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), T = plan.tierAt((r[0] + r[2]) / 2, (r[1] + r[3]) / 2), m = claim ? 90 : 50;
+      for (let x = r[0] - m; x <= r[2] + m; x += 20)
+        for (let y = r[1] - m; y <= r[3] + m; y += 20) {
+          if (!plan.terraceIn(x, y)) continue;
+          // a street alongside may be a brick off (a doorstep)
+          if (onPath(x, y)) { if (Math.abs(lv(x, y) - want) > 12 && x >= r[0] - 50 && x <= r[2] + 50 && y >= r[1] - 50 && y <= r[3] + 50) return no('terrace'); continue; }
+          if (!claim) { if (lv(x, y) !== want) return no('terrace'); continue; }
+          const tc = plan.tierAt(x, y);
+          if (Math.abs(tc - T) > 1 || (tc !== T && plan.pinnedAt(x, y))) return no('terrace');
+          // a cell this claim would re-level must not hold an earlier site
+          if (tc !== T && x >= r[0] - 50 && x <= r[2] + 50 && y >= r[1] - 50 && y <= r[3] + 50) {
+            const cx0 = Math.floor(x / 40) * 40, cy0 = Math.floor(y / 40) * 40;
+            if (hits([cx0, cy0, cx0 + 40, cy0 + 40])) return no('terrace');
+          }
+        }
+      cur.claim = claim ? [r[0] - 50, r[1] - 50, r[2] + 50, r[3] + 50, T] : null;
+    }
     for (let x = r[0] - river; x <= r[2] + river; x += 40)
       for (let y = r[1] - river; y <= r[3] + river; y += 40) if (riverAt(x, y)) return no('river');
     return true;
@@ -1650,9 +1863,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const off = PATH_W / 2 + 50 + half;
           const cx = Math.round((x - fx * off) / 10) * 10, cy = Math.round((y - fy * off) / 10) * 10;
           const r = boxOf(cx, cy, fx, fy, fp);
-          if (!rectClear(r, { edge, margin })) continue;
+          if (!rectClear(r, { edge, margin, claim: true })) continue;
           taken.push(r);
-          TYPES[type](cx, cy, fx, fy, s, small);
+          onSite(r, () => TYPES[type](cx, cy, fx, fy, s, small));
           if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
         }
       }
@@ -1680,9 +1893,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const [fx, fy] = Math.abs(bx - x) >= Math.abs(by - y) ? [Math.sign(bx - x) || 1, 0] : [0, Math.sign(by - y) || 1];
         const cx = Math.round(x / 10) * 10, cy = Math.round(y / 10) * 10;
         const r = boxOf(cx, cy, fx, fy, footprint(type, s, small));
-        if (!rectClear(r, { edge, margin })) continue;
+        if (!rectClear(r, { edge, margin, claim: true })) continue;
         taken.push(r);
-        TYPES[type](cx, cy, fx, fy, s, small);
+        onSite(r, () => TYPES[type](cx, cy, fx, fy, s, small));
         if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
       }
   }
@@ -1695,7 +1908,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const r = [lx - 10, ly - 10, lx + 10, ly + 10];
         if (hits(r, 20) || onPath(lx, ly) || (edge && Math.hypot(lx, ly) > edge(lx, ly)) || [[0, 0], [40, 0], [-40, 0], [0, 40], [0, -40]].some(([a, b]) => riverAt(lx + a, ly + b))) continue;
         taken.push(r);
-        lamp(lx, ly);
+        onSite(r, () => lamp(lx, ly));
       }
     });
   }
@@ -1733,7 +1946,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       const x = Math.round((rnd(seed, k, 1) - 0.5) * 2 * 2400 / 10) * 10, y = Math.round((rnd(seed, k, 2) - 0.5) * 2 * 2400 / 10) * 10;
       const r = [x - 70, y - 70, x + 70, y + 70];
       if (!ok(x, y) || !rectClear(r, { margin: 20, river: 80 })) continue;
-      taken.push(r); tree(x, y, seed * 31 + k); placed++;
+      taken.push(r); onSite(r, () => tree(x, y, seed * 31 + k)); placed++;
     }
   }
   /** a fenced field (crops) or pen (grass, a trough), w x h centred */
@@ -1809,9 +2022,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const w = 200 + Math.round(rnd(vs, 70, k) * 3) * 40, h = 200 + Math.round(rnd(vs, 71, k) * 2) * 40;
         const cx = Math.round((Math.cos(m) * rad) / 20) * 20, cy = Math.round((Math.sin(m) * rad) / 20) * 20;
         const r = [cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2];
-        if (!rectClear(r, { margin: 30, edge })) continue;
+        if (!rectClear(r, { margin: 30, edge, claim: true })) continue;
         taken.push(r);
-        field(cx, cy, w, h, vs * 10 + k, !(pens === 0 && k === angles.length - 1) && !(village.desert));
+        onSite(r, () => field(cx, cy, w, h, vs * 10 + k, !(pens === 0 && k === angles.length - 1) && !(village.desert)));
         if (!(pens === 0 && k === angles.length - 1)) {} else pens++;
         break;
       }
@@ -1835,7 +2048,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         // orient: 16 button -y, 17 +x, 18 +y, 19 -x: toward the well
         const orient = Math.abs(x) >= Math.abs(y) ? (x > 0 ? 19 : 17) : (y > 0 ? 16 : 18);
         taken.push(r);
-        stats.shopSpots.push([x, y, 12, orient]);
+        stats.shopSpots.push([x, y, 12 + lv(x, y), orient]);
       }
     }
     count('village');
@@ -1891,25 +2104,27 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       const [x, y, a] = open[k], c = Math.cos(a), sn = Math.sin(a);
       // orient: 16 button -y, 17 +x, 18 +y, 19 -x
       const orient = Math.abs(c) >= Math.abs(sn) ? (c > 0 ? 19 : 17) : (sn > 0 ? 16 : 18);
-      stats.townShops.push({ at: [x, y, 12], tier: w.tier, orient, ...(w.prefab ? { prefab: w.prefab } : {}) });
+      stats.townShops.push({ at: [x, y, 12 + lv(x, y)], tier: w.tier, orient, ...(w.prefab ? { prefab: w.prefab } : {}) });
     });
   };
   // landmarks
   const [CX, CY] = plan.castle, [HX, HY] = plan.church;
-  castle(CX, CY);
+  onSite([CX - 1, CY - 1, CX + 1, CY + 1], () => castle(CX, CY));
   taken.push([CX - 540, CY - 520, CX + 540, CY + 520]);
-  church(HX, HY);
+  onSite([HX - 1, HY - 1, HX + 1, HY + 1], () => church(HX, HY));
   taken.push([HX - 640, HY - 560, HX + 280, HY + 380]);
-  TYPES.bank(-540, -200, 1, 0, 7001);
+  onSite([-541, -201, -539, -199], () => TYPES.bank(-540, -200, 1, 0, 7001));
   taken.push([-680, -380, -370, -20]);
   placeStands();
-  TYPES.tavern(560, -760, -1, 0, 7002);
+  onSite([559, -761, 561, -759], () => TYPES.tavern(560, -760, -1, 0, 7002));
   taken.push([420, -960, 700, -560]);
   // river crossings first, so nothing lands on a bridge
   bridges(plan.paths);
   // (2026-10-08) market stalls down the first stretch of each road out of the
   // plaza, and a windmill out toward the edge, before the houses take the room
   stallsAlong(plan.main.slice(0, 4), PLAZA_R + 60, 900, 160, 501);
+  // (2026-10-12) sewer accesses on three of the roads out
+  sewerAccess(plan.main.slice(0, 3));
   landmark(windmill, [160, 90], [1900, 1700, 1500], plan.edgeR, 502);
   // houses along every path: shops near the plaza, homes further out
   // (2026-10-10, owner: "make the houses more dense"): step 160 -> 80, margin 40 -> 30,

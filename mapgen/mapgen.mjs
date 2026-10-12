@@ -12,7 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { makeGod } from './gods.mjs';
-import { TOWN_CELLS, build as buildTown, surface as townSurface, planTown, planVillage, RIVER_LOCAL } from './town.mjs';
+import { TOWN_CELLS, build as buildTown, surface as townSurface, planTown, planVillage, RIVER_LOCAL, PLAZA_R, distToLine } from './town.mjs';
 import { floorPieces } from './floors.mjs';
 import { orientFor, worldBox } from './orient.mjs';
 import { makeBuilder } from './builder.mjs';
@@ -187,6 +187,13 @@ const DRYGRASS = mat([170, 160, 88]);
 const SCRUB = [mat([140, 146, 78]), mat([126, 134, 70])]; // the shrubland (2026-10-10)
 const BASALT = [mat([54, 50, 52]), mat([44, 41, 44])]; // the volcano (2026-10-10)
 const ASH = mat([92, 86, 84]);
+// terrace retaining walls (2026-10-12): coursed masonry in two tones
+const WALLSTONE = [mat([138, 130, 118]), mat([124, 117, 106])];
+// sewers (2026-10-12): old red brick, a worn stone walk, a sludge channel, a tile vault
+const SEWER_BRICK = [mat([112, 66, 52]), mat([98, 58, 46])];
+const SEWER_WALK = mat([104, 100, 94]);
+const SLUDGE = mat([84, 92, 40], { asset: 'PB_DefaultTile' });
+const SEWER_CEIL = mat([92, 70, 58], { asset: 'PB_DefaultTile' });
 
 // --------------------------------------------------------------- dungeons --
 // Zelda-style temple dungeons from dungeon.mjs: floors of rooms on a 5 x 5
@@ -446,23 +453,28 @@ const townRnd = (a, b = 0, c = 0) => hash(a + 7919, b, c);
 const townPlan = planTown(townRnd);
 const townKind = new Uint8Array(N * N);   // 0 natural, 1 grass lot, 2 paved (path / plaza)
 const townNear = new Uint8Array(N * N);   // within 2 cells of the flattened town
+const terraceCell = new Uint8Array(N * N); // town / hamlet terrace cells: retaining walls where they step down (2026-10-12)
+// a town cell's terrace height over the town level, voxels (town.mjs plan.levelAt)
+const townLocal = (x, y) => [(x - town.fx - TOWN.cells / 2 + 0.5) * CELL, (y - town.fy - TOWN.cells / 2 + 0.5) * CELL];
+const townLevel = (x, y) => townPlan.levelAt(...townLocal(x, y)) / VZ;
 {
   const B = TOWN.blend, x0 = town.fx - B, y0 = town.fy - B, S = TOWN.cells + 2 * B;
-  const dist = new Float32Array(S * S).fill(Infinity), queue = [];
+  const dist = new Float32Array(S * S).fill(Infinity), src = new Float32Array(S * S), queue = [];
   for (let x = town.fx; x < town.fx + TOWN.cells; x++)
     for (let y = town.fy; y < town.fy + TOWN.cells; y++) {
-      const k = townSurface((x - town.fx - TOWN.cells / 2 + 0.5) * CELL, (y - town.fy - TOWN.cells / 2 + 0.5) * CELL, townPlan);
+      const k = townSurface(...townLocal(x, y), townPlan);
       if (!k || !inBounds(x, y)) continue;
       townKind[x * N + y] = k === 'lot' ? 1 : 2;
-      dist[(x - x0) * S + (y - y0)] = 0; queue.push([x - x0, y - y0]);
+      terraceCell[x * N + y] = 1;
+      dist[(x - x0) * S + (y - y0)] = 0; src[(x - x0) * S + (y - y0)] = town.h + townLevel(x, y); queue.push([x - x0, y - y0]);
     }
-  // multi-source BFS (8-neighbour, diagonal 1.41) for the blend distance
+  // multi-source BFS (8-neighbour, diagonal 1.41) for the blend distance, carrying the nearest terrace's height
   for (let qi = 0; qi < queue.length; qi++) {
     const [a, b] = queue[qi], d0 = dist[a * S + b];
     for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       const na = a + da, nb = b + db; if (na < 0 || nb < 0 || na >= S || nb >= S) continue;
       const nd = d0 + (da && db ? 1.41 : 1);
-      if (nd < dist[na * S + nb] && nd < B) { dist[na * S + nb] = nd; queue.push([na, nb]); }
+      if (nd < dist[na * S + nb] && nd < B) { dist[na * S + nb] = nd; src[na * S + nb] = src[a * S + b]; queue.push([na, nb]); }
     }
   }
   for (let a = 0; a < S; a++)
@@ -470,7 +482,7 @@ const townNear = new Uint8Array(N * N);   // within 2 cells of the flattened tow
       const d = dist[a * S + b], x = a + x0, y = b + y0;
       if (!inBounds(x, y) || d === Infinity) continue;
       if (d <= 2) townNear[x * N + y] = 1;
-      H[x * N + y] = d === 0 ? town.h : Math.round(lerp(town.h, H[x * N + y], smooth(0, B, d)));
+      H[x * N + y] = d === 0 ? src[a * S + b] : Math.round(lerp(src[a * S + b], H[x * N + y], smooth(0, B, d)));
     }
 }
 
@@ -1234,7 +1246,8 @@ for (const v of villages) {
       const k = v.plan.surfaceAt((i + 0.5) * CELL, (j + 0.5) * CELL);
       if (k === 'street' || k === 'square') for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (Math.abs(i + a) <= VW && Math.abs(j + b) <= VW) foot[(i + a + VW) * S + j + b + VW] = 1;
     }
-  for (const desert of [false, true]) {
+  const isDesert = desertW(v.x, v.y) > 0.5; // (set for good further down) the real variant runs last: its terrace claims level the ground
+  for (const desert of [!isDesert, isDesert]) {
     // only st.taken is used: bricks go nowhere (build() ignores put's result)
     const st = buildTown({
       put: () => {}, orientFor, rnd: townRnd,
@@ -1243,31 +1256,38 @@ for (const v of villages) {
     });
     for (const [x0, y0, x1, y1] of st.taken) mark(x0, y0, x1, y1);
   }
-  // chamfer distance (cells) from the footprint
-  const D = new Float32Array(S * S).fill(1e9);
-  for (let i = 0; i < S * S; i++) if (foot[i]) D[i] = 0;
+  // chamfer distance (cells) from the footprint, carrying the nearest footprint cell's terrace height
+  const D = new Float32Array(S * S).fill(1e9), SRC = new Float32Array(S * S);
+  // terrace level (voxels) of a hamlet cell; cells past the outline take the level just inside it
+  const vLevel = (i, j) => {
+    let ux = (i + 0.5) * CELL, uy = (j + 0.5) * CELL;
+    const r = Math.hypot(ux, uy), e = v.plan.edgeR(ux, uy) - 20;
+    if (r > e) { ux *= e / r; uy *= e / r; }
+    return v.plan.levelAt(ux, uy) / VZ;
+  };
+  for (let i = 0; i < S * S; i++) if (foot[i]) { D[i] = 0; SRC[i] = v.h + vLevel(Math.floor(i / S) - VW, (i % S) - VW); }
   const pass = (i0, i1, st) => {
     for (let i = i0; i !== i1; i += st)
       for (let j = i0; j !== i1; j += st) {
-        let d = D[i * S + j];
+        let d = D[i * S + j], src = SRC[i * S + j];
         for (const [a, b, w] of [[-st, 0, 1], [0, -st, 1], [-st, -st, 1.414], [-st, st, 1.414]]) {
           const ii = i + a, jj = j + b;
-          if (ii >= 0 && jj >= 0 && ii < S && jj < S && D[ii * S + jj] + w < d) d = D[ii * S + jj] + w;
+          if (ii >= 0 && jj >= 0 && ii < S && jj < S && D[ii * S + jj] + w < d) { d = D[ii * S + jj] + w; src = SRC[ii * S + jj]; }
         }
-        D[i * S + j] = d;
+        D[i * S + j] = d; SRC[i * S + j] = src;
       }
   };
   pass(0, S, 1); pass(S - 1, -1, -1);
   v.used = D;
-  // level the footprint, blending out over VILLAGE.blend
+  // level the footprint on its terraces, blending out over VILLAGE.blend
   const B = VILLAGE.blend;
   for (let i = -VW; i <= VW; i++)
     for (let j = -VW; j <= VW; j++) {
       const x = v.x + i, y = v.y + j;
       if (!inBounds(x, y)) continue;
-      const d = D[(i + VW) * S + j + VW];
-      if (d <= 0) H[x * N + y] = v.h;
-      else if (d < B) H[x * N + y] = Math.round(lerp(v.h, H[x * N + y], smooth(0, B, d)));
+      const d = D[(i + VW) * S + j + VW], src = SRC[(i + VW) * S + j + VW];
+      if (d <= 0) { H[x * N + y] = src; terraceCell[x * N + y] = 1; noSmooth[x * N + y] = 1; } // (no smoothing pieces on the terraces: their parapets stand there)
+      else if (d < B) H[x * N + y] = Math.round(lerp(src, H[x * N + y], smooth(0, B, d)));
     }
 }
 
@@ -1761,6 +1781,23 @@ const holy = [];
 
 // the river valley cap runs here: after every pass that moves the ground (roads,
 // bridges, settlements), before the voxels are built from H
+// sewers (2026-10-12): floor SEWER.floor voxels, SEWER.high clear over it,
+// under tier 0 by sewerDepth (the kiosks' stairs go that far down)
+const SEWER = { floor: town.h - 13, high: 7 };
+const sewerDepth = (town.h - SEWER.floor) * VZ;
+let townTrial = null;
+// terrace claims (2026-10-12): a trial town build levels each building's lot
+// to its tier (town.mjs plan.claim); raise / lower those cells to match
+{
+  const base = new Map();
+  for (let x = town.fx; x < town.fx + TOWN.cells; x++)
+    for (let y = town.fy; y < town.fy + TOWN.cells; y++) if (townKind[x * N + y]) base.set(x * N + y, townLevel(x, y));
+  townTrial = buildTown({ put: () => {}, orientFor, rnd: townRnd, plan: townPlan, shopTiers: ['bronze', 'iron'], sewerDepth,
+    riverAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; } });
+  let moved = 0;
+  for (const [c, l0] of base) { const x = (c / N) | 0, y = c % N, l = townLevel(x, y); if (l !== l0 && !riverCell[c]) { H[c] = town.h + l; moved++; } }
+  console.error(`town terraces: ${moved} lot cells levelled to their buildings`);
+}
 riverDiag('before cap');
 riverValleyCap();
 riverDiag('after cap');
@@ -1807,10 +1844,14 @@ for (let x = 0; x < N; x++)
     else if (slope >= 4 || h > 96) [top, sub] = [ROCK[shade & 1], ROCK[shade & 1]];
     else [top, sub] = [GRASS[shade], DIRT];
     surfaceMat[x * N + y] = top;
+    // a terrace stepping down 2+ bricks to a neighbour: masonry down the exposed face
+    let wallFrom = h;
+    if (terraceCell[x * N + y]) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (h - hAt(x + dx, y + dy) >= 2) wallFrom = Math.min(wallFrom, hAt(x + dx, y + dy) + 1);
     for (let z = 0; z <= h; z++) {
       let m;
       if (z < 2) m = BEDROCK;
       else if (z === h) m = top;
+      else if (z >= wallFrom) m = WALLSTONE[z & 1];
       else if (z >= h - 3) m = sub;
       else if (z < 20) m = DEEP;
       else m = STONE;
@@ -1832,6 +1873,73 @@ for (let c = 0; c < N * N; c++) {
   tunnelCells++;
 }
 console.error(`tunnels: ${tunnelCells} cells`);
+
+// ----------------------------------------------------------------- sewers --
+// (owner 2026-10-12: "make towns have layered heights, with retaining walls
+// and sewers") Brick tunnels under every town path: a sludge channel a brick
+// down between stone walks, red-brick walls, a tile vault and lamps; a
+// pillared cistern under the square; the kiosks' stair shafts (town.mjs
+// sewerKiosk) and a passage from each to the nearest tunnel. Smashable pots
+// on the walks.
+const sewerPots = [];
+{
+  const SF = SEWER.floor, TOP = SF + SEWER.high + 1, CIST = PLAZA_R - 40;
+  const lines = townPlan.paths.map(p => p.filter(([ux, uy]) => Math.hypot(ux, uy) < townPlan.edgeR(ux, uy) - 220)).filter(p => p.length > 1);
+  const kind = new Uint8Array(N * N); // 1 walk, 2 channel, 3 wall / pillar
+  const cx0 = town.fx + TOWN.cells / 2, cy0 = town.fy + TOWN.cells / 2;
+  for (let x = town.fx; x < town.fx + TOWN.cells; x++)
+    for (let y = town.fy; y < town.fy + TOWN.cells; y++) {
+      const [ux, uy] = townLocal(x, y), r = Math.hypot(ux, uy);
+      if (r <= CIST) { kind[x * N + y] = (x - cx0) % 4 === 0 && (y - cy0) % 4 === 0 && r > 80 ? 3 : 1; continue; }
+      let d = Infinity;
+      for (const l of lines) { d = Math.min(d, distToLine(ux, uy, l)); if (d <= 22) break; }
+      kind[x * N + y] = d <= 22 ? 2 : d <= 62 ? 1 : d <= 102 || r <= CIST + 40 ? 3 : 0;
+    }
+  const open = (x, y, z0, z1) => { for (let z = z0; z <= z1; z++) V[vi(x, y, z)] = 0; };
+  const line = (x, y, z0, z1) => { for (let z = z0; z <= z1; z++) if (V[vi(x, y, z)]) V[vi(x, y, z)] = SEWER_BRICK[z & 1]; };
+  const tunnel = (x, y, channel) => {
+    open(x, y, channel ? SF : SF + 1, TOP - 1);
+    V[vi(x, y, channel ? SF - 1 : SF)] = channel ? SLUDGE : SEWER_WALK;
+    if (V[vi(x, y, TOP)]) V[vi(x, y, TOP)] = SEWER_CEIL;
+  };
+  let cells = 0;
+  for (let x = town.fx; x < town.fx + TOWN.cells; x++)
+    for (let y = town.fy; y < town.fy + TOWN.cells; y++) {
+      const k = kind[x * N + y];
+      if (k === 1 || k === 2) { tunnel(x, y, k === 2); cells++; }
+      else if (k === 3) line(x, y, SF - 1, TOP);
+    }
+  // stair shafts: the 5 x 5 ring open from the floor to the top, brick-lined, a passage out the front to the tunnels
+  const cellOf = (ux, uy) => [cx0 + Math.floor(ux / CELL), cy0 + Math.floor(uy / CELL)];
+  for (const sh of townTrial.sewerShafts ?? []) {
+    const [sx, sy] = cellOf(sh.x, sh.y);
+    for (let i = -3; i <= 3; i++)
+      for (let j = -3; j <= 3; j++) {
+        const x = sx + i, y = sy + j, h = H[x * N + y], m = Math.max(Math.abs(i), Math.abs(j));
+        if (m === 2) { open(x, y, SF + 1, h); V[vi(x, y, SF)] = SEWER_WALK; }
+        else line(x, y, SF, h - 1); // the pillar and the shaft's outer wall
+      }
+    let reached = false;
+    for (let k = 3; k < 16 && !reached; k++) {
+      const x = sx + sh.fx * k, y = sy + sh.fy * k;
+      for (let w = -1; w <= 1; w++) {
+        const px = x + (sh.fy ? w : 0), py = y + (sh.fx ? w : 0);
+        if (kind[px * N + py] === 1 || kind[px * N + py] === 2) { reached = true; continue; }
+        tunnel(px, py, false);
+        for (const e of [-2, 2]) { const qx = x + (sh.fy ? e : 0), qy = y + (sh.fx ? e : 0); if (!kind[qx * N + qy]) line(qx, qy, SF - 1, TOP); }
+      }
+    }
+    if (!reached) console.error(`sewer: the kiosk at ${sh.x},${sh.y} found no tunnel`);
+  }
+  // lamps under the vault and pots on the walks
+  for (let x = town.fx; x < town.fx + TOWN.cells; x++)
+    for (let y = town.fy; y < town.fy + TOWN.cells; y++) {
+      if (kind[x * N + y] !== 1 || V[vi(x, y, SF + 1)] !== 0) continue;
+      if (hash(x, y, 501) < 0.07) tunnelLights.push([x, y, SF]);
+      else if (hash(x, y, 502) < 0.012) sewerPots.push([X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, (SF + 1) * VZ + 12]);
+    }
+  console.error(`sewers: ${cells} cells, ${(townTrial.sewerShafts ?? []).length} stair kiosks, ${sewerPots.length} pots`);
+}
 
 // ------------------------------------------------------------------ caves --
 // Zelda-style caves: a dark doorway cut into a cliff face, a short passage,
@@ -2341,6 +2449,7 @@ const at = (x, y, z) => [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, z * VZ];
 // (ruins.mjs) each through its own overlap guard; their cells are reserved, so
 // the trees, boulders and plants below keep off them
 const details = { count: 0, kinds: {} }, pots = [], casinoGames = [];
+for (const at of sewerPots) pots.push({ at, where: 'sewer' });
 {
   const wrap = (ox, oy, oz) => { const b = makeBuilder(); return { b, put: (br, x, y, z) => b.add({ ...br, position: [ox + x, oy + y, oz + z] }, br.asset ?? 'box') }; };
   // procedural sizes off the grid would load as "Missing brick type": drop and count them
@@ -2402,6 +2511,8 @@ const details = { count: 0, kinds: {} }, pots = [], casinoGames = [];
       const cx = Math.round(x) + a, cy = Math.round(y) + b, c = cx * N + cy;
       if (!inBounds(cx, cy) || pathCell[c] || keepOut[c] || rampCol[c] || capCol[c] || H[c] <= SEA || townDist(cx, cy) <= 0) continue;
       if (reserved[c] && !broken) continue;
+      // the boards overhang the cell: nothing round it higher, so no smoothing piece reaches them (2026-10-12)
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([p, q]) => hAt(cx + p, cy + q) > H[c])) continue;
       const o = at(cx, cy, H[c] + 1), w = wrap(o[0] - CELL / 2, o[1] - CELL / 2, o[2]);
       buildSign({ put: w.put, text, facing: out, broken });
       if (w.b.dropped.length) continue;
@@ -3007,6 +3118,39 @@ const WATER_ZONE = {
     bricks.push({ asset: 'PB_DefaultMicroBrick', size: [6, 6, 2], color: [255, 200, 130], material: 'BMC_Glow', material_intensity: 5, position: [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, (zr + 1 + TUNNEL.high) * VZ - 2] });
 }
 
+// terrace dressing (2026-10-12) for the cells [x0, x1) x [y0, y1), through a
+// settlement's overlap guard: a cobble micro wedge on every paved cell a brick
+// below a paved neighbour (the ramps between terraces), and a stone parapet
+// along the top of each retaining wall 2+ bricks high
+function terraceDressing(B, x0, y0, x1, y1, paved) {
+  const CAP = [[150, 144, 132], [138, 132, 120]];
+  for (let x = x0; x < x1; x++)
+    for (let y = y0; y < y1; y++) {
+      const c = x * N + y;
+      if (!inMap(x, y) || !terraceCell[c]) continue;
+      const h = H[c], top = (h + 1) * VZ, wx = X0 + x * CELL, wy = Y0 + y * CELL;
+      if (paved(c) && !riverCell[c])
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const n = (x + dx) * N + y + dy;
+          if (!inMap(x + dx, y + dy) || !paved(n) || H[n] !== h + 1) continue;
+          const b = { asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[dx, dy]], [CELL / 2, CELL / 2, VZ / 2]), color: COBBLE_C, position: [wx + CELL / 2, wy + CELL / 2, top + VZ / 2] };
+          const [lo, hi] = worldBox(b);
+          if (B.free(lo, hi)) B.add(b, 'ramp');
+          break;
+        }
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (h - hAt(x + dx, y + dy) < 2) continue;
+        // a 10-thick strip on this cell's edge toward the drop, 24 high
+        const ex0 = dx > 0 ? wx + CELL - 10 : wx, ey0 = dy > 0 ? wy + CELL - 10 : wy;
+        const ex1 = dx ? ex0 + 10 : wx + CELL, ey1 = dy ? ey0 + 10 : wy + CELL;
+        const lo = [ex0, ey0, top], hi = [ex1, ey1, top + 24];
+        if (!B.free(lo, hi)) continue;
+        B.add({ asset: 'PB_DefaultMicroBrick', size: [(ex1 - ex0) / 2, (ey1 - ey0) / 2, 12], position: [(ex0 + ex1) / 2, (ey0 + ey1) / 2, top + 12], color: CAP[(x + y) & 1] }, 'parapet');
+      }
+    }
+}
+const COBBLE_C = MATS[COBBLE].color;
+
 // town buildings (town.mjs), positioned from the square's centre on its paving
 const townBricks = bricks.length;
 // through the overlap guard: the game would reject overlapping bricks
@@ -3019,8 +3163,10 @@ const townStats = buildTown({
   rnd: townRnd,
   plan: townPlan,
   shopTiers: ['bronze', 'iron'], // the spawn town: low tiers only (owner 2026-10-06)
+  sewerDepth,
   riverAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; },
 });
+terraceDressing(townB, town.fx, town.fy, town.fx + TOWN.cells, town.fy + TOWN.cells, c => townKind[c] === 2);
 if (townB.dropped.length) throw new Error(`town: ${townB.dropped.length} overlapping pieces, e.g.\n${townB.dropped.slice(0, 8).join('\n')}`);
 for (const { label, ...b } of townB.bricks) bricks.push(b);
 // hamlets, each through its own overlap guard; their shop spots become
@@ -3037,13 +3183,14 @@ for (const v of villages) {
     plan: v.plan,
     riverAt: (ux, uy) => { const x = v.x + Math.floor(ux / CELL), y = v.y + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; },
   });
+  terraceDressing(vb, v.x - VW, v.y - VW, v.x + VW + 1, v.y + VW + 1, c => villagePaved[c] === 1);
   if (vb.dropped.length) throw new Error(`village: ${vb.dropped.length} overlapping pieces, e.g.\n${vb.dropped.slice(0, 8).join('\n')}`);
   for (const { label, ...b } of vb.bricks) bricks.push(b);
   (st.shopSpots ?? []).forEach(([x, y, z, orient], k) => shops.push({ at: [o[0] + x, o[1] + y, o[2] + z], tier: v.shops[k].tier, prefab: v.shops[k].prefab, orient }));
   if ((st.shopSpots ?? []).length < v.shops.length) console.error(`hamlet ${v.seed}: room for ${st.shopSpots.length} of ${v.shops.length} stands`);
   for (const hs of st.houseShops) shops.push({ at: [o[0] + hs.at[0], o[1] + hs.at[1], o[2] + hs.at[2]], tier: hs.tier, orient: hs.orient, house: true, ...(hs.prefab ? { prefab: hs.prefab } : {}) });
-  for (const [x, y] of st.potSpots ?? []) pots.push({ at: [o[0] + x, o[1] + y, o[2] + 12], where: 'hamlet' });
-  checkpoints.push({ at: [o[0], o[1] - 100, o[2] + 2], where: 'village' });
+  for (const [x, y] of st.potSpots ?? []) pots.push({ at: [o[0] + x, o[1] + y, o[2] + v.plan.levelAt(x, y) + 12], where: 'hamlet' });
+  checkpoints.push({ at: [o[0], o[1] - 100, o[2] + v.plan.levelAt(0, -100) + 2], where: 'village' });
   v.center = o;
   v.buildings = st.buildings;
   v.rejects = st.rejects;
@@ -3055,7 +3202,7 @@ const townOrigin = [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN
 // sword-shop stands inside some town houses (town.mjs HOUSE_SHOP_CHANCE)
 for (const hs of townStats.houseShops) shops.push({ at: hs.at.map((v, k) => townOrigin[k] + v), tier: hs.tier, orient: hs.orient, house: true });
 // the spawn market: every sword shop and gun stand on the plaza
-for (const [x, y] of townStats.potSpots ?? []) pots.push({ at: [townOrigin[0] + x, townOrigin[1] + y, townOrigin[2] + 12], where: 'town' });
+for (const [x, y] of townStats.potSpots ?? []) pots.push({ at: [townOrigin[0] + x, townOrigin[1] + y, townOrigin[2] + townPlan.levelAt(x, y) + 12], where: 'town' });
 for (const ts of townStats.townShops ?? []) shops.push({ at: ts.at.map((v, k) => townOrigin[k] + v), tier: ts.tier, orient: ts.orient, market: true, ...(ts.prefab ? { prefab: ts.prefab } : {}) });
 const townRemoved = townStats.removed.map(({ type, lo, hi }) => ({
   type,
