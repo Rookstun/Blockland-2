@@ -2304,6 +2304,8 @@ for (let x = 0; x < N; x++)
     const h = H[x * N + y];
     if (h + 1 <= SEA || V[vi(x, y, h)] === 0) continue;
     if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || noSmooth[x * N + y]) continue;
+    // the foot of a terrace retaining wall: its brick veneer stands here (terraceDressing)
+    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && terraceCell[(x + dx) * N + y + dy] && H[(x + dx) * N + y + dy] - h >= 2)) continue;
     const hN = (dx, dy) => (inMap(x + dx, y + dy) ? H[(x + dx) * N + y + dy] : h);
     // the step up to the lowest higher neighbour (1..MAX_RISE bricks); every
     // piece on this cell rises by that much
@@ -3119,11 +3121,22 @@ const WATER_ZONE = {
 }
 
 // terrace dressing (2026-10-12) for the cells [x0, x1) x [y0, y1), through a
-// settlement's overlap guard: a cobble micro wedge on every paved cell a brick
-// below a paved neighbour (the ramps between terraces), and a stone parapet
-// along the top of each retaining wall 2+ bricks high
+// settlement's overlap guard (owner 2026-10-12: "retaining walls in villages ...
+// ramps made of tiled herringbone and the actual retaining wall using brick"):
+//  - ramps: a paved cell a brick below a paved neighbour gets a herringbone step
+//    6 high on its uphill half (2 studs), so each brick of rise is 2 paved steps
+//  - retaining walls 2+ bricks high: a running-bond brick veneer (1 x 2-stud
+//    bricks, joints staggered a stud per course on the global stud grid, as
+//    walltool lays walls) 1 stud thick on the low side of the face, laid in
+//    continuous runs along each wall line; a stone parapet along the top
+const BRICK_BASE = [150, 74, 56];
 function terraceDressing(B, x0, y0, x1, y1, paved) {
   const CAP = [[150, 144, 132], [138, 132, 120]];
+  const PAVE = { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 91) * C.length)] };
+  // wall faces per line and course: key "axis|line|side|course" -> stud positions along the line
+  const faces = new Map();
+  const face = (key, from) => (faces.get(key) ?? faces.set(key, new Set()).get(key)).add(from);
+  let steps = 0;
   for (let x = x0; x < x1; x++)
     for (let y = y0; y < y1; y++) {
       const c = x * N + y;
@@ -3133,14 +3146,28 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const n = (x + dx) * N + y + dy;
           if (!inMap(x + dx, y + dy) || !paved(n) || H[n] !== h + 1) continue;
-          const b = { asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[dx, dy]], [CELL / 2, CELL / 2, VZ / 2]), color: COBBLE_C, position: [wx + CELL / 2, wy + CELL / 2, top + VZ / 2] };
-          const [lo, hi] = worldBox(b);
-          if (B.free(lo, hi)) B.add(b, 'ramp');
+          // the uphill half of the cell, in global studs
+          const sa0 = x * 4 + (dx > 0 ? 2 : 0), sa1 = dx ? sa0 + 2 : x * 4 + 4;
+          const sb0 = y * 4 + (dy > 0 ? 2 : 0), sb1 = dy ? sb0 + 2 : y * 4 + 4;
+          const lo = [X0 + sa0 * 10, Y0 + sb0 * 10, top], hi = [X0 + sa1 * 10, Y0 + sb1 * 10, top + 6];
+          if (!B.free(lo, hi)) continue;
+          B.add({ asset: 'PB_DefaultMicroBrick', size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, 1], position: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, top + 1], color: COBBLE_C }, 'ramp');
+          const cells = new Set();
+          for (let a = sa0; a < sa1; a++) for (let b = sb0; b < sb1; b++) cells.add(a + ',' + b);
+          for (const r of floorPieces(cells, 'paving', PAVE))
+            B.add({ asset: r.brick.asset, position: [X0 + ((r.x0 + r.x1) / 2) * 10, Y0 + ((r.y0 + r.y1) / 2) * 10, top + 4],
+              size: [(r.x1 - r.x0) * 5, (r.y1 - r.y0) * 5, 2], color: r.brick.color }, 'ramp');
+          steps++;
           break;
         }
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (h - hAt(x + dx, y + dy) < 2) continue;
-        // a 10-thick strip on this cell's edge toward the drop, 24 high
+        const hn = hAt(x + dx, y + dy);
+        if (h - hn < 2) continue;
+        const onRiver = inMap(x + dx, y + dy) && riverCell[(x + dx) * N + y + dy];
+        // the face lies on the edge toward the drop; the veneer stands on the low cell
+        const axis = dx ? 'x' : 'y', line = dx ? (dx > 0 ? x + 1 : x) * 4 : (dy > 0 ? y + 1 : y) * 4;
+        if (!onRiver) for (let k = hn + 1; k <= h; k++) for (let s = 0; s < 4; s++) face(`${axis}|${line}|${dx + dy}|${k}`, (dx ? y : x) * 4 + s);
+        // the parapet: a 10-thick strip on this cell's edge toward the drop, 24 high
         const ex0 = dx > 0 ? wx + CELL - 10 : wx, ey0 = dy > 0 ? wy + CELL - 10 : wy;
         const ex1 = dx ? ex0 + 10 : wx + CELL, ey1 = dy ? ey0 + 10 : wy + CELL;
         const lo = [ex0, ey0, top], hi = [ex1, ey1, top + 24];
@@ -3148,7 +3175,37 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
         B.add({ asset: 'PB_DefaultMicroBrick', size: [(ex1 - ex0) / 2, (ey1 - ey0) / 2, 12], position: [(ex0 + ex1) / 2, (ey0 + ey1) / 2, top + 12], color: CAP[(x + y) & 1] }, 'parapet');
       }
     }
+  // lay the veneer: per wall line and course, the stud runs, cut into 2-stud
+  // bricks whose joints sit on studs of the course's parity (1-stud ends)
+  let bricksLaid = 0, skipped = 0;
+  for (const [key, set] of faces) {
+    const [axis, lineS, sideS, kS] = key.split('|'), line = +lineS, side = +sideS, k = +kS;
+    const studs = [...set].sort((p, q) => p - q);
+    const z0 = k * VZ;
+    // the veneer's stud row across the line: just past the face, on the low side
+    const across = side > 0 ? line : line - 1;
+    for (let i = 0; i < studs.length;) {
+      let j = i;
+      while (j + 1 < studs.length && studs[j + 1] === studs[j] + 1) j++;
+      const r0 = studs[i], r1 = studs[j] + 1;
+      for (let p = r0; p < r1;) {
+        const q = Math.min(r1, (p - k) % 2 === 0 ? p + 2 : p + 1); // joints where (stud - course) is even
+        const [ax0, ax1, ay0, ay1] = axis === 'x' ? [across, across + 1, p, q] : [p, q, across, across + 1];
+        const lo = [X0 + ax0 * 10, Y0 + ay0 * 10, z0], hi = [X0 + ax1 * 10, Y0 + ay1 * 10, z0 + VZ];
+        if (B.free(lo, hi)) {
+          const f = 0.88 + hash(ax0 * 7 + ay0, k, 501) * 0.2;
+          B.add({ asset: 'PB_DefaultBrick', size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, VZ / 2], position: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, z0 + VZ / 2],
+            color: BRICK_BASE.map(v => Math.round(v * f)) }, 'veneer');
+          bricksLaid++;
+        } else skipped++;
+        p = q;
+      }
+      i = j + 1;
+    }
+  }
+  terraceStats.steps += steps; terraceStats.veneer += bricksLaid; terraceStats.veneerSkipped += skipped;
 }
+const terraceStats = { steps: 0, veneer: 0, veneerSkipped: 0 };
 const COBBLE_C = MATS[COBBLE].color;
 
 // town buildings (town.mjs), positioned from the square's centre on its paving
@@ -3225,7 +3282,7 @@ console.error(JSON.stringify({
   town: { center: [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN.cells / 2) * CELL, (town.h + 1) * VZ], bricks: townCount, ...townStats, thinnedOut: townRemoved.length, restoredAfterClear: swallowed.length },
   caves: caves.length, carvedVoxels: carved,
   terrainBricks: terrainCount, dungeonBricks: dungeonCount, decorBricks: decorCount, total: bricks.length,
-  trees, boulders, ramps,
+  trees, boulders, ramps, terrace: terraceStats,
   plants: plantCount,
   desert: { centre: [X0 + desert.x * CELL, Y0 + desert.y * CELL], r: DESERT.r * CELL, cacti, villages: villages.filter(v => v.desert).length },
   volcano: { centre: at(volcano.x, volcano.y, volcano.rim).map(Math.round), foot: volcano.foot, rim: volcano.rim, lake: volcano.lake, roadCells: volcano.road.length, lead: at(...volcano.lead, H[volcano.lead[0] * N + volcano.lead[1]] + 1).map(Math.round) },
