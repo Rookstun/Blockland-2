@@ -496,15 +496,20 @@ function dressing(axis, a0, a1, face, n, z0, z1, st, s) {
 // ------------------------------------------------------------------ roof --
 // town.mjs gable(): courses of a micro-brick lip with a micro wedge on top,
 // ridge along x, gable ends filled with running-bond bricks of `fill`
-function gable(x0, y0, x1, y1, zBase, rise, color, fill, winStyle = null) {
+// gambrel = true (owner 2026-10-11 "new roofing types"): a barn roof, the lower ~45% of the
+// courses twice as steep, the upper ones shallow
+function gable(x0, y0, x1, y1, zBase, rise, color, fill, winStyle = null, gambrel = false) {
   const ox0 = x0 - 10, oy0 = y0 - 10, ox1 = x1 + 10, oy1 = y1 + 10;
   const S = (oy1 - oy0) / 2, LIP = 4;
-  const { widths, per } = townCourses(S, rise, LIP), n = widths.length;
+  const { widths, per: per0 } = townCourses(S, rise, LIP), n = widths.length;
+  const steepN = Math.ceil(n * 0.45), even2 = v => Math.max(LIP + 4, Math.round(v / 2) * 2);
+  const P = widths.map((_, k) => !gambrel ? per0 : k < steepN ? even2(per0 * 2) : even2(per0 * 0.6));
+  const Z = P.map((_, k) => zBase + P.slice(0, k).reduce((a, b) => a + b, 0));
   const lipC = color.map(v => Math.round(v * 0.82));
   for (const sgn of [-1, 1]) {
     let e = 0;
     widths.forEach((w, k) => {
-      const z = zBase + k * per, ya = sgn < 0 ? oy0 + e : oy1 - e - w, yb = ya + w;
+      const z = Z[k], per = P[k], ya = sgn < 0 ? oy0 + e : oy1 - e - w, yb = ya + w;
       box(ox0, ya, z, ox1, yb, z + LIP, { color: lipC }, 'roof lip');
       const ext = [(ox1 - ox0) / 2, w / 2, (per - LIP) / 2];
       B.add({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[0, -sgn]], ext), color, position: [(ox0 + ox1) / 2, (ya + yb) / 2, z + LIP + (per - LIP) / 2] }, 'roof wedge');
@@ -516,13 +521,13 @@ function gable(x0, y0, x1, y1, zBase, rise, color, fill, winStyle = null) {
   // the rows of each gable end; an attic window takes the middle of the rows
   // from one course up to 40 units higher, where the rows are wide enough
   const rowsAll = [];
-  for (let k = 0, e = 0; k + 1 < n; k++) {
+  for (let k = 0, e = 0, row = 0; k + 1 < n; k++) {
     e += widths[k];
-    const z = zBase + k * per;
-    for (let zz = z, row = k * 3; zz < z + per; zz += 12, row++) rowsAll.push({ zz, z1: Math.min(z + per, zz + 12), row, a0: oy0 + e, a1: oy1 - e });
+    const z = Z[k], per = P[k];
+    for (let zz = z; zz < z + per; zz += 12, row++) rowsAll.push({ zz, z1: Math.min(z + per, zz + 12), row, a0: oy0 + e, a1: oy1 - e });
   }
   const mid = oy0 + Math.round((oy1 - oy0) / 20) * 10, HOLE = [mid - 20, mid + 20]; // on the rows' own grid (oy0 + 10k)
-  const holeRows = winStyle ? rowsAll.filter(r => r.zz >= zBase + per && r.z1 <= zBase + per + 40 && r.a0 < HOLE[0] - 30 && r.a1 > HOLE[1] + 30) : [];
+  const holeRows = winStyle ? rowsAll.filter(r => r.zz >= Z[1] && r.z1 <= Z[1] + 40 && r.a0 < HOLE[0] - 30 && r.a1 > HOLE[1] + 30) : [];
   for (const { zz, z1, row, a0, a1 } of rowsAll) {
     const holed = holeRows.some(r => r.zz === zz);
     for (const gx of [x0 + 5, x1 - 15]) {
@@ -618,6 +623,130 @@ function shed(x0, y0, x1, y1, zBase, rise, color, fill) {
       run(x0 + 15, x1 - 15, row + 1, (a, b, m) => box(a, y1 - 15, zz, b, y1 - 5, z1, m, 'shed back'));
     }
   }
+}
+
+// (owner 2026-10-11: "new roofing types") hip: courses step in from all four sides, a micro
+// wedge on each band and a corner wedge where two bands meet, closing on a ridge (or a point).
+// mansard = two steep courses, then a flat cap.
+function hip(x0, y0, x1, y1, zBase, rise, color, mansard = false) {
+  const ox0 = x0 - 10, oy0 = y0 - 10, ox1 = x1 + 10, oy1 = y1 + 10, LIP = 4;
+  const S = Math.min(ox1 - ox0, oy1 - oy0) / 2;
+  let { widths, per } = townCourses(S, rise, LIP);
+  if (mansard) { widths = [20, 20]; per = 40; }
+  const lipC = color.map(v => Math.round(v * 0.82));
+  const wedge = (ax0, ay0, ax1, ay1, z, ups, label) => {
+    if (ax1 <= ax0 || ay1 <= ay0) return;
+    const ext = [(ax1 - ax0) / 2, (ay1 - ay0) / 2, (per - LIP) / 2];
+    box(ax0, ay0, z, ax1, ay1, z + LIP, { color: lipC }, 'roof lip');
+    const asset = ups.length === 2 ? 'PB_DefaultMicroWedgeCorner' : 'PB_DefaultMicroWedge';
+    B.add({ asset, ...orientFor(asset, ups, ext), color, position: [(ax0 + ax1) / 2, (ay0 + ay1) / 2, z + LIP + (per - LIP) / 2] }, label);
+  };
+  let e = 0, k = 0;
+  for (const w of widths) {
+    const ax0 = ox0 + e, ax1 = ox1 - e, ay0 = oy0 + e, ay1 = oy1 - e, z = zBase + k * per;
+    if (ax1 <= ax0 || ay1 <= ay0) break;
+    const wx = Math.min(w, (ax1 - ax0) / 2), wy = Math.min(w, (ay1 - ay0) / 2);
+    wedge(ax0 + wx, ay0, ax1 - wx, ay0 + wy, z, [[0, 1]], 'hip front');
+    wedge(ax0 + wx, ay1 - wy, ax1 - wx, ay1, z, [[0, -1]], 'hip back');
+    wedge(ax0, ay0 + wy, ax0 + wx, ay1 - wy, z, [[1, 0]], 'hip side');
+    wedge(ax1 - wx, ay0 + wy, ax1, ay1 - wy, z, [[-1, 0]], 'hip side');
+    wedge(ax0, ay0, ax0 + wx, ay0 + wy, z, [[1, 0], [0, 1]], 'hip corner');
+    wedge(ax1 - wx, ay0, ax1, ay0 + wy, z, [[-1, 0], [0, 1]], 'hip corner');
+    wedge(ax1 - wx, ay1 - wy, ax1, ay1, z, [[-1, 0], [0, -1]], 'hip corner');
+    wedge(ax0, ay1 - wy, ax0 + wx, ay1, z, [[1, 0], [0, -1]], 'hip corner');
+    e += w; k++;
+  }
+  if (mansard) { // the flat top inside the steep courses
+    const zt = zBase + k * per;
+    box(ox0 + e, oy0 + e, zt, ox1 - e, oy1 - e, zt + LIP, { color: lipC }, 'mansard cap');
+    box(ox0 + e, oy0 + e, zt + LIP, ox1 - e, oy1 - e, zt + LIP + 4, { asset: TILE, color: color.map(v => Math.round(v * 0.7)) }, 'mansard top');
+  }
+}
+
+// flat roof: a micro-brick slab over the walls, a tiled membrane, a parapet with a white cap,
+// an air-conditioning unit and a vent stack
+function flatRoof(x0, y0, x1, y1, zBase, color, fill, s) {
+  const ox0 = x0 - 10, oy0 = y0 - 10, ox1 = x1 + 10, oy1 = y1 + 10;
+  box(ox0, oy0, zBase, ox1, oy1, zBase + 8, { color: color.map(v => Math.round(v * 0.82)) }, 'flat slab');
+  box(ox0 + 10, oy0 + 10, zBase + 8, ox1 - 10, oy1 - 10, zBase + 12, { asset: TILE, color: [120, 118, 116] }, 'flat membrane');
+  for (const [a0, b0, a1, b1] of [[ox0, oy0, ox1, oy0 + 10], [ox0, oy1 - 10, ox1, oy1], [ox0, oy0 + 10, ox0 + 10, oy1 - 10], [ox1 - 10, oy0 + 10, ox1, oy1 - 10]]) {
+    box(a0, b0, zBase + 8, a1, b1, zBase + 32, { asset: 'PB_DefaultBrick', color: fill }, 'parapet');
+    box(a0, b0, zBase + 32, a1, b1, zBase + 36, { color: WHITE }, 'parapet cap');
+  }
+  const ax = Math.round((ox0 + 60 + rnd(s, 61) * (ox1 - ox0 - 180)) / 10) * 10, ay = Math.round((oy0 + 60 + rnd(s, 62) * (oy1 - oy0 - 160)) / 10) * 10;
+  box(ax, ay, zBase + 12, ax + 60, ay + 40, zBase + 44, { color: [176, 178, 180], material: 'BMC_Metallic' }, 'ac unit');
+  box(ax + 10, ay + 40, zBase + 24, ax + 50, ay + 42, zBase + 40, { color: [60, 62, 64] }, 'ac grille');
+  pole(ax + 90, ay + 20, zBase + 12, zBase + 52, 3, { color: [90, 90, 92], material: 'BMC_Metallic' }, 'vent stack');
+}
+
+// (owner 2026-10-11: "add garages") a garage beside the house: concrete slab, walls in the
+// house siding, a flat roof, the door half rolled up showing the family car, a driveway to the road
+function garageAt(gx0, gx1, ctx, s) {
+  const y0 = HOUSE_Y, y1 = HOUSE_Y + GD, WALL = 96, CON = [170, 168, 164];
+  box(gx0, y0, 0, gx1, y1, 8, { asset: 'PB_DefaultBrick', color: CON }, 'garage slab');
+  box(gx0 + 10, WALK[1], 0, gx1 - 10, y0, LAWN_Z, { asset: TILE, color: [150, 148, 144] }, 'driveway');
+  const wb = (x0, yy0, x1, yy1, z0, z1, label) => box(x0, yy0, z0, x1, yy1, z1, { asset: 'PB_DefaultBrick', color: ctx.wallC }, label);
+  wb(gx0, y0 + 10, gx0 + 10, y1, 8, 8 + WALL, 'garage wall');
+  wb(gx1 - 10, y0 + 10, gx1, y1, 8, 8 + WALL, 'garage wall');
+  wb(gx0 + 10, y1 - 10, gx1 - 10, y1, 8, 8 + WALL, 'garage wall');
+  wb(gx0, y0, gx0 + 10, y0 + 10, 8, 8 + WALL, 'garage post');
+  wb(gx1 - 10, y0, gx1, y0 + 10, 8, 8 + WALL, 'garage post');
+  box(gx0 + 10, y0, 8 + WALL - 12, gx1 - 10, y0 + 10, 8 + WALL, { color: WHITE }, 'garage header');
+  // the door, rolled half up: white panels with grooves, hanging below the header
+  for (let z = 8 + WALL - 12 - 8, k = 0; k < 4; z -= 8, k++) box(gx0 + 12, y0 + 2, z, gx1 - 12, y0 + 8, z + 8, { color: k % 2 ? [228, 228, 224] : [244, 244, 240] }, 'garage door');
+  box(gx0, y0 - 10, 8 + WALL, gx1, y1 + 10, 8 + WALL + 8, { color: ctx.roofC.map(v => Math.round(v * 0.82)) }, 'garage roof'); // no side overhang: the house's shutters are 10 away
+  box(gx0, y0, 8 + WALL + 8, gx1, y1, 8 + WALL + 12, { asset: TILE, color: ctx.roofC }, 'garage roof top');
+  box(gx0 + 80, y1 - 60, 8 + WALL - 4, gx1 - 80, y1 - 40, 8 + WALL, GLOW([255, 240, 210], 3), 'garage light');
+  // the car, nose to the door
+  const cx = Math.round((gx0 + gx1) / 20) * 10, car = pick([[200, 40, 40], [40, 80, 170], [230, 230, 230], [30, 30, 34], [60, 130, 80], [240, 190, 40]], s, 70);
+  const cy0 = y0 + 40, cy1 = y0 + 200;
+  box(cx - 46, cy0, 20, cx + 46, cy1, 44, { color: car, material: 'BMC_Metallic' }, 'car body');
+  box(cx - 40, cy0 + 50, 44, cx + 40, cy1 - 30, 70, { ...GLASS }, 'car glass');
+  box(cx - 40, cy0 + 50, 70, cx + 40, cy1 - 30, 74, { color: car, material: 'BMC_Metallic' }, 'car roof');
+  for (const wy of [cy0 + 30, cy1 - 40]) for (const [a, b] of [[cx - 52, cx - 46], [cx + 46, cx + 52]]) box(a, wy - 14, 8, b, wy + 14, 36, { color: [24, 24, 26] }, 'car wheel');
+  box(cx - 40, cy0 - 2, 28, cx - 24, cy0, 36, GLOW([255, 250, 220], 4), 'headlight');
+  box(cx + 24, cy0 - 2, 28, cx + 40, cy0, 36, GLOW([255, 250, 220], 4), 'headlight');
+}
+
+// (owner 2026-10-11: "add basements") a cellar under the whole house: concrete walls and floor,
+// a tile ceiling under the foundation, a light, laundry, a furnace and shelves; reached by an
+// outdoor stairwell along the back wall (landing at the bottom, 5 one-brick treads, open to the lawn)
+function basement(X0, HY, w, d, well, s) {
+  const CON = [150, 150, 148], FZ = BSMT_FLOOR, X1 = X0 + w, Y1 = HY + d;
+  box(X0, HY, FZ - 4, X1, Y1, FZ, { asset: TILE, color: [120, 118, 114] }, 'basement floor');
+  const cw = (x0, y0, x1, y1, z0 = FZ, z1 = 0) => box(x0, y0, z0, x1, y1, z1, { asset: 'PB_DefaultBrick', color: CON }, 'basement wall');
+  cw(X0, HY, X1, HY + 10);
+  cw(X0, HY + 10, X0 + 10, Y1);
+  cw(X1 - 10, HY + 10, X1, Y1);
+  // back wall, a doorway onto the stairwell landing
+  const L0 = well.dir > 0 ? well.x0 + 10 : well.x1 - 50, L1 = L0 + 40;
+  cw(X0 + 10, Y1 - 10, L0, Y1); cw(L1, Y1 - 10, X1 - 10, Y1); cw(L0, Y1 - 10, L1, Y1, FZ + 48, 0);
+  box(X0, HY, 0, X1, Y1, LAWN_Z, { asset: TILE, color: [210, 208, 204] }, 'basement ceiling');
+  const mx = Math.round((X0 + X1) / 20) * 10, my = Math.round((HY + Y1) / 20) * 10;
+  box(mx - 20, my - 20, -4, mx + 20, my + 20, 0, GLOW([255, 236, 200], 4), 'basement light');
+  // laundry and the furnace along the front wall, shelves along a side wall
+  const fy = HY + 10;
+  box(X0 + 30, fy, FZ, X0 + 60, fy + 30, FZ + 36, { color: WHITE }, 'washer');
+  box(X0 + 38, fy + 30, FZ + 14, X0 + 52, fy + 32, FZ + 28, { ...GLASS }, 'washer door');
+  box(X0 + 70, fy, FZ, X0 + 100, fy + 30, FZ + 36, { color: WHITE }, 'dryer');
+  box(X1 - 80, fy, FZ, X1 - 30, fy + 40, FZ + 60, { color: [110, 112, 116], material: 'BMC_Metallic' }, 'furnace');
+  box(X1 - 70, fy + 10, FZ + 60, X1 - 60, fy + 20, 0, { color: [90, 90, 92], material: 'BMC_Metallic' }, 'flue');
+  const sx = well.dir > 0 ? X0 + 10 : X1 - 30;
+  for (const z of [FZ + 16, FZ + 36, FZ + 56]) box(sx, my - 56, z, sx + 20, my + 56, z + 4, { color: WOOD }, 'shelf');
+  for (const yy of [my - 60, my + 56]) box(sx, yy, FZ, sx + 20, yy + 4, FZ + 60, { color: WOOD }, 'shelf post');
+  box(sx + 2, my - 40, FZ + 40, sx + 18, my - 20, FZ + 52, { color: [180, 140, 90] }, 'box');
+  box(sx + 2, my + 10, FZ + 20, sx + 18, my + 40, FZ + 34, { color: [70, 110, 160] }, 'tote');
+  // the stairwell: floor, outer wall, end wall (behind the landing), treads, a rail round the top
+  const { x0, x1, y0 } = well, yi = y0 + WELL_W;
+  box(x0, y0, FZ - 4, x1, y0 + WELL_W + 10, FZ, { asset: TILE, color: [120, 118, 114] }, 'well floor');
+  cw(x0, yi, x1, yi + 10, FZ, LAWN_Z);
+  if (well.dir > 0) cw(x0, y0, x0 + 10, yi, FZ, LAWN_Z); else cw(x1 - 10, y0, x1, yi, FZ, LAWN_Z);
+  for (let k = 0; k < 5; k++) {
+    const top = FZ + 12 * (k + 1), a = well.dir > 0 ? x0 + 50 + 20 * k : x1 - 70 - 20 * k;
+    box(a, y0, FZ, a + 20, yi, top, { asset: 'PB_DefaultBrick', color: CON }, 'well step');
+  }
+  for (let x = x0; x <= x1 - 4; x += 40) box(x, yi + 3, LAWN_Z, x + 4, yi + 7, LAWN_Z + 32, { color: [60, 60, 64] }, 'rail post');
+  box(x0, yi + 3, LAWN_Z + 32, x1, yi + 7, LAWN_Z + 36, { color: [60, 60, 64] }, 'rail');
 }
 
 // ------------------------------------------------------------------ house --
@@ -844,11 +973,13 @@ const YARD = {
 // open-plan kitchen and, by chance, in the others
 // SIM_SEED=n (suburb.mjs, owner 2026-10-11: "a ton of houses"): four random lots instead of the fixed street
 const SIM_SEED = Number(process.env.SIM_SEED) || 0;
+const ROOF_TYPES = ['gable', 'shed', 'hip', 'gambrel', 'mansard', 'flat'];
 const randomLot = i => {
   const s = SIM_SEED * 10 + i + 1; seed = s;
   const [W, D] = pick([[48, 40], [44, 44], [52, 40], [48, 44]], s, 2);
   return { plan: pick(['open', 'centre', 'cross'], s, 1), W, D, storeys: rnd(s, 4) < 0.45 ? 1 : 2, s, win: Math.floor(rnd(s, 5) * WINDOW_STYLES.length),
-    job: pick(Object.keys(JOBS), s, 6), roof: rnd(s, 7) < 0.5 ? 'shed' : 'gable' };
+    job: pick(Object.keys(JOBS), s, 6), roof: process.env.SIM_ROOF || pick(ROOF_TYPES, s, 7),
+    garage: W <= 48 && rnd(s, 8) < 0.5 ? (rnd(s, 9) < 0.5 ? -1 : 1) : 0, bsmt: rnd(s, 10) < 0.5, stairSide: rnd(s, 11) < 0.5 ? -1 : 1 };
 };
 const LOT_W = 780, LOTS = (SIM_SEED ? [0, 1, 2, 3].map(randomLot) : [
   { plan: 'open', W: 48, D: 40, storeys: 1, s: 111, win: 3, job: 'baker', roof: 'shed' },
@@ -859,13 +990,54 @@ const LOT_W = 780, LOTS = (SIM_SEED ? [0, 1, 2, 3].map(randomLot) : [
 const ROAD = [100, 280], WALK = [280, 340], LOT_Y = [340, 1100], HOUSE_Y = 500;
 const XS = LOTS.map((_, i) => (i - (LOTS.length - 1) / 2) * (LOT_W + 20));
 const PAD = [XS[0] - LOT_W / 2 - 80, ROAD[0] - 60, XS[XS.length - 1] + LOT_W / 2 + 80, LOT_Y[1] + 80];
+// (owner 2026-10-11: "add garages add basements") each lot's footprints, planned before the
+// ground: a garage lot shifts its house to one side; basements, their stairwells, garages and
+// driveways cut holes in the sand and lawn (HOLES: xy rect + z range, boxCut skips them)
+const GW = 210, GD = 240, BSMT_FLOOR = -68, WELL_W = 40;
+const HOLES = [];
+const boxCut = (x0, y0, z0, x1, y1, z1, b, label) => {
+  let parts = [[x0, y0, x1, y1]];
+  for (const h of HOLES) {
+    if (h.z1 <= z0 || h.z0 >= z1) continue;
+    const next = [];
+    for (const [a0, b0, a1, b1] of parts) {
+      if (h.x1 <= a0 || h.x0 >= a1 || h.y1 <= b0 || h.y0 >= b1) { next.push([a0, b0, a1, b1]); continue; }
+      const cx0 = Math.max(a0, h.x0), cx1 = Math.min(a1, h.x1), cy0 = Math.max(b0, h.y0), cy1 = Math.min(b1, h.y1);
+      next.push([a0, b0, cx0, b1], [cx1, b0, a1, b1], [cx0, b0, cx1, cy0], [cx0, cy1, cx1, b1]);
+    }
+    parts = next.filter(([a0, b0, a1, b1]) => a1 > a0 && b1 > b0);
+  }
+  for (const [a0, b0, a1, b1] of parts) box(a0, b0, z0, a1, b1, z1, b, label);
+};
+const LOTPLAN = LOTS.map((lot, i) => {
+  const Lx = XS[i], L0 = Lx - LOT_W / 2, L1 = Lx + LOT_W / 2;
+  const w = (lot.W + 1) * 10, d = (lot.D + 1) * 10, half = Math.floor(w / 20) * 10;
+  let X0 = Lx - half, garage = null;
+  if (lot.garage > 0) { X0 = L0 + 40; garage = [X0 + w + 20, X0 + w + 20 + GW]; } // 20 clear: window boxes stick out 12
+  else if (lot.garage < 0) { garage = [L0 + 20, L0 + 20 + GW]; X0 = garage[1] + 20; }
+  const HLx = X0 + half, pl = { Lx, L0, L1, HLx, X0, w, d, garage, well: null };
+  if (garage) {
+    HOLES.push({ x0: garage[0], y0: HOUSE_Y, x1: garage[1], y1: HOUSE_Y + GD, z0: 0, z1: LAWN_Z });            // garage slab
+    HOLES.push({ x0: garage[0] + 10, y0: WALK[1], x1: garage[1] - 10, y1: HOUSE_Y, z0: 0, z1: LAWN_Z });       // driveway
+  }
+  if (lot.bsmt) {
+    HOLES.push({ x0: X0, y0: HOUSE_Y, x1: X0 + w, y1: HOUSE_Y + d, z0: BSMT_FLOOR - 4, z1: LAWN_Z });
+    // the outdoor stairwell along the back wall: end wall, a 4-stud landing, 5 treads, open to the lawn
+    const sx = lot.stairSide > 0 ? HLx + 20 : HLx - 20 - 150;
+    pl.well = { x0: sx, x1: sx + 150, dir: lot.stairSide, y0: HOUSE_Y + d, y1: HOUSE_Y + d + WELL_W + 10 };
+    HOLES.push({ x0: sx, y0: pl.well.y0, x1: sx + 150, y1: pl.well.y1, z0: BSMT_FLOOR - 4, z1: LAWN_Z });
+  }
+  return pl;
+});
 // the island pad: sand down to the sea floor, in 280 x 280 blocks
 {
   const depth = BASE - GROUND;
   for (let x = PAD[0]; x < PAD[2]; x += 280) for (let y = PAD[1]; y < PAD[3]; y += 280) {
     const x1 = Math.min(PAD[2], x + 280), y1 = Math.min(PAD[3], y + 280);
-    if (depth > 12) box(x, y, -depth, x1, y1, -12, { asset: 'PB_DefaultBrick', color: [190, 172, 128] }, 'pad');
-    box(x, y, -12, x1, y1, 0, { asset: 'PB_DefaultBrick', color: [214, 196, 142] }, 'sand');
+    // the pad height must be a multiple of 4 (a brick's half height is even): odd ones were rejected in game
+    const padH = Math.floor((depth - 12) / 4) * 4;
+    if (padH > 0) boxCut(x, y, -12 - padH, x1, y1, -12, { asset: 'PB_DefaultBrick', color: [190, 172, 128] }, 'pad');
+    boxCut(x, y, -12, x1, y1, 0, { asset: 'PB_DefaultBrick', color: [214, 196, 142] }, 'sand');
   }
 }
 // road, centre dashes, pavement with a curb
@@ -875,18 +1047,20 @@ box(PAD[0], WALK[0], 0, PAD[2], WALK[1], 8, { asset: TILE, color: [196, 194, 188
 let furnished = 0;
 const summary = [];
 for (const [i, lot] of LOTS.entries()) {
-  const Lx = XS[i], L0 = Lx - LOT_W / 2, L1 = Lx + LOT_W / 2;
+  const pl = LOTPLAN[i], { Lx, L0, L1 } = pl;
   seed = lot.s;
-  const ctx = house(Lx, HOUSE_Y, lot);
+  const ctx = house(pl.HLx, HOUSE_Y, lot);
   ctx.HY = HOUSE_Y;
   const { rooms, typeOf, X0, w, d } = ctx;
   const doorX = X0 + rooms.fd * 10;
   // lawn (around the foundation), path, porch, step
   const lawn = { asset: 'PB_DefaultBrick', color: pick([[96, 160, 70], [88, 150, 64], [104, 168, 76]], lot.s, 30) };
   const pathX = [doorX - 30, doorX + 30];
-  box(L0, LOT_Y[0], 0, pathX[0], LOT_Y[1], LAWN_Z, lawn, 'lawn');
-  box(pathX[1], LOT_Y[0], 0, L1, LOT_Y[1], LAWN_Z, lawn, 'lawn');
-  box(pathX[0], HOUSE_Y + d, 0, pathX[1], LOT_Y[1], LAWN_Z, lawn, 'lawn');
+  boxCut(L0, LOT_Y[0], 0, pathX[0], LOT_Y[1], LAWN_Z, lawn, 'lawn');
+  boxCut(pathX[1], LOT_Y[0], 0, L1, LOT_Y[1], LAWN_Z, lawn, 'lawn');
+  boxCut(pathX[0], HOUSE_Y + d, 0, pathX[1], LOT_Y[1], LAWN_Z, lawn, 'lawn');
+  if (pl.garage) garageAt(pl.garage[0], pl.garage[1], ctx, lot.s);
+  if (lot.bsmt) basement(X0, HOUSE_Y, w, d, pl.well, lot.s);
   box(pathX[0], LOT_Y[0], 0, pathX[1], HOUSE_Y, LAWN_Z, { asset: TILE, color: [176, 170, 160] }, 'path');
   box(pathX[0] - 10, HOUSE_Y - 100, LAWN_Z, pathX[1] + 10, HOUSE_Y - 60, 12, { color: [160, 156, 150] }, 'step');
   box(pathX[0] - 10, HOUSE_Y - 60, LAWN_Z, pathX[1] + 10, HOUSE_Y, HB + 4, { color: [160, 156, 150] }, 'porch');
@@ -895,21 +1069,22 @@ for (const [i, lot] of LOTS.entries()) {
     if (b - a < 40) continue;
     box(a, HOUSE_Y - 30, LAWN_Z, b, HOUSE_Y, LAWN_Z + 4, { color: [96, 70, 48] }, 'bed');
     for (let x = a + 10, k = 0; x + 10 <= b; x += 20, k++) {
-      const rose = rnd(lot.s, k, 40) < 0.5;
+      const rose = false; // B_Rose is a 'missing brick type' on the server (4,500 rejects on the 2026-10-11 suburb load)
       asset(rose ? 'B_Rose' : 'B_Tulip', x, HOUSE_Y - 15, LAWN_Z + 4 + (rose ? 4 : 6), { color: pick([[220, 50, 60], [240, 200, 50], [160, 90, 200], [245, 140, 50], [240, 130, 170]], lot.s, k) });
     }
   }
   // fence round the lot, a gap for the path; mailbox by the gate; two front-yard trees
-  picketRun(L0, LOT_Y[0] + 10, L1, LOT_Y[0] + 10, [[pathX[0] - 10, pathX[1] + 10]]);
+  picketRun(L0, LOT_Y[0] + 10, L1, LOT_Y[0] + 10, [[pathX[0] - 10, pathX[1] + 10], ...(pl.garage ? [[pl.garage[0], pl.garage[1]]] : [])]);
   picketRun(L0, LOT_Y[0] + 30, L0, LOT_Y[1]);
   picketRun(L1 - 4, LOT_Y[0] + 30, L1 - 4, LOT_Y[1]);
   picketRun(L0 + 20, LOT_Y[1] - 4, L1 - 20, LOT_Y[1] - 4);
   box(pathX[1] + 30, LOT_Y[0] + 30, LAWN_Z, pathX[1] + 34, LOT_Y[0] + 34, LAWN_Z + 40, { color: WOOD }, 'mailbox post');
   box(pathX[1] + 24, LOT_Y[0] + 24, LAWN_Z + 40, pathX[1] + 40, LOT_Y[0] + 44, LAWN_Z + 52, { color: pick([[60, 90, 160], [170, 50, 50], [60, 120, 70]], lot.s, 31) }, 'mailbox');
   box(pathX[1] + 40, LOT_Y[0] + 36, LAWN_Z + 44, pathX[1] + 42, LOT_Y[0] + 38, LAWN_Z + 60, { color: [220, 40, 40] }, 'flag');
-  for (const sg of [-1, 1]) { const tx = Lx + sg * 310; if (Math.abs(tx - doorX) > 100) tree(tx, LOT_Y[0] + 80, lot.s + sg); }
+  for (const sg of [-1, 1]) { const tx = Lx + sg * 310; if (Math.abs(tx - doorX) > 100 && !(pl.garage && tx > pl.garage[0] - 60 && tx < pl.garage[1] + 60)) tree(tx, LOT_Y[0] + 80, lot.s + sg); }
   // the household's trade in the back yard, off the path
-  YARD[JOBS[lot.job].yard](Math.round((Lx + (doorX > Lx ? -1 : 1) * 200) / 10) * 10, LOT_Y[1] - 90);
+  const yardSide = pl.well ? -pl.well.dir : (doorX > Lx ? -1 : 1); // away from the basement stairwell
+  YARD[JOBS[lot.job].yard](Math.round(Math.min(L1 - 120, Math.max(L0 + 120, pl.HLx + yardSide * 200)) / 10) * 10, LOT_Y[1] - 90);
   // furnish every room on every storey
   for (let st = 0; st < lot.storeys; st++) {
     // door cells of this plan, inflated: no furniture in a doorway or in front of it
@@ -920,8 +1095,12 @@ for (const [i, lot] of LOTS.entries()) {
     for (const k of upper) if (!wallCells.has(k)) { const [x, y] = k.split(',').map(Number); for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) doorCells.add(`${x + dx},${y + dy}`); }
     for (const room of rooms) furnished += furnish(ctx, st, room.rect, typeOf(room, st), lot.s * 10 + st * 100 + room.rect[0] * 7 + room.rect[2], doorCells);
   }
-  if (lot.roof === 'shed') shed(X0 - 5, HOUSE_Y - 5, X0 + w + 5, HOUSE_Y + d + 5, HB + ctx.h.top, Math.round(d * 0.26 / 4) * 4, ctx.roofC, ctx.wallC);
-  else gable(X0 - 5, HOUSE_Y - 5, X0 + w + 5, HOUSE_Y + d + 5, HB + ctx.h.top, Math.round(d * 0.32 / 4) * 4, ctx.roofC, ctx.wallC, ctx.ws);
+  const RB = [X0 - 5, HOUSE_Y - 5, X0 + w + 5, HOUSE_Y + d + 5], RZ = HB + ctx.h.top;
+  if (lot.roof === 'shed') shed(...RB, RZ, Math.round(d * 0.26 / 4) * 4, ctx.roofC, ctx.wallC);
+  else if (lot.roof === 'hip') hip(...RB, RZ, Math.round(d * 0.3 / 4) * 4, ctx.roofC);
+  else if (lot.roof === 'mansard') hip(...RB, RZ, 0, ctx.roofC, true);
+  else if (lot.roof === 'flat') flatRoof(...RB, RZ, ctx.roofC, ctx.wallC, lot.s);
+  else gable(...RB, RZ, Math.round(d * 0.32 / 4) * 4, ctx.roofC, ctx.wallC, ctx.ws, lot.roof === 'gambrel');
   summary.push(`${lot.job}: ${lot.roof} roof, ${lot.bar ? 'breakfast bar, ' : ''}${lot.plan} plan ${lot.W}x${lot.D} ${lot.storeys}-storey, ${ctx.ws.name} windows, ${ctx.stair.length ? 'stairs' : 'no stairs'}, rooms ${[...Array(lot.storeys)].map((_, st) => rooms.map(r => typeOf(r, st)).join('/')).join(' | ')}`);
 }
 if (process.env.SIM_DEBUG) { const c = {}; for (const b of B.bricks) c[b.label] = (c[b.label] ?? 0) + 1; console.error(JSON.stringify(c)); }
