@@ -956,22 +956,50 @@ module.exports = class Media {
       // box is ~14 units thick, so less would let one piece's clear eat the other)
       // with their sound chips 3 studs to the side, so the next piece goes in
       // before the old one is cleared (same spot would overlap and be refused)
+      // (owner 2026-10-12: "trying to reload the next clip of the video will overlap the audio or
+      // video chip", "the chips are placed very randomly and should be close to each other and the
+      // screen but do not overlap them") two slots that never touch, measured from the real boxes:
+      // even clips in slot A, odd clips in slot B. Behind the screen plane (-n): video A, video B
+      // (its whole depth plus a stud further back: chip and all), then the sound chips in a tidy
+      // row along the screen's width, row A then row B, a stud apart. The next clip goes into the
+      // other slot before the old one is cleared, and no clear box reaches into the playing slot.
+      const along = (v, d) => v[0] * d[0] + v[1] * d[1] + v[2] * d[2];
+      const depthOf = dev => { // [front, back] of a device along -n, relative to its pixel plane
+        const p = T([(dev.pixLo[0] + dev.pixHi[0]) / 2, dev.pixHi[1], (dev.pixLo[2] + dev.pixHi[2]) / 2]);
+        const ds = [0, 1, 2, 3, 4, 5, 6, 7].map(c => along(T([0, 1, 2].map(i => ((c >> i) & 1 ? dev.hi : dev.lo)[i])).map((v, i) => v - p[i]), [-n[0], -n[1], 0]));
+        return [Math.min(0, ...ds), Math.max(0, ...ds)];
+      };
+      const [vFront, vBack] = depthOf(first.video);
+      const slotB = Math.ceil((vBack - vFront + STUD) / 2) * 2;          // video slot B, this far behind A
+      const audioBase = slotB + vBack + STUD;                             // the first sound row starts here
+      const audioSpots = (audio, k) => {
+        if (!audio?.length) return [];
+        const ws = audio.map(d => Math.abs(along([d.hi[0] - d.lo[0], d.hi[1] - d.lo[1], 0], right.concat(0))) || STUD);
+        const deep = Math.max(...audio.map(d => Math.abs(along([d.hi[0] - d.lo[0], d.hi[1] - d.lo[1], 0], n.concat(0)))));
+        const rowAt = audioBase + (k % 2) * (deep + STUD) + deep / 2;     // row A, or row B behind it
+        const total = ws.reduce((a, w) => a + w, 0) + STUD * (ws.length - 1);
+        let lat = -total / 2;
+        return audio.map((d, j) => {
+          const c = lat + ws[j] / 2; lat += ws[j] + STUD;
+          const centre = [cx - n[0] * rowAt + right[0] * c, cy - n[1] * rowAt + right[1] * c];
+          // Prefab.Load puts file coordinates + at: centre the device's own box on the spot
+          return [centre[0] - (d.lo[0] + d.hi[0]) / 2, centre[1] - (d.lo[1] + d.hi[1]) / 2, mid[2]].map(v => Math.round(v / 2) * 2);
+        });
+      };
       const loadSet = (set, k = 0) => {
         const old = clearCur;
-        const back = (k % 2) * 2 * STUD, side = (k % 2) * 3 * STUD;
+        const back = (k % 2) * slotB;
         const { video, audio } = set;
         // bottom row of pixels centred on (cx, cy), standing on the ground
         const p = T([(video.pixLo[0] + video.pixHi[0]) / 2, video.pixHi[1], (video.pixLo[2] + video.pixHi[2]) / 2]);
         const at = [cx - n[0] * back - p[0], cy - n[1] * back - p[1], ground - p[2]].map(v => Math.round(v / 2) * 2);
         setTimeout(old, 2000);
+        const spots = audioSpots(audio, k);
         // the soundtrack chips ride in the same prefab (one set of buttons
         // drives all clocks): their spot in the video file's coordinates
         const inv = v => [0, 1, 2].map(i => { const e = [0, 0, 0]; e[i] = 1; const t = T(e); return t[0] * v[0] + t[1] * v[1] + t[2] * v[2]; });
         const parts = [{ buf: video.buf }];
-        (audio ?? []).forEach((d, k) => {
-          const spot = [mid[0] - n[0] * k * this.deviceStep(audio) + right[0] * side, mid[1] - n[1] * k * this.deviceStep(audio) + right[1] * side, mid[2]];
-          parts.push({ buf: d.buf, offset: inv(spot.map((v, i) => v - at[i])).map(v => Math.round(v / 10) * 10) });
-        });
+        (audio ?? []).forEach((d, j) => parts.push({ buf: d.buf, offset: inv(spots[j].map((v, i) => v - at[i])).map(v => Math.round(v / 10) * 10) }));
         let merged;
         try {
           if (!MERGE_AUDIO) throw null;
@@ -980,7 +1008,7 @@ module.exports = class Media {
           // fall back to separate chips (each with its own buttons)
           if (e) console.error('[media] merge', e);
           const clears = [this.loadDevice({ ...video, buf: this.autoStart(video.buf) }, session, at, orient, T)];
-          (audio ?? []).forEach((d, j) => clears.push(this.loadDevice(d, session, [mid[0] - n[0] * j * this.deviceStep(audio) + right[0] * side, mid[1] - n[1] * j * this.deviceStep(audio) + right[1] * side, mid[2]])));
+          (audio ?? []).forEach((d, j) => clears.push(this.loadDevice(d, session, spots[j])));
           clearCur = () => clears.forEach(c => c());
           return;
         }

@@ -14,7 +14,7 @@ import { createRequire } from 'module';
 import { makeGod } from './gods.mjs';
 import { TOWN_CELLS, build as buildTown, surface as townSurface, planTown, planVillage, RIVER_LOCAL } from './town.mjs';
 import { floorPieces } from './floors.mjs';
-import { orientFor } from './orient.mjs';
+import { orientFor, worldBox } from './orient.mjs';
 import { makeBuilder } from './builder.mjs';
 import { buildDungeon, SIZE as DSIZE, STOREY as DSTOREY, THEMES as DTHEMES } from './dungeon.mjs';
 import { planSurfaceDungeon } from './surfacedungeon.mjs';
@@ -3116,7 +3116,8 @@ const SHIFT = [-(X0 + (town.fx + TOWN.cells / 2) * CELL), -(Y0 + (town.fy + TOWN
 // town beds, window boxes, crops, lotus pads) is dropped here, so the rest of
 // the map stays byte-identical. Live: cleared by bridge/tools/noflowers.py.
 // (owner 2026-10-10: "remove branches and twigs") B_Branch goes the same way
-const FLOWERS = new Set(['B_Flower', 'B_Small_Flower', 'B_Tulip', 'B_Rose', 'B_Lotus_1x1', 'B_Lotus_2x2', 'B_Branch']);
+// (owner 2026-10-12: "remove bushes that dont drop anything", "these ferns need to go") decorative B_Bush and B_Fern dropped too
+const FLOWERS = new Set(['B_Flower', 'B_Small_Flower', 'B_Tulip', 'B_Rose', 'B_Lotus_1x1', 'B_Lotus_2x2', 'B_Branch', 'B_Fern', 'B_Leaf_Bush', 'B_Pumpkin']); // owner: "no flowers or any of that shit" (decorative B_Bush: dropped in the smashable block below)
 {
   let k = 0;
   for (const b of bricks) if (!FLOWERS.has(b.asset)) bricks[k++] = b;
@@ -3133,9 +3134,19 @@ const bushes = [];
   let k = 0;
   for (const b of bricks) {
     if (b.asset === 'B_Bush' && hash(Math.round(b.position[0] / 10), Math.round(b.position[1] / 10), 977) < tune('bush.smashable', 0.25, 'share of bushes you can smash like pots')) { bushes.push({ at: [...b.position] }); continue; }
+    if (b.asset === 'B_Bush') continue; // (owner 2026-10-12) the rest dropped nothing: gone
     bricks[k++] = b;
   }
   bricks.length = k;
+  // (2026-10-12) the bush is world bricks now (bushgen6.mjs, a target ring 18 out): stand it on the
+  // highest terrain under that ring, or the game rejects it where a slope rises into it
+  const cellOf = (x, y) => `${Math.floor(x / 200)},${Math.floor(y / 200)}`, idx = new Map();
+  for (const b of bricks) { const [lo, hi] = worldBox(b); for (let x = Math.floor(lo[0] / 200); x <= Math.floor(hi[0] / 200); x++) for (let y = Math.floor(lo[1] / 200); y <= Math.floor(hi[1] / 200); y++) { const kk = `${x},${y}`; (idx.get(kk) ?? idx.set(kk, []).get(kk)).push([lo, hi]); } }
+  for (const p of bushes) {
+    const [x, y, z] = p.at; let top = z - 16;
+    for (const [lo, hi] of idx.get(cellOf(x, y)) ?? []) if (hi[0] > x - 22 && lo[0] < x + 22 && hi[1] > y - 22 && lo[1] < y + 22 && lo[2] < z + 16) top = Math.max(top, hi[2]);
+    p.at[2] = top + 16;
+  }
   console.error(`smashable bushes: ${bushes.length}`);
 }
 if (!DRY) {
