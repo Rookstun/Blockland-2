@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i < 0 ? d : process.argv[i + 1]; };
 const COLS = +arg('cols', 5), ROWS = +arg('rows', 15), SEED = +arg('seed', 1), OUT = join(here, arg('out', 'out_suburb'));
-const STREET_W = 3340, STREET_D = 1140;   // simhouse pad: x -1670..1670, y 40..1180 around the street origin
+const STREET_W = 4380, STREET_D = 1340;   // simhouse SIM_SEED pad (lots 1040 wide, back yards to 1300): x -2190..2190, y 40..1380
 const AVE = 400;                          // avenue between columns: 40 pavement, 320 road (4 lanes of 80), 40 pavement
 const BASE = 380, GROUND = 270;           // lot top 110 over the sea plane (mapgen WATER_Z 270): room for the basements
 const PAD_H = Math.floor((BASE - GROUND - 12) / 4) * 4; // pad under the sand: a multiple of 4 (even half height)

@@ -31,6 +31,9 @@ const WHITE = [240, 240, 236], WOOD = [126, 86, 54], DARK = [52, 48, 46];
 const B = makeBuilder();
 const box = (x0, y0, z0, x1, y1, z1, b, label = 'box') => {
   if (x1 <= x0 || y1 <= y0 || z1 <= z0) return;
+  // split very long strips (roads on the wide suburb streets): a 17100-long micro brick was rejected in game
+  if (x1 - x0 > 2000) { const m = x0 + Math.round((x1 - x0) / 20) * 10; box(x0, y0, z0, m, y1, z1, b, label); box(m, y0, z0, x1, y1, z1, b, label); return; }
+  if (y1 - y0 > 2000) { const m = y0 + Math.round((y1 - y0) / 20) * 10; box(x0, y0, z0, x1, m, z1, b, label); box(x0, m, z0, x1, y1, z1, b, label); return; }
   B.add({ asset: MB, ...b, size: [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2], position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2] }, label);
 };
 const pole = (x, y, z0, z1, r, b, label = 'pole') => B.add({ asset: 'PB_DefaultPole', ...b, size: [r, r, (z1 - z0) / 2], position: [x, y, (z0 + z1) / 2] }, label);
@@ -1076,13 +1079,14 @@ const randomLot = i => {
     garage: W <= 48 && rnd(s, 8) < 0.5 ? (rnd(s, 9) < 0.5 ? -1 : 1) : 0, bsmt: rnd(s, 10) < 0.5, stairSide: rnd(s, 11) < 0.5 ? -1 : 1,
     park: rnd(s, 12) < 0.12 };   // (owner 2026-10-11 "make the streets more dynamic") some lots are parks
 };
-const LOT_W = 780, LOTS = (SIM_SEED ? [0, 1, 2, 3].map(randomLot) : [
+// (owner 2026-10-12 "spread houses out") suburb lots are wider with deeper back yards
+const LOT_W = SIM_SEED ? 1040 : 780, LOTS = (SIM_SEED ? [0, 1, 2, 3].map(randomLot) : [
   { plan: 'open', W: 48, D: 40, storeys: 1, s: 111, win: 3, job: 'baker', roof: 'shed' },
   { plan: 'centre', W: 44, D: 44, storeys: 2, s: 222, win: 2, job: 'musician', roof: 'gable' },
   { plan: 'open', W: 52, D: 40, storeys: 2, s: 333, win: 1, job: 'programmer', roof: 'shed' },
   { plan: 'cross', W: 48, D: 40, storeys: 1, s: 444, win: 0, job: 'artist', roof: 'shed' },
 ]).map(l => { seed = l.s; return { ...l, bar: l.plan === 'open' || rnd(l.s, 77) < 0.5 }; });
-const ROAD = [100, 280], WALK = [280, 340], LOT_Y = [340, 1100], HOUSE_Y = 500;
+const ROAD = [100, 280], WALK = [280, 340], LOT_Y = [340, SIM_SEED ? 1300 : 1100], HOUSE_Y = 500;
 const XS = LOTS.map((_, i) => (i - (LOTS.length - 1) / 2) * (LOT_W + 20));
 const PAD = [XS[0] - LOT_W / 2 - 80, ROAD[0] - 60, XS[XS.length - 1] + LOT_W / 2 + 80, LOT_Y[1] + 80];
 // (owner 2026-10-11: "add garages add basements") each lot's footprints, planned before the
@@ -1109,8 +1113,10 @@ const LOTPLAN = LOTS.map((lot, i) => {
   if (lot.park) return { Lx, L0, L1, park: true, garage: null, well: null };
   const w = (lot.W + 1) * 10, d = (lot.D + 1) * 10, half = Math.floor(w / 20) * 10;
   let X0 = Lx - half, garage = null;
-  if (lot.garage > 0) { X0 = L0 + 40; garage = [X0 + w + 20, X0 + w + 20 + GW]; } // 20 clear: window boxes stick out 12
-  else if (lot.garage < 0) { garage = [L0 + 20, L0 + 20 + GW]; X0 = garage[1] + 20; }
+  // the house and its garage centred as a pair (20 clear between them: window boxes stick out 12)
+  const g0 = Math.round((Lx - (w + 20 + GW) / 2) / 10) * 10;
+  if (lot.garage > 0) { X0 = g0; garage = [X0 + w + 20, X0 + w + 20 + GW]; }
+  else if (lot.garage < 0) { garage = [g0, g0 + GW]; X0 = garage[1] + 20; }
   const HLx = X0 + half, pl = { Lx, L0, L1, HLx, X0, w, d, garage, well: null };
   if (garage) {
     HOLES.push({ x0: garage[0], y0: HOUSE_Y, x1: garage[1], y1: HOUSE_Y + GD, z0: 0, z1: LAWN_Z });            // garage slab
