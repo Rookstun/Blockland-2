@@ -31,8 +31,10 @@ const tiled = (x0, y0, z0, x1, y1, z1, b, label, step = 280) => {
 
 // ---- the island: sand pad (height a multiple of 4: even half heights), a stone plaza on top
 const IX = 700, IY = 750, depth = BASE - GROUND, padH = Math.floor((depth - 12) / 4) * 4;
-if (padH > 0) tiled(-IX, -IY, -12 - padH, IX, IY, -12, { asset: BRICK, color: [190, 172, 128] }, 'pad');
-tiled(-IX, -IY, -12, IX, IY, 0, { asset: BRICK, color: [214, 196, 142] }, 'sand');
+if (!args.includes('--nopad')) { // --nopad: the town (town2.mjs) lays the ground under the plaza
+  if (padH > 0) tiled(-IX, -IY, -12 - padH, IX, IY, -12, { asset: BRICK, color: [190, 172, 128] }, 'pad');
+  tiled(-IX, -IY, -12, IX, IY, 0, { asset: BRICK, color: [214, 196, 142] }, 'sand');
+}
 
 // ---- tiers: [first floor, last floor, half width]
 const H = 96, SLAB = 8;

@@ -1071,24 +1071,30 @@ const YARD = {
 // SIM_SEED=n (suburb.mjs, owner 2026-10-11: "a ton of houses"): four random lots instead of the fixed street
 const SIM_SEED = Number(process.env.SIM_SEED) || 0;
 const ROOF_TYPES = ['gable', 'shed', 'hip', 'gambrel', 'mansard', 'flat'];
+// SIM_LOT=1 (owner 2026-10-12: "semi freeform like real world"): ONE lot, no street: SIM_LOT_W wide,
+// SIM_LOT_D deep from its front edge (local y 340); the town planner (town2.mjs) lays the roads and
+// pavements and asks for each lot. SIM_PARK=1 makes it a park.
+const SINGLE = !!process.env.SIM_LOT, SLW = Number(process.env.SIM_LOT_W) || 900, SLD = Number(process.env.SIM_LOT_D) || 800;
 const randomLot = i => {
   const s = SIM_SEED * 10 + i + 1; seed = s;
-  const [W, D] = pick([[48, 40], [44, 44], [52, 40], [48, 44]], s, 2);
+  const sizes = [[48, 40], [44, 44], [52, 40], [48, 44]].filter(([w]) => !SINGLE || (w + 1) * 10 <= SLW - 100);
+  const [W, D] = pick(sizes.length ? sizes : [[44, 40]], s, 2);
+  const roomForGarage = !SINGLE || (W + 1) * 10 + 20 + 210 <= SLW - 60;
   return { plan: pick(['open', 'centre', 'cross'], s, 1), W, D, storeys: rnd(s, 4) < 0.45 ? 1 : 2, s, win: Math.floor(rnd(s, 5) * WINDOW_STYLES.length),
     job: pick(Object.keys(JOBS), s, 6), roof: process.env.SIM_ROOF || pick(ROOF_TYPES, s, 7),
-    garage: W <= 48 && rnd(s, 8) < 0.5 ? (rnd(s, 9) < 0.5 ? -1 : 1) : 0, bsmt: rnd(s, 10) < 0.5, stairSide: rnd(s, 11) < 0.5 ? -1 : 1,
-    park: rnd(s, 12) < 0.12 };   // (owner 2026-10-11 "make the streets more dynamic") some lots are parks
+    garage: W <= 48 && roomForGarage && rnd(s, 8) < 0.5 ? (rnd(s, 9) < 0.5 ? -1 : 1) : 0, bsmt: rnd(s, 10) < 0.5, stairSide: rnd(s, 11) < 0.5 ? -1 : 1,
+    park: SINGLE ? !!process.env.SIM_PARK : rnd(s, 12) < 0.12 };   // (owner 2026-10-11 "make the streets more dynamic") some lots are parks
 };
 // (owner 2026-10-12 "spread houses out") suburb lots are wider with deeper back yards
-const LOT_W = SIM_SEED ? 1040 : 780, LOTS = (SIM_SEED ? [0, 1, 2, 3].map(randomLot) : [
+const LOT_W = SINGLE ? SLW : SIM_SEED ? 1040 : 780, LOTS = (SINGLE ? [randomLot(0)] : SIM_SEED ? [0, 1, 2, 3].map(randomLot) : [
   { plan: 'open', W: 48, D: 40, storeys: 1, s: 111, win: 3, job: 'baker', roof: 'shed' },
   { plan: 'centre', W: 44, D: 44, storeys: 2, s: 222, win: 2, job: 'musician', roof: 'gable' },
   { plan: 'open', W: 52, D: 40, storeys: 2, s: 333, win: 1, job: 'programmer', roof: 'shed' },
   { plan: 'cross', W: 48, D: 40, storeys: 1, s: 444, win: 0, job: 'artist', roof: 'shed' },
 ]).map(l => { seed = l.s; return { ...l, bar: l.plan === 'open' || rnd(l.s, 77) < 0.5 }; });
-const ROAD = [100, 280], WALK = [280, 340], LOT_Y = [340, SIM_SEED ? 1300 : 1100], HOUSE_Y = 500;
+const ROAD = [100, 280], WALK = [280, 340], LOT_Y = [340, SINGLE ? 340 + SLD : SIM_SEED ? 1300 : 1100], HOUSE_Y = 500;
 const XS = LOTS.map((_, i) => (i - (LOTS.length - 1) / 2) * (LOT_W + 20));
-const PAD = [XS[0] - LOT_W / 2 - 80, ROAD[0] - 60, XS[XS.length - 1] + LOT_W / 2 + 80, LOT_Y[1] + 80];
+const PAD = SINGLE ? [-LOT_W / 2, LOT_Y[0], LOT_W / 2, LOT_Y[1]] : [XS[0] - LOT_W / 2 - 80, ROAD[0] - 60, XS[XS.length - 1] + LOT_W / 2 + 80, LOT_Y[1] + 80];
 // (owner 2026-10-11: "add garages add basements") each lot's footprints, planned before the
 // ground: a garage lot shifts its house to one side; basements, their stairwells, garages and
 // driveways cut holes in the sand and lawn (HOLES: xy rect + z range, boxCut skips them)
@@ -1143,12 +1149,14 @@ const LOTPLAN = LOTS.map((lot, i) => {
   }
 }
 // road, centre dashes, pavement with a curb
-box(PAD[0], ROAD[0], 0, PAD[2], ROAD[1], 4, { color: [58, 58, 62] }, 'road');
-if (SIM_SEED) roadMarkings();
+if (!SINGLE) box(PAD[0], ROAD[0], 0, PAD[2], ROAD[1], 4, { color: [58, 58, 62] }, 'road');
+if (SINGLE) { /* the planner draws the roads */ }
+else if (SIM_SEED) roadMarkings();
 else for (let x = PAD[0] + 40; x + 60 < PAD[2]; x += 120) box(x, (ROAD[0] + ROAD[1]) / 2 - 4, 4, x + 60, (ROAD[0] + ROAD[1]) / 2 + 4, 6, { color: [236, 200, 60] }, 'dash');
-box(PAD[0], WALK[0], 0, PAD[2], WALK[1], 8, { asset: TILE, color: [196, 194, 188] }, 'pavement');
-if (SIM_SEED) streetLife();
+if (!SINGLE) box(PAD[0], WALK[0], 0, PAD[2], WALK[1], 8, { asset: TILE, color: [196, 194, 188] }, 'pavement');
+if (SIM_SEED && !SINGLE) streetLife();
 let furnished = 0;
+const META = { lot: [PAD[0], PAD[1], PAD[2], PAD[3]], doorX: 0, garage: null };
 const summary = [];
 for (const [i, lot] of LOTS.entries()) {
   const pl = LOTPLAN[i], { Lx, L0, L1 } = pl;
@@ -1158,6 +1166,7 @@ for (const [i, lot] of LOTS.entries()) {
   ctx.HY = HOUSE_Y;
   const { rooms, typeOf, X0, w, d } = ctx;
   const doorX = X0 + rooms.fd * 10;
+  META.doorX = doorX; META.garage = pl.garage;
   // lawn (around the foundation), path, porch, step
   const lawn = { asset: 'PB_DefaultBrick', color: pick([[96, 160, 70], [88, 150, 64], [104, 168, 76]], lot.s, 30) };
   const pathX = [doorX - 30, doorX + 30];
@@ -1186,7 +1195,8 @@ for (const [i, lot] of LOTS.entries()) {
   box(pathX[1] + 30, LOT_Y[0] + 30, LAWN_Z, pathX[1] + 34, LOT_Y[0] + 34, LAWN_Z + 40, { color: WOOD }, 'mailbox post');
   box(pathX[1] + 24, LOT_Y[0] + 24, LAWN_Z + 40, pathX[1] + 40, LOT_Y[0] + 44, LAWN_Z + 52, { color: pick([[60, 90, 160], [170, 50, 50], [60, 120, 70]], lot.s, 31) }, 'mailbox');
   box(pathX[1] + 40, LOT_Y[0] + 36, LAWN_Z + 44, pathX[1] + 42, LOT_Y[0] + 38, LAWN_Z + 60, { color: [220, 40, 40] }, 'flag');
-  for (const sg of [-1, 1]) { const tx = Lx + sg * 310; if (Math.abs(tx - doorX) > 100 && !(pl.garage && tx > pl.garage[0] - 60 && tx < pl.garage[1] + 60)) tree(tx, LOT_Y[0] + 80, lot.s + sg); }
+  // two front-yard trees (canopy r 55: kept inside narrow lots)
+  for (const sg of [-1, 1]) { const tx = Lx + sg * Math.min(310, LOT_W / 2 - 70); if (Math.abs(tx - doorX) > 100 && !(pl.garage && tx > pl.garage[0] - 60 && tx < pl.garage[1] + 60)) tree(tx, LOT_Y[0] + 80, lot.s + sg); }
   // the household's trade in the back yard, off the path
   const yardSide = pl.well ? -pl.well.dir : (doorX > Lx ? -1 : 1); // away from the basement stairwell
   YARD[JOBS[lot.job].yard](Math.round(Math.min(L1 - 120, Math.max(L0 + 120, pl.HLx + yardSide * 200)) / 10) * 10, LOT_Y[1] - 90);
@@ -1225,4 +1235,4 @@ console.error(`${bricks.length} bricks, ${furnished} furniture pieces, turn ${r}
 process.stdout.write(JSON.stringify({ ops: [
   { op: 'say', msg: '<b>Building a little street of houses...</>' },
   { op: 'bricks', at: [0, 0, 0], captureMs: 4000, bricks }, // world coordinates, like the map chunks (absolute mode has no prefab metadata)
-] }));
+], meta: META })); // meta (local, before the turn): the lot rect, the front door x, the garage x range
