@@ -52,7 +52,7 @@ const out = [];
 const MAXL = 500;  // longest box side: long ones are split (a 3340-long brick and a 17100-long micro brick were rejected in game)
 const box = (x0, y0, z0, x1, y1, z1, b) => {
   if (!(x1 > x0 && y1 > y0 && z1 > z0)) return;
-  // regular bricks: 500 or at most 280 per side (a 340-long and a 3340-long one were rejected in game)
+  // regular bricks: 500 or at most 280 per side (keeps the live medians' pieces; length itself was not the problem)
   const cuts = (v0, v1) => { const out = []; for (let v = v0; v < v1;) { let L = Math.min(MAXL, v1 - v); if (b.asset === 'PB_DefaultBrick' && L < MAXL && L > 280) L = 280; out.push([v, v + L]); v += L; } return out; };
   for (const [x, a] of cuts(x0, x1)) for (const [y, c] of cuts(y0, y1)) {
     out.push({ asset: MB, ...b, size: [(a - x) / 2, (c - y) / 2, (z1 - z0) / 2], position: [(x + a) / 2, (y + c) / 2, BASE + (z0 + z1) / 2] });

@@ -152,5 +152,8 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
 - Seat B_Seat direction 4 rotation 0 faces +y.
 
 ## Brick size limits (learned on the suburb loads, 2026-10-12)
-- PB_DefaultBrick half height must be even (z 49, 9, 3 were rejected as "Missing brick type"); x/y halves multiples of 5.
-- Long regular bricks get rejected: a PB_DefaultBrick 3340 long and one 340 long failed while 280 and 500 loaded; a micro brick 17100 long failed (3340 was fine). Keep regular bricks at 500 or <= 280 per side, micro bricks <= 3340.
+All rejects show up in the log as "Missing brick type to create brick (N)":
+- PB_DefaultBrick half height must be even (z halves 49, 9, 3 were rejected); x/y halves multiples of 5.
+- PB_DefaultTile must be at least 4 thick (a 2-thick tile, z half 1, was rejected); use a micro brick for 2-thick layers.
+- A micro brick 17100 long was rejected (3340 is fine); keep long strips split (suburb.mjs splits at 500).
+- Long regular bricks are fine as such (3340-long bricks loaded; an earlier 3340 reject was its odd half height).

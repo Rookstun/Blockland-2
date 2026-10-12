@@ -809,7 +809,7 @@ function park(Lx, L0, L1, s) {
   boxCut(px[0], Y1 - 120, 0, px[1], Y1, LAWN_Z, grass, 'park lawn');
   // playground
   const gx0 = side < 0 ? L0 + 40 : Lx + 60, gx1 = gx0 + 260, gy0 = Y0 + 180, gy1 = gy0 + 300;
-  box(gx0, gy0, LAWN_Z, gx1, gy1, LAWN_Z + 2, { asset: TILE, color: [222, 200, 150] }, 'sandpit');
+  box(gx0, gy0, LAWN_Z, gx1, gy1, LAWN_Z + 2, { color: [222, 200, 150] }, 'sandpit'); // micro brick: a 2-thick tile is a 'missing brick type' in game
   const SW = [200, 60, 50], z0 = LAWN_Z + 2;
   for (const x of [gx0 + 30, gx0 + 150]) for (const y of [gy0 + 40, gy0 + 50]) box(x, y, z0, x + 4, y + 4, z0 + 90, { color: SW }, 'swing frame');
   box(gx0 + 30, gy0 + 40, z0 + 90, gx0 + 154, gy0 + 54, z0 + 94, { color: SW }, 'swing bar');
