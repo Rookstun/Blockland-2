@@ -3176,28 +3176,7 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
     for (let y = y0; y < y1; y++) {
       const c = x * N + y;
       if (!inMap(x, y) || !terraceCell[c]) continue;
-      const h = H[c], ztop = (h + 1) * VZ;
-      if (paved(c) && !riverCell[c])
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const n = (x + dx) * N + y + dy;
-          if (!inMap(x + dx, y + dy) || !paved(n) || H[n] !== h + 1) continue;
-          // stair treads (owner 2026-10-13): plate-high risers, 1-stud treads of 1x1
-          // flat tiles; a brick of rise = 3 risers, the 2 treads on the uphill studs
-          const lo = [X0 + (dx > 0 ? x * 4 + 2 : x * 4) * 10, Y0 + (dy > 0 ? y * 4 + 2 : y * 4) * 10, ztop];
-          const hi = [X0 + (dx < 0 ? x * 4 + 2 : x * 4 + 4) * 10, Y0 + (dy < 0 ? y * 4 + 2 : y * 4 + 4) * 10, ztop + 8];
-          if (!B.free(lo, hi)) continue;
-          for (let t = 1; t <= 2; t++) {
-            const s = 2 - t; // tread t (top at 4t) stands s studs in from the uphill edge
-            const a = dx > 0 ? x * 4 + 3 - s : dx < 0 ? x * 4 + s : null, b = dy > 0 ? y * 4 + 3 - s : dy < 0 ? y * 4 + s : null;
-            for (let q = 0; q < 4; q++) {
-              const sa = a ?? x * 4 + q, sb = b ?? y * 4 + q, cx = X0 + sa * 10 + 5, cy = Y0 + sb * 10 + 5;
-              if (t === 2) B.add({ asset: 'PB_DefaultMicroBrick', size: [5, 5, 2], position: [cx, cy, ztop + 2], color: COBBLE_C }, 'ramp');
-              B.add({ asset: 'PB_DefaultTile', size: [5, 5, 2], position: [cx, cy, ztop + 4 * t - 2], color: PAVE_C[Math.floor(hash(sa, sb, 91) * PAVE_C.length)] }, 'ramp');
-            }
-          }
-          steps++;
-          break;
-        }
+      const h = H[c];
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const hn = hAt(x + dx, y + dy);
         if (h - hn < 2 || (inMap(x + dx, y + dy) && riverCell[(x + dx) * N + y + dy])) continue;
@@ -3217,9 +3196,37 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
       for (const [p, q] of [[a + da, b], [a, b + db]]) if (groundK(p, q) < k) { put(p, q, k); break; }
     }
   }
+  // every wall stud goes down to its own ground (corner studs were put on one course)
+  for (const [key, t] of [...top]) { const [a, b] = key.split(',').map(Number); for (let k = groundK(a, b) + 1; k < t; k++) put(a, b, k); }
+  // stairs (owner 2026-10-13): plate-high risers, 1-stud treads of 1x1 flat tiles,
+  // a brick of rise = 3 risers, the 2 treads on the uphill studs; studs a retaining
+  // wall stands on are left to the wall (else its foot course is lost and it floats)
+  for (let x = x0; x < x1; x++)
+    for (let y = y0; y < y1; y++) {
+      const c = x * N + y;
+      if (!inMap(x, y) || !terraceCell[c] || !paved(c) || riverCell[c]) continue;
+      const ztop = (H[c] + 1) * VZ;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const n = (x + dx) * N + y + dy;
+        if (!inMap(x + dx, y + dy) || !paved(n) || H[n] !== H[c] + 1) continue;
+        let laid = 0;
+        for (let q = 0; q < 4; q++)
+          for (let t = 1; t <= 2; t++) {
+            const s = 2 - t; // tread t (top at 4t) stands s studs in from the uphill edge
+            const sa = dx > 0 ? x * 4 + 3 - s : dx < 0 ? x * 4 + s : x * 4 + q, sb = dy > 0 ? y * 4 + 3 - s : dy < 0 ? y * 4 + s : y * 4 + q;
+            if (top.has(sa + ',' + sb)) continue;
+            const cx = X0 + sa * 10 + 5, cy = Y0 + sb * 10 + 5;
+            if (!B.free([cx - 5, cy - 5, ztop], [cx + 5, cy + 5, ztop + 4 * t])) continue;
+            if (t === 2) B.add({ asset: 'PB_DefaultMicroBrick', size: [5, 5, 2], position: [cx, cy, ztop + 2], color: COBBLE_C }, 'ramp');
+            B.add({ asset: 'PB_DefaultTile', size: [5, 5, 2], position: [cx, cy, ztop + 4 * t - 2], color: PAVE_C[Math.floor(hash(sa, sb, 91) * PAVE_C.length)] }, 'ramp');
+            laid++;
+          }
+        if (laid) { steps++; break; }
+      }
+    }
   // tile each course: pair along the wall where the joint parity allows, else a 1-stud brick
   let bricksLaid = 0, skipped = 0;
-  const lay = (lo, hi, m, label) => { if (!B.free(lo, hi)) { skipped++; return false; } B.add({ ...m, size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2], position: [0, 1, 2].map(i => (lo[i] + hi[i]) / 2) }, label); return true; };
+  const lay = (lo, hi, m, label) => { if (process.env.MAPGEN_TERRACEDUMP) terraceDump.push([label, lo, hi, B.free(lo, hi)]); if (!B.free(lo, hi)) { skipped++; return false; } B.add({ ...m, size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2], position: [0, 1, 2].map(i => (lo[i] + hi[i]) / 2) }, label); return true; };
   for (const [k, S] of course) {
     const done = new Set(), z0 = k * VZ;
     for (const key of [...S].sort()) {
@@ -3248,6 +3255,7 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
   terraceStats.steps += steps; terraceStats.veneer += bricksLaid; terraceStats.veneerSkipped += skipped;
 }
 const terraceStats = { steps: 0, veneer: 0, veneerSkipped: 0 };
+const terraceDump = []; // MAPGEN_TERRACEDUMP=file: every wall/coping box tried
 const COBBLE_C = MATS[COBBLE].color;
 const PAVE_C = [[164, 156, 142], [152, 146, 134], [174, 166, 150], [158, 148, 130], [146, 140, 132]]; // floors.mjs paving
 
@@ -3296,6 +3304,7 @@ for (const v of villages) {
   v.rejects = st.rejects;
 }
 const townCount = bricks.length - townBricks;
+if (process.env.MAPGEN_TERRACEDUMP) fs.writeFileSync(process.env.MAPGEN_TERRACEDUMP, JSON.stringify(terraceDump));
 // thinned-out town buildings as world boxes, so a live world built before the
 // thinning can be cleared with br.World.ClearRegion
 const townOrigin = [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN.cells / 2) * CELL, (town.h + 1) * VZ];
