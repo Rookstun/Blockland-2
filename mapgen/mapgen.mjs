@@ -2286,7 +2286,9 @@ const dungeonCount = bricks.length - terrainCount;
 //
 // Orientation: see orient.mjs (ORIENT, orientFor).
 const MAX_RISE = tune('smooth.maxRise', 6, 'tallest step that gets a wedge, bricks');
+const SEABED_SMOOTH = tune('smooth.seabed', 10, 'seabed smoothed this many bricks under the sea plane');
 riverDiag('before smoothing');
+if (process.env.MAPGEN_RIVERBED) { const sx = -(X0 + (town.fx + TOWN.cells / 2) * CELL), sy = -(Y0 + (town.fy + TOWN.cells / 2) * CELL); const out = []; for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) { const c = x * N + y; if (riverCell[c] || riverBankL[c] > -999) out.push([x, y, H[c], riverCell[c], riverLevel[c], riverBankL[c], Math.round(X0 + x * CELL + sx), Math.round(Y0 + y * CELL + sy)]); } fs.writeFileSync(process.env.MAPGEN_RIVERBED, JSON.stringify({ SEA, out })); }
 if (process.env.MAPGEN_RIVERDIAG) {
   const sx = -(X0 + (town.fx + TOWN.cells / 2) * CELL), sy = -(Y0 + (town.fy + TOWN.cells / 2) * CELL), cl = new Map();
   for (const [x, y, m] of globalThis.__riverHits) { const k = Math.round(x / 20) + ',' + Math.round(y / 20); const v = cl.get(k) ?? { n: 0, m: 0, at: null }; v.n++; if (m > v.m) { v.m = m; v.at = [X0 + x * CELL + 20 + sx, Y0 + y * CELL + 20 + sy, H[x * N + y] * VZ]; } cl.set(k, v); }
@@ -2304,8 +2306,10 @@ if (!args.includes('--no-smooth'))
 for (let x = 0; x < N; x++)
   for (let y = 0; y < N; y++) {
     const h = H[x * N + y];
-    if (h + 1 <= SEA || V[vi(x, y, h)] === 0) continue;
-    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || noSmooth[x * N + y]) continue;
+    // under the sea too, down to SEABED_SMOOTH (owner 2026-10-13: the shallows showed raw
+    // voxel steps through the water), and the river's mouth where it has no water plates
+    if (h + 1 <= SEA - SEABED_SMOOTH || V[vi(x, y, h)] === 0) continue;
+    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA))) continue;
     // the foot of a terrace retaining wall: its brick veneer stands here (terraceDressing)
     if ([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && terraceCell[(x + dx) * N + y + dy] && H[(x + dx) * N + y + dy] - h >= 2)) continue;
     const hN = (dx, dy) => (inMap(x + dx, y + dy) ? H[(x + dx) * N + y + dy] : h);
