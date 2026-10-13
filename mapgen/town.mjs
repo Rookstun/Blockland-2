@@ -309,7 +309,13 @@ const HOUSE_SHOP_TIERS = ['bronze', 'iron', 'steel', 'black', 'mithril', 'adaman
 // roofs and attics; the blacksmith houses (HOUSE_SHOP_CHANCE) stay wallgen
 // workshops. The wing goes behind the main body, away from the street.
 const isSmith = (rnd, s) => rnd(s, 77) < HOUSE_SHOP_CHANCE;
+// rooms a bit bigger (owner 2026-10-13): every house and shop GROW studs wider and deeper
+const GROW = 2;
 function shapedSpec(type, rnd, s, small = false) {
+  const sp = shapedSpec0(type, rnd, s, small);
+  return { ...sp, W: sp.W + GROW, D: sp.D + GROW };
+}
+function shapedSpec0(type, rnd, s, small = false) {
   // small: villages and the market-ring lots keep the old sizes (their lots are tighter)
   const pickS = list => list[Math.floor(rnd(s, 90) * list.length)];
   // style runescape (2026-10-05, owner): plaster / grey stone, timber trim, thatch roofs, plank floors
@@ -335,7 +341,7 @@ const PLANKS = FLOOR_STYLES.townPlanks.colors;
 const KEEP_INNER = 0.7, KEEP_OUTER = 0.2;
 // interior furniture (owner 2026-10-05: "remove all furniture for now"): beds, tables,
 // counters, wares, forges, shelves, lanterns, throne, pews... Off until asked for again.
-export const FURNITURE = false;
+export const FURNITURE = true; // back on (owner 2026-10-13: "readd furniture")
 
 // plan: planTown(rnd) or planVillage(seed, rnd); riverAt(x, y): is that point (local units) river water
 export function build({ put, orientFor, rnd, village = null, plan, riverAt = () => false, free = () => true, shopTiers = HOUSE_SHOP_TIERS, single = null, sewerDepth = 0 }) {
@@ -1198,7 +1204,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   }
   const TYPES = {
     cottage(cx, cy, fx, fy, s, small) {
-      if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 32, 24, 1, s, {
+      if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 32 + GROW, 24 + GROW, 1, s, {
         wallColor: pick(PALETTE.brick, s, 3), roofColor: pick(PALETTE.roof, s, 4), rise: 72 + Math.floor(rnd(s, 5) * 3) * 12,
       });
       else shapedTown(cx, cy, fx, fy, shapedSpec('cottage', rnd, s, small), s);
@@ -1218,11 +1224,11 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     },
     // desert hamlets (mapgen desert biome): a false-front western house (shapedhouse style 'western')
     western(cx, cy, fx, fy, s) {
-      shapedTown(cx, cy, fx, fy, { shape: 'rect', W: 28 + Math.floor(rnd(s, 31) * 2) * 4, D: 24, E: 0, storeys: rnd(s, 32) < 0.4 ? 2 : 1, attic: false, style: 'western' }, s);
+      shapedTown(cx, cy, fx, fy, { shape: 'rect', W: 28 + GROW + Math.floor(rnd(s, 31) * 2) * 4, D: 24 + GROW, E: 0, storeys: rnd(s, 32) < 0.4 ? 2 : 1, attic: false, style: 'western' }, s);
       count('western');
     },
     townhouse(cx, cy, fx, fy, s, small) {
-      if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 36, 28, 2 + (rnd(s, 1) < 0.35 ? 1 : 0), s, {
+      if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 36 + GROW, 28 + GROW, 2 + (rnd(s, 1) < 0.35 ? 1 : 0), s, {
         wallColor: pick(PALETTE.brick, s, 3), upperColor: pick(PALETTE.plaster, s, 6), roofColor: pick(PALETTE.roof, s, 4), rise: 96 + Math.floor(rnd(s, 5) * 2) * 24,
       });
       else shapedTown(cx, cy, fx, fy, shapedSpec('townhouse', rnd, s, small), s);
@@ -1230,7 +1236,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     },
     shop(cx, cy, fx, fy, s) {
       const kind = pick(SHOP_KINDS, s, 20);
-      wallShop(cx, cy, fx, fy, 36, 28, kind === 'smithy' || rnd(s, 1) < 0.4 ? 1 : 2, s, kind, {
+      wallShop(cx, cy, fx, fy, 36 + GROW, 28 + GROW, kind === 'smithy' || rnd(s, 1) < 0.4 ? 1 : 2, s, kind, {
         wallColor: kind === 'smithy' ? pick(PALETTE.stone, s, 3) : pick(PALETTE.brick, s, 3), upperColor: pick(PALETTE.plaster, s, 6),
         roofColor: pick(PALETTE.roof, s, 4), rise: 84 + Math.floor(rnd(s, 5) * 2) * 24, cloth: pick(PALETTE.cloth, s, 5),
       });
@@ -1826,7 +1832,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   /** across-front width and depth of a building type with this seed (units, generous) */
   const footprint = (type, s, small) => {
     if (type === 'garden') return [360, 360];
-    if (type === 'shop') return [380, 330];
+    if (type === 'shop') return [380 + GROW * 10, 330 + GROW * 10];
     if (type === 'bank') return [340, 300];
     if (type === 'tavern') return [380, 280];
     if (type === 'library') return [340, 280];
@@ -1837,8 +1843,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (type === 'meadhall') return [600, 320];
     if (type === 'casino') return [600, 480];
     if (type === 'gunstore') return [380, 330];
-    if (type === 'western') return [340, 330];
-    if (isSmith(rnd, s)) return type === 'cottage' ? [340, 290] : [380, 330];
+    if (type === 'western') return [340 + GROW * 10, 330 + GROW * 10];
+    if (isSmith(rnd, s)) return type === 'cottage' ? [340 + GROW * 10, 290 + GROW * 10] : [380 + GROW * 10, 330 + GROW * 10];
     const sp = shapedSpec(type, rnd, s, small);
     return [(sp.W + 1) * 10 + 20, shapedDepth(sp) + 20];
   };
@@ -2134,8 +2140,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (r < 1000) return u < 0.5 ? 'shop' : 'townhouse';
     return u < 0.1 ? 'garden' : u < 0.2 ? 'shop' : u < 0.6 ? 'townhouse' : 'cottage';
   };
-  housesAlong(plan.paths, { step: 80, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType });
-  infill({ step: 100, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
+  housesAlong(plan.paths, { step: 60, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType }); // step 80 -> 60 (2026-10-13: bigger houses, same count)
+  infill({ step: 80, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
   lampsAlong(plan.paths, 400, plan.edgeR);
   propsAlong(plan.paths, 120, plan.edgeR, 503);
   trees(26, 7100, (x, y) => Math.hypot(x, y) < plan.edgeR(x, y) - 120);
