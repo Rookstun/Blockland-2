@@ -499,7 +499,8 @@ const townLevel = (x, y) => townPlan.levelAt(...townLocal(x, y)) / VZ;
 // levee. The water is glass with collision off (you wade), down to the sea
 // plane, where the game's water takes over. Roads crossing it get bridges.
 const RIVER = { rw: tune('river.width', 3 + K, 'half-width, cells'), bank: tune('river.bank', 12, 'bank blend, cells'), depth: tune('river.depth', 2, 'bed depth, voxels'),
-  valley: Math.round(tune('river.valley', 20, 'valley sides reach this far past the banks, cells (x K)') * K), slope: tune('river.slope', 4.5, 'steepest valley side, voxels per cell (keep under smooth.maxRise)') };
+  valley: Math.round(tune('river.valley', 20, 'valley sides reach this far past the banks, cells (x K)') * K), slope: tune('river.slope', 4.5, 'steepest valley side, voxels per cell (keep under smooth.maxRise)'),
+  oct: tune('river.oct', 1, 'octilinear course (45/90 degree runs), 0 = free curve'), octTol: tune('river.octTol', 4, 'octilinear: max cells off the meander line'), octTolTown: tune('river.octTolTown', 2, 'octilinear: max cells off it in town') };
 // the valley's height over the water level at e cells past the channel edge
 // (2026-10-06, owner: the river ran in a sheer-walled canyon): a brick per cell
 // across the banks, then steepening to RIVER.slope; every step stays wedge-smoothable
@@ -547,6 +548,48 @@ const riverRiver = (() => {
     const x = raw[i][0] - ((q[1] - o[1]) / tl) * m, y = raw[i][1] + ((q[0] - o[0]) / tl) * m;
     if (!inBounds(Math.round(x), Math.round(y))) break;
     pts.push([x, y]);
+  }
+  // octilinear course (owner 2026-10-13: "rivers only by 45 or 90 degree angles"):
+  // the meandering line is cut into runs, each joined by two legs (one diagonal,
+  // one straight, the order that hugs the line) between cell centres; a run grows
+  // while every point of the line it replaces stays within river.octTol cells
+  // (tighter in town, whose plan keeps clear of RIVER_LOCAL)
+  if (RIVER.oct) {
+    const C = p => [Math.floor(p[0]) + 0.5, Math.floor(p[1]) + 0.5];
+    const dist2seg = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0; return Math.hypot(px - ax - t * dx, py - ay - t * dy); };
+    const legs = (a, b, diagFirst) => {
+      const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.min(Math.abs(dx), Math.abs(dy));
+      const m = diagFirst ? [a[0] + Math.sign(dx) * d, a[1] + Math.sign(dy) * d] : [b[0] - Math.sign(dx) * d, b[1] - Math.sign(dy) * d];
+      return [a, m, b];
+    };
+    const segD = (px, py, [a, m, b]) => Math.min(dist2seg(px, py, a[0], a[1], m[0], m[1]), dist2seg(px, py, m[0], m[1], b[0], b[1]));
+    const tolAt = p => townDist(Math.round(p[0]), Math.round(p[1])) <= 25 ? RIVER.octTolTown : RIVER.octTol;
+    const fits = (i, j) => {
+      const a = C(pts[i]), b = C(pts[j]);
+      for (const df of [true, false]) {
+        const L = legs(a, b, df);
+        let ok = true;
+        for (let k = i + 1; k < j && ok; k++) if (segD(pts[k][0], pts[k][1], L) > tolAt(pts[k])) ok = false;
+        if (ok) return L;
+      }
+      return null;
+    };
+    const route = [C(pts[0])];
+    for (let i = 0; i < pts.length - 1;) {
+      let j = i + 1, best = legs(C(pts[i]), C(pts[j]), true);
+      for (let t = i + 2; t < pts.length; t++) { const L = fits(i, t); if (!L) break; j = t; best = L; }
+      if (best[1][0] !== best[0][0] || best[1][1] !== best[0][1]) route.push(best[1]);
+      route.push(best[2]);
+      i = j;
+    }
+    // densify to half-cell steps (levels and channel distances read the points)
+    const dense = [route[0]];
+    for (let i = 1; i < route.length; i++) {
+      const [a, b] = [route[i - 1], route[i]], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2);
+      for (let k = 1; k <= n; k++) dense.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
+    pts.length = 0; pts.push(...dense);
+    console.error(`river: octilinear, ${route.length} corners`);
   }
   // levels: lowest ground across the channel, falling only, pinned to the town
   const townL = town.h - 1, rw = RIVER.rw;
@@ -3388,6 +3431,14 @@ const FLOWERS = new Set(['B_Flower', 'B_Small_Flower', 'B_Tulip', 'B_Rose', 'B_L
   let k = 0;
   for (const b of bricks) if (!FLOWERS.has(b.asset)) bricks[k++] = b;
   console.error(`flowers and branches removed: ${bricks.length - k}`);
+  bricks.length = k;
+}
+// exact duplicates (2026-10-13: a torch or wedge placed twice by two features; the
+// game rejects the second copy anyway): keep the first
+{
+  const seen = new Set(); let k = 0;
+  for (const b of bricks) { const key = JSON.stringify(b); if (!seen.has(key)) { seen.add(key); bricks[k++] = b; } }
+  console.error(`exact duplicate bricks dropped: ${bricks.length - k}`);
   bricks.length = k;
 }
 // (owner 2026-10-10: "bushes that are like if you attack them they work like
