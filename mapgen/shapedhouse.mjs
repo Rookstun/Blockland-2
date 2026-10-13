@@ -37,6 +37,7 @@ const require = createRequire(import.meta.url);
 const lib = require('../tools/wallgen/lib.js');
 import { floorPieces } from './floors.mjs';
 import { roofProfile as styleProfile } from './roofs.mjs';
+import { furnishRoom } from './furniture.mjs';
 
 const ST = 10, C = 12, FLOOR_H = 4;
 export const COURSES = 13;
@@ -422,65 +423,57 @@ export function shapedHouse({ shape = 'L', W = 40, D = 24, E = 16, storeys = 2, 
   }
   let furniturePieces = 0;
   // ------------------------------------------------------------ furniture --
-  // (owner 2026-10-13: "readd furniture") micro-brick pieces on each storey's boards,
-  // never on the stair strip, its landings or the hole over it, never in front of a
-  // door; a piece goes in only where every cell is room floor and the box is free
+  // (owner 2026-10-13: "readd furniture", "make furniture better", "make template
+  // pools") each room draws a layout from its pool in furniture.mjs (front room,
+  // stair room, wing, bedrooms upstairs); never on the stair strip, its landings or
+  // the hole over it, never in front of a door, tall pieces never across a window;
+  // a lantern under each room's ceiling
   if (furniture && !west) {
-    const WOOD = [[120, 84, 54], [104, 72, 46], [136, 96, 62]][seed % 3], DARKW = [86, 60, 40];
-    const CLOTH = [[150, 52, 48], [58, 88, 140], [70, 110, 70], [170, 140, 70]][seed % 4], LINEN = [232, 226, 210];
-    const blocked = new Set(), used = new Set();
+    const pal = {
+      wood: [[120, 84, 54], [104, 72, 46], [136, 96, 62]][seed % 3], dark: [86, 60, 40],
+      cloth: [[150, 52, 48], [58, 88, 140], [70, 110, 70], [170, 140, 70], [120, 70, 120]][seed % 5], linen: [232, 226, 210], stone: [128, 124, 118],
+    };
+    const blocked = new Set(), used = new Set(), windowCells = new Set();
     const block = (x0, y0, x1, y1) => { for (let x = x0; x < x1; x++) for (let y = y0; y < y1; y++) blocked.add(key(x, y)); };
     block(0, 0, 1 + STAIR_W + 1, stairTop + 1);                      // stair strip, landings, the hole
     block(fd - 3, 0, fd + 4, 5);                                      // front door
     block(part - 4, even(D / 2) - 1, part + 5, even(D / 2) + 6);       // partition door
     if (wing) block(even((wx0 + wx1) / 2) - 4, D - 4, even((wx0 + wx1) / 2) + 5, D + 5);
     if (shape === 'T') block(wx1 - 4, even(D / 2), wx1 + 5, even(D / 2) + 7);
-    const fits = (st, x0, y0, x1, y1) => { for (let x = x0; x < x1; x++) for (let y = y0; y < y1; y++) { const c = key(x, y); if (!encl.interior.has(c) || wallCells.has(c) || partitionCells.has(c) || blocked.has(c) || used.has(c + ':' + st)) return false; } return true; };
-    // a piece: parts [x0, y0, z0, x1, y1, z1 (z from the floor top), colour]; x/y in studs (may be fractional)
-    const place = (st, x0, y0, x1, y1, parts) => {
-      if (!fits(st, x0, y0, x1, y1)) return false;
-      const zf = st * SH + FLOOR_H;
-      if (!B.free([x0 * ST, y0 * ST, zf], [x1 * ST, y1 * ST, zf + 40])) return false;
-      for (const [a0, b0, c0, a1, b1, c1, color] of parts) box(a0, b0, zf + c0, a1, b1, zf + c1, { asset: MB, color }, 'furniture');
-      for (let x = x0; x < x1; x++) for (let y = y0; y < y1; y++) used.add(key(x, y) + ':' + st);
-      return true;
-    };
-    const table = (st, x, y) => place(st, x - 1, y - 2, x + 3, y + 3, [
-      [x, y, 24, x + 2, y + 1, 28, WOOD], [x + 0.2, y + 0.2, 0, x + 0.6, y + 0.6, 24, DARKW], [x + 1.4, y + 0.2, 0, x + 1.8, y + 0.6, 24, DARKW],
-      [x - 1, y, 0, x - 0.2, y + 1, 16, WOOD], [x - 1, y, 16, x - 0.6, y + 1, 36, DARKW],          // chair west
-      [x + 2.2, y, 0, x + 3, y + 1, 16, WOOD], [x + 2.6, y, 16, x + 3, y + 1, 36, DARKW],          // chair east
-    ]);
-    const bed = (st, x, y, alongY) => alongY
-      ? place(st, x, y, x + 3, y + 5, [[x, y, 0, x + 3, y + 5, 8, WOOD], [x, y, 8, x + 3, y + 4.6, 12, LINEN], [x, y, 12, x + 3, y + 3.8, 14, CLOTH], [x + 0.4, y + 4, 12, x + 2.6, y + 4.6, 16, LINEN], [x, y + 4.6, 8, x + 3, y + 5, 28, DARKW]]) // headboard on the back wall
-      : place(st, x, y, x + 5, y + 3, [[x, y, 0, x + 5, y + 3, 8, WOOD], [x + 0.4, y, 8, x + 5, y + 3, 12, LINEN], [x + 1.2, y, 12, x + 5, y + 3, 14, CLOTH], [x + 0.4, y + 0.4, 12, x + 1, y + 2.6, 16, LINEN], [x, y, 8, x + 0.4, y + 3, 28, DARKW]]);
-    const chest = (st, x, y) => place(st, x, y, x + 2, y + 1, [[x, y, 0, x + 2, y + 1, 10, WOOD], [x, y, 10, x + 2, y + 1, 12, DARKW]]);
-    const shelf = (st, x, y, alongY) => alongY
-      ? place(st, x, y, x + 1, y + 3, [[x, y, 0, x + 1, y + 3, 2, DARKW], [x + 0.6, y, 2, x + 1, y + 3, 40, DARKW], [x, y, 12, x + 0.6, y + 3, 14, WOOD], [x, y, 26, x + 0.6, y + 3, 28, WOOD], [x, y, 38, x + 0.6, y + 3, 40, WOOD]])
-      : place(st, x, y, x + 3, y + 1, [[x, y, 0, x + 3, y + 1, 2, DARKW], [x, y + 0.6, 2, x + 3, y + 1, 40, DARKW], [x, y, 12, x + 3, y + 0.6, 14, WOOD], [x, y, 26, x + 3, y + 0.6, 28, WOOD], [x, y, 38, x + 3, y + 0.6, 40, WOOD]]);
-    // try spots in a room [x0, x1) x [y0, y1) until one fits
-    const tryAll = (fn, spots) => { for (const s of spots) if (fn(...s)) return true; return false; };
-    const rooms = [[1, part, 1, D], [part + 1, W, 1, D]];
-    if (wing) rooms.push([wx0 + 1, wx1, D + 1, D + E]);
-    let pieces = 0;
+    for (const r of runs) for (const o of r.openings ?? []) if (o.type === 'window') for (let q = o.pos0; q < o.pos1; q++) windowCells.add(r.orient === 'H' ? key(q, r.line) : key(r.line, q));
+    const rooms = [{ x0: 1, x1: part, y0: 1, y1: D, role: 0 }, { x0: part + 1, x1: W, y0: 1, y1: D, role: 1 }];
+    if (wing) rooms.push({ x0: wx0 + 1, x1: wx1, y0: D + 1, y1: D + E, role: 2 });
+    const usedT = {};
     for (let st = 0; st < storeys; st++)
-      rooms.forEach(([rx0, rx1, ry0, ry1], ri) => {
-        const cx = even((rx0 + rx1) / 2), cy = even((ry0 + ry1) / 2), backY = ry1 - 1;
-        const got = [];
-        if (st === 0 && ri !== 0) got.push(tryAll((x, y) => table(st, x, y), [[cx - 1, cy], [cx - 1, cy + 2], [cx - 3, cy], [cx + 1, cy], [cx - 1, cy - 2]]));
-        if (st === 0 && ri === 0) got.push(tryAll((x, y) => shelf(st, x, y, false), [[rx1 - 4, backY], [rx1 - 7, backY], [rx0 + 5, backY]]));
-        if (st > 0 || storeys === 1) got.push(tryAll((x, y, a) => bed(st, x, y, a), [[rx1 - 4, ry1 - 5, true], [rx0 + 5, ry1 - 5, true], [rx1 - 6, ry1 - 3, false], [cx - 2, ry1 - 3, false]]));
-        got.push(tryAll((x, y) => chest(st, x, y), [[rx1 - 3, ry0], [rx1 - 3, ry1 - 1], [rx0 + 5, ry1 - 1], [cx, ry1 - 1]]));
-        if (st > 0) got.push(tryAll((x, y) => shelf(st, x, y, true), [[rx1 - 1, ry0 + 1], [rx1 - 1, cy]]));
-        pieces += got.filter(Boolean).length;
+      rooms.forEach((room, ri) => {
+        const pool = st > 0 ? 'bedroom' : room.role === 1 ? 'front' : room.role === 2 ? 'wing' : storeys === 1 ? 'cottage' : 'stair';
+        const zf = st * SH + FLOOR_H;
+        const ctx = {
+          zf,
+          fits: cells => cells.every(c => encl.interior.has(c) && !wallCells.has(c) && !partitionCells.has(c) && !blocked.has(c) && !used.has(c + ':' + st)),
+          tallOk: cells => cells.every(c => { const [x, y] = c.split(',').map(Number); return ![[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => windowCells.has(key(x + dx, y + dy))); }),
+          free: (lo, hi) => B.free(lo, hi),
+          emit: b => B.add(b, 'furniture'),
+          take: cells => cells.forEach(c => used.add(c + ':' + st)),
+          rnd: a => { let h = (seed * 2654435761 + st * 97 + ri * 7919 + a * 104729) >>> 0; h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; },
+        };
+        const t = furnishRoom(pool, room, ctx, pal);
+        usedT[t] = (usedT[t] ?? 0) + 1;
+        // lantern under the ceiling at the room's middle (not over the stair hole)
+        const lx = even((room.x0 + room.x1) / 2), ly = even((room.y0 + room.y1) / 2), cz = (st + 1) * SH - FLOOR_H;
+        if (!hole.has(key(lx, ly)) && B.free([lx * ST, ly * ST, cz - 14], [(lx + 1) * ST, (ly + 1) * ST, cz])) {
+          box(lx + 0.4, ly + 0.4, cz - 6, lx + 0.6, ly + 0.6, cz, { asset: MB, color: [40, 40, 44] }, 'furniture');
+          box(lx + 0.2, ly + 0.2, cz - 14, lx + 0.8, ly + 0.8, cz - 6, { asset: MB, ...{ color: [255, 196, 120], material: 'BMC_Glow', material_intensity: 5 } }, 'furniture');
+        }
       });
-    furniturePieces = pieces;
+    furniturePieces = JSON.stringify(usedT);
   }
   if (B.dropped.length) throw new Error(`shapedhouse: ${B.dropped.length} overlapping bricks, e.g. ${B.dropped[0]}`);
 
   // headroom on the attic flight and at its landing
   const under = (u) => { for (const g of segs) if (u >= g.ui && u < g.uo) return g.z0; return crownZ0; };
   const latU = y => (y < mc ? mc - 1 - y : y - mc - 1) + 0; // studs from the crown edge
-  const notes = [`furniture: ${furniturePieces} pieces`];
+  const notes = [`furniture: ${furniturePieces}`];
   if (attic) {
     const yTop = 1 + LANDING + COURSES;
     const room = Math.min(...[yTop, yTop + 1, yTop + 2].map(y => (y === mc ? roofTop : under(Math.max(0, latU(y)) + 0.5)) - (Z0 + FLOOR_H)));
