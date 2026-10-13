@@ -3199,30 +3199,36 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
   // every wall stud goes down to its own ground (corner studs were put on one course)
   for (const [key, t] of [...top]) { const [a, b] = key.split(',').map(Number); for (let k = groundK(a, b) + 1; k < t; k++) put(a, b, k); }
   // stairs (owner 2026-10-13): plate-high risers, 1-stud treads of 1x1 flat tiles,
-  // a brick of rise = 3 risers, the 2 treads on the uphill studs; studs a retaining
-  // wall stands on are left to the wall (else its foot course is lost and it floats)
+  // 3 risers a brick: a paved stud 0 / 1 studs from a paved neighbour a brick up
+  // (orthogonal: from that edge; diagonal: from that corner, so flights wrap round
+  // corners) gets a tread 8 / 4 high, the highest wins, so treads run on across
+  // cells instead of a strip per cell; studs a retaining wall stands on are left to
+  // the wall (else its foot course is lost and it floats)
+  const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
   for (let x = x0; x < x1; x++)
     for (let y = y0; y < y1; y++) {
       const c = x * N + y;
       if (!inMap(x, y) || !terraceCell[c] || !paved(c) || riverCell[c]) continue;
+      const ups = N8.filter(([dx, dy]) => { const n = (x + dx) * N + y + dy; return inMap(x + dx, y + dy) && paved(n) && !riverCell[n] && H[n] === H[c] + 1; });
+      if (!ups.length) continue;
       const ztop = (H[c] + 1) * VZ;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const n = (x + dx) * N + y + dy;
-        if (!inMap(x + dx, y + dy) || !paved(n) || H[n] !== H[c] + 1) continue;
-        let laid = 0;
-        for (let q = 0; q < 4; q++)
-          for (let t = 1; t <= 2; t++) {
-            const s = 2 - t; // tread t (top at 4t) stands s studs in from the uphill edge
-            const sa = dx > 0 ? x * 4 + 3 - s : dx < 0 ? x * 4 + s : x * 4 + q, sb = dy > 0 ? y * 4 + 3 - s : dy < 0 ? y * 4 + s : y * 4 + q;
-            if (top.has(sa + ',' + sb)) continue;
-            const cx = X0 + sa * 10 + 5, cy = Y0 + sb * 10 + 5;
-            if (!B.free([cx - 5, cy - 5, ztop], [cx + 5, cy + 5, ztop + 4 * t])) continue;
-            if (t === 2) B.add({ asset: 'PB_DefaultMicroBrick', size: [5, 5, 2], position: [cx, cy, ztop + 2], color: COBBLE_C }, 'ramp');
-            B.add({ asset: 'PB_DefaultTile', size: [5, 5, 2], position: [cx, cy, ztop + 4 * t - 2], color: PAVE_C[Math.floor(hash(sa, sb, 91) * PAVE_C.length)] }, 'ramp');
-            laid++;
-          }
-        if (laid) { steps++; break; }
-      }
+      let laid = 0;
+      for (let i = 0; i < 4; i++)
+        for (let j = 0; j < 4; j++) {
+          // studs from the edge toward a neighbour on each axis (0 = touching it)
+          const d = (dv, k) => (dv > 0 ? 3 - k : dv < 0 ? k : -1);
+          let t = 0;
+          for (const [dx, dy] of ups) t = Math.max(t, 2 - Math.max(d(dx, i), d(dy, j)));
+          if (t <= 0) continue;
+          const sa = x * 4 + i, sb = y * 4 + j;
+          if (top.has(sa + ',' + sb)) continue;
+          const cx = X0 + sa * 10 + 5, cy = Y0 + sb * 10 + 5;
+          if (!B.free([cx - 5, cy - 5, ztop], [cx + 5, cy + 5, ztop + 4 * t])) continue;
+          if (t === 2) B.add({ asset: 'PB_DefaultMicroBrick', size: [5, 5, 2], position: [cx, cy, ztop + 2], color: COBBLE_C }, 'ramp');
+          B.add({ asset: 'PB_DefaultTile', size: [5, 5, 2], position: [cx, cy, ztop + 4 * t - 2], color: PAVE_C[Math.floor(hash(sa, sb, 91) * PAVE_C.length)] }, 'ramp');
+          laid++;
+        }
+      if (laid) steps++;
     }
   // tile each course: pair along the wall where the joint parity allows, else a 1-stud brick
   let bricksLaid = 0, skipped = 0;
