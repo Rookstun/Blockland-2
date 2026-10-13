@@ -938,7 +938,7 @@ module.exports = class Media {
         await run(HEIGHTMAP, [file, '--anim-mode', 'brick', '--glow', '--width', String(width), '--fps', String(fps),
           '--pixel-extent', String(ext), '--start', String(t0), '--duration', String(dur), '--no-loop', '--backend', 'ffmpeg',
           '--no-download', '-o', base + '.brz'], 900_000);
-        const buf = fs.readFileSync(base + '.brz');
+        const buf = this.chipAbove(fs.readFileSync(base + '.brz'));
         fs.rmSync(base + '.brz', { force: true });
         const video = { buf, ...this.deviceBox(this.brs.WorldReader.from(buf)) };
         let audio = null;
@@ -1302,6 +1302,30 @@ module.exports = class Media {
   }
 
   /**
+   * (owner 2026-10-12: "make !playvideo's chip invisible and above it entirely")
+   * The video device's microchip brick (and its gate grid) moved to a stud above
+   * the picture's top row (file -y = up once stood), centred, hidden and with
+   * no collision. deviceBox of the result includes it, so clears still take it.
+   */
+  chipAbove(buf) {
+    const r = this.brs.WorldReader.from(buf), assets = r.brickAssets();
+    let chip = null;
+    const others = [];
+    for (const b of r.bricks(1)) {
+      if (assets[b.asset_name_index] === 'B_1x1_Microchip') { chip = b; continue; }
+      const half = b.size.some(v => v) ? b.size : [5, 5, 6];
+      others.push([b.position.map((v, i) => v - half[i]), b.position.map((v, i) => v + half[i])]);
+    }
+    const box = this.deviceBox(r);
+    if (!chip || !Number.isFinite(box.pixLo[1])) return buf;
+    // centred a stud above the picture's top row (file -y is up once stood), clear of the buttons
+    const target = [Math.floor((box.pixLo[0] + box.pixHi[0]) / 20) * 10 + 5, Math.floor(box.pixLo[1] / 10) * 10 - 15, chip.position[2]];
+    const hit = t => others.some(([lo, hi]) => lo[0] < t[0] + 5 && t[0] - 5 < hi[0] && lo[1] < t[1] + 5 && t[1] - 5 < hi[1] && lo[2] < t[2] + 6 && t[2] - 6 < hi[2]);
+    while (hit(target)) target[1] -= 10;
+    return this.mergeDevices([{ buf, chipDelta: target.map((v, i) => v - chip.position[i]) }]).buf;
+  }
+
+  /**
    * One prefab out of several heightmap2brz devices: `parts` = [{ buf, offset }]
    * (main-grid offset in the first part's coordinates). Every brick, component,
    * wire (local and remote) and microchip grid entity is copied through the
@@ -1322,7 +1346,7 @@ module.exports = class Media {
     const buttons = new Map(); // label -> handle of the first part's button
     const boxes = [];
     const key = c => `${c.x}_${c.y}_${c.z}`;
-    parts.forEach(({ buf, offset = [0, 0, 0] }, partNo) => {
+    parts.forEach(({ buf, offset = [0, 0, 0], chipDelta = null }, partNo) => {
       const r = WorldReader.from(buf);
       const assets = r.brickAssets(), mats = r.materials(), extA = r.externalAssets();
       const remap = i => (typeof i === 'number' && extA[i] ? extIndex(extA[i]) : i);
@@ -1333,7 +1357,7 @@ module.exports = class Media {
         const loc = e.location;
         grids.set(e.persistentIndex, w.addBrickGrid({
           type: e.typeName, owner_index: owner, rotation: e.rotation, frozen: e.frozen, sleeping: e.sleeping, data: e.data,
-          location: { X: loc.X + offset[0], Y: loc.Y + offset[1], Z: loc.Z + offset[2] },
+          location: { X: loc.X + offset[0] + (chipDelta && /Microchip/.test(e.typeName) ? chipDelta[0] : 0), Y: loc.Y + offset[1] + (chipDelta && /Microchip/.test(e.typeName) ? chipDelta[1] : 0), Z: loc.Z + offset[2] + (chipDelta && /Microchip/.test(e.typeName) ? chipDelta[2] : 0) },
         }));
       }
       const handles = new Map(); // `${grid}:${chunk}` -> [handle per brick in chunk]
@@ -1364,11 +1388,14 @@ module.exports = class Media {
               continue;
             }
             const asset = assets[b.asset_name_index];
-            const position = g === 1 ? b.position.map((v, k) => v + offset[k]) : b.position.map(v => v + 1024);
+            // chipDelta: the chip brick moves (with its grid entity, above) and is hidden, no collision
+            const moveChip = chipDelta && g === 1 && asset === 'B_1x1_Microchip';
+            const position = g === 1 ? b.position.map((v, k) => v + offset[k] + (moveChip ? chipDelta[k] : 0)) : b.position.map(v => v + 1024);
             const h = w.addBrick({
               asset, size: b.size.some(v => v) ? b.size : undefined, position, direction: b.direction, rotation: b.rotation,
               color: b.color, material: mats[b.material_index], material_intensity: b.material_intensity,
-              collision: b.collision, visibility: b.visibility, owner_index: owner, components: cs,
+              collision: moveChip ? { player: false, weapon: false, interaction: false, tool: true, physics: false } : b.collision,
+              visibility: moveChip ? false : b.visibility, owner_index: owner, components: cs,
             }, { grid: gh.grid });
             list.push(h);
             if (button && partNo === 0) buttons.set(button.data?.PromptCustomLabel, h);
