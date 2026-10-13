@@ -679,7 +679,7 @@ module.exports = class Plugin {
     const bot = sanitize(this.config['bot-name'] || 'AI');
     [
       `<b><color="8cf">${bot} help</></>`,
-      '<b>!ai</> message - chat, or ask for a build: "!ai build a red castle with towers". "!ai undo" removes your last build, "!ai reset" clears my memory.',
+      '<b>!ai</> message - chat, or ask for a build: "!ai build a red castle with towers". "!ai undo" removes your last build, "!ai reset" stops everything and clears my memory.',
       '<b>!agent</> task - a bigger multi-step job, e.g. "!agent build a village of 5 houses". "!agent stop" stops yours.',
       '<b>!img</> image-link [width] [pixel size] [flat] [glow] - turns a picture into bricks.',
       '<b>Tickets</> - every request gets a number and waits its turn. <b>!ticket</> your tickets, <b>!tickets</> the whole counter, <b>!cancel</> [#] drops a waiting one.',
@@ -830,14 +830,10 @@ module.exports = class Plugin {
   async command(name, text) {
     const botName = sanitize(this.config['bot-name'] || 'AI');
     if (!text) {
-      this.whisper(name, 'Usage: !ai your message   (!ai reset clears my memory)');
+      this.whisper(name, 'Usage: !ai your message   (!ai reset stops everything and clears my memory)');
       return;
     }
-    if (text === 'reset') {
-      this.history = [];
-      this.broadcast(`<b><color="8cf">${botName}</></> memory cleared.`);
-      return;
-    }
+    if (/^reset$/i.test(text)) return this.resetAll(name);
     const cooldown = (this.config['cooldown-seconds'] ?? 5) * 1000;
     const wait = (this.lastUse.get(name) ?? 0) + cooldown - Date.now();
     if (wait > 0) {
@@ -861,7 +857,9 @@ module.exports = class Plugin {
       const past = this.history.flat();
       const messages = [...past, message];
       for (let round = 0; ; round++) {
+        if (job.cancelled) throw Object.assign(new Error('stopped'), { stopped: true });
         const response = await this.callModel(name, SYSTEM, TOOLS, messages, round ? 'working' : 'thinking');
+        if (job.cancelled) throw Object.assign(new Error('stopped'), { stopped: true }); // !ai reset while it thought
         const u = response.usage ?? {};
         this.log('model', `round ${round + 1} for ${name} at ${secs()}: stop=${response.stop_reason}, tokens in=${u.input_tokens ?? '?'} out=${u.output_tokens ?? '?'}, blocks [${response.content.map(b => b.type).join(', ')}]`);
         if (response.stop_reason === 'refusal') {
@@ -949,6 +947,7 @@ module.exports = class Plugin {
       reply = stripSpeaker(reply || '') || (done.length ? 'Done.' : '...');
       this.remember([...messages.slice(past.length), { role: 'assistant', content: reply }]);
     } catch (err) {
+      if (err.stopped) { this.endJob(job); this.log('reset', `${name}: request stopped after ${secs()}`); return; }
       job.failed = true;
       this.endJob(job);
       this.whisper(name, `<color="f55">${this.describe(err)}</>`);
@@ -1563,6 +1562,21 @@ module.exports = class Plugin {
     if (err instanceof Anthropic.APIError)
       return `AI proxy error ${err.status ?? ''}: ${String(err.message).slice(0, 120)}`;
     return `AI request failed: ${String(err.message ?? err).slice(0, 120)}`;
+  }
+
+  /** !ai reset (2026-10-13, owner: "its tweaking"): stop every running request, drop
+   * the waiting line, free the slots, clear memory and cooldowns. */
+  resetAll(name) {
+    const botName = sanitize(this.config['bot-name'] || 'AI');
+    const running = [...this.jobs], waiting = this.queue.length;
+    for (const job of running) { job.cancelled = true; this.jobs.delete(job); }
+    for (const { job, resolve } of this.queue) { job.cancelled = true; resolve(null); }
+    this.queue = [];
+    this.updateTickets(list => { for (const t of list) if (t.status === 'working' || t.status === 'waiting') t.status = 'cancelled'; }).catch(() => {});
+    this.history = [];
+    this.lastUse.clear();
+    this.log('reset', `${name}: ${running.length} running stopped, ${waiting} waiting dropped`);
+    this.broadcast(`<b><color="8cf">${botName}</></> reset by ${sanitize(name)}: memory cleared, ${running.length} running and ${waiting} waiting requests stopped.`);
   }
 
   async stop() {
