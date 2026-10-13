@@ -16,3 +16,4 @@ corpus/out/
 *.pem
 eyes/*.png
 ddr/ddr.chip.brz
+mapgen/delta_*.json

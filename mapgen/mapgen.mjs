@@ -1743,7 +1743,7 @@ const holy = [];
           lo = Math.min(lo, h); hi = Math.max(hi, h); sum += h; n++;
         }
         if (bad || hi - lo > rough) continue;
-        cand.push({ x: cx, y: cy, h: Math.round(sum / n), score: hi - lo + hash(cx, cy, 441 + kind.length) * 6 + (kind === 'casino' ? townDist(cx, cy) * 2 : 0), kind, r: Rr, blend });
+        cand.push({ x: cx, y: cy, h: Math.round(sum / n), score: hi - lo + hash(cx, cy, 441 + kind.length) * 6 + (kind === 'casino' ? townDist(cx, cy) * 2 - (cx === 456 && cy === 420 ? 1000 : 0) : 0), kind, r: Rr, blend }); // the live casino's site (2026-10-12): its game prefabs stand there
       }
     cand.sort((a, b) => a.score - b.score);
     let got = 0;
@@ -1755,13 +1755,13 @@ const holy = [];
   };
   pick1('temple', HOLY.temples, 9, 6, 120 * K, [4, 14], 10);
   pick1('shrine', HOLY.shrines, 3, 4, 40 * K, [2, 8], 4);
+  // the casino (owner 2026-10-10: "a casino at spawn"): as near the town as a flat site by a road gets;
+  // picked before the roadside buildings (2026-10-12: picked last, the terraced build's chapel took its site and the live casino was cleared)
+  pick1('casino', 1, 9, 5, 100, [3, 24], 18);
   // roadside buildings (this map's three hamlets are small, so the new kinds
   // also stand alone by the roads): inns, a library, warehouses, a dining hall, chapels
   for (const [kind, n, r] of [['tavern', 2, 6], ['warehouse', 2, 6], ['chapel', 2, 6], ['library', 1, 5], ['dininghall', 1, 7]])
     pick1(kind, Math.round(tune('roadside.' + kind, n, `${kind}s standing alone by the roads`)), r, 5, 40 * K, [3, 18], 14);
-  // the casino (owner 2026-10-10: "a casino at spawn"): as near the town as a flat site by a road gets;
-  // picked last so the sites above stay where they were
-  pick1('casino', 1, 9, 5, 100, [3, 24], 18);
   holy.forEach((v, k) => {
     v.seed = 17000 + k;
     // the door faces the nearest road cell
@@ -2307,7 +2307,7 @@ for (let x = 0; x < N; x++)
     if (h + 1 <= SEA || V[vi(x, y, h)] === 0) continue;
     if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || noSmooth[x * N + y]) continue;
     // the foot of a terrace retaining wall: its brick veneer stands here (terraceDressing)
-    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && terraceCell[(x + dx) * N + y + dy] && H[(x + dx) * N + y + dy] - h >= 2)) continue;
+    if ([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && terraceCell[(x + dx) * N + y + dy] && H[(x + dx) * N + y + dy] - h >= 2)) continue;
     const hN = (dx, dy) => (inMap(x + dx, y + dy) ? H[(x + dx) * N + y + dy] : h);
     // the step up to the lowest higher neighbour (1..MAX_RISE bricks); every
     // piece on this cell rises by that much
@@ -3158,83 +3158,89 @@ const WATER_ZONE = {
 // ramps made of tiled herringbone and the actual retaining wall using brick"):
 //  - ramps: a paved cell a brick below a paved neighbour gets a herringbone step
 //    6 high on its uphill half (2 studs), so each brick of rise is 2 paved steps
-//  - retaining walls 2+ bricks high: a running-bond brick veneer (1 x 2-stud
-//    bricks, joints staggered a stud per course on the global stud grid, as
-//    walltool lays walls) 1 stud thick on the low side of the face, laid in
-//    continuous runs along each wall line; a stone parapet along the top
-const BRICK_BASE = [150, 74, 56];
+//  - retaining walls 2+ bricks high: a brick wall 1 stud thick on the low side of
+//    every face, rasterized as ONE stud set per course (faces of all cells, plus
+//    the outer-corner studs where a stepped edge turns, so corners close and no
+//    stud is laid twice), tiled like walltool: 1 x 2-stud bricks whose joints sit
+//    on studs of the course's parity (running bond, bonded corners); the wall
+//    rises PARAPET courses above the upper ground, capped by a stone coping
+const BRICK_BASE = [150, 74, 56], PARAPET = 2;
 function terraceDressing(B, x0, y0, x1, y1, paved) {
-  const CAP = [[150, 144, 132], [138, 132, 120]];
+  const COPING = [[150, 144, 132], [138, 132, 120]];
   const PAVE = { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 91) * C.length)] };
-  // wall faces per line and course: key "axis|line|side|course" -> stud positions along the line
-  const faces = new Map();
-  const face = (key, from) => (faces.get(key) ?? faces.set(key, new Set()).get(key)).add(from);
+  const course = new Map(); // course k -> Set "a,b" (global studs)
+  const top = new Map();    // "a,b" -> highest course of the wall at that stud
+  const put = (a, b, k) => { (course.get(k) ?? course.set(k, new Set()).get(k)).add(a + ',' + b); const t = top.get(a + ',' + b); if (t === undefined || k > t) top.set(a + ',' + b, k); };
+  const groundK = (a, b) => { const cx = Math.floor(a / 4), cy = Math.floor(b / 4); return inMap(cx, cy) ? H[cx * N + cy] : 1e9; };
   let steps = 0;
   for (let x = x0; x < x1; x++)
     for (let y = y0; y < y1; y++) {
       const c = x * N + y;
       if (!inMap(x, y) || !terraceCell[c]) continue;
-      const h = H[c], top = (h + 1) * VZ, wx = X0 + x * CELL, wy = Y0 + y * CELL;
+      const h = H[c], ztop = (h + 1) * VZ;
       if (paved(c) && !riverCell[c])
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const n = (x + dx) * N + y + dy;
           if (!inMap(x + dx, y + dy) || !paved(n) || H[n] !== h + 1) continue;
-          // the uphill half of the cell, in global studs
           const sa0 = x * 4 + (dx > 0 ? 2 : 0), sa1 = dx ? sa0 + 2 : x * 4 + 4;
           const sb0 = y * 4 + (dy > 0 ? 2 : 0), sb1 = dy ? sb0 + 2 : y * 4 + 4;
-          const lo = [X0 + sa0 * 10, Y0 + sb0 * 10, top], hi = [X0 + sa1 * 10, Y0 + sb1 * 10, top + 6];
+          const lo = [X0 + sa0 * 10, Y0 + sb0 * 10, ztop], hi = [X0 + sa1 * 10, Y0 + sb1 * 10, ztop + 6];
           if (!B.free(lo, hi)) continue;
-          B.add({ asset: 'PB_DefaultMicroBrick', size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, 1], position: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, top + 1], color: COBBLE_C }, 'ramp');
+          B.add({ asset: 'PB_DefaultMicroBrick', size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, 1], position: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, ztop + 1], color: COBBLE_C }, 'ramp');
           const cells = new Set();
-          for (let a = sa0; a < sa1; a++) for (let b = sb0; b < sb1; b++) cells.add(a + ',' + b);
+          for (let p = sa0; p < sa1; p++) for (let q = sb0; q < sb1; q++) cells.add(p + ',' + q);
           for (const r of floorPieces(cells, 'paving', PAVE))
-            B.add({ asset: r.brick.asset, position: [X0 + ((r.x0 + r.x1) / 2) * 10, Y0 + ((r.y0 + r.y1) / 2) * 10, top + 4],
+            B.add({ asset: r.brick.asset, position: [X0 + ((r.x0 + r.x1) / 2) * 10, Y0 + ((r.y0 + r.y1) / 2) * 10, ztop + 4],
               size: [(r.x1 - r.x0) * 5, (r.y1 - r.y0) * 5, 2], color: r.brick.color }, 'ramp');
           steps++;
           break;
         }
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const hn = hAt(x + dx, y + dy);
-        if (h - hn < 2) continue;
-        const onRiver = inMap(x + dx, y + dy) && riverCell[(x + dx) * N + y + dy];
-        // the face lies on the edge toward the drop; the veneer stands on the low cell
-        const axis = dx ? 'x' : 'y', line = dx ? (dx > 0 ? x + 1 : x) * 4 : (dy > 0 ? y + 1 : y) * 4;
-        if (!onRiver) for (let k = hn + 1; k <= h; k++) for (let s = 0; s < 4; s++) face(`${axis}|${line}|${dx + dy}|${k}`, (dx ? y : x) * 4 + s);
-        // the parapet: a 10-thick strip on this cell's edge toward the drop, 24 high
-        const ex0 = dx > 0 ? wx + CELL - 10 : wx, ey0 = dy > 0 ? wy + CELL - 10 : wy;
-        const ex1 = dx ? ex0 + 10 : wx + CELL, ey1 = dy ? ey0 + 10 : wy + CELL;
-        const lo = [ex0, ey0, top], hi = [ex1, ey1, top + 24];
-        if (!B.free(lo, hi)) continue;
-        B.add({ asset: 'PB_DefaultMicroBrick', size: [(ex1 - ex0) / 2, (ey1 - ey0) / 2, 12], position: [(ex0 + ex1) / 2, (ey0 + ey1) / 2, top + 12], color: CAP[(x + y) & 1] }, 'parapet');
+        if (h - hn < 2 || (inMap(x + dx, y + dy) && riverCell[(x + dx) * N + y + dy])) continue;
+        // the stud strip of the low neighbour along this face
+        for (let s = 0; s < 4; s++) {
+          const a = dx > 0 ? x * 4 + 4 : dx < 0 ? x * 4 - 1 : x * 4 + s, b = dy > 0 ? y * 4 + 4 : dy < 0 ? y * 4 - 1 : y * 4 + s;
+          for (let k = hn + 1; k <= h + PARAPET; k++) if (groundK(a, b) < k) put(a, b, k);
+        }
       }
     }
-  // lay the veneer: per wall line and course, the stud runs, cut into 2-stud
-  // bricks whose joints sit on studs of the course's parity (1-stud ends)
+  // outer corners of stepped edges: two strip studs touching only diagonally get the
+  // stud between them that stands on low ground, so the corner closes
+  for (const [k, S] of course) for (const key of [...S]) {
+    const [a, b] = key.split(',').map(Number);
+    for (const [da, db] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      if (!S.has((a + da) + ',' + (b + db)) || S.has((a + da) + ',' + b) || S.has(a + ',' + (b + db))) continue;
+      for (const [p, q] of [[a + da, b], [a, b + db]]) if (groundK(p, q) < k) { put(p, q, k); break; }
+    }
+  }
+  // tile each course: pair along the wall where the joint parity allows, else a 1-stud brick
   let bricksLaid = 0, skipped = 0;
-  for (const [key, set] of faces) {
-    const [axis, lineS, sideS, kS] = key.split('|'), line = +lineS, side = +sideS, k = +kS;
-    const studs = [...set].sort((p, q) => p - q);
-    const z0 = k * VZ;
-    // the veneer's stud row across the line: just past the face, on the low side
-    const across = side > 0 ? line : line - 1;
-    for (let i = 0; i < studs.length;) {
-      let j = i;
-      while (j + 1 < studs.length && studs[j + 1] === studs[j] + 1) j++;
-      const r0 = studs[i], r1 = studs[j] + 1;
-      for (let p = r0; p < r1;) {
-        const q = Math.min(r1, (p - k) % 2 === 0 ? p + 2 : p + 1); // joints where (stud - course) is even
-        const [ax0, ax1, ay0, ay1] = axis === 'x' ? [across, across + 1, p, q] : [p, q, across, across + 1];
-        const lo = [X0 + ax0 * 10, Y0 + ay0 * 10, z0], hi = [X0 + ax1 * 10, Y0 + ay1 * 10, z0 + VZ];
-        if (B.free(lo, hi)) {
-          const f = 0.88 + hash(ax0 * 7 + ay0, k, 501) * 0.2;
-          B.add({ asset: 'PB_DefaultBrick', size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, VZ / 2], position: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, z0 + VZ / 2],
-            color: BRICK_BASE.map(v => Math.round(v * f)) }, 'veneer');
-          bricksLaid++;
-        } else skipped++;
-        p = q;
-      }
-      i = j + 1;
+  const lay = (lo, hi, m, label) => { if (!B.free(lo, hi)) { skipped++; return false; } B.add({ ...m, size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2], position: [0, 1, 2].map(i => (lo[i] + hi[i]) / 2) }, label); return true; };
+  for (const [k, S] of course) {
+    const done = new Set(), z0 = k * VZ;
+    for (const key of [...S].sort()) {
+      if (done.has(key)) continue;
+      const [a, b] = key.split(',').map(Number);
+      let a1 = a + 1, b1 = b + 1;
+      if (S.has((a + 1) + ',' + b) && !done.has((a + 1) + ',' + b) && (a - k) % 2 === 0) a1 = a + 2;
+      else if (S.has(a + ',' + (b + 1)) && !done.has(a + ',' + (b + 1)) && (b - k) % 2 === 0) b1 = b + 2;
+      for (let p = a; p < a1; p++) for (let q = b; q < b1; q++) done.add(p + ',' + q);
+      const f = 0.9 + hash(a * 7 + b, k, 501) * 0.16;
+      if (lay([X0 + a * 10, Y0 + b * 10, z0], [X0 + a1 * 10, Y0 + b1 * 10, z0 + VZ], { asset: 'PB_DefaultBrick', color: BRICK_BASE.map(v => Math.round(v * f)) }, 'veneer')) bricksLaid++;
     }
+  }
+  // stone coping on top of the wall, merged into runs along x then y
+  const cop = new Set([...top.keys()]), used = new Set();
+  for (const key of [...cop].sort()) {
+    if (used.has(key)) continue;
+    const [a, b] = key.split(',').map(Number), k = top.get(key);
+    let a1 = a + 1; while (cop.has(a1 + ',' + b) && !used.has(a1 + ',' + b) && top.get(a1 + ',' + b) === k) a1++;
+    let b1 = b + 1;
+    if (a1 === a + 1) while (cop.has(a + ',' + b1) && !used.has(a + ',' + b1) && top.get(a + ',' + b1) === k) b1++;
+    for (let p = a; p < a1; p++) for (let q = b; q < b1; q++) used.add(p + ',' + q);
+    const z = (k + 1) * VZ;
+    lay([X0 + a * 10, Y0 + b * 10, z], [X0 + a1 * 10, Y0 + b1 * 10, z + 4], { asset: 'PB_DefaultMicroBrick', color: COPING[(a + b) & 1] }, 'coping');
   }
   terraceStats.steps += steps; terraceStats.veneer += bricksLaid; terraceStats.veneerSkipped += skipped;
 }
