@@ -3156,8 +3156,8 @@ const WATER_ZONE = {
 // terrace dressing (2026-10-12) for the cells [x0, x1) x [y0, y1), through a
 // settlement's overlap guard (owner 2026-10-12: "retaining walls in villages ...
 // ramps made of tiled herringbone and the actual retaining wall using brick"):
-//  - ramps: a paved cell a brick below a paved neighbour gets a herringbone step
-//    6 high on its uphill half (2 studs), so each brick of rise is 2 paved steps
+//  - ramps: a paved cell a brick below a paved neighbour gets 2 stair treads on its
+//    uphill half: 1 stud deep, a flat tile (4) high each, 1x1 tiles; 3 risers a brick
 //  - retaining walls 2+ bricks high: a brick wall 1 stud thick on the low side of
 //    every face, rasterized as ONE stud set per course (faces of all cells, plus
 //    the outer-corner studs where a stepped edge turns, so corners close and no
@@ -3167,7 +3167,6 @@ const WATER_ZONE = {
 const BRICK_BASE = [150, 74, 56], PARAPET = 2;
 function terraceDressing(B, x0, y0, x1, y1, paved) {
   const COPING = [[150, 144, 132], [138, 132, 120]];
-  const PAVE = { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 91) * C.length)] };
   const course = new Map(); // course k -> Set "a,b" (global studs)
   const top = new Map();    // "a,b" -> highest course of the wall at that stud
   const put = (a, b, k) => { (course.get(k) ?? course.set(k, new Set()).get(k)).add(a + ',' + b); const t = top.get(a + ',' + b); if (t === undefined || k > t) top.set(a + ',' + b, k); };
@@ -3182,16 +3181,20 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const n = (x + dx) * N + y + dy;
           if (!inMap(x + dx, y + dy) || !paved(n) || H[n] !== h + 1) continue;
-          const sa0 = x * 4 + (dx > 0 ? 2 : 0), sa1 = dx ? sa0 + 2 : x * 4 + 4;
-          const sb0 = y * 4 + (dy > 0 ? 2 : 0), sb1 = dy ? sb0 + 2 : y * 4 + 4;
-          const lo = [X0 + sa0 * 10, Y0 + sb0 * 10, ztop], hi = [X0 + sa1 * 10, Y0 + sb1 * 10, ztop + 6];
+          // stair treads (owner 2026-10-13): plate-high risers, 1-stud treads of 1x1
+          // flat tiles; a brick of rise = 3 risers, the 2 treads on the uphill studs
+          const lo = [X0 + (dx > 0 ? x * 4 + 2 : x * 4) * 10, Y0 + (dy > 0 ? y * 4 + 2 : y * 4) * 10, ztop];
+          const hi = [X0 + (dx < 0 ? x * 4 + 2 : x * 4 + 4) * 10, Y0 + (dy < 0 ? y * 4 + 2 : y * 4 + 4) * 10, ztop + 8];
           if (!B.free(lo, hi)) continue;
-          B.add({ asset: 'PB_DefaultMicroBrick', size: [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, 1], position: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, ztop + 1], color: COBBLE_C }, 'ramp');
-          const cells = new Set();
-          for (let p = sa0; p < sa1; p++) for (let q = sb0; q < sb1; q++) cells.add(p + ',' + q);
-          for (const r of floorPieces(cells, 'paving', PAVE))
-            B.add({ asset: r.brick.asset, position: [X0 + ((r.x0 + r.x1) / 2) * 10, Y0 + ((r.y0 + r.y1) / 2) * 10, ztop + 4],
-              size: [(r.x1 - r.x0) * 5, (r.y1 - r.y0) * 5, 2], color: r.brick.color }, 'ramp');
+          for (let t = 1; t <= 2; t++) {
+            const s = 2 - t; // tread t (top at 4t) stands s studs in from the uphill edge
+            const a = dx > 0 ? x * 4 + 3 - s : dx < 0 ? x * 4 + s : null, b = dy > 0 ? y * 4 + 3 - s : dy < 0 ? y * 4 + s : null;
+            for (let q = 0; q < 4; q++) {
+              const sa = a ?? x * 4 + q, sb = b ?? y * 4 + q, cx = X0 + sa * 10 + 5, cy = Y0 + sb * 10 + 5;
+              if (t === 2) B.add({ asset: 'PB_DefaultMicroBrick', size: [5, 5, 2], position: [cx, cy, ztop + 2], color: COBBLE_C }, 'ramp');
+              B.add({ asset: 'PB_DefaultTile', size: [5, 5, 2], position: [cx, cy, ztop + 4 * t - 2], color: PAVE_C[Math.floor(hash(sa, sb, 91) * PAVE_C.length)] }, 'ramp');
+            }
+          }
           steps++;
           break;
         }
@@ -3246,6 +3249,7 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
 }
 const terraceStats = { steps: 0, veneer: 0, veneerSkipped: 0 };
 const COBBLE_C = MATS[COBBLE].color;
+const PAVE_C = [[164, 156, 142], [152, 146, 134], [174, 166, 150], [158, 148, 130], [146, 140, 132]]; // floors.mjs paving
 
 // town buildings (town.mjs), positioned from the square's centre on its paving
 const townBricks = bricks.length;
