@@ -1517,14 +1517,19 @@ const tunnelLights = [];
     for (let i = n - 2; i >= 0; i--) z[i] = Math.max(z[i + 1] - 1, Math.min(z[i + 1] + 1, z[i]));
     // corridor (3 x 3 round each sample), then the shoulder rings
     const zAt = new Map(); // cell -> road level (the lowest sample that reaches it)
+    const crossing = new Set();
     P.forEach(([x, y], i) => {
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
         const cx = x + a, cy = y + b; if (!inBounds(cx, cy) || stop(cx, cy)) continue;
         const c = cx * N + cy; if (!zAt.has(c) || zAt.get(c) > z[i]) zAt.set(c, z[i]);
+        // (owner 2026-10-13 screenshot: a plank deck ran ALONG the river) a corridor cell over
+        // water is bridge only where the centre line itself is over water (a crossing)
+        if (wet(c) && wet(x * N + y)) crossing.add(c);
       }
     });
     for (const [c, zr] of zAt) {
       const x = (c / N) | 0, y = c % N;
+      if (wet(c) && !crossing.has(c)) continue; // the road's edge spilling onto the water: not road
       if (pinned(x, y) || wet(c)) { if (!pinned(x, y) || townDist(x, y) > 0) pathCell[c] = 1; continue; }
       if (H[c] - zr >= TUNNEL.at) { tunnelZ[c] = zr; keepOut[c] = 1; continue; }
       H[c] = zr; roadGraded[c] = 1; pathCell[c] = 1;
