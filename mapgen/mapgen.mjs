@@ -23,6 +23,7 @@ import { buildSettlement, buildCamp, buildDetail, buildSign, placeName, EXTERNAL
 import { FIXED as BUILDER_FIXED } from './builder.mjs';
 import { treeVoxels } from '../trees/tree.mjs';
 import { makeOccupancy, placeVoxelProp } from './props.mjs';
+import { buildRocks } from './rocks.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1636,6 +1637,36 @@ const deck = new Int16Array(N * N); // deck top (units), 0 = none
     }
 }
 
+// ------------------------------------------------------------ rock weirs --
+// (owner 2026-10-13: "use [rocks] as a natural wall to lower and raise water levels that
+// stray too much") wherever the river's level steps down from one cell to the next, a
+// ridge of boulders (rocks.mjs) runs across the channel on that line, from the low bed up
+// past the upper water, and into both banks, so a step reads as a rock weir, not a cut.
+// Not next to roads, bridges or in town. Cells under it get no smoothing, plants or trees.
+const weirs = [];                          // { x, y, dx, dy }: river cell (x,y) above (x+dx, y+dy)
+const weirCell = new Uint8Array(N * N);    // columns the rocks may fill
+if (tune('river.weirs', 1, 'boulder weirs where the river level steps down (0 = off)')) {
+  const nearRoad = (x, y) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (inBounds(x + a, y + b) && (pathCell[(x + a) * N + y + b] || deck[(x + a) * N + y + b])) return true; return false; };
+  for (let x = 0; x < N; x++)
+    for (let y = 0; y < N; y++) {
+      const c = x * N + y;
+      if (!riverCell[c] || townKind[c] || nearRoad(x, y)) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const n = (x + dx) * N + y + dy;
+        if (!inBounds(x + dx, y + dy) || !riverCell[n] || riverLevel[n] >= riverLevel[c] || townKind[n]) continue;
+        weirs.push({ x, y, dx, dy });
+        weirCell[c] = weirCell[n] = 1;
+        // the line's ends run into the banks (up to 2 cells across, along the step line)
+        for (const s of [-1, 1]) for (let k = 1; k <= 2; k++) {
+          const bx = x + s * k * dy, by = y + s * k * dx; // perpendicular to (dx, dy)
+          if (inBounds(bx, by) && !riverCell[bx * N + by] && !pathCell[bx * N + by] && !deck[bx * N + by]) { weirCell[bx * N + by] = 1; weirs.push({ x: bx, y: by, bank: true }); }
+        }
+      }
+    }
+  for (let c = 0; c < N * N; c++) if (weirCell[c]) { noSmooth[c] = 1; keepOut[c] = 1; }
+  console.error(`river weirs: ${weirs.filter(w => !w.bank).length} step edges, ${weirs.filter(w => w.bank).length} bank ends`);
+}
+
 // ------------------------------------------------------------- settlements --
 // Abandoned settlements (2026-10-06, owner: "abandoned settlements", ruins.mjs):
 // flat ground well off the roads, away from everything built; levelled like a
@@ -2357,7 +2388,7 @@ for (let x = 0; x < N; x++)
     // under the sea too, down to SEABED_SMOOTH (owner 2026-10-13: the shallows showed raw
     // voxel steps through the water), and the river's mouth where it has no water plates
     if (h + 1 <= SEA - SEABED_SMOOTH || V[vi(x, y, h)] === 0) continue;
-    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA))) continue;
+    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || weirCell[x * N + y] || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA))) continue;
     // the foot of a terrace retaining wall: its brick veneer stands here (terraceDressing)
     if ([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && terraceCell[(x + dx) * N + y + dy] && H[(x + dx) * N + y + dy] - h >= 2)) continue;
     const hN = (dx, dy) => (inMap(x + dx, y + dy) ? H[(x + dx) * N + y + dy] : h);
@@ -3156,6 +3187,42 @@ const WATER_ZONE = {
       x = x1;
     }
 }
+// rock weirs (see 'rock weirs' above): boulders on every step edge, voxels only in weir
+// columns and above each column's ground (and its water plate)
+if (weirs.length) {
+  const R = (a, b, k) => hash(a, b, 700 + k);
+  const blobs = [];
+  for (const w of weirs) {
+    const c = w.x * N + w.y;
+    if (w.bank) {
+      const g = (H[c] + 1) * VZ, s = 20 + R(w.x, w.y, 1) * 14;
+      blobs.push({ c: [X0 + (w.x + 0.5) * CELL, Y0 + (w.y + 0.5) * CELL, g + s * 0.3], r: [s, s, s * 0.8], seed: w.x * 7 + w.y });
+      continue;
+    }
+    const n = (w.x + w.dx) * N + w.y + w.dy;
+    const zLow = (H[n] + 1) * VZ, zHigh = (riverLevel[c] + 1) * VZ + 6; // bed below the step .. above the upper water
+    const ex = X0 + (w.x + 0.5 + w.dx * 0.5) * CELL, ey = Y0 + (w.y + 0.5 + w.dy * 0.5) * CELL;
+    // stacked up a tall step, a blob every ~36 units, alternating a little up/downstream
+    const steps = Math.max(1, Math.round((zHigh - zLow) / 36));
+    for (let k = 0; k < steps; k++) {
+      const z = zLow + ((k + 0.5) / steps) * (zHigh - zLow), s = 18 + R(w.x, w.y, k) * 10;
+      const off = (R(w.y, w.x, k) - 0.5) * 16;
+      blobs.push({ c: [ex + w.dx * off, ey + w.dy * off, z], r: [w.dx ? s * 0.9 : s * 1.2, w.dy ? s * 0.9 : s * 1.2, Math.max(s, (zHigh - zLow) / steps * 0.75)], seed: w.x * 131 + w.y * 7 + k });
+    }
+  }
+  const top = c => { const g = (H[c] + 1) * VZ; return riverCell[c] && riverLevel[c] > SEA && (riverLevel[c] + 1) * VZ > g + 2 ? g + 2 : g; };
+  const rocks = buildRocks(blobs, { seed: 77, moss: 0.25, allow: (x, y, z) => {
+    const cx = Math.floor((x - X0) / CELL), cy = Math.floor((y - Y0) / CELL);
+    if (!inMap(cx, cy) || !weirCell[cx * N + cy]) return false;
+    // the voxel's footprint must not straddle into a column that isn't a weir column
+    const cx2 = Math.floor((x + 3 - X0) / CELL), cy2 = Math.floor((y + 3 - Y0) / CELL);
+    if (cx2 !== cx || cy2 !== cy) return false;
+    return z >= top(cx * N + cy);
+  } });
+  for (const b of rocks) bricks.push(b);
+  console.error(`river weirs: ${blobs.length} boulders, ${rocks.length} bricks`);
+}
+
 // bridge decks (planks) and their rails over open water
 {
   const PLANK = [[150, 104, 64], [134, 92, 56], [160, 114, 72]], RAIL = [96, 66, 42], MB = 'PB_DefaultMicroBrick';
