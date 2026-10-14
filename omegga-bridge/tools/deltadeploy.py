@@ -51,8 +51,8 @@ if "--skip-clear" not in sys.argv:
         print(f"cleared {min(i + B, len(D['clear']))}/{len(D['clear'])}", flush=True)
     while done_count() - base < sent:  # the whole queue has run before the load
         time.sleep(2)
-res = job([{"op": "say", "msg": QUOTE},
-           {"op": "bricks", "at": [0, 0, 0], "owner": OWNER, "captureMs": 20000, "externalAssets": D.get("externalAssets", []), "bricks": D["add"]}])
+# (owner 2026-10-13: "stop announcing changes") no chat line before the load
+res = job([{"op": "bricks", "at": [0, 0, 0], "owner": OWNER, "captureMs": 20000, "externalAssets": D.get("externalAssets", []), "bricks": D["add"]}])
 r = res["results"][-1]
 log = r.get("log", []) if isinstance(r, dict) else []
 print("loaded", r.get("count") if isinstance(r, dict) else r, "| overlap lines:", sum("overlapping" in l for l in log))
