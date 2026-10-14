@@ -18,10 +18,12 @@ import crypto from 'crypto';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { mergeVoxels } from '../trees/tree.mjs';
+import { orientFor } from './orient.mjs';
 
-export const RV = 4; // voxel size (units)
+export const RV = 10; // voxel size (units): 1-stud micro bricks (owner 2026-10-13: "make them 1.0 microbricks with wedges corners and ramps")
 export const STONE = [[128, 124, 118], [112, 108, 104], [140, 136, 128], [98, 96, 94], [150, 146, 136]];
 const MOSS = [[86, 112, 60], [72, 98, 52]];
+const RAMP_ROT = { '-1,0': 0, '0,-1': 1, '1,0': 2, '0,1': 3 }; // micro ramp rotation 0 rises toward -x
 
 const hash3 = (x, y, z, s) => { let h = (x * 374761393 + y * 668265263 + z * 1274126177 + s * 2246822519) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const sm = t => t * t * (3 - 2 * t);
@@ -47,7 +49,7 @@ export function buildRocks(blobs, { allow = () => true, seed = 1, moss = 0.35, p
       const x = (i + 0.5) * RV, y = (j + 0.5) * RV, z = (k + 0.5) * RV;
       const d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 + ((z - cz) / rz) ** 2;
       // lumpy surface: two octaves of noise push the radius in and out; flatter under, rounder on top
-      const n = noise(x / 22, y / 22, z / 22, s) * 0.55 + noise(x / 9, y / 9, z / 9, s + 7) * 0.25;
+      const n = noise(x / 26, y / 26, z / 26, s) * 0.55 + noise(x / 13, y / 13, z / 13, s + 7) * 0.25;
       if (d > 0.75 + n * 0.7) continue;
       if (!allow(i * RV, j * RV, k * RV)) continue;
       vox.set(K(i, j, k), 0);
@@ -57,15 +59,48 @@ export function buildRocks(blobs, { allow = () => true, seed = 1, moss = 0.35, p
   const pal = [...palette, ...MOSS];
   for (const key of vox.keys()) {
     const [i, j, k] = key.split(',').map(Number);
-    const t = noise(i / 11, j / 11, k / 6, seed + 3); // broad bands: fewer, bigger merged pieces
+    const t = noise(i / 4.4, j / 4.4, k / 2.4, seed + 3); // broad bands: fewer, bigger merged pieces
     let c = Math.min(palette.length - 1, Math.floor(t * palette.length));
-    if (!vox.has(K(i, j, k + 1)) && hash3(i >> 1, j >> 1, k, seed + 11) < moss * noise(i / 7, j / 7, 0, seed + 5) * 1.6) c = palette.length + (hash3(i, j, k, seed) < 0.5 ? 0 : 1);
+    if (!vox.has(K(i, j, k + 1)) && hash3(i, j, k, seed + 11) < moss * noise(i / 3, j / 3, 0, seed + 5) * 1.6) c = palette.length + (hash3(i, j, k, seed) < 0.5 ? 0 : 1);
     vox.set(key, c);
   }
-  return mergeVoxels(vox).map(b => {
+  const out = mergeVoxels(vox).map(b => {
     const lo = b.lo.map(v => v * RV), hi = b.hi.map(v => v * RV);
     return { asset: 'PB_DefaultMicroBrick', position: [0, 1, 2].map(a => (lo[a] + hi[a]) / 2), size: [0, 1, 2].map(a => (hi[a] - lo[a]) / 2), color: pal[b.c] };
   });
+  // smoothing on top of every column, like the terrain: in the empty voxel over a column's
+  // top, a micro wedge rising toward one higher side, an outer corner into two, a corner
+  // piece toward a higher diagonal; opposite or three higher sides fill flat
+  const tops = new Map(); // "i,j" -> highest solid k
+  for (const key of vox.keys()) { const [i, j, k] = key.split(',').map(Number); const c = i + ',' + j; if (!(tops.get(c) >= k)) tops.set(c, k); }
+  const T = (i, j) => tops.get(i + ',' + j) ?? -Infinity;
+  const half = [RV / 2, RV / 2, RV / 2];
+  for (const [c, k] of tops) {
+    const [i, j] = c.split(',').map(Number);
+    if (vox.has(K(i, j, k + 1))) continue;
+    if (!allow(i * RV, j * RV, (k + 1) * RV)) continue;
+    const up = (di, dj) => T(i + di, j + dj) >= k + 1 && vox.has(K(i + di, j + dj, k + 1));
+    const orth = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([a, b]) => up(a, b));
+    const color = pal[vox.get(K(i, j, k))];
+    const pos = [(i + 0.5) * RV, (j + 0.5) * RV, (k + 1.5) * RV];
+    let piece = null;
+    if (orth.length === 1) {
+      // a slope that carries on downhill (the column on the other side is lower): a micro
+      // ramp (rotation = the side it rises toward, BUILDING.md), else a wedge
+      const [a, b] = orth[0];
+      piece = T(i - a, j - b) < k
+        ? { asset: 'PB_DefaultMicroRamp', direction: 4, rotation: RAMP_ROT[a + ',' + b], size: half }
+        : { asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [orth[0]], half) };
+    }
+    else if (orth.length === 2 && orth[0][0] !== -orth[1][0] && orth[0][1] !== -orth[1][1]) piece = { asset: 'PB_DefaultMicroWedgeOuterCorner', ...orientFor('PB_DefaultMicroWedgeOuterCorner', orth, half) };
+    else if (orth.length >= 2) piece = { asset: 'PB_DefaultMicroBrick', size: half };
+    else {
+      const diag = [[1, 1], [1, -1], [-1, 1], [-1, -1]].find(([a, b]) => up(a, b));
+      if (diag) piece = { asset: 'PB_DefaultMicroWedgeCorner', ...orientFor('PB_DefaultMicroWedgeCorner', [[diag[0], 0], [0, diag[1]]], half) };
+    }
+    if (piece) out.push({ ...piece, position: pos, color });
+  }
+  return out;
 }
 
 /** a natural pile of `count` blobs of radius ~size round (x, y), sitting on ground z */

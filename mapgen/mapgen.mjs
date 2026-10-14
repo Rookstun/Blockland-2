@@ -23,7 +23,7 @@ import { buildSettlement, buildCamp, buildDetail, buildSign, placeName, EXTERNAL
 import { FIXED as BUILDER_FIXED } from './builder.mjs';
 import { treeVoxels } from '../trees/tree.mjs';
 import { makeOccupancy, placeVoxelProp } from './props.mjs';
-import { buildRocks } from './rocks.mjs';
+import { buildRocks, RV } from './rocks.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -3215,7 +3215,7 @@ if (weirs.length) {
     const cx = Math.floor((x - X0) / CELL), cy = Math.floor((y - Y0) / CELL);
     if (!inMap(cx, cy) || !weirCell[cx * N + cy]) return false;
     // the voxel's footprint must not straddle into a column that isn't a weir column
-    const cx2 = Math.floor((x + 3 - X0) / CELL), cy2 = Math.floor((y + 3 - Y0) / CELL);
+    const cx2 = Math.floor((x + RV - 1 - X0) / CELL), cy2 = Math.floor((y + RV - 1 - Y0) / CELL);
     if (cx2 !== cx || cy2 !== cy) return false;
     return z >= top(cx * N + cy);
   } });
