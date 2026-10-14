@@ -3590,6 +3590,9 @@ const FLOWERS = new Set(['B_Flower', 'B_Small_Flower', 'B_Tulip', 'B_Rose', 'B_L
   console.error(`flowers and branches removed: ${bricks.length - k}`);
   bricks.length = k;
 }
+// (owner 2026-10-13: "you made a checkpoint with no checkpoint component") a B_CheckPoint brick
+// only works with its Component_CheckPoint (data from one placed in-game): every one gets it
+for (const b of bricks) if (b.asset === 'B_CheckPoint' && !b.components) b.components = [{ type: 'Component_CheckPoint', data: { bRotatePlayerGravityOnSpawn: true } }];
 // exact duplicates (2026-10-13: a torch or wedge placed twice by two features; the
 // game rejects the second copy anyway): keep the first
 {
