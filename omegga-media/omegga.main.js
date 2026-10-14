@@ -37,6 +37,8 @@ const CACHE = path.join(TMP, 'cache');
 // as separate chips, 1.45 for the same device alone; owner: "it sucks ingame"). Separate chips keep
 // their own clocks and buttons. Likely cause: the video clock drives the audio chip once merged.
 const MERGE_AUDIO = false;
+// clock probe merged into every /playvideo chunk (probe.ws): reports the chunk's game time
+const PROBE_FILE = path.join(__dirname, 'probe.brz');
 const CACHE_MAX = 4; // owner 2026-10-11: keep the last 4 downloads
 const OWNER = { id: '3f9b2d71-6c4e-4a8b-9e15-7d20c1a4b5e7', name: 'Claude Media' };
 
@@ -272,6 +274,16 @@ module.exports = class Media {
         this.omegga.on(e, handler);
       }
     };
+    // (owner 2026-10-13: "videos switching too early") each chunk's probe logs its game time;
+    // the chunk scheduler follows that instead of the wall clock (game time falls behind
+    // while the server is busy, e.g. building the next chunk)
+    this.probe = fs.existsSync(PROBE_FILE) ? fs.readFileSync(PROBE_FILE) : null;
+    this.omegga.removeAllListeners('wirecmd:mediaclip');
+    this.omegga.on('wirecmd:mediaclip', (n, ...xyz) => {
+      const sec = Number(n), at = xyz.map(v => Number(String(v).replace(/,/g, '')));
+      if (!Number.isFinite(sec) || at.length < 3 || at.some(v => !Number.isFinite(v))) return;
+      for (const s of this.sessions.values()) s.probe?.(sec, at);
+    });
     on(['cmd:playvideo', 'chatcmd:playvideo'], this.videoCommand);
     on(['cmd:search', 'chatcmd:search'], this.searchCommand);
     on(['cmd:playaudio', 'chatcmd:playaudio'], this.audioCommand);
@@ -955,7 +967,6 @@ module.exports = class Media {
       this.whisper(name, '<color="999">Building the video chip...</>');
       const first = await build(0);
       if (session.stopped) return;
-      let clearCur = () => {};
       // seamless piece swaps (owner 2026-10-11: the screen popped in and out every
       // minute): odd pieces load 2 studs behind the screen plane (each part's clear
       // box is ~14 units thick, so less would let one piece's clear eat the other)
@@ -992,13 +1003,12 @@ module.exports = class Media {
         });
       };
       const loadSet = (set, k = 0) => {
-        const old = clearCur;
         const back = (k % 2) * slotB;
         const { video, audio } = set;
         // bottom row of pixels centred on (cx, cy), standing on the ground
         const p = T([(video.pixLo[0] + video.pixHi[0]) / 2, video.pixHi[1], (video.pixLo[2] + video.pixHi[2]) / 2]);
         const at = [cx - n[0] * back - p[0], cy - n[1] * back - p[1], ground - p[2]].map(v => Math.round(v / 2) * 2);
-        setTimeout(old, 2000);
+        clips[k] = { cmdAt: Date.now(), loc: null, sec: 0, secAt: 0, clear: null };
         const spots = audioSpots(audio, k);
         // the soundtrack chips ride in the same prefab (one set of buttons
         // drives all clocks): their spot in the video file's coordinates
@@ -1014,11 +1024,32 @@ module.exports = class Media {
           if (e) console.error('[media] merge', e);
           const clears = [this.loadDevice({ ...video, buf: this.autoStart(video.buf) }, session, at, orient, T)];
           (audio ?? []).forEach((d, j) => clears.push(this.loadDevice(d, session, spots[j])));
-          clearCur = () => clears.forEach(c => c());
+          clips[k].clear = () => clears.forEach(c => c());
           return;
         }
-        clearCur = this.loadDevice({ buf: this.autoStart(merged.buf), boxes: merged.boxes }, session, at, orient, T);
+        clips[k].clear = this.loadDevice({ buf: this.autoStart(merged.buf), boxes: merged.boxes }, session, at, orient, T);
       };
+      // chunk clocks from the probes: the newest chunk without a location takes the
+      // first fresh probe (seconds <= 5) from a spot no other chunk has
+      const clips = [];
+      session.probe = (sec, loc) => {
+        const same = c => c.loc && Math.hypot(c.loc[0] - loc[0], c.loc[1] - loc[1], c.loc[2] - loc[2]) < 30;
+        let c = clips.find(c => c && same(c));
+        if (!c && sec <= 5) {
+          for (let i = clips.length - 1; i >= 0; i--) if (clips[i] && !clips[i].loc && Date.now() - clips[i].cmdAt < 120_000) { c = clips[i]; c.loc = loc; c.lag = (Date.now() - c.cmdAt) / 1000 - sec; break; }
+        }
+        if (c && sec >= c.sec) { c.sec = sec; c.secAt = Date.now(); }
+      };
+      // a chunk's game time now: its last probe second plus the time since; no probe
+      // yet (or a dead one) -> the wall clock since its load, as before
+      const gameTime = k => {
+        const c = clips[k];
+        if (!c) return 0;
+        if (c.loc && Date.now() - c.secAt < 8000) return c.sec + (Date.now() - c.secAt) / 1000;
+        if (c.loc) return c.sec + (Date.now() - c.secAt) / 1000;
+        return (Date.now() - c.cmdAt) / 1000 - (Date.now() - c.cmdAt < 20_000 ? 5 : 0);
+      };
+      const lead = () => { const l = clips.filter(c => c?.lag != null).map(c => c.lag); return l.length ? Math.max(0, Math.min(8, l[l.length - 1])) : 2; };
       const mins = Math.floor(seconds / 60), secs = Math.round(seconds % 60);
       this.broadcast(`<color="9cf">${sanitize(name)} is playing a video (${width}x${height}, ${mins}:${String(secs).padStart(2, '0')} at ${fps} fps). /stop to end.</>`);
       this.whisper(name, `<color="999">The screen is ${dist / STUD} studs to your ${facing === '-x' ? '+x' : facing === '+x' ? '-x' : facing === '-y' ? '+y' : '-y'} side. Pick the side with -x, +x, -y or +y.</>`);
@@ -1028,18 +1059,28 @@ module.exports = class Media {
       // later piece off. A piece that is still building when its turn comes loads the moment it
       // is ready, and the schedule carries on from there.
       const durOf = k => Math.min(chunkSec, seconds - k * chunkSec);
-      let loadedAt = Date.now();
-      loadSet(first);
-      const waitUntil = async t => { while (!session.stopped && Date.now() < t) await sleep(Math.min(250, t - Date.now())); };
+      // (owner 2026-10-13: "videos switching too early") the schedule runs on each chunk's
+      // GAME time (its probe), not the wall clock: the next piece loads when this one has
+      // played its length less the measured load lag, and a finished piece is cleared once
+      // the next one is running (or 6 s after it ended)
+      const waitFor = async ok => { while (!session.stopped && !ok()) await sleep(200); };
+      const retire = async (k, next) => {
+        await waitFor(() => gameTime(k) >= durOf(k) + 0.2);
+        const ended = Date.now();
+        await waitFor(() => (clips[next]?.sec ?? 0) >= 1 || Date.now() - ended > 6000);
+        clips[k]?.clear?.();
+      };
+      loadSet(first, 0);
       for (let k = 1; k < chunks && !session.stopped; k++) {
         const set = await tryBuild(k);
-        await waitUntil(loadedAt + durOf(k - 1) * 1000);
+        await waitFor(() => gameTime(k - 1) >= durOf(k - 1) - lead());
         if (session.stopped) break;
-        loadedAt = Date.now();
         if (set) loadSet(set, k);
-        else clearCur();
+        else clips[k] = { cmdAt: Date.now(), loc: null, sec: 0, secAt: 0, clear: null };
+        retire(k - 1, k);
+        console.log(`[media] chunk ${k} loaded at chunk ${k - 1} game time ${gameTime(k - 1).toFixed(1)}/${durOf(k - 1)} (lead ${lead().toFixed(1)}, probe ${clips[k - 1]?.loc ? 'yes' : 'no'})`);
       }
-      await waitUntil(loadedAt + durOf(chunks - 1) * 1000 + 1000);
+      await waitFor(() => gameTime(chunks - 1) >= durOf(chunks - 1) + 1);
       if (!session.stopped && !this.config['keep-last-frame']) session.clear?.();
     } finally {
       session.stopped = true;
@@ -1322,7 +1363,19 @@ module.exports = class Media {
     const target = [Math.floor((box.pixLo[0] + box.pixHi[0]) / 20) * 10 + 5, Math.floor(box.pixLo[1] / 10) * 10 - 15, chip.position[2]];
     const hit = t => others.some(([lo, hi]) => lo[0] < t[0] + 5 && t[0] - 5 < hi[0] && lo[1] < t[1] + 5 && t[1] - 5 < hi[1] && lo[2] < t[2] + 6 && t[2] - 6 < hi[2]);
     while (hit(target)) target[1] -= 10;
-    return this.mergeDevices([{ buf, chipDelta: target.map((v, i) => v - chip.position[i]) }]).buf;
+    const parts = [{ buf, chipDelta: target.map((v, i) => v - chip.position[i]) }];
+    if (this.probe) {
+      // the clock probe, hidden 2 studs beside the chip (same load, same tick)
+      const pr = this.brs.WorldReader.from(this.probe), pa = pr.brickAssets();
+      const pc = [...pr.bricks(1)].find(b => pa[b.asset_name_index] === 'B_1x1_Microchip');
+      if (pc) {
+        const pt = [target[0] + 20, target[1], target[2]];
+        while (hit(pt)) pt[0] += 10;
+        parts.push({ buf: this.probe, offset: pt.map((v, i) => v - pc.position[i]), chipDelta: [0, 0, 0] });
+      }
+    }
+    try { return this.mergeDevices(parts).buf; }
+    catch (e) { console.error('[media] probe merge', e); return this.mergeDevices(parts.slice(0, 1)).buf; }
   }
 
   /**
