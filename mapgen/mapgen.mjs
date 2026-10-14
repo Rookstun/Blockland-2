@@ -25,6 +25,7 @@ import { treeVoxels } from '../trees/tree.mjs';
 import { makeOccupancy, placeVoxelProp } from './props.mjs';
 import { buildRocks, RV } from './rocks.mjs';
 import { shrine, CHECKPOINT_AT, FOOT as SHRINE_FOOT } from './checkpoint.mjs';
+import { signpost } from './signpost.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -3069,6 +3070,55 @@ for (const d of DUNGEONS) {
     placed++;
   }
   console.error(`checkpoints: ${checkpoints.length} (${shrines} shrines, ${placed} roadside of ${WANT}, ${cand.length} flat spots, skipped ${JSON.stringify(why)})`);
+}
+
+// fingerposts (signpost.mjs; owner 2026-10-13: "make signs indicating where things are, like
+// iron steel copper"): beside the roads, spread out, each pointing to its nearest places
+// (what the hamlets sell, dungeons, the volcano, the swamp, the henge, the casino)
+{
+  const dest = [], NL = String.fromCharCode(10); // board text: name, newline, what is there
+  const tc = [town.fx + TOWN.cells / 2, town.fy + TOWN.cells / 2];
+  dest.push({ c: tc, text: TOWN_NAME + NL + 'Bronze & Iron swords', kind: 'town' });
+  for (const v of villages) {
+    if (!v.name) continue;
+    const pre = (v.shops || []).map(w => w.prefab);
+    const tiers = [...new Set((v.shops || []).filter(w => w.prefab.startsWith('shop_')).map(w => w.tier))].map(t => t[0].toUpperCase() + t.slice(1));
+    const bows = pre.some(p => p.startsWith('bow_')), guns = v.desert;
+    const wares = guns ? 'Gun store' : tiers.length ? `${tiers.join(' & ')} swords${bows ? ', bows' : ''}` : v.nordic ? 'Mead hall' : 'Hamlet';
+    dest.push({ c: [v.x, v.y], text: v.name + NL + wares, kind: guns ? 'trade' : 'hamlet' });
+  }
+  for (const d of DUNGEONS) if (d.mouth) dest.push({ c: d.mouth, text: d.name + NL + 'Dungeon', kind: 'dungeon' });
+  dest.push({ c: [volcano.x, volcano.y], text: 'Volcano' + NL + 'Lava', kind: 'hazard' });
+  dest.push({ c: [swamp.x, swamp.y], text: 'The Swamp' + NL + 'Zombies', kind: 'hazard' });
+  dest.push({ c: [henge.x0 + (henge.n >> 1), henge.y0 + (henge.n >> 1)], text: 'Wizard Henge' + NL + 'Evil wizards', kind: 'magic' });
+  if (casinoGames.length) dest.push({ c: [(casinoGames[0].at[0] - X0) / CELL, (casinoGames[0].at[1] - Y0) / CELL], text: 'Casino' + NL + 'Slots & dice', kind: 'trade' });
+  const WANT = tune('signs.posts', 45, 'fingerposts beside the roads'), GAP = tune('signs.spacing', 26, 'cells between fingerposts') * K / 2;
+  const near = new Int16Array(N * N).fill(99);
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (pathCell[x * N + y]) for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const i = (x + a) * N + y + b; if (inMap(x + a, y + b)) near[i] = Math.min(near[i], Math.max(Math.abs(a), Math.abs(b))); }
+  const cand = [];
+  for (let x = 3; x < N - 3; x++) for (let y = 3; y < N - 3; y++) {
+    const c = x * N + y;
+    if (near[c] !== 2 || H[c] <= SEA + 2 || keepOut[c] || reserved[c] || blocked[c] || townNear[c] || riverCell[c] || swampCell[c] || volcanoCell[c] || trenchCell[c] || rampCol[c] || capCol[c]) continue;
+    if (villageDist(x, y) <= VILLAGE.r + 3 || townDist(x, y) <= TOWN.blend || hengeDist(x, y) <= 3 || DUNGEONS.some(d => footDist(d, x, y) <= 3)) continue;
+    cand.push([hash(x, y, 909), x, y]);
+  }
+  cand.sort((a, b) => a[0] - b[0]);
+  const posts = [], cps = checkpoints.map(c => [(c.at[0] - X0) / CELL, (c.at[1] - Y0) / CELL]);
+  const axis = (dx, dy) => (Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1]);
+  for (const [, x, y] of cand) {
+    if (posts.length >= WANT) break;
+    if (posts.some(([px, py]) => Math.hypot(px - x, py - y) < GAP) || cps.some(([px, py]) => Math.hypot(px - x, py - y) < 6)) continue;
+    const near4 = dest.map(d => ({ ...d, dist: Math.hypot(d.c[0] - x, d.c[1] - y) })).filter(d => d.dist > 14).sort((a, b) => a.dist - b.dist).slice(0, 4);
+    if (!near4.length) continue;
+    const boards = near4.map(d => ({ dir: axis(d.c[0] - x, d.c[1] - y), text: d.text, kind: d.kind }));
+    const [wx, wy, wz] = at(x, y, H[x * N + y] + 1);
+    const sb = signpost(boards, x + y).map(b => ({ ...b, position: [b.position[0] + wx, b.position[1] + wy, b.position[2] + wz] }));
+    if (!sb.every(b => { const [lo, hi] = worldBox(b, BUILDER_FIXED); return shrineIdx.free(lo, hi); })) continue;
+    for (const b of sb) { bricks.push(b); shrineIdx.add(b); }
+    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { blocked[(x + a) * N + y + b] = 1; keepOut[(x + a) * N + y + b] = 1; }
+    posts.push([x, y]);
+  }
+  console.error(`fingerposts: ${posts.length} of ${WANT} (${cand.length} spots, ${dest.length} destinations)`);
 }
 
 // swamp pools: the water plane fills them; lily pads float on top

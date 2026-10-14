@@ -166,7 +166,8 @@ const codeFacing = (() => {
   }
   return out; // "dx,dy,0" -> orientation code whose local +Z faces (dx, dy)
 })();
-export const EXTERNAL_ASSETS = [{ type: 'BrickFontDescriptor', name: 'MonaspaceXenon' }]; // index 0 = the sign font
+// index 0 = the sign font; 1.. = signpost fonts (signpost.mjs SIGN_FONTS; owner 2026-10-13 "experiment with the fonts")
+export const EXTERNAL_ASSETS = ['MonaspaceXenon', 'Cinzel', 'PirataOne', 'Gotfridus', 'EagleLake', 'Bungee'].map(name => ({ type: 'BrickFontDescriptor', name }));
 const TEXT = {
   Font: 0, Rotation: -90, // Font = index into the load's externalAssets: [{ type: 'BrickFontDescriptor', name: 'MonaspaceXenon' }]
   Skew: 0, Kerning: 0, LineHeight: 3, WidthScale: 1, LineOffset: 0, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },
