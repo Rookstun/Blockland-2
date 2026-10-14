@@ -2063,8 +2063,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   }
 
   // ------------------------------------------------------- plaza decor --
-  // (2026-10-14) Everything here stays inside r 280 (the market stands start
-  // at r 282) and clear of the spawn ring (r 200, every 45 degrees).
+  // (2026-10-14; spread out the same day, owner: "super scrunched") benches r 260,
+  // statues r 300 on the diagonals, boards r 330; all inside r 380 (the market stands sit
+  // on r 400) and clear of the spawn ring (r 200, every 45 degrees).
   function plazaDecor() {
     const MB = 'PB_DefaultMicroBrick';
     const PALE = [206, 198, 182], CUT = [170, 162, 150], DARK = [96, 104, 110], MID = [150, 144, 134];
@@ -2120,9 +2121,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     const toCentre = (x, y) => (Math.abs(x) >= Math.abs(y) ? [-Math.sign(x), 0] : [0, -Math.sign(y)]);
     // ---- benches: two each side, facing the fountain, between the spawn points
     for (let k = 0; k < 4; k++) {
-      const [cx, cy] = [[160, 0], [0, 160], [-160, 0], [0, -160]][k], [fx, fy] = toCentre(cx, cy);
+      const [cx, cy] = [[260, 0], [0, 260], [-260, 0], [0, -260]][k], [fx, fy] = toCentre(cx, cy);
       for (const s of [-1, 1]) {
-        const { bx } = frame(cx + -fy * s * 52, cy + fx * s * 52, fx, fy);
+        const { bx } = frame(cx + -fy * s * 60, cy + fx * s * 60, fx, fy);
         for (const a of [-1, 1]) bx(a * 40, -10, 0, a * 34, 12, 16, { color: CUT });               // stone ends
         for (const [b0, b1] of [[-10, -4], [-2, 4], [6, 12]]) bx(-40, b0, 16, 40, b1, 20, { color: PALETTE.timber[1] }); // seat planks
         for (const a of [-1, 1]) bx(a * 40, -14, 0, a * 32, -10, 44, { color: PALETTE.timber[0] }); // back posts
@@ -2132,8 +2133,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // ---- statues on plinths, facing the fountain
     const MARBLE = { color: [228, 224, 214] }, BRONZE = { color: [176, 132, 66] };
     STATUES.forEach(([text, kind], k) => {
-      const ang = Math.PI / 6 + (k * Math.PI) / 2;
-      const x = Math.round((Math.cos(ang) * 240) / 2) * 2, y = Math.round((Math.sin(ang) * 240) / 2) * 2, [fx, fy] = toCentre(x, y);
+      const ang = Math.PI / 4 + (k * Math.PI) / 2;
+      const x = Math.round((Math.cos(ang) * 300) / 2) * 2, y = Math.round((Math.sin(ang) * 300) / 2) * 2, [fx, fy] = toCentre(x, y);
       const { at, bx } = frame(x, y, fx, fy);
       bx(-26, -26, 0, 26, 26, 8, { color: PALE });   // base
       bx(-22, -22, 8, 22, 22, 44, { color: CUT });   // die
@@ -2166,7 +2167,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     });
     // ---- notice boards: one each side behind the spawn point, both faces written
     NOTICES.forEach((n, k) => {
-      const [cx, cy] = [[250, 0], [0, 250], [-250, 0], [0, -250]][k], [fx, fy] = toCentre(cx, cy);
+      const [cx, cy] = [[330, 0], [0, 330], [-330, 0], [0, -330]][k], [fx, fy] = toCentre(cx, cy);
       const { at, bx } = frame(cx, cy, fx, fy);
       for (const a of [-1, 1]) bx(a * 61, -5, 0, a * 71, 5, 112, { color: PALETTE.timber[0] }); // posts
       bx(-60, -2, 30, 60, 2, 104, { color: PALETTE.timber[1] });  // board
