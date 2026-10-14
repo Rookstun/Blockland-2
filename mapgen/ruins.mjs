@@ -195,8 +195,8 @@ const NB = ['ford', 'brook', 'wick', 'stead', 'hollow', 'by', 'ham', 'moor', 'va
 export function placeName(seed, rnd) { return NA[Math.floor(rnd(seed, 801) * NA.length)] + NB[Math.floor(rnd(seed, 802) * NB.length)]; }
 
 /** a name board: a thin plank centred (x, y, z), its text on the face toward (dx, dy) (a wall face, a lintel) */
-export function plaque({ put, text, facing: [dx, dy], x, y, z, w = 36, h = 10, color = [150, 112, 72] }) {
+export function plaque({ put, text, facing: [dx, dy], x, y, z, w = 36, h = 10, color = [150, 112, 72], style = {} }) {
   const code = codeFacing[`${dx},${dy},0`];
   return put({ asset: 'PB_DefaultMicroBrick', direction: code >> 2, rotation: code & 3, color, size: [w, h, 1],
-    components: [{ type: 'Component_TextDisplay', data: { ...TEXT, Text: text } }] }, x, y, z);
+    components: [{ type: 'Component_TextDisplay', data: { ...TEXT, ...style, Text: text } }] }, x, y, z);
 }

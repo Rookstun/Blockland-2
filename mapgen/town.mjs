@@ -21,6 +21,7 @@ import { turnBrick } from './orient.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
 import { townCourses, pickRoof } from './roofs.mjs';
 import { plaque } from './ruins.mjs';
+import { NOTICES, STATUES } from './notices.mjs';
 
 // Organic layout (owner 2026-10-05: "make spawn town less square and more
 // connected by herringbone paths", RuneScape's Lumbridge map as the model):
@@ -2061,12 +2062,131 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     return stats;
   }
 
+  // ------------------------------------------------------- plaza decor --
+  // (2026-10-14) Everything here stays inside r 280 (the market stands start
+  // at r 282) and clear of the spawn ring (r 200, every 45 degrees).
+  function plazaDecor() {
+    const MB = 'PB_DefaultMicroBrick';
+    const PALE = [206, 198, 182], CUT = [170, 162, 150], DARK = [96, 104, 110], MID = [150, 144, 134];
+    const WATER = { color: [70, 150, 210], material: 'BMC_Glass' }, FALL = { color: [190, 225, 245], material: 'BMC_Glass' };
+    // octagonal ring dIn < d <= dOut (d = octagon radius), laid as 4-unit row strips
+    const oct = (z0, z1, dIn, dOut, b) => {
+      const C = 4;
+      for (let y = -dOut; y < dOut; y += C) {
+        let run = null;
+        for (let x = -dOut; x <= dOut; x += C) {
+          const mx = Math.abs(x + C / 2), my = Math.abs(y + C / 2);
+          const d = Math.max(mx, my, (mx + my) * Math.SQRT1_2);
+          const inside = x < dOut && d > dIn && d <= dOut;
+          if (inside && run === null) run = x;
+          else if (!inside && run !== null) { box(run, y, z0, x, y + C, z1, { asset: MB, ...b }); run = null; }
+        }
+      }
+    };
+    // ---- fountain: stepped octagonal basin, two tiers of bowls with falling water
+    oct(0, 4, 0, 144, { color: PALE });                 // step
+    oct(4, 8, 0, 120, { color: DARK });                 // basin floor
+    oct(4, 28, 120, 136, { color: CUT });               // basin wall
+    oct(28, 32, 116, 140, { color: PALE });             // coping
+    oct(8, 24, 32, 120, WATER);                         // pool
+    oct(8, 48, 0, 32, { color: MID });                  // pedestal
+    oct(24, 64, 48, 56, FALL);                          // curtain from the lower bowl
+    oct(48, 64, 0, 12, { color: MID });                 // column
+    oct(64, 70, 0, 60, { color: PALE });                // lower bowl
+    oct(70, 76, 52, 60, { color: PALE });               //   its lip
+    oct(70, 74, 12, 52, WATER);                         //   its water
+    oct(70, 116, 0, 12, { color: MID });                // upper column
+    oct(74, 116, 24, 28, FALL);                         // curtain from the upper bowl
+    oct(116, 120, 0, 32, { color: PALE });              // upper bowl
+    oct(120, 126, 24, 32, { color: PALE });             //   its lip
+    oct(120, 124, 8, 24, WATER);                        //   its water
+    oct(120, 140, 0, 8, { color: MID });                // finial stem
+    pole(0, 0, 140, 148, 10, GLOW([120, 220, 255], 4)); // glowing orb
+    for (let k = 0; k < 8; k++) {                       // lanterns on the coping
+      const a = (k * Math.PI) / 4, x = Math.round(Math.cos(a) * 64) * 2, y = Math.round(Math.sin(a) * 64) * 2;
+      box(x - 4, y - 4, 32, x + 4, y + 4, 44, { asset: MB, color: CUT });
+      box(x - 5, y - 5, 44, x + 5, y + 5, 52, { asset: MB, ...GLOW([255, 200, 120], 3) });
+    }
+    // a local frame at (x, y) whose front (+b) faces (fx, fy); a runs along it
+    const frame = (x, y, fx, fy) => {
+      const ux = -fy, uy = fx;
+      const at = (a, b) => [x + a * ux + b * fx, y + a * uy + b * fy];
+      const bx = (a0, b0, z0, a1, b1, z1, br) => {
+        const [p, q] = at(a0, b0), [r, t] = at(a1, b1);
+        box(Math.min(p, r), Math.min(q, t), z0, Math.max(p, r), Math.max(q, t), z1, { asset: MB, ...br });
+      };
+      return { at, bx };
+    };
+    const toCentre = (x, y) => (Math.abs(x) >= Math.abs(y) ? [-Math.sign(x), 0] : [0, -Math.sign(y)]);
+    // ---- benches: two each side, facing the fountain, between the spawn points
+    for (let k = 0; k < 4; k++) {
+      const [cx, cy] = [[160, 0], [0, 160], [-160, 0], [0, -160]][k], [fx, fy] = toCentre(cx, cy);
+      for (const s of [-1, 1]) {
+        const { bx } = frame(cx + -fy * s * 52, cy + fx * s * 52, fx, fy);
+        for (const a of [-1, 1]) bx(a * 40, -10, 0, a * 34, 12, 16, { color: CUT });               // stone ends
+        for (const [b0, b1] of [[-10, -4], [-2, 4], [6, 12]]) bx(-40, b0, 16, 40, b1, 20, { color: PALETTE.timber[1] }); // seat planks
+        for (const a of [-1, 1]) bx(a * 40, -14, 0, a * 32, -10, 44, { color: PALETTE.timber[0] }); // back posts
+        for (const z of [26, 36]) bx(-32, -14, z, 32, -10, z + 6, { color: PALETTE.timber[1] });   // back rails
+      }
+    }
+    // ---- statues on plinths, facing the fountain
+    const MARBLE = { color: [228, 224, 214] }, BRONZE = { color: [176, 132, 66] };
+    STATUES.forEach(([text, kind], k) => {
+      const ang = Math.PI / 6 + (k * Math.PI) / 2;
+      const x = Math.round((Math.cos(ang) * 240) / 2) * 2, y = Math.round((Math.sin(ang) * 240) / 2) * 2, [fx, fy] = toCentre(x, y);
+      const { at, bx } = frame(x, y, fx, fy);
+      bx(-26, -26, 0, 26, 26, 8, { color: PALE });   // base
+      bx(-22, -22, 8, 22, 22, 44, { color: CUT });   // die
+      bx(-26, -26, 44, 26, 26, 50, { color: PALE }); // cornice
+      const [px, py] = at(0, 23);
+      plaque({ put, text, facing: [fx, fy], x: px, y: py, z: 26, w: 18, h: 8, color: [60, 56, 52], style: { LineHeight: 3, Color: { R: 230, G: 190, B: 110, A: 255 } } });
+      // the figure, about 1.4 players tall
+      bx(-12, -6, 50, -2, 6, 90, MARBLE); bx(2, -6, 50, 12, 6, 90, MARBLE);   // legs
+      bx(-14, -8, 90, 14, 8, 126, MARBLE);                                     // body
+      bx(-22, -6, 94, -14, 6, 124, MARBLE); bx(14, -6, 94, 22, 6, 124, MARBLE); // arms
+      bx(-4, -4, 126, 4, 4, 128, MARBLE);                                      // neck
+      bx(-8, -8, 128, 8, 8, 146, MARBLE);                                      // head
+      if (kind === 'knight') {
+        bx(-2, -6, 146, 2, 6, 152, BRONZE);                                    // helmet crest
+        bx(24, -2, 56, 28, 2, 118, { color: [200, 204, 210] });                // blade
+        bx(22, -4, 118, 30, 4, 122, BRONZE);                                   // guard
+        bx(24, -2, 122, 28, 2, 132, BRONZE);                                   // grip
+      } else if (kind === 'wizard') {
+        bx(-12, -12, 146, 12, 12, 150, MARBLE); bx(-7, -7, 150, 7, 7, 160, MARBLE); bx(-4, -4, 160, 4, 4, 168, MARBLE); bx(-2, -2, 168, 2, 2, 174, MARBLE); // hat
+        bx(22, -2, 50, 26, 2, 158, { color: PALETTE.timber[1] });              // staff
+        bx(20, -4, 158, 28, 4, 166, GLOW([150, 120, 255], 4));                 // its stone
+      } else if (kind === 'archer') {
+        bx(4, -16, 100, 12, -8, 132, { color: PALETTE.timber[0] });            // quiver
+        bx(22, 6, 70, 24, 8, 140, { color: PALETTE.timber[1] });               // bow
+        bx(22, -2, 72, 24, 6, 74, { color: PALETTE.timber[1] }); bx(22, -2, 136, 24, 6, 138, { color: PALETTE.timber[1] });
+      } else {
+        for (const [a0, b0, a1, b1] of [[-8, 8, 8, 10], [-8, -10, 8, -8], [-10, -10, -8, 10], [8, -10, 10, 10]]) bx(a0, b0, 146, a1, b1, 150, BRONZE); // crown band
+        for (const a of [-8, 0, 6]) bx(a, 8, 150, a + 2, 10, 154, BRONZE);     // crown points
+      }
+    });
+    // ---- notice boards: one each side behind the spawn point, both faces written
+    NOTICES.forEach((n, k) => {
+      const [cx, cy] = [[250, 0], [0, 250], [-250, 0], [0, -250]][k], [fx, fy] = toCentre(cx, cy);
+      const { at, bx } = frame(cx, cy, fx, fy);
+      for (const a of [-1, 1]) bx(a * 61, -5, 0, a * 71, 5, 112, { color: PALETTE.timber[0] }); // posts
+      bx(-60, -2, 30, 60, 2, 104, { color: PALETTE.timber[1] });  // board
+      bx(-60, -4, 26, 60, 4, 30, { color: PALETTE.timber[0] });   // bottom rail
+      bx(-60, -4, 104, 60, 4, 108, { color: PALETTE.timber[0] }); // top rail
+      bx(-74, -10, 112, 74, 10, 116, { color: PALETTE.roof[1] }); // roof
+      bx(-68, -6, 116, 68, 6, 120, { color: PALETTE.roof[1] });
+      const style = { LineHeight: 4.5, Color: { R: 40, G: 32, B: 24, A: 255 }, OutlineWidth: 0, Anchor: { X: 0.5, Y: 0.5 } };
+      for (const [s, text] of [[1, n.front], [-1, n.back]]) {
+        const [px, py] = at(0, s * 3);
+        plaque({ put, text, facing: [fx * s, fy * s], x: px, y: py, z: 67, w: 56, h: 34, color: [236, 228, 206], style });
+      }
+    });
+  }
+
   // --------------------------------------------------------------- town --
-  // the plaza: fountain and the spawn ring in the middle, lamps round it
-  pole(0, 0, 0, 12, 90, { color: PALETTE.stone[0] });
-  pole(0, 0, 12, 20, 75, { color: [70, 150, 210], material: 'BMC_Glass' });
-  pole(0, 0, 20, 80, 15, { color: PALETTE.stone[0] });
-  pole(0, 0, 80, 88, 30, GLOW([120, 220, 255], 4));
+  // the plaza: fountain and the spawn ring in the middle, benches, statues
+  // and notice boards round it (owner 2026-10-14: "make the main fountain
+  // beautiful and add benches and statues and noticeboards")
+  onSite([-1, -1, 1, 1], () => plazaDecor());
   for (let k = 0; k < 8; k++) {
     const a = (k * Math.PI) / 4;
     put({ asset: 'B_SpawnPoint', size: [0, 0, 0], color: [240, 240, 240] }, Math.round(Math.cos(a) * 20) * 10, Math.round(Math.sin(a) * 20) * 10, 2);
@@ -2089,6 +2209,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   void TIER7;
   for (const ty of ['dagger', '', 'longsword']) for (const t of ['bronze', 'iron']) wares.push({ tier: ty ? `${t}_${ty}` : t });
   for (const bow of ['bow', 'oak']) wares.push({ tier: bow, prefab: 'bow_' + bow });
+  // (owner 2026-10-14: "make shitty guns at spawn") the two cheapest guns; the rest stay at the desert store
+  for (const gun of ['derringer', 'revolver']) wares.push({ tier: gun, prefab: 'gun_' + gun });
   const mouths = plan.paths.filter(p => Math.hypot(...p[0]) <= PLAZA_R + 40).map(p => p.find(([x, y]) => Math.hypot(x, y) >= PLAZA_R - 40)).filter(Boolean).map(([x, y]) => Math.atan2(y, x));
   const spots = [];
   for (const r of [400, 346, 292]) {
