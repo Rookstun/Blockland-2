@@ -117,26 +117,30 @@ renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, came
 const SEL = new THREE.Color(0xf2c14e), tmpC = new THREE.Color(), M = new THREE.Matrix4();
 // real shapes (BUILDING.md section 3, orient.mjs): each piece is the unit cube [-1,1]^3
 // cut by planes n.u <= d in its LOCAL frame; the instance matrix = place * orientation * size
+// a shape = one or more convex parts (a part = its cut planes), drawn as one instance each
 const SHAPES = {
-  wedge: [[[1, 1, 0], 0]],                                        // side wedge: x + y <= 0, along z
-  outer: [[[-1, -1, -1], 1]],                                     // cube, low (-,-,-) corner cut off
-  tetra: [[[1, 1, 1], -1]],                                       // apex over the -x -y corner
-  ramp: [[[1, 0, 1], 0]],                                         // rises toward -x
-  rampInv: [[[1, 0, -1], 0]],
-  rampCorner: [[[1, 0, 1], 0], [[0, 1, 1], 0]],                   // high at (-x, -y)
-  rampCornerInv: [[[1, 0, -1], 0], [[0, 1, -1], 0]],
+  wedge: [[[[1, 1, 0], 0]]],                                      // side wedge: x + y <= 0, along z
+  outer: [[[[-1, -1, -1], 1]]],                                   // cube, low (-,-,-) corner cut off
+  tetra: [[[[1, 1, 1], -1]]],                                     // apex over the -x -y corner
+  ramp: [[[[1, 0, 1], 0]]],                                       // rises toward -x
+  rampInv: [[[[1, 0, -1], 0]]],
+  rampCorner: [[[[1, 0, 1], 0], [[0, 1, 1], 0]]],                 // high at (-x, -y)
+  rampCornerInv: [[[[1, 0, -1], 0], [[0, 1, -1], 0]]],
+  inner: [[[[1, 0, 1], 0]], [[[0, 1, 1], 0]]],                    // valley: z <= max(-x, -y), down toward (+x, +y)
 };
 const SHAPE_OF = a => /SideWedge|^PB_DefaultMicroWedge$|^PB_DefaultWedge$/.test(a) ? 'wedge'
   : /MicroWedgeOuterCorner$/.test(a) ? 'outer'
+  : /MicroWedgeInnerCorner$/.test(a) ? 'inner'
   : /MicroWedge(Triangle)?Corner$/.test(a) ? 'tetra'
   : /RampCornerInverted$/.test(a) ? 'rampCornerInv' : /RampCorner$/.test(a) ? 'rampCorner'
   : /RampInverted$/.test(a) ? 'rampInv' : /Ramp$/.test(a) ? 'ramp' : 'box';
 const geoCache = {};
-function shapeGeo(kind) {
-  if (geoCache[kind]) return geoCache[kind];
-  if (kind === 'box') return (geoCache[kind] = new THREE.BoxGeometry(2, 2, 2));
+function shapeGeo(kind, part = 0) {
+  const ck = kind + ':' + part;
+  if (geoCache[ck]) return geoCache[ck];
+  if (kind === 'box') return (geoCache[ck] = new THREE.BoxGeometry(2, 2, 2));
   // vertices: every triple of cube faces / cut planes that meets inside all of them
-  const P = [[[1, 0, 0], 1], [[-1, 0, 0], 1], [[0, 1, 0], 1], [[0, -1, 0], 1], [[0, 0, 1], 1], [[0, 0, -1], 1], ...SHAPES[kind]];
+  const P = [[[1, 0, 0], 1], [[-1, 0, 0], 1], [[0, 1, 0], 1], [[0, -1, 0], 1], [[0, 0, 1], 1], [[0, 0, -1], 1], ...SHAPES[kind][part]];
   const pts = [];
   for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) for (let k = j + 1; k < P.length; k++) {
     const m = new THREE.Matrix3().set(...P[i][0], ...P[j][0], ...P[k][0]);
@@ -144,7 +148,7 @@ function shapeGeo(kind) {
     const v = new THREE.Vector3(P[i][1], P[j][1], P[k][1]).applyMatrix3(m.invert());
     if (P.every(([n, d]) => n[0] * v.x + n[1] * v.y + n[2] * v.z <= d + 1e-6) && !pts.some(q => q.distanceTo(v) < 1e-6)) pts.push(v);
   }
-  return (geoCache[kind] = new ConvexGeometry(pts));
+  return (geoCache[ck] = new ConvexGeometry(pts));
 }
 const meshes = []; // { mesh, idx: [brick index per instance] }
 function placeMatrix(b, i) {
@@ -166,12 +170,13 @@ function buildMesh() {
   meshes.length = 0;
   const by = new Map();
   orig.forEach((b, i) => { const k = SHAPE_OF(b.asset); (by.get(k) ?? by.set(k, []).get(k)).push(i); });
-  for (const [kind, idx] of by) {
-    const mesh = new THREE.InstancedMesh(shapeGeo(kind), new THREE.MeshLambertMaterial({ clippingPlanes: [clip] }), idx.length);
-    idx.forEach((i, j) => mesh.setMatrixAt(j, placeMatrix(orig[i], i)));
-    mesh.userData.idx = idx;
-    scene.add(mesh); meshes.push({ mesh, idx });
-  }
+  for (const [kind, idx] of by)
+    for (let part = 0; part < (SHAPES[kind]?.length ?? 1); part++) {
+      const mesh = new THREE.InstancedMesh(shapeGeo(kind, part), new THREE.MeshLambertMaterial({ clippingPlanes: [clip] }), idx.length);
+      idx.forEach((i, j) => mesh.setMatrixAt(j, placeMatrix(orig[i], i)));
+      mesh.userData.idx = idx;
+      scene.add(mesh); meshes.push({ mesh, idx });
+    }
   paint();
 }
 function paint() {
