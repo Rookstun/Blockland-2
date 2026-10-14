@@ -501,6 +501,8 @@ const townLevel = (x, y) => townPlan.levelAt(...townLocal(x, y)) / VZ;
 // plane, where the game's water takes over. Roads crossing it get bridges.
 const RIVER = { rw: tune('river.width', 3 + K, 'half-width, cells'), bank: tune('river.bank', 12, 'bank blend, cells'), depth: tune('river.depth', 2, 'bed depth, voxels'),
   valley: Math.round(tune('river.valley', 20, 'valley sides reach this far past the banks, cells (x K)') * K), slope: tune('river.slope', 4.5, 'steepest valley side, voxels per cell (keep under smooth.maxRise)'),
+  levelWin: tune('river.levelWin', 6, 'river level = lowest bank within this many points either side'),
+  levelBlock: tune('river.levelBlock', 40, 'river reach length with one water level, points (2 per cell)'),
   oct: tune('river.oct', 1, 'octilinear course (45/90 degree runs), 0 = free curve'), octTol: tune('river.octTol', 4, 'octilinear: max cells off the meander line'), octTolTown: tune('river.octTolTown', 2, 'octilinear: max cells off it in town') };
 // the valley's height over the water level at e cells past the channel edge
 // (2026-10-06, owner: the river ran in a sheer-walled canyon): a brick per cell
@@ -606,12 +608,19 @@ const riverRiver = (() => {
   const inT = pts.map(([x, y]) => townDist(Math.round(x), Math.round(y)) <= 0);
   const firstT = inT.indexOf(true), lastT = inT.lastIndexOf(true);
   const L = new Array(pts.length);
-  for (let i = 0; i < pts.length; i++) {
-    if (inT[i]) { L[i] = townL; continue; }
-    const prev = i ? L[i - 1] : ground[0] - 1;
-    L[i] = Math.min(prev, ground[i] - 1);
-    if (firstT >= 0 && i < firstT) L[i] = Math.max(L[i], townL);  // upstream never below the town
-    L[i] = Math.max(L[i], SEA - 1);
+  // (owner 2026-10-13: "lower and raise water levels that stray too much", "the water sticks
+  // up out of the ground") the level follows the ground both ways: the lowest bank within
+  // RIVER.levelWin points, a brick under it; only the town pins it. Every step it takes
+  // gets a rock weir (see 'rock weirs'). Was: falling only and never below the town upstream,
+  // which held the water up to 22 bricks over lower ground.
+  // in reaches of RIVER.levelBlock points (one level each, so steps, and weirs, come at reach
+  // ends only), each reach as low as the lowest bank over it and LW points either side
+  const LW = RIVER.levelWin, BL = RIVER.levelBlock;
+  for (let b0 = 0; b0 < pts.length; b0 += BL) {
+    const b1 = Math.min(pts.length, b0 + BL);
+    let g = Infinity;
+    for (let j = Math.max(0, b0 - LW); j < Math.min(pts.length, b1 + LW); j++) g = Math.min(g, ground[j]);
+    for (let i = b0; i < b1; i++) L[i] = inT[i] ? townL : Math.max(g - 1, SEA - 1);
   }
   // stop a little way into the sea
   let end = pts.length;
@@ -1637,35 +1646,9 @@ const deck = new Int16Array(N * N); // deck top (units), 0 = none
     }
 }
 
-// ------------------------------------------------------------ rock weirs --
-// (owner 2026-10-13: "use [rocks] as a natural wall to lower and raise water levels that
-// stray too much") wherever the river's level steps down from one cell to the next, a
-// ridge of boulders (rocks.mjs) runs across the channel on that line, from the low bed up
-// past the upper water, and into both banks, so a step reads as a rock weir, not a cut.
-// Not next to roads, bridges or in town. Cells under it get no smoothing, plants or trees.
-const weirs = [];                          // { x, y, dx, dy }: river cell (x,y) above (x+dx, y+dy)
-const weirCell = new Uint8Array(N * N);    // columns the rocks may fill
-if (tune('river.weirs', 1, 'boulder weirs where the river level steps down (0 = off)')) {
-  const nearRoad = (x, y) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (inBounds(x + a, y + b) && (pathCell[(x + a) * N + y + b] || deck[(x + a) * N + y + b])) return true; return false; };
-  for (let x = 0; x < N; x++)
-    for (let y = 0; y < N; y++) {
-      const c = x * N + y;
-      if (!riverCell[c] || townKind[c] || nearRoad(x, y)) continue;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const n = (x + dx) * N + y + dy;
-        if (!inBounds(x + dx, y + dy) || !riverCell[n] || riverLevel[n] >= riverLevel[c] || townKind[n]) continue;
-        weirs.push({ x, y, dx, dy });
-        weirCell[c] = weirCell[n] = 1;
-        // the line's ends run into the banks (up to 2 cells across, along the step line)
-        for (const s of [-1, 1]) for (let k = 1; k <= 2; k++) {
-          const bx = x + s * k * dy, by = y + s * k * dx; // perpendicular to (dx, dy)
-          if (inBounds(bx, by) && !riverCell[bx * N + by] && !pathCell[bx * N + by] && !deck[bx * N + by]) { weirCell[bx * N + by] = 1; weirs.push({ x: bx, y: by, bank: true }); }
-        }
-      }
-    }
-  for (let c = 0; c < N * N; c++) if (weirCell[c]) { noSmooth[c] = 1; keepOut[c] = 1; }
-  console.error(`river weirs: ${weirs.filter(w => !w.bank).length} step edges, ${weirs.filter(w => w.bank).length} bank ends`);
-}
+const weirs = [];                          // rock weirs: filled in just before the voxels
+const weirCell = new Uint8Array(N * N);
+
 
 // ------------------------------------------------------------- settlements --
 // Abandoned settlements (2026-10-06, owner: "abandoned settlements", ruins.mjs):
@@ -1881,6 +1864,52 @@ let townTrial = null;
 }
 riverDiag('before cap');
 riverValleyCap();
+// levees (2026-10-13, "the water sticks up out of the ground"): after every ground edit
+// (the valley cap last), a dry cell lower than the water beside it is raised to the water
+// line, and a river cell's bed stays under its water; then the rock weirs
+{
+  let raised = 0;
+  for (let x = 0; x < N; x++)
+    for (let y = 0; y < N; y++) {
+      const c = x * N + y;
+      if (!riverCell[c] || riverLevel[c] <= SEA) continue;
+      const lv = riverLevel[c];
+      if (H[c] >= lv) H[c] = lv - 1;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const n = (x + dx) * N + y + dy;
+        if (!inBounds(x + dx, y + dy) || riverCell[n] || townKind[n] || deck[n]) continue;
+        if (H[n] < lv) { H[n] = lv; raised++; }
+      }
+    }
+  console.error(`river levees: ${raised} bank cells raised to the water line`);
+}
+// ------------------------------------------------------------ rock weirs --
+// (owner 2026-10-13: "use [rocks] as a natural wall to lower and raise water levels that
+// stray too much") wherever the river's level steps down from one cell to the next, a
+// ridge of boulders (rocks.mjs) runs across the channel on that line, from the low bed up
+// past the upper water, and into both banks, so a step reads as a rock weir, not a cut.
+// Not next to roads, bridges or in town. Cells under it get no smoothing, plants or trees.
+if (tune('river.weirs', 1, 'boulder weirs where the river level steps down (0 = off)')) {
+  const nearRoad = (x, y) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (inBounds(x + a, y + b) && (pathCell[(x + a) * N + y + b] || deck[(x + a) * N + y + b])) return true; return false; };
+  for (let x = 0; x < N; x++)
+    for (let y = 0; y < N; y++) {
+      const c = x * N + y;
+      if (!riverCell[c] || townKind[c] || nearRoad(x, y)) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const n = (x + dx) * N + y + dy;
+        if (!inBounds(x + dx, y + dy) || !riverCell[n] || riverLevel[n] >= riverLevel[c] || townKind[n]) continue;
+        weirs.push({ x, y, dx, dy });
+        weirCell[c] = weirCell[n] = 1;
+        // the line's ends run into the banks (up to 2 cells across, along the step line)
+        for (const s of [-1, 1]) for (let k = 1; k <= 2; k++) {
+          const bx = x + s * k * dy, by = y + s * k * dx; // perpendicular to (dx, dy)
+          if (inBounds(bx, by) && !riverCell[bx * N + by] && !pathCell[bx * N + by] && !deck[bx * N + by]) { weirCell[bx * N + by] = 1; weirs.push({ x: bx, y: by, bank: true }); }
+        }
+      }
+    }
+  for (let c = 0; c < N * N; c++) if (weirCell[c]) { noSmooth[c] = 1; keepOut[c] = 1; }
+  console.error(`river weirs: ${weirs.filter(w => !w.bank).length} step edges, ${weirs.filter(w => w.bank).length} bank ends`);
+}
 riverDiag('after cap');
 
 // ----------------------------------------------------------------- voxels --
@@ -2388,7 +2417,7 @@ for (let x = 0; x < N; x++)
     // under the sea too, down to SEABED_SMOOTH (owner 2026-10-13: the shallows showed raw
     // voxel steps through the water), and the river's mouth where it has no water plates
     if (h + 1 <= SEA - SEABED_SMOOTH || V[vi(x, y, h)] === 0) continue;
-    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || weirCell[x * N + y] || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA))) continue;
+    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || weirCell[x * N + y] || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA && !deck[x * N + y] && !pathCell[x * N + y]))) continue;
     // the foot of a terrace retaining wall: its brick veneer stands here (terraceDressing)
     if ([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && terraceCell[(x + dx) * N + y + dy] && H[(x + dx) * N + y + dy] - h >= 2)) continue;
     const hN = (dx, dy) => (inMap(x + dx, y + dy) ? H[(x + dx) * N + y + dy] : h);
