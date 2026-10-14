@@ -82,7 +82,13 @@ http.createServer(async (req, res) => {
       const half = [Math.min(LIMIT.hxy, Math.abs(+q.hx || 200)), Math.min(LIMIT.hxy, Math.abs(+q.hy || 200)), Math.min(LIMIT.hz, Math.abs(+q.hz || 200))].map(Math.round);
       const c = [+q.cx, +q.cy, +q.cz].map(Math.round);
       if (!c.every(Number.isFinite)) return send(res, 400, { error: 'bad centre' });
-      const data = JSON.parse(await ssh(`${NODE} ${TOOLS}/liveedit/fetch.mjs ${c.join(' ')} ${half.join(' ')}`));
+      // SaveRegion keeps only bricks ENTIRELY inside its box (2026-10-13: roofs and walls that
+      // crossed the edge were missing): save a box MARGIN bigger, keep every brick that touches
+      // the asked box, so pieces poking out of it come back whole
+      const MARGIN = [600, 600, 400];
+      const data = JSON.parse(await ssh(`${NODE} ${TOOLS}/liveedit/fetch.mjs ${c.join(' ')} ${half.map((h, k) => h + MARGIN[k]).join(' ')}`));
+      const lo = c.map((v, k) => v - half[k]), hi = c.map((v, k) => v + half[k]);
+      data.bricks = data.bricks.filter(b => { const [a, z] = worldBox(b, FIXED); return [0, 1, 2].every(k => a[k] < hi[k] && z[k] > lo[k]); });
       if (data.bricks.length > LIMIT.bricks) return send(res, 400, { error: `${data.bricks.length} bricks: too big for the editor, take a smaller box` });
       return send(res, 200, { ...data, box: { center: c, half } });
     }
