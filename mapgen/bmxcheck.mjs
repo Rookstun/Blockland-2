@@ -67,7 +67,8 @@ for (const f of fs.readdirSync(outDir).filter(f => /^chunk_\d+\.json$/.test(f)).
       // obstacles you ride round, not over: poles (wells, fountains, posts, lamps) and rail-thin pieces
       if (br.asset === 'PB_DefaultPole') continue;
       const [lo, hi] = worldBox(br, FIXED);
-      if (Math.min(hi[0] - lo[0], hi[1] - lo[1]) <= 10 && hi[2] - lo[2] >= 12) continue; // rails (4) and parapets (10) along the edges
+      // rails (4 thick) and parapets (10 thick, tall) along the edges; a 1-stud strip of road fill is ridden on
+      { const thin = Math.min(hi[0] - lo[0], hi[1] - lo[1]), tall = hi[2] - lo[2]; if ((thin <= 4 && tall >= 12) || (thin <= 10 && tall >= 30)) continue; }
       const [s0x, s0y] = toS(lo[0], lo[1]), [s1x, s1y] = toS(hi[0] - 0.01, hi[1] - 0.01);
       let any = false;
       for (let sx = s0x; sx <= s1x && !any; sx += PER) for (let sy = s0y; sy <= s1y && !any; sy += PER) any = sIsPath(sx, sy);
