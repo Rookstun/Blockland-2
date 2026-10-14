@@ -3477,13 +3477,16 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
         }
       }
     }
-  // outer corners of stepped edges: two strip studs touching only diagonally get the
-  // stud between them that stands on low ground, so the corner closes
+  // corners of stepped edges: two strip studs touching only diagonally get the stud between
+  // them on the HIGH side (owner 2026-10-13: the corners were inverted, poking out over the
+  // low ground): the parapet and coping turn inward there, and below the upper ground the
+  // terrace itself closes the corner
   for (const [k, S] of course) for (const key of [...S]) {
     const [a, b] = key.split(',').map(Number);
     for (const [da, db] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       if (!S.has((a + da) + ',' + (b + db)) || S.has((a + da) + ',' + b) || S.has(a + ',' + (b + db))) continue;
-      for (const [p, q] of [[a + da, b], [a, b + db]]) if (groundK(p, q) < k) { put(p, q, k); break; }
+      const [p, q] = [[a + da, b], [a, b + db]].sort((u, v) => groundK(v[0], v[1]) - groundK(u[0], u[1]))[0];
+      if (groundK(p, q) < k) put(p, q, k);
     }
   }
   // every wall stud goes down to its own ground (corner studs were put on one course)
