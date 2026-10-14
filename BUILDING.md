@@ -107,7 +107,7 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
 - Generated bricks carry components as `components: [{ type, data }]`; the
   bridge's `bricks` op writes them (brs `writeBrzLegacy` -> new format).
   `BP_ZoneProjector` also exists as a dedicated projector brick. **(measured)**
-- The sea is the environment water plane (`sea` preset), not a zone.
+- The sea is the environment water plane (`sea` preset), not a zone. The `sea` preset IS the owner's sky (blue sky/fog, clouds 0.25; restored 2026-10-14 from the pre_regen1014 world after the old 10-02 preset greyed the sky on every deploy; old one = sea.pre_1014.bp). If the owner changes the sky in-game, re-export it into sea.bp before the next deploy. **(owner)**
 
 ## 5c. Text
 - Text is `Component_TextDisplay` on a brick face (Face 4 = the brick's local
