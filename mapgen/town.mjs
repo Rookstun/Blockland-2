@@ -22,6 +22,7 @@ import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
 import { townCourses, pickRoof } from './roofs.mjs';
 import { plaque } from './ruins.mjs';
 import { NOTICES, STATUES } from './notices.mjs';
+import SODAS from './sodas.json' with { type: 'json' };
 
 // Organic layout (owner 2026-10-05: "make spawn town less square and more
 // connected by herringbone paths", RuneScape's Lumbridge map as the model):
@@ -2183,6 +2184,110 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     });
   }
 
+  // -------------------------------------------------------- soda market --
+  // (owner 2026-10-14: "make a market for shops with exotic sodas") a walled,
+  // tiled yard beside a main road: an arch with the name over the gate, an
+  // aisle from the gate with a kiosk each side per flavour (striped awning in
+  // its colours, name board, a shelf of cans), the soda_<key> stand in front of
+  // each kiosk (bridge/tools/sodashopgen.mjs, flavours in sodas.json), strings
+  // of lights over the aisle and a giant can at the far end.
+  // Local frame: a across the yard, b from the back wall (-B) to the gate (+B).
+  const SM_A = 170, SM_B = 130;
+  function placeSodaMarket(paths) {
+    for (const p of paths)
+      for (let i = 0; i + 1 < p.length; i += 5) {
+        const [x, y] = p[i], [qx, qy] = p[i + 1], d = Math.hypot(x, y);
+        if (d < 600 || d > 2000) continue;
+        const tl = Math.hypot(qx - x, qy - y) || 1;
+        for (const side of [-1, 1]) {
+          const nx = (-(qy - y) / tl) * side, ny = ((qx - x) / tl) * side;
+          // gate toward the road, snapped to an axis
+          const [fx, fy] = Math.abs(nx) >= Math.abs(ny) ? [-Math.sign(nx), 0] : [0, -Math.sign(ny)];
+          const off = PATH_W / 2 + SM_B + 30;
+          const cx = Math.round((x - fx * off) / 10) * 10, cy = Math.round((y - fy * off) / 10) * 10;
+          const [hx, hy] = fx ? [SM_B, SM_A] : [SM_A, SM_B];
+          const r = [cx - hx, cy - hy, cx + hx, cy + hy];
+          if (!rectClear(r, { margin: 30, edge: plan.edgeR, claim: true })) continue;
+          taken.push(r);
+          onSite(r, () => sodaMarket(cx, cy, fx, fy));
+          stats.sodaMarket = [cx, cy];
+          return;
+        }
+      }
+    throw new Error('town: no room for the soda market ' + JSON.stringify(why));
+  }
+  function sodaMarket(cx, cy, fx, fy) {
+    const MB = 'PB_DefaultMicroBrick', ux = -fy, uy = fx;
+    const at = (a, b) => [cx + a * ux + b * fx, cy + a * uy + b * fy];
+    const bx = (a0, b0, z0, a1, b1, z1, br) => {
+      const [p, q] = at(a0, b0), [r, t] = at(a1, b1);
+      box(Math.min(p, r), Math.min(q, t), z0, Math.max(p, r), Math.max(q, t), z1, { asset: MB, ...br });
+    };
+    const orientToward = (dx, dy) => (dy < 0 ? 16 : dx > 0 ? 17 : dy > 0 ? 18 : 19); // shop stand button direction
+    const WHITE = [244, 242, 236], STONE = [196, 188, 172];
+    const KB = [-100, -50, 0, 50, 100]; // kiosk centres along b
+    const standAt = SODAS.map((s, k) => [k < 5 ? 1 : -1, KB[k % 5]]); // [side of the aisle, b]
+    // floor: checker tiles (the stands stand on them, z 16 like the house shops)
+    for (let a = -SM_A + 10; a < SM_A; a += 20)
+      for (let b = -SM_B + 10; b < SM_B; b += 20) {
+        const [p, q] = at(a, b);
+        box(p - 10, q - 10, 0, p + 10, q + 10, 4, { asset: 'PB_DefaultTile', color: (Math.round((a + b) / 20) & 1) ? [236, 226, 204] : [70, 170, 170] });
+      }
+    // walls, gate and its arch
+    bx(-SM_A, -SM_B, 4, -SM_A + 6, SM_B - 6, 28, { color: STONE });
+    bx(SM_A - 6, -SM_B, 4, SM_A, SM_B - 6, 28, { color: STONE });
+    bx(-SM_A + 6, -SM_B, 4, SM_A - 6, -SM_B + 6, 28, { color: STONE });
+    for (const s of [-1, 1]) {
+      bx(s * 70, SM_B - 6, 4, s * SM_A, SM_B, 28, { color: STONE });
+      bx(s * 58, SM_B - 8, 4, s * 70, SM_B, 150, { color: [220, 60, 90] });
+    }
+    bx(-70, SM_B - 8, 150, 70, SM_B, 170, { color: [40, 40, 60] });
+    { const [p, q] = at(0, SM_B + 1); plaque({ put, text: 'SODA MARKET', facing: [fx, fy], x: p, y: q, z: 160, w: 66, h: 9, color: [40, 40, 60], style: { Font: 5, LineHeight: 11, Color: { R: 255, G: 220, B: 60, A: 255 }, OutlineColor: { R: 220, G: 40, B: 120, A: 255 } } }); }
+    { const [p, q] = at(0, SM_B - 9); plaque({ put, text: 'EXOTIC SODAS\nFROM EVERYWHERE', facing: [-fx, -fy], x: p, y: q, z: 160, w: 66, h: 9, color: [40, 40, 60], style: { Font: 5, LineHeight: 5, Color: { R: 120, G: 230, B: 255, A: 255 } } }); }
+    // kiosks
+    SODAS.forEach((s, k) => {
+      const [sd, b0] = standAt[k], A = (v) => sd * v; // mirror across the aisle
+      const ab = (a0, b0_, z0, a1, b1, z1, br) => bx(Math.min(A(a0), A(a1)), b0_, z0, Math.max(A(a0), A(a1)), b1, z1, br);
+      ab(150, b0 - 24, 4, 158, b0 + 24, 84, { color: s.body });                       // back wall
+      for (const e of [-1, 1]) ab(104, b0 + e * 24 - (e > 0 ? 4 : 0), 4, 108, b0 + e * 24 + (e < 0 ? 4 : 0), 84, { color: WHITE }); // front posts
+      for (let a = 100, n = 0; a < 160; a += 6, n++) ab(a, b0 - 24, 84, a + 6, b0 + 24, 88, { color: n & 1 ? WHITE : s.body }); // striped awning
+      for (const z of [22, 42]) {                                                       // shelves of cans
+        ab(126, b0 - 18, z - 2, 150, b0 + 18, z, { color: [120, 90, 60] });
+        for (let c = -14; c <= 14; c += 7) ab(140, b0 + c - 2, z, 146, b0 + c + 2, z + 10, { color: c % 2 ? s.accent : s.body });
+      }
+      const [p, q] = at(A(99), b0);
+      plaque({ put, text: s.name.replace(' ', '\n'), facing: [-sd * ux, -sd * uy], x: p, y: q, z: 96, w: 22, h: 8, color: s.body, style: { LineHeight: 3.5, Color: { R: 255, G: 255, B: 255, A: 255 }, OutlineColor: { R: 20, G: 20, B: 30, A: 255 } } });
+      const [sx, sy] = at(A(80), b0);
+      stats.townShops.push({ at: [sx, sy, 16 + (zCtx ?? 0)], tier: s.key, orient: orientToward(-sd * ux, -sd * uy), prefab: 'soda_' + s.key });
+    });
+    // lights over the aisle
+    SODAS.slice(0, 4).forEach((s, k) => {
+      const b = -75 + k * 50;
+      bx(-100, b - 1, 110, 100, b + 1, 112, { color: [40, 40, 44] });
+      for (let a = -90, n = 0; a <= 90; a += 20, n++) bx(a - 2, b - 2, 104, a + 2, b + 2, 108, GLOW(SODAS[(n + k) % SODAS.length].body, 4));
+    });
+    // the giant can (octagon, flat faces on the axes)
+    const can = (z0, z1, dIn, dOut, br) => {
+      for (let b = -dOut; b < dOut; b += 4) {
+        let run = null;
+        for (let a = -dOut; a <= dOut; a += 4) {
+          const ma = Math.abs(a + 2), mb = Math.abs(b + 2), dd = Math.max(ma, mb, (ma + mb) * Math.SQRT1_2);
+          const inside = a < dOut && dd > dIn && dd <= dOut;
+          if (inside && run === null) run = a;
+          else if (!inside && run !== null) { bx(run, -85 + b, z0, a, -85 + b + 4, z1, br); run = null; }
+        }
+      }
+    };
+    const C0 = SODAS[1];
+    can(4, 8, 0, 28, { color: [200, 200, 205] });
+    can(8, 40, 0, 32, { color: C0.body });
+    can(40, 60, 0, 32, { color: WHITE });
+    can(60, 84, 0, 32, { color: C0.body });
+    can(84, 88, 0, 28, { color: [200, 200, 205] });
+    bx(-4, -91, 88, 4, -79, 90, { color: [170, 170, 176] }); // ring pull
+    { const [p, q] = at(0, -85 + 33); plaque({ put, text: 'FIZZ', facing: [fx, fy], x: p, y: q, z: 50, w: 12, h: 8, color: WHITE, style: { Font: 5, LineHeight: 6, Color: { R: 200, G: 30, B: 20, A: 255 } } }); }
+  }
+
   // --------------------------------------------------------------- town --
   // the plaza: fountain and the spawn ring in the middle, benches, statues
   // and notice boards round it (owner 2026-10-14: "make the main fountain
@@ -2254,6 +2359,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   stallsAlong(plan.main.slice(0, 4), PLAZA_R + 60, 900, 160, 501);
   // (2026-10-12) sewer accesses on three of the roads out
   sewerAccess(plan.main.slice(0, 3));
+  // (2026-10-14) the soda market beside one of the main roads
+  placeSodaMarket(plan.paths);
   landmark(windmill, [160, 90], [1900, 1700, 1500], plan.edgeR, 502);
   // houses along every path: shops near the plaza, homes further out
   // (2026-10-10, owner: "make the houses more dense"): step 160 -> 80, margin 40 -> 30,
