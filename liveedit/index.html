@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Brick Editor</title>
+<style>
+  :root { --bg: #15171c; --panel: #1d2027; --line: #2c313b; --text: #e3e6ec; --dim: #8c94a3; --accent: #f2c14e; --bad: #ff6b6b; --ok: #6bd49a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; display: grid; grid-template-columns: 380px 1fr; height: 100vh; overflow: hidden; }
+  #side { overflow-y: auto; border-right: 1px solid var(--line); background: var(--panel); }
+  section { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  h2 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+  label { color: var(--dim); }
+  input, select, button { font: inherit; color: var(--text); background: #262a33; border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; }
+  input[type=number] { width: 70px; }
+  input[type=color] { padding: 0; width: 28px; height: 24px; vertical-align: middle; }
+  button { cursor: pointer; } button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+  .tabs button.on { border-color: var(--accent); color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 2px 4px; border-bottom: 1px solid #23272f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+  tr.grp { cursor: pointer; } tr.grp:hover { background: #262a33; } tr.grp.sel td { color: var(--accent); }
+  .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid #0006; vertical-align: middle; }
+  .num { text-align: right; color: var(--dim); }
+  #status { font-size: 12px; color: var(--dim); min-height: 1.4em; }
+  #status.err { color: var(--bad); } #status.ok { color: var(--ok); }
+  #view { position: relative; }
+  #view canvas { display: block; }
+  #hud { position: absolute; left: 10px; bottom: 8px; color: var(--dim); font-size: 12px; pointer-events: none; }
+  .pal { display: flex; gap: 3px; flex-wrap: wrap; }
+  .hist div { display: flex; justify-content: space-between; gap: 6px; padding: 2px 0; border-bottom: 1px solid #23272f; }
+  .muted { color: var(--dim); }
+  details summary { cursor: pointer; color: var(--dim); }
+</style>
+</head>
+<body>
+<div id="side">
+  <section>
+    <h2>Region</h2>
+    <div class="row"><select id="player"><option value="">player...</option></select><button id="refreshPlayers">↻</button><button id="usePlayer">centre on player</button></div>
+    <div class="row"><label>centre</label><input id="cx" type="number" value="0"><input id="cy" type="number" value="0"><input id="cz" type="number" value="700"></div>
+    <div class="row"><label>half size</label><input id="hx" type="number" value="250"><input id="hy" type="number" value="250"><input id="hz" type="number" value="250"></div>
+    <div class="row"><button class="primary" id="fetch">Fetch region</button><span class="muted">max 1000 × 1000 × 800, 60k bricks</span></div>
+    <div id="status"></div>
+  </section>
+  <section>
+    <h2>Bricks</h2>
+    <div class="row tabs"><button data-g="asset" class="on">Type</button><button data-g="color">Colour</button><button data-g="material">Material</button><button data-g="owner">Owner</button><button data-g="size">Size</button></div>
+    <div class="row"><label>height cut</label><input id="zcut" type="range" min="0" max="1000" value="1000" style="flex:1"><span id="zcutv" class="muted"></span></div>
+    <div style="max-height:260px; overflow:auto"><table id="groups"></table></div>
+    <div class="row"><button id="selAll">all</button><button id="selNone">none</button><button id="selInv">invert</button><span id="selInfo" class="muted"></span></div>
+    <div class="muted">click a row = select that group (shift adds, alt removes). In 3D: click a brick = toggle it, shift-click = its whole group.</div>
+  </section>
+  <section>
+    <h2>Change selection</h2>
+    <div class="row"><select id="act">
+      <option value="recolor">Recolour</option><option value="pattern">Pattern</option><option value="shade">Shade (vary)</option>
+      <option value="material">Material</option><option value="asset">Brick type</option><option value="delete">Delete</option></select></div>
+    <div id="opt-recolor" class="opt row"><input type="color" id="recolorC" value="#a05030"></div>
+    <div id="opt-shade" class="opt row"><label>amount</label><input id="shadeA" type="number" step="0.02" value="0.08"></div>
+    <div id="opt-pattern" class="opt">
+      <div class="row"><select id="patN"></select><label>scale</label><input id="patS" type="number" value="1" min="1"><label>axis</label><select id="patA"><option>z</option><option>x</option><option>y</option></select></div>
+      <div class="row"><label>seed</label><input id="patSeed" type="number" value="1"><label>jitter</label><input id="patJ" type="number" step="0.02" value="0"></div>
+      <div class="row"><span class="pal" id="pal"></span><button id="palAdd">+</button><button id="palSel">from selection</button></div>
+    </div>
+    <div id="opt-material" class="opt row"><select id="matN"></select><label>intensity</label><input id="matI" type="number" value="5"></div>
+    <div id="opt-asset" class="opt row"><select id="assetN"></select><span class="muted">same box only</span></div>
+    <div class="row"><button class="primary" id="preview">Apply to preview</button><button id="resetPrev">Reset preview</button></div>
+    <div id="pending" class="muted"></div>
+  </section>
+  <section>
+    <h2>Deploy</h2>
+    <div class="row"><input id="label" placeholder="what is this (for the log)" style="flex:1"></div>
+    <div class="row"><button class="primary" id="deploy">Deploy to live server</button></div>
+    <details><summary>history / undo</summary><div class="hist" id="hist"></div></details>
+  </section>
+</div>
+<div id="view"><div id="hud"></div></div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { worldBox } from '/mapgen/orient.mjs';
+import { FIXED } from '/mapgen/builder.mjs';
+import { applyAction, BOX_ASSETS, MATERIALS, PATTERN_NAMES, keyOf } from '/patterns.mjs';
+
+const $ = id => document.getElementById(id);
+const hex = c => '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+const unhex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const status = (t, cls = '') => { $('status').textContent = t; $('status').className = cls; };
+const api = async (p, body) => { const r = await fetch(p, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}); const j = await r.json(); if (!r.ok) throw new Error(j.error ?? r.status); return j; };
+
+// ------------------------------------------------------------ state --
+let orig = [], work = [], boxes = [], owners = [], region = null;
+let sel = new Set(), group = 'asset';
+const pending = new Map(); // i -> next brick | null (deleted)
+
+// ------------------------------------------------------------- 3D --
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.localClippingEnabled = true;
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x101216);
+const camera = new THREE.PerspectiveCamera(50, 1, 1, 50000); camera.up.set(0, 0, 1);
+const controls = new OrbitControls(camera, renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(0.4, -0.6, 1); scene.add(sun);
+const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 1e9);
+let mesh = null;
+const resize = () => { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+addEventListener('resize', resize); resize();
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+
+const SEL = new THREE.Color(0xf2c14e), tmpC = new THREE.Color(), M = new THREE.Matrix4();
+function buildMesh() {
+  if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+  const mat = new THREE.MeshLambertMaterial({ clippingPlanes: [clip] });
+  mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, Math.max(1, work.length));
+  boxes.forEach(([lo, hi], i) => {
+    M.makeScale(Math.max(0.6, hi[0] - lo[0] - 0.4), Math.max(0.6, hi[1] - lo[1] - 0.4), Math.max(0.6, hi[2] - lo[2] - 0.4));
+    M.setPosition((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+    mesh.setMatrixAt(i, M);
+  });
+  scene.add(mesh);
+  paint();
+}
+function paint() {
+  if (!mesh) return;
+  work.forEach((b, i) => {
+    if (!b) { tmpC.setRGB(0, 0, 0); M.makeScale(0, 0, 0); mesh.setMatrixAt(i, M); mesh.setColorAt(i, tmpC); return; }
+    tmpC.setRGB(...b.color.map(v => v / 255), THREE.SRGBColorSpace);
+    if (b.material === 'BMC_Glow') tmpC.offsetHSL(0, 0, 0.1);
+    if (sel.has(i)) tmpC.lerp(SEL, 0.55);
+    if (b.locked) tmpC.multiplyScalar(0.45);
+    mesh.setColorAt(i, tmpC);
+  });
+  mesh.instanceColor.needsUpdate = true; mesh.instanceMatrix.needsUpdate = true;
+}
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => (downAt = [e.clientX, e.clientY]));
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!mesh || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = ray.intersectObject(mesh).find(h => h.point.z <= clip.constant + 0.01 && work[h.instanceId]);
+  if (!hit) return;
+  const i = hit.instanceId, b = work[i];
+  if (e.shiftKey) { const k = groupKey(b); work.forEach((x, j) => x && groupKey(x) === k && sel.add(j)); }
+  else sel.has(i) ? sel.delete(i) : sel.add(i);
+  $('hud').textContent = describe(b);
+  refresh();
+});
+const describe = b => `${b.asset} ${b.size ? b.size.join('×') : ''} at ${b.position.join(', ')} · ${hex(b.color)} · ${b.material} · ${owners[b.owner]?.name ?? '?'}${b.locked ? ' · LOCKED (has components)' : ''}`;
+
+// --------------------------------------------------------- grouping --
+const groupKey = b => group === 'asset' ? b.asset : group === 'color' ? hex(b.color) : group === 'material' ? b.material : group === 'owner' ? String(b.owner) : (b.size ?? []).join('×');
+function renderGroups() {
+  const g = new Map();
+  work.forEach((b, i) => { if (!b) return; const k = groupKey(b); const e = g.get(k) ?? g.set(k, { n: 0, s: 0, col: b.color }).get(k); e.n++; if (sel.has(i)) e.s++; });
+  const rows = [...g].sort((a, b) => b[1].n - a[1].n).slice(0, 400);
+  $('groups').innerHTML = rows.map(([k, e]) => `<tr class="grp${e.s === e.n ? ' sel' : ''}" data-k="${encodeURIComponent(k)}"><td>${group === 'color' ? `<span class="sw" style="background:${k}"></span> ` : ''}${group === 'owner' ? (owners[+k]?.name ?? k) : k}</td><td class="num">${e.s ? e.s + ' / ' : ''}${e.n}</td></tr>`).join('');
+}
+$('groups').addEventListener('click', e => {
+  const tr = e.target.closest('tr.grp'); if (!tr) return;
+  const k = decodeURIComponent(tr.dataset.k);
+  if (!e.shiftKey && !e.altKey) sel.clear();
+  work.forEach((b, i) => { if (b && groupKey(b) === k) e.altKey ? sel.delete(i) : sel.add(i); });
+  refresh();
+});
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b)); group = b.dataset.g; renderGroups(); });
+$('selAll').onclick = () => { work.forEach((b, i) => b && sel.add(i)); refresh(); };
+$('selNone').onclick = () => { sel.clear(); refresh(); };
+$('selInv').onclick = () => { const s = new Set(); work.forEach((b, i) => b && !sel.has(i) && s.add(i)); sel = s; refresh(); };
+function refresh() {
+  paint(); renderGroups();
+  const locked = [...sel].filter(i => work[i]?.locked).length;
+  $('selInfo').textContent = `${sel.size} selected${locked ? `, ${locked} locked` : ''}`;
+  $('pending').textContent = pending.size ? `${pending.size} bricks changed in the preview (not live yet)` : 'no pending changes';
+}
+
+// height cut (look inside a house)
+let zr = [0, 1];
+$('zcut').oninput = () => { const t = $('zcut').value / 1000, z = zr[0] + (zr[1] - zr[0]) * t; clip.constant = t >= 1 ? 1e9 : z; $('zcutv').textContent = t >= 1 ? 'off' : 'z ≤ ' + Math.round(z); };
+
+// ----------------------------------------------------------- actions --
+PATTERN_NAMES.forEach(p => $('patN').add(new Option(p, p)));
+MATERIALS.forEach(m => $('matN').add(new Option(m.replace('BMC_', ''), m)));
+BOX_ASSETS.forEach(a => $('assetN').add(new Option(a.replace('PB_Default', ''), a)));
+let palette = [[150, 74, 56], [128, 64, 48], [168, 86, 64]];
+function renderPal() {
+  $('pal').innerHTML = '';
+  palette.forEach((c, i) => {
+    const inp = document.createElement('input'); inp.type = 'color'; inp.value = hex(c);
+    inp.oninput = () => (palette[i] = unhex(inp.value));
+    inp.oncontextmenu = e => { e.preventDefault(); if (palette.length > 1) { palette.splice(i, 1); renderPal(); } };
+    inp.title = 'right-click removes'; $('pal').append(inp);
+  });
+}
+renderPal();
+$('palAdd').onclick = () => { palette.push([...palette.at(-1)]); renderPal(); };
+$('palSel').onclick = () => {
+  const n = new Map(); for (const i of sel) { const k = hex(work[i].color); n.set(k, (n.get(k) ?? 0) + 1); }
+  const top = [...n].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => unhex(k));
+  if (top.length) { palette = top; renderPal(); }
+};
+const showOpt = () => document.querySelectorAll('.opt').forEach(o => (o.style.display = o.id === 'opt-' + $('act').value ? '' : 'none'));
+$('act').onchange = showOpt; showOpt();
+$('preview').onclick = () => {
+  if (!sel.size) return status('select some bricks first', 'err');
+  const kind = $('act').value;
+  const action = kind === 'recolor' ? { kind, color: unhex($('recolorC').value) }
+    : kind === 'shade' ? { kind, amount: +$('shadeA').value }
+    : kind === 'pattern' ? { kind, pattern: $('patN').value, palette, scale: +$('patS').value, axis: $('patA').value, seed: +$('patSeed').value, jitter: +$('patJ').value }
+    : kind === 'material' ? { kind, material: $('matN').value, intensity: +$('matI').value }
+    : kind === 'asset' ? { kind, asset: $('assetN').value } : { kind: 'delete' };
+  const live = [...sel].filter(i => work[i]);
+  const ch = applyAction(work, boxes, live, action);
+  for (const { i, next } of ch) { work[i] = next; if (!next) sel.delete(i); if (JSON.stringify(next) === JSON.stringify(orig[i])) pending.delete(i); else pending.set(i, next); }
+  const skipped = live.length - ch.length;
+  status(`${ch.length} bricks changed in the preview${skipped ? `, ${skipped} unchanged (locked, same, or the type does not fit)` : ''}`, 'ok');
+  refresh();
+};
+$('resetPrev').onclick = () => { work = orig.map(b => ({ ...b })); pending.clear(); refresh(); status('preview reset'); };
+
+// ------------------------------------------------------------- fetch --
+async function loadPlayers() {
+  try { const ps = await api('/api/players'); const s = $('player'); s.length = 1; for (const p of ps) s.add(new Option(`${p.name} (${p.pos.map(Math.round).join(', ')})`, JSON.stringify(p.pos))); }
+  catch (e) { status('players: ' + e.message, 'err'); }
+}
+$('refreshPlayers').onclick = loadPlayers; loadPlayers();
+$('usePlayer').onclick = () => { const v = $('player').value; if (!v) return; const p = JSON.parse(v); $('cx').value = Math.round(p[0]); $('cy').value = Math.round(p[1]); $('cz').value = Math.round(p[2]); };
+$('fetch').onclick = async () => {
+  if (pending.size && !confirm('Drop the pending preview changes?')) return;
+  const q = Object.fromEntries(['cx', 'cy', 'cz', 'hx', 'hy', 'hz'].map(k => [k, +$(k).value]));
+  status('saving the region on the server and reading it...');
+  try {
+    const d = await api('/api/fetch', q);
+    region = d.box; owners = d.owners;
+    orig = d.bricks; work = orig.map(b => ({ ...b })); boxes = orig.map(b => worldBox(b, FIXED));
+    sel.clear(); pending.clear();
+    const lo = [0, 1, 2].map(k => Math.min(...boxes.map(b => b[0][k]))), hi = [0, 1, 2].map(k => Math.max(...boxes.map(b => b[1][k])));
+    zr = [lo[2], hi[2]]; $('zcut').value = 1000; $('zcut').oninput();
+    buildMesh();
+    const c = d.box.center, r = Math.max(...d.box.half);
+    controls.target.set(...c); camera.position.set(c[0] + r * 1.4, c[1] - r * 1.6, c[2] + r * 1.2); controls.update();
+    status(`${orig.length} bricks, ${orig.filter(b => b.locked).length} locked, ${owners.length} owners${d.entities ? `, ${d.entities} chip grids (not shown)` : ''}`, 'ok');
+    refresh();
+  } catch (e) { status(e.message, 'err'); }
+};
+
+// ------------------------------------------------------------ deploy --
+async function loadHist() {
+  try {
+    const h = await api('/api/edits');
+    $('hist').innerHTML = h.map(e => `<div><span>${e.id.slice(5, 19)} · ${e.n} · ${e.label || '<span class=muted>no label</span>'}</span>${e.undone ? '<span class=muted>undone</span>' : `<button data-u="${e.id}">undo</button>`}</div>`).join('') || '<span class=muted>nothing yet</span>';
+  } catch {}
+}
+$('hist').addEventListener('click', async e => {
+  const id = e.target.dataset?.u; if (!id || !confirm('Undo this edit on the live server?')) return;
+  status('undoing...');
+  try { const r = await api('/api/undo', { id }); status(`undone: ${JSON.stringify(r.report)}`, 'ok'); loadHist(); } catch (err) { status(err.message, 'err'); }
+});
+loadHist();
+$('deploy').onclick = async () => {
+  if (!pending.size) return status('nothing to deploy', 'err');
+  const changes = [...pending].map(([i, next]) => ({ before: orig[i], after: next }));
+  if (!confirm(`Deploy ${changes.length} changed bricks to the live server?`)) return;
+  status('deploying...');
+  try {
+    const r = await api('/api/deploy', { changes, owners, box: region, label: $('label').value });
+    const issues = r.report.loads.flatMap(l => l.issues);
+    status(`deployed ${changes.length}: cleared ${r.report.clearsRun ?? r.report.cleared}, laid ${r.report.loads.map(l => l.count).join('+')}${issues.length ? ' · ' + issues[0] : ''}`, issues.length ? 'err' : 'ok');
+    for (const [i, next] of pending) orig[i] = next ? { ...next } : null;
+    pending.clear(); loadHist(); refresh();
+  } catch (e) { status(e.message, 'err'); }
+};
+</script>
+</body>
+</html>

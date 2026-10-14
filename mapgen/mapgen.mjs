@@ -3475,6 +3475,13 @@ if (!DRY) {
   for (const p of bushes) p.at = mv(p.at);
   for (const p of casinoGames) p.at = mv(p.at);
   console.error(`shifted by ${SHIFT.join(',')}: town centre now at 0,0`);
+  // live editor edits (liveedit/: owner 2026-10-13, "no world-only fixes"): every deployed,
+  // not undone change set is replayed on the output (live coordinates), matched by shape + place
+  {
+    const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'liveedit', 'edits');
+    const edits = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort().map(f => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))).filter(e => !e.undone) : [];
+    if (edits.length) { const { replayEdits } = await import('../liveedit/patterns.mjs'); console.error(`live edits replayed: ${JSON.stringify(replayEdits(bricks, edits))} from ${edits.length} sets`); }
+  }
   for (const f of fs.readdirSync(OUT)) if (/^chunk_\d+\.json$/.test(f)) fs.rmSync(path.join(OUT, f));
   // bottom-up, west to east, so the map rises out of the ground
   bricks.sort((a, b) => (a.position[2] - a.size[2]) - (b.position[2] - b.size[2]) || a.position[0] - b.position[0]);
