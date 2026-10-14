@@ -192,6 +192,9 @@ const DRYGRASS = mat([170, 160, 88]);
 const SCRUB = [mat([140, 146, 78]), mat([126, 134, 70])]; // the shrubland (2026-10-10)
 const BASALT = [mat([54, 50, 52]), mat([44, 41, 44])]; // the volcano (2026-10-10)
 const ASH = mat([92, 86, 84]);
+// the death forest (2026-10-14): blackened grass, rot, dead stone
+const DEADGRASS = [mat([44, 50, 36]), mat([52, 54, 40]), mat([38, 40, 32])];
+const ROT = mat([56, 42, 36]), DEADSOIL = mat([46, 36, 30]), DEADROCK = [mat([64, 60, 60]), mat([54, 50, 52])];
 // terrace retaining walls (2026-10-12): coursed masonry in two tones
 const WALLSTONE = [mat([138, 130, 118]), mat([124, 117, 106])];
 // sewers (2026-10-12): old red brick, a worn stone walk, a sludge channel, a tile vault
@@ -223,6 +226,12 @@ const RAISE_BLEND = tune('dungeon.raiseBlend', 30, 'cells the hill over a dungeo
 const ISLAND = {
   spine: tune('island.spine', [[-45, -45], [0, 0], [60, 80], [110, 165], [165, 205], [215, 228]], 'spine points, cells from the town centre (x K)').map(([a, b]) => [a * K, b * K]),
   half: tune('island.half', [100, 140, 135, 120, 90, 55], 'half-width at each spine point, cells (x K)').map(h => h * K),
+  // (owner 2026-10-14: "make the volcano after the fucking scary evil death forest at the end of the map after the
+  // snow biome") the island goes on past the far end: a tail curving away (offsets from the last spine point) that
+  // holds the death forest and then the volcano at its tip. progress() stays 0..1 over the old spine (1 on the tail),
+  // so everything placed by progress keeps its place; the tail only adds land past the old far end.
+  tail: tune('island.tail', [[14, -63], [16, -143], [0, -223], [-24, -278]], 'tail past the far end: points, cells from the last spine point (x K)').map(([a, b]) => [a * K, b * K]),
+  tailHalf: tune('island.tailHalf', [42, 46, 50, 44], 'tail half-widths, cells (x K)').map(h => h * K),
 };
 const spine = (() => {
   const tcx = TOWN_PIN.fx + TOWN_CELLS / 2, tcy = TOWN_PIN.fy + TOWN_CELLS / 2;
@@ -243,8 +252,28 @@ const spine = (() => {
   }
   pts.push([...P[P.length - 1], s + 1, ISLAND.half[ISLAND.half.length - 1]]);
   const sTown = pts.reduce((b, p) => (Math.hypot(p[0] - tcx, p[1] - tcy) < Math.hypot(b[0] - tcx, b[1] - tcy) ? p : b))[2];
-  return { pts, L: pts[pts.length - 1][2], sTown };
+  const L = pts[pts.length - 1][2], tail = [pts[pts.length - 1]];
+  // the tail: the same curve on from the old end (the old segments are left exactly as they were)
+  const E = P[P.length - 1], T = [E, ...ISLAND.tail.map(([a, b]) => [E[0] + a, E[1] + b])], TH = [ISLAND.half[ISLAND.half.length - 1], ...ISLAND.tailHalf];
+  let st = L;
+  for (let i = 0; i + 1 < T.length; i++) {
+    const seg = Math.hypot(T[i + 1][0] - T[i][0], T[i + 1][1] - T[i][1]), n = Math.ceil(seg / 2);
+    for (let k = i ? 0 : 1; k <= (i + 2 === T.length ? n : n - 1); k++) {
+      const f = k / n;
+      const p0 = i ? T[i - 1] : P[P.length - 2], p1 = T[i], p2 = T[i + 1], p3 = T[Math.min(T.length - 1, i + 2)];
+      const cr = j => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * f + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * f * f + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * f * f * f);
+      const x = cr(0), y = cr(1), q = tail[tail.length - 1];
+      st += Math.hypot(x - q[0], y - q[1]);
+      tail.push([x, y, st, TH[i] + (TH[i + 1] - TH[i]) * f]);
+    }
+  }
+  return { pts, L, sTown, tail, LT: st };
 })();
+// how far along the tail (0..1) a cell's nearest spine point is, -1 where the old spine is nearer, and the
+// tail's own ground there (filled in by the heightmap, merged in just before the volcano: everything placed
+// before it sees the old island exactly)
+const tailU = new Float32Array(N * N).fill(-1), Htail = new Int16Array(N * N);
+const tailOff = c => tailU[c] >= 0.15; // the tail's own stuff only: keeps the old map's site searches as they were
 // nearest spine sample to (x, y): [sample, distance]
 const nearSpine = (x, y) => {
   let best = spine.pts[0], bd = Infinity;
@@ -309,6 +338,17 @@ for (let x = 0; x < N; x++)
     let h = base + mask * Math.pow(ridged2(wx / TER.ridgeScale, wy / TER.ridgeScale), TER.ridgePow) * TER.mountainAmp;
     h = lerp(h, TER.oceanFloor, smooth(TER.oceanStart, TER.oceanEnd, r)); // ocean ring
     H[x * N + y] = Math.max(4, Math.min(NZ - 8, Math.round(h)));
+    // the tail, where its curve is nearer than the old spine: the same ground (wild, up = 1), calmer past the snow
+    let tp = null, td = sd * sd;
+    for (const q of spine.tail) { const d = (q[0] - x) ** 2 + (q[1] - y) ** 2; if (d < td) { td = d; tp = q; } }
+    if (tp) {
+      const tu = (tp[2] - spine.L) / (spine.LT - spine.L);
+      const rt = (Math.sqrt(td) / tp[3]) * TER.coastFit + fbm2(wx / TER.coastScale + 40, wy / TER.coastScale, 3) * TER.coastNoise;
+      const tmask = Math.max(mask, TER.wildMax) * (1 - 0.75 * smooth(0.12, 0.35, tu)); // rolling forest ground; the volcano rises on its own
+      let ht = base + tmask * Math.pow(ridged2(wx / TER.ridgeScale, wy / TER.ridgeScale), TER.ridgePow) * TER.mountainAmp;
+      ht = lerp(ht, TER.oceanFloor, smooth(TER.oceanStart, TER.oceanEnd, rt));
+      tailU[x * N + y] = tu; Htail[x * N + y] = Math.max(4, Math.min(NZ - 8, Math.round(ht)));
+    }
   }
 if (PREVIEW && args.includes('--preview-height')) {
   // terrain tuning: the bare heightmap, before any site is placed (a few seconds)
@@ -861,20 +901,20 @@ const riverD = new Float32Array(N * N).fill(1e9);
   };
   pass(0, N, 1); pass(N - 1, -1, -1);
 }
-const landShare = (cx, cy, r) => {
+const landShare = (cx, cy, r, Hs = H) => {
   let land = 0, n = 0;
   for (let x = cx - r; x <= cx + r; x += 4) for (let y = cy - r; y <= cy + r; y += 4) {
     if (!inBounds(x, y) || Math.hypot(x - cx, y - cy) > r) continue;
-    n++; if (H[x * N + y] > SEA + 1) land++;
+    n++; if (Hs[x * N + y] > SEA + 1) land++;
   }
   return n ? land / n : 0;
 };
-const volcano = (() => {
+const volcanoSite = onTail => {
   const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2, R = VOLC.r;
   let best = null;
   for (const [minLand, slack] of [[0.75, 1], [0.6, 0.75], [0.45, 0.5]]) {
     if (best) break;
-    if (minLand < 0.75) console.error(`volcano: no site, relaxing to land ${minLand}, gaps x${slack}`);
+    if (minLand < 0.75 && onTail) console.error(`volcano: no site, relaxing to land ${minLand}, gaps x${slack}`);
     for (let cx = R + 20; cx < N - R - 20; cx += 6)
       for (let cy = R + 20; cy < N - R - 20; cy += 6) {
         if (Math.hypot(cx - tx, cy - ty) < TOWN.cells / 2 + R + 40 * K * slack) continue;
@@ -882,15 +922,41 @@ const volcano = (() => {
         if (Math.hypot(cx - desert.x, cy - desert.y) < DESERT.r + DESERT.blend * slack + R) continue;
         if (DUNGEONS.some(d => footDist(d, cx, cy) < R + RAISE_BLEND * slack)) continue;
         if (riverD[cx * N + cy] < R * 1.15) continue;
+        if (onTail && tailU[cx * N + cy] < 0.5) continue; // (2026-10-14) at the tip of the tail, past the death forest
         const land = landShare(cx, cy, R);
         if (land < minLand) continue;
-        const score = Math.abs(progress(cx, cy) - 0.6) + (1 - land) + hash(cx, cy, 401) * 0.1;
+        const score = onTail ? -tailU[cx * N + cy] * 2 + (1 - land) * 1.5 + hash(cx, cy, 401) * 0.05 : Math.abs(progress(cx, cy) - 0.6) + (1 - land) + hash(cx, cy, 401) * 0.1;
         if (!best || score < best.score) best = { x: cx, y: cy, score };
       }
   }
   if (!best) throw new Error('no site for the volcano');
   return best;
-})();
+};
+// where the volcano stood until 2026-10-14 (the old search, on the old island): the site searches that
+// steered round it still do, so the hamlets, ruins, camps, temples and caves keep their places; its
+// ground is plain land now (trees, plants)
+const formerVolcano = volcanoSite(false), formerVCell = new Uint8Array(N * N);
+{
+  const R = VOLC.r, { x: vx, y: vy } = formerVolcano;
+  const ragged = (x, y) => 1 + 0.12 * fbm2((X0 + x * CELL) / 1800 + 77, (Y0 + y * CELL) / 1800 - 31, 3);
+  for (let x = vx - Math.ceil(R * 1.4); x <= vx + R * 1.4; x++)
+    for (let y = vy - Math.ceil(R * 1.4); y <= vy + R * 1.4; y++)
+      if (inBounds(x, y) && Math.hypot(x - vx, y - vy) * ragged(x, y) / R < 1.02 + (hash(x, y, 402) - 0.5) * 0.12) formerVCell[x * N + y] = 1;
+}
+const siteOff = c => tailOff(c) || formerVCell[c] === 1; // count-limited site searches skip these
+const Hpre = H.slice(); // the old island's ground, for the snow's site search
+// the tail's land goes in now (never lowering anything, never on the river, its banks or the dungeons' ground)
+{
+  let n = 0;
+  for (let c = 0; c < N * N; c++) {
+    if (tailU[c] < 0 || Htail[c] <= H[c] || riverCell[c] || riverBankL[c] > -999 || keepOut[c]) continue;
+    const x = (c / N) | 0, y = c % N;
+    if (DUNGEONS.some(d => footDist(d, x, y) <= RAISE_BLEND) || townDist(x, y) <= TOWN.blend + 24 || swampCell[c]) continue;
+    H[c] = Htail[c]; n++;
+  }
+  console.error(`tail: ${spine.tail.length} spine points, ${Math.round(spine.LT - spine.L)} cells long, ${n} cells raised`);
+}
+const volcano = volcanoSite(true);
 {
   const R = VOLC.r, rc = R * VOLC.crater, { x: vx, y: vy } = volcano;
   let sum = 0, n = 0;
@@ -918,9 +984,9 @@ const volcano = (() => {
       if (t < 1.02 + (hash(x, y, 402) - 0.5) * 0.12) { volcanoCell[c] = 1; keepOut[c] = 1; }
       if (rho < rc * 0.55) { volcanoCell[c] = 3; H[c] = lake; }
     }
-  // the spiral road: from the foot (facing the town) round and up to the rim
-  const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2;
-  const a0 = Math.atan2(ty - vy, tx - vx), dir = hash(vx, vy, 403) < 0.5 ? 1 : -1;
+  // the spiral road: from the foot (facing back up the tail, where the road comes from) round and up to the rim
+  const back = spine.tail.find(p => p[2] >= spine.L + Math.max(0, tailU[vx * N + vy] - 0.35) * (spine.LT - spine.L));
+  const a0 = Math.atan2(back[1] - vy, back[0] - vx), dir = hash(vx, vy, 403) < 0.5 ? 1 : -1;
   const rAt = h => R * (1 - Math.pow(Math.max(0, Math.min(1, (h - foot) / (peak - foot))), 1 / VOLC.pow));
   const pts = []; // [x, y, h] cells
   // a straight lead from outside the cone in to the foot of the spiral
@@ -995,9 +1061,10 @@ const snowSite = (() => {
         if (Math.hypot(cx - tx, cy - ty) < TOWN.cells / 2 + TOWN.blend + R + 20 * K * slack) { why.town++; continue; }
         if (swampRho(cx, cy) < SWAMP.r + SWAMP.blend + R + 20 * K * slack) { why.swamp++; continue; }
         if (Math.hypot(cx - desert.x, cy - desert.y) < DESERT.r + R + DESERT.blend * slack) { why.desert++; continue; }
-        if (Math.hypot(cx - volcano.x, cy - volcano.y) < VOLC.r * 1.3 + R + SNOWB.blend * 0.5 * slack) { why.volcano++; continue; }
+        if (Math.hypot(cx - formerVolcano.x, cy - formerVolcano.y) < VOLC.r * 1.3 + R + SNOWB.blend * 0.5 * slack) { why.volcano++; continue; }
         if (riverD[cx * N + cy] < R * 0.4 * slack) { why.river++; continue; }
-        const land = landShare(cx, cy, R);
+        if (tailU[cx * N + cy] > 0.1) { why.volcano++; continue; } // the tail is the death forest's
+        const land = landShare(cx, cy, R, Hpre);
         if (land < minLand) { why.land++; continue; }
         const score = -progress(cx, cy) + (1 - land) * 1.5 + hash(cx, cy, 411) * 0.1;
         if (!best || score < best.score) best = { x: cx, y: cy, score };
@@ -1037,6 +1104,27 @@ const nordicCalm = (x, y) => (nordicSpot ? smooth(NORDIC_R + 4, NORDIC_R + 34, M
       if (H[c] > top) top = H[c];
     }
   console.error(`snow: cells ${snowSite.x},${snowSite.y}, r ${SNOWB.r}, highest peak ${top}`);
+}
+
+// ----------------------------------------------------------- death forest --
+// (owner 2026-10-14: "the fucking scary evil death forest at the end of the map after the snow biome", the
+// volcano after it) The tail past the snow down to the volcano's foot: black rotten ground, dead black trees
+// packed close (tree loop), graves, skulls on pikes, ghost lanterns, red eyes in the dark and the hardest
+// enemies outside the Deep (plants section). deathW 0..1 by cell.
+const deathW = new Float32Array(N * N);
+const deathForest = { cells: 0, x: 0, y: 0 };
+{
+  for (let c = 0; c < N * N; c++) {
+    if (tailU[c] < 0 || H[c] <= SEA) continue;
+    const x = (c / N) | 0, y = c % N, wx = X0 + x * CELL, wy = Y0 + y * CELL;
+    const vd = Math.hypot(x - volcano.x, y - volcano.y) * (1 + 0.15 * fbm2(wx / 1600 - 21, wy / 1600 + 44, 3));
+    const w = smooth(0.06, 0.18, tailU[c] + fbm2(wx / 1200 + 5, wy / 1200 - 9, 2) * 0.05) * (1 - smooth(0.05, 0.35, snowW(x, y))) * smooth(VOLC.r * 1.0, VOLC.r * 1.35, vd);
+    if (w <= 0) continue;
+    deathW[c] = w;
+    if (w > 0.5) { deathForest.cells++; deathForest.x += x; deathForest.y += y; }
+  }
+  if (deathForest.cells) { deathForest.x = Math.round(deathForest.x / deathForest.cells); deathForest.y = Math.round(deathForest.y / deathForest.cells); }
+  console.error(`death forest: ${deathForest.cells} cells, centre ${deathForest.x},${deathForest.y}`);
 }
 
 // --------------------------------------------------------- river valley cap --
@@ -1168,7 +1256,7 @@ const shrubSite = (() => {
       if (Math.hypot(cx - tx, cy - ty) < TOWN.cells / 2 + TOWN.blend + R + 10 * K) continue;
       if (swampRho(cx, cy) < SWAMP.r + SWAMP.blend + R) continue;
       if (Math.hypot(cx - desert.x, cy - desert.y) < DESERT.r + DESERT.blend + R) continue;
-      if (Math.hypot(cx - volcano.x, cy - volcano.y) < VOLC.r * 1.3 + R + 10) continue;
+      if (Math.hypot(cx - formerVolcano.x, cy - formerVolcano.y) < VOLC.r * 1.3 + R + 10 || tailOff(cx * N + cy)) continue;
       if (Math.hypot(cx - snowSite.x, cy - snowSite.y) < SNOWB.r + SNOWB.blend + R) continue;
       const land = landShare(cx, cy, R);
       if (land < 0.6) continue;
@@ -1201,7 +1289,7 @@ const villages = [];
       if (DUNGEONS.some(d => footDist(d, cx, cy) < R + 6)) { vwhy.dungeon++; continue; }
       if (swampRho(cx, cy) < SWAMP.r + SWAMP.blend + R + 4) { vwhy.swamp++; continue; } // the marsh's own (oval, ragged) shape
       if (riverNear(cx, cy, R + 4)) { vwhy.wet++; continue; }
-      if (Math.hypot(cx - volcano.x, cy - volcano.y) < VOLC.r * 1.3 + R + 4) { vwhy.dungeon++; continue; } // the volcano
+      if (Math.hypot(cx - formerVolcano.x, cy - formerVolcano.y) < VOLC.r * 1.3 + R + 4 || tailU[cx * N + cy] >= 0) { vwhy.dungeon++; continue; } // where the volcano stood; the tail (death forest, volcano)
       let lo = Infinity, hi = -Infinity, sum = 0, n = 0;
       for (let x = cx - VILLAGE.r; x <= cx + VILLAGE.r; x += 2)
         for (let y = cy - VILLAGE.r; y <= cy + VILLAGE.r; y += 2) {
@@ -1397,7 +1485,7 @@ for (let k = 0; k < OUTPOSTS; k++) {
     for (let y = Math.round(ay) - 24; y <= Math.round(ay) + 24; y++) {
       if (!inBounds(x - 3, y - 3) || !inBounds(x + 3, y + 3)) continue;
       const h = H[x * N + y];
-      if (h <= SEA + 2 || swampCell[x * N + y] || keepOut[x * N + y] || townDist(x, y) <= TOWN.blend + 2 || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend ||
+      if (h <= SEA + 2 || swampCell[x * N + y] || keepOut[x * N + y] || siteOff(x * N + y) || townDist(x, y) <= TOWN.blend + 2 || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend ||
           DUNGEONS.some(d => footDist(d, x, y) <= PLAZA_RING + BLEND) || hengeDistPre(x, y) <= HENGE.blend + 3) continue;
       // no neighbour higher (so no smoothing piece lands in this cell) and gentle round it
       let flat = true;
@@ -1621,13 +1709,20 @@ const tunnelLights = [];
     road(from.at[0], from.at[1], tip[0], tip[1], stop);
     ends.push({ at: [v.x + spoke.end[0] / CELL * 1.15, v.y + spoke.end[1] / CELL * 1.15] });
   }
-  // the volcano's spiral road: its lead joins the nearest town exit or hamlet end
+  // the volcano's spiral road: its lead joins the nearest road (2026-10-14: the volcano is at the tail's tip,
+  // so this is the long road down through the death forest; a town exit or hamlet end could be a hamlet away)
   {
     const [lx, ly] = volcano.lead;
-    const from = ends.reduce((p, q) => (Math.hypot(q.at[0] - lx, q.at[1] - ly) < Math.hypot(p.at[0] - lx, p.at[1] - ly) ? q : p));
     const stop = (x, y) => volcanoCell[x * N + y] !== 0 || swampCell[x * N + y] === 1 || villageDist(x, y) <= VILLAGE.r - 1.5 || DUNGEONS.some(d => footDist(d, x, y) <= 0);
-    if (from.gate) leadOut(from.gate, stop);
-    road(from.at[0], from.at[1], lx, ly, stop);
+    let from = null, fd = Infinity;
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+      const c = x * N + y;
+      if (!pathCell[c] || riverCell[c] || trenchCell[c] || townDist(x, y) <= 0 || stop(x, y) || villageDist(x, y) <= VILLAGE.r + 2) continue;
+      const d = Math.hypot(x - lx, y - ly);
+      if (d < fd) { fd = d; from = [x, y]; }
+    }
+    road(from[0], from[1], lx, ly, stop);
+    console.error(`volcano road: from ${from} (${Math.round(fd)} cells) to the lead ${lx},${ly}`);
   }
 }
 
@@ -1720,7 +1815,7 @@ const ruins = [];
       let lo = Infinity, hi = -Infinity, sum = 0, n = 0, bad = false;
       for (let x = cx - Rr; x <= cx + Rr && !bad; x += 2) for (let y = cy - Rr; y <= cy + Rr; y += 2) {
         const c = x * N + y, h = H[c];
-        if (h <= SEA + 2 || keepOut[c] || reserved[c] || trenchCell[c]) { bad = true; break; }
+        if (h <= SEA + 2 || keepOut[c] || reserved[c] || trenchCell[c] || siteOff(c)) { bad = true; break; }
         lo = Math.min(lo, h); hi = Math.max(hi, h); sum += h; n++;
       }
       if (bad || hi - lo > 14 || hi > 120) continue;
@@ -1761,7 +1856,7 @@ const camps = [];
       let lo = Infinity, hi = -Infinity, sum = 0, n = 0, bad = false;
       for (let x = cx - Rr; x <= cx + Rr && !bad; x++) for (let y = cy - Rr; y <= cy + Rr; y++) {
         const c = x * N + y, h = H[c];
-        if (h <= SEA + 2 || keepOut[c] || reserved[c] || trenchCell[c] || pathCell[c]) { bad = true; break; }
+        if (h <= SEA + 2 || keepOut[c] || reserved[c] || trenchCell[c] || pathCell[c] || siteOff(c)) { bad = true; break; }
         lo = Math.min(lo, h); hi = Math.max(hi, h); sum += h; n++;
       }
       if (bad || hi - lo > 9) continue;
@@ -1803,7 +1898,7 @@ const holy = [];
         let lo = Infinity, hi = -Infinity, sum = 0, n = 0, bad = false;
         for (let x = cx - Rr; x <= cx + Rr && !bad; x++) for (let y = cy - Rr; y <= cy + Rr; y++) {
           const c = x * N + y, h = H[c];
-          if (h <= SEA + 2 || keepOut[c] || reserved[c] || trenchCell[c] || pathCell[c]) { bad = true; break; }
+          if (h <= SEA + 2 || keepOut[c] || reserved[c] || trenchCell[c] || pathCell[c] || siteOff(c)) { bad = true; break; }
           lo = Math.min(lo, h); hi = Math.max(hi, h); sum += h; n++;
         }
         if (bad || hi - lo > rough) continue;
@@ -1950,6 +2045,8 @@ for (let x = 0; x < N; x++)
     else if ((dw = desertW(x, y)) > 0.55 || (dw > 0.3 && hash(x, y, 77) < (dw - 0.3) / 0.25))
       [top, sub] = slope >= 4 || h > 96 ? [MESA[shade & 1], MESA[shade & 1]] : [DUNE[shade & 1], DUNE[0]];
     else if (dw > 0.12 && hash(x, y, 78) < (dw - 0.12) / 0.2 && slope < 4 && h <= 96) [top, sub] = [DRYGRASS, DIRT];
+    else if (deathW[x * N + y] > 0.5 || (deathW[x * N + y] > 0.15 && hash(x, y, 461) < (deathW[x * N + y] - 0.15) / 0.35))
+      [top, sub] = slope >= 5 ? [DEADROCK[shade & 1], DEADROCK[1]] : fbm2(wx / 380 + 61, wy / 380 - 7, 2) > 0.22 ? [ROT, DEADSOIL] : [DEADGRASS[shade], DEADSOIL];
     else if ((sw = Math.max(snowW(x, y), nordicSnowW(x, y))) > 0.55 || (sw > 0.25 && hash(x, y, 412) < (sw - 0.25) / 0.3)) [top, sub] = slope >= 7 && h > SEA + 6 ? [ROCK[shade & 1], ROCK[shade & 1]] : [SNOW, ROCK[0]];
     else if (h > 118 + noise2(wx / 400, wy / 400) * 8) [top, sub] = [SNOW, ROCK[0]];
     else if ((shw = shrubW(x, y)) > 0.5 || (shw > 0.15 && hash(x, y, 432) < (shw - 0.15) / 0.35)) [top, sub] = slope >= 4 ? [ROCK[shade & 1], ROCK[shade & 1]] : [SCRUB[shade & 1], DIRT];
@@ -2110,7 +2207,7 @@ let carved = 0;
     for (let y = 4; y < N - 4; y++) {
       const h = H[x * N + y];
       if (h <= SEA + 1 || !GRASS.includes(surfaceMat[x * N + y]) && !ROCK.includes(surfaceMat[x * N + y])) continue;
-      if (DUNGEONS.some(d => footDist(d, x, y) <= PLAZA_RING + BLEND) || keepOut[x * N + y] || townDist(x, y) <= TOWN.blend || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend || hengeDist(x, y) <= HENGE.blend + 12 || reserved[x * N + y]) continue;
+      if (DUNGEONS.some(d => footDist(d, x, y) <= PLAZA_RING + BLEND) || keepOut[x * N + y] || townDist(x, y) <= TOWN.blend || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend || hengeDist(x, y) <= HENGE.blend + 12 || reserved[x * N + y] || siteOff(x * N + y)) continue;
       for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
         if (hAt(x - dx, y - dy) > h + 1) continue; // open ground in front of the door
         sites.push({ x, y, dx, dy, h, r: hash(x, y, 77) });
@@ -2754,7 +2851,7 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
 
   // details: single flat cells off the paths; logs and carts take two in a row
   const COUNT = Math.round(tune('details.count', 250, 'random details: logs, cairns, carts... (x K)') * K);
-  const okCell = c => !(pathCell[c] || keepOut[c] || reserved[c] || rampCol[c] || capCol[c] || townNear[c] || swampCell[c]);
+  const okCell = c => !(pathCell[c] || keepOut[c] || reserved[c] || rampCol[c] || capCol[c] || townNear[c] || swampCell[c] || siteOff(c));
   for (let n = 0, tries = 0; n < COUNT && tries < COUNT * 200; tries++) {
     const x = 6 + Math.floor(hash(n, tries, 601) * (N - 12)), y = 6 + Math.floor(hash(n, tries, 602) * (N - 12)), i = x * N + y, h = H[i];
     if (h <= SEA + 1 || !okCell(i) || townDist(x, y) <= TOWN.blend || villageDist(x, y) <= VILLAGE.r + 2 || hengeDist(x, y) <= 3) continue;
@@ -2788,11 +2885,12 @@ for (let bx = 0; bx < N; bx += 4)
     if (!inMap(x, y)) continue;
     const s = surfaceMat[x * N + y];
     const snowy = s === SNOW && Math.max(snowW(x, y), nordicSnowW(x, y)) > 0.3 && H[x * N + y] < 140; // the snow biome's pines (2026-10-10)
-    if (!GRASS.includes(s) && !(ROCK.includes(s) && H[x * N + y] < 100) && !snowy) continue;
+    const dead = deathW[x * N + y] > 0.3 && (DEADGRASS.includes(s) || s === ROT); // the death forest: dead black trees, packed close
+    if (!GRASS.includes(s) && !(ROCK.includes(s) && H[x * N + y] < 100) && !snowy && !dead) continue;
     const h = H[x * N + y];
     if (V[vi(x, y, h)] === 0) continue; // a cave mouth ate the ground
     const forest = fbm2((X0 + x * CELL) / 1500, (Y0 + y * CELL) / 1500, 2);
-    if (hash(bx, by, 3) > 0.25 + forest * 0.9) continue;
+    if (hash(bx, by, 3) > (dead ? 0.6 : 0.25 + forest * 0.9)) continue;
     const trunk = 6 + Math.floor(hash(x, y, 4) * 6); // bricks
     // keep canopies (from about the trunk top, 1.5 cells across) out of hillsides
     let crowded = false;
@@ -2813,8 +2911,9 @@ for (let bx = 0; bx < N; bx += 4)
     let wet = false;
     for (let dx = -4; dx <= 4 && !wet; dx++) for (let dy = -4; dy <= 4; dy++) if (inMap(x + dx, y + dy) && riverCell[(x + dx) * N + y + dy]) { wet = true; break; }
     const roll = hash(x, y, 5);
-    const kind = h > 60 || snowy ? 'pine' : wet && roll < 0.6 ? 'willow' : roll < 0.4 ? 'oak' : roll < 0.6 ? 'birch' : roll < 0.8 ? 'autumn' : roll < 0.9 ? 'cherry' : 'pine';
-    const tv = treeVoxels(kind, 1 + Math.floor(hash(x, y, 6) * 1e6), 0.7 + hash(x, y, 7) * 0.3);
+    const kind = dead ? 'dead' : h > 60 || snowy ? 'pine' : wet && roll < 0.6 ? 'willow' : roll < 0.4 ? 'oak' : roll < 0.6 ? 'birch' : roll < 0.8 ? 'autumn' : roll < 0.9 ? 'cherry' : 'pine';
+    const tv = treeVoxels(kind, 1 + Math.floor(hash(x, y, 6) * 1e6), dead ? 0.75 + hash(x, y, 7) * 0.35 : 0.7 + hash(x, y, 7) * 0.3);
+    if (dead) tv.colors = tv.colors.map((c, k) => c.map((v, a) => Math.round(v * 0.38 + (a === 0 && k === 1 ? 10 : 0)))); // charred black bark
     // origin on the 8-unit grid so every tree's leaves share one lattice
     const ox = Math.round(wx / 8) * 8, oy = Math.round(wy / 8) * 8, oz = Math.floor(wz / 8) * 8;
     const ci = tv.colors.map(c => { const k = c.join(); let i = forestColors.findIndex(f => f.join() === k); if (i < 0) i = forestColors.push(c) - 1; return i; });
@@ -3048,7 +3147,7 @@ for (const d of DUNGEONS) {
   const cand = [];
   for (let x = 3; x < N - 3; x++) for (let y = 3; y < N - 3; y++) {
     const c = x * N + y, h = H[c];
-    if (near[c] < 2 || near[c] > 6 || h <= SEA + 2 || keepOut[c] || reserved[c] || townNear[c] || swampCell[c] || volcanoCell[c] || trenchCell[c] || riverCell[c]) continue;
+    if (near[c] < 2 || near[c] > 6 || h <= SEA + 2 || keepOut[c] || reserved[c] || townNear[c] || swampCell[c] || volcanoCell[c] || formerVCell[c] || trenchCell[c] || riverCell[c]) continue;
     if (villageDist(x, y) <= VILLAGE.r + 4 || townDist(x, y) <= TOWN.blend || hengeDist(x, y) <= 4 || DUNGEONS.some(d => footDist(d, x, y) <= 3)) continue;
     let flat = true;
     // the middle 3 x 3 level; the shrine's outer ring (10 units into the next cells) is left to the brick check
@@ -3089,6 +3188,7 @@ for (const d of DUNGEONS) {
   }
   for (const d of DUNGEONS) if (d.mouth) dest.push({ c: d.mouth, text: d.name + NL + 'Dungeon', kind: 'dungeon' });
   dest.push({ c: [volcano.x, volcano.y], text: 'Volcano' + NL + 'Lava', kind: 'hazard' });
+  if (deathForest.cells) dest.push({ c: [deathForest.x, deathForest.y], text: 'Death Forest' + NL + 'Turn back', kind: 'hazard' });
   dest.push({ c: [swamp.x, swamp.y], text: 'The Swamp' + NL + 'Zombies', kind: 'hazard' });
   dest.push({ c: [henge.x0 + (henge.n >> 1), henge.y0 + (henge.n >> 1)], text: 'Wizard Henge' + NL + 'Evil wizards', kind: 'magic' });
   if (casinoGames.length) dest.push({ c: [(casinoGames[0].at[0] - X0) / CELL, (casinoGames[0].at[1] - Y0) / CELL], text: 'Casino' + NL + 'Slots & dice', kind: 'trade' });
@@ -3098,7 +3198,7 @@ for (const d of DUNGEONS) {
   const cand = [];
   for (let x = 3; x < N - 3; x++) for (let y = 3; y < N - 3; y++) {
     const c = x * N + y;
-    if (near[c] !== 2 || H[c] <= SEA + 2 || keepOut[c] || reserved[c] || blocked[c] || townNear[c] || riverCell[c] || swampCell[c] || volcanoCell[c] || trenchCell[c] || rampCol[c] || capCol[c]) continue;
+    if (near[c] !== 2 || H[c] <= SEA + 2 || keepOut[c] || reserved[c] || blocked[c] || townNear[c] || riverCell[c] || swampCell[c] || volcanoCell[c] || siteOff(c) || trenchCell[c] || rampCol[c] || capCol[c]) continue;
     if (villageDist(x, y) <= VILLAGE.r + 3 || townDist(x, y) <= TOWN.blend || hengeDist(x, y) <= 3 || DUNGEONS.some(d => footDist(d, x, y) <= 3)) continue;
     cand.push([hash(x, y, 909), x, y]);
   }
@@ -3163,6 +3263,87 @@ for (let bx = swamp.x - SWAMP.r; bx <= swamp.x + SWAMP.r; bx += 5)
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) canopy[(x + dx) * N + y + dy] = 1;
     deadTrees++;
   }
+
+// the death forest's dressing (2026-10-14): graves in little yards, skulls on pikes, ghost lanterns, red
+// eyes hanging in the dark, and its enemies (the hardest skeletons, bloated zombies) on clear flat ground
+const deathProps = { graves: 0, pikes: 0, lanterns: 0, eyes: 0, spawners: 0 };
+{
+  const BONE = [226, 218, 196], GSTONE = [[112, 110, 108], [92, 92, 94], [128, 124, 118]], WOOD = [52, 40, 32];
+  const EYE = { color: [255, 24, 16], material: 'BMC_Glow', material_intensity: 6 }, GHOST = { color: [120, 255, 150], material: 'BMC_Glow', material_intensity: 5 };
+  const mb = (x, y, z, sx, sy, sz, color, extra = {}) => bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x, y, z], size: [sx, sy, sz], color, ...extra });
+  // a flat free cell: level with its 8 neighbours, nothing on it, nothing in the air above for `up` bricks
+  const flat = (x, y, up, open = true) => {
+    const i = x * N + y, h = H[i];
+    if (!inMap(x, y) || deathW[i] < 0.4 || pathCell[i] || keepOut[i] || volcanoCell[i] || V[vi(x, y, h)] === 0) return false;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      const j = (x + dx) * N + y + dy;
+      if (!inMap(x + dx, y + dy) || H[j] !== h || rampCol[j] || capCol[j] || pathCell[j] || (dx === 0 && dy === 0 && blocked[j]) || (open && canopy[j])) return false;
+    }
+    for (let z = h + 1; z <= Math.min(NZ - 1, h + up); z++) if (V[vi(x, y, z)]) return false;
+    return true;
+  };
+  // enemies first, each on its own clear 3 x 3
+  const spots = [];
+  for (let x = 2; x < N - 2; x++) for (let y = 2; y < N - 2; y++) if (deathW[x * N + y] > 0.6) spots.push([hash(x, y, 471), x, y]);
+  spots.sort((a, b) => a[0] - b[0]);
+  const WANT = tune('death.spawners', 10, 'death forest enemy spawners'), got = [];
+  for (const [, x, y] of spots) {
+    if (got.length >= WANT) break;
+    if (got.some(q => Math.hypot(q[0] - x, q[1] - y) < 26) || !flat(x, y, 4, false)) continue;
+    let clear = true;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if (blocked[(x + dx) * N + y + dy] || canopyLow[(x + dx) * N + y + dy]) clear = false;
+    if (!clear) continue;
+    got.push([x, y]);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) blocked[(x + dx) * N + y + dy] = 1;
+    const [wx, wy] = at(x, y, 0), z = (H[x * N + y] + 1) * VZ + 2;
+    spawners.push(hash(x, y, 472) < 0.6 ? { at: [wx, wy, z], tier: 7, dungeon: 'Death Forest', level: 0 } : { at: [wx, wy, z], prefab: 'swamp_zombie_2', dungeon: 'Death Forest', level: 0 });
+    deathProps.spawners++;
+  }
+  for (let x = 2; x < N - 2; x++)
+    for (let y = 2; y < N - 2; y++) {
+      const i = x * N + y;
+      if (deathW[i] < 0.4) continue;
+      const r = hash(x, y, 481), [wx, wy, wz] = at(x, y, H[i] + 1);
+      if (r < 0.012 && flat(x, y, 3)) {
+        // a grave yard: headstones and crosses in rows over sunken dirt, on whatever free cells round here
+        const along = hash(x, y, 482) < 0.5, n = 3 + Math.floor(hash(x, y, 483) * 5);
+        for (let k = 0; k < n; k++) {
+          const gx = x + (along ? (k % 3) - 1 : Math.floor(k / 3) * 2 - 1), gy = y + (along ? Math.floor(k / 3) * 2 - 1 : (k % 3) - 1);
+          if (!inMap(gx, gy) || blocked[gx * N + gy] || !flat(gx, gy, 3)) continue;
+          const [px, py, pz] = at(gx, gy, H[gx * N + gy] + 1), stone = GSTONE[Math.floor(hash(gx, gy, 484) * 3)];
+          const tilt = hash(gx, gy, 485) < 0.5 ? -2 : 2; // not quite straight
+          if (hash(gx, gy, 486) < 0.35) { // a cross
+            mb(px + tilt, py + 10, pz + 18, 2, 2, 18, stone);
+            mb(px + tilt - 6, py + 10, pz + 26, 4, 2, 2, stone); mb(px + tilt + 6, py + 10, pz + 26, 4, 2, 2, stone);
+          } else { // a headstone, its top in two steps
+            mb(px + tilt, py + 10, pz + 10, 8, 4, 10, stone);
+            mb(px + tilt, py + 10, pz + 22, 6, 4, 2, stone);
+          }
+          mb(px, py - 6, pz + 2, 8, 12, 2, [40, 32, 26]); // the dug earth in front
+          blocked[gx * N + gy] = 1; deathProps.graves++;
+        }
+      } else if (r < 0.03 && flat(x, y, 4)) {
+        // a skull on a pike, glowing eyes
+        mb(wx, wy, wz + 18, 2, 2, 18, WOOD);
+        mb(wx, wy, wz + 42, 6, 6, 6, BONE);
+        mb(wx - 4, wy + 7, wz + 44, 2, 1, 2, EYE.color, EYE); mb(wx + 4, wy + 7, wz + 44, 2, 1, 2, EYE.color, EYE);
+        mb(wx, wy + 4, wz + 34, 4, 2, 2, BONE); // the jaw
+        blocked[i] = 1; deathProps.pikes++;
+      } else if (r < 0.042 && flat(x, y, 3)) {
+        // a ghost lantern on a crooked post
+        mb(wx, wy, wz + 14, 2, 2, 14, WOOD);
+        mb(wx + 4, wy, wz + 26, 2, 2, 2, WOOD);
+        mb(wx + 8, wy, wz + 22, 2, 2, 2, GHOST.color, GHOST);
+        blocked[i] = 1; deathProps.lanterns++;
+      } else if (r < 0.07 && flat(x, y, 7)) {
+        // red eyes in the dark, a pair hanging at head height or above
+        const ez = wz + 30 + Math.floor(hash(x, y, 487) * 4) * 8, along = hash(x, y, 488) < 0.5;
+        mb(wx + (along ? 6 : 0), wy + (along ? 0 : 6), ez, 2, 2, 2, EYE.color, EYE); mb(wx - (along ? 6 : 0), wy - (along ? 0 : 6), ez, 2, 2, 2, EYE.color, EYE);
+        deathProps.eyes++;
+      }
+    }
+  console.error(`death forest: ${JSON.stringify(deathProps)}`);
+}
 
 // swamp floor and the grass everywhere else
 let turds = 0;
@@ -3688,6 +3869,7 @@ console.error(JSON.stringify({
   desert: { centre: [X0 + desert.x * CELL, Y0 + desert.y * CELL], r: DESERT.r * CELL, cacti, villages: villages.filter(v => v.desert).length },
   volcano: { centre: at(volcano.x, volcano.y, volcano.rim).map(Math.round), foot: volcano.foot, rim: volcano.rim, lake: volcano.lake, roadCells: volcano.road.length, lead: at(...volcano.lead, H[volcano.lead[0] * N + volcano.lead[1]] + 1).map(Math.round) },
   snow: { centre: at(snowSite.x, snowSite.y, 0).slice(0, 2).map(Math.round), r: SNOWB.r * CELL },
+  deathForest: { centre: at(deathForest.x, deathForest.y, 0).slice(0, 2).map(Math.round), cells: deathForest.cells, ...deathProps },
   swamp: { center: at(swamp.x, swamp.y, 0).slice(0, 2), gate: swamp.gate, zombieSpawners: swampSpawns.length, deadTrees, turds },
   villages: villages.map(v => ({ name: v.name, center: v.center, shops: (v.shops || []).map(w => w.prefab), buildings: v.buildings, rejects: v.rejects, desert: v.desert })),
   townName: TOWN_NAME,
