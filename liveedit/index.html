@@ -83,7 +83,8 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { worldBox } from '/mapgen/orient.mjs';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
+import { worldBox, ORIENT } from '/mapgen/orient.mjs';
 import { FIXED } from '/mapgen/builder.mjs';
 import { applyAction, BOX_ASSETS, MATERIALS, PATTERN_NAMES, keyOf } from '/patterns.mjs';
 
@@ -109,47 +110,96 @@ const controls = new OrbitControls(camera, renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 1.6));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(0.4, -0.6, 1); scene.add(sun);
 const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 1e9);
-let mesh = null;
 const resize = () => { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); };
 addEventListener('resize', resize); resize();
 renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
 
 const SEL = new THREE.Color(0xf2c14e), tmpC = new THREE.Color(), M = new THREE.Matrix4();
+// real shapes (BUILDING.md section 3, orient.mjs): each piece is the unit cube [-1,1]^3
+// cut by planes n.u <= d in its LOCAL frame; the instance matrix = place * orientation * size
+const SHAPES = {
+  wedge: [[[1, 1, 0], 0]],                                        // side wedge: x + y <= 0, along z
+  outer: [[[-1, -1, -1], 1]],                                     // cube, low (-,-,-) corner cut off
+  tetra: [[[1, 1, 1], -1]],                                       // apex over the -x -y corner
+  ramp: [[[1, 0, 1], 0]],                                         // rises toward -x
+  rampInv: [[[1, 0, -1], 0]],
+  rampCorner: [[[1, 0, 1], 0], [[0, 1, 1], 0]],                   // high at (-x, -y)
+  rampCornerInv: [[[1, 0, -1], 0], [[0, 1, -1], 0]],
+};
+const SHAPE_OF = a => /SideWedge|^PB_DefaultMicroWedge$|^PB_DefaultWedge$/.test(a) ? 'wedge'
+  : /MicroWedgeOuterCorner$/.test(a) ? 'outer'
+  : /MicroWedge(Triangle)?Corner$/.test(a) ? 'tetra'
+  : /RampCornerInverted$/.test(a) ? 'rampCornerInv' : /RampCorner$/.test(a) ? 'rampCorner'
+  : /RampInverted$/.test(a) ? 'rampInv' : /Ramp$/.test(a) ? 'ramp' : 'box';
+const geoCache = {};
+function shapeGeo(kind) {
+  if (geoCache[kind]) return geoCache[kind];
+  if (kind === 'box') return (geoCache[kind] = new THREE.BoxGeometry(2, 2, 2));
+  // vertices: every triple of cube faces / cut planes that meets inside all of them
+  const P = [[[1, 0, 0], 1], [[-1, 0, 0], 1], [[0, 1, 0], 1], [[0, -1, 0], 1], [[0, 0, 1], 1], [[0, 0, -1], 1], ...SHAPES[kind]];
+  const pts = [];
+  for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) for (let k = j + 1; k < P.length; k++) {
+    const m = new THREE.Matrix3().set(...P[i][0], ...P[j][0], ...P[k][0]);
+    if (Math.abs(m.determinant()) < 1e-9) continue;
+    const v = new THREE.Vector3(P[i][1], P[j][1], P[k][1]).applyMatrix3(m.invert());
+    if (P.every(([n, d]) => n[0] * v.x + n[1] * v.y + n[2] * v.z <= d + 1e-6) && !pts.some(q => q.distanceTo(v) < 1e-6)) pts.push(v);
+  }
+  return (geoCache[kind] = new ConvexGeometry(pts));
+}
+const meshes = []; // { mesh, idx: [brick index per instance] }
+function placeMatrix(b, i) {
+  if (!b.size || !b.size.some(v => v)) { // fixed-size props: their world box
+    const [lo, hi] = boxes[i];
+    return M.makeScale((hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2).setPosition((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
+  }
+  const f = ORIENT[(b.direction ?? 4) * 4 + (b.rotation ?? 0)];
+  const ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(v => f(v));      // local axis -> world
+  const s = b.size.map(v => Math.max(0.3, v - 0.15));                 // a hair smaller: edges show
+  M.set(ax[0][0] * s[0], ax[1][0] * s[1], ax[2][0] * s[2], b.position[0],
+        ax[0][1] * s[0], ax[1][1] * s[1], ax[2][1] * s[2], b.position[1],
+        ax[0][2] * s[0], ax[1][2] * s[1], ax[2][2] * s[2], b.position[2],
+        0, 0, 0, 1);
+  return M;
+}
 function buildMesh() {
-  if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
-  const mat = new THREE.MeshLambertMaterial({ clippingPlanes: [clip] });
-  mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, Math.max(1, work.length));
-  boxes.forEach(([lo, hi], i) => {
-    M.makeScale(Math.max(0.6, hi[0] - lo[0] - 0.4), Math.max(0.6, hi[1] - lo[1] - 0.4), Math.max(0.6, hi[2] - lo[2] - 0.4));
-    M.setPosition((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
-    mesh.setMatrixAt(i, M);
-  });
-  scene.add(mesh);
+  for (const m of meshes) { scene.remove(m.mesh); m.mesh.material.dispose(); }
+  meshes.length = 0;
+  const by = new Map();
+  orig.forEach((b, i) => { const k = SHAPE_OF(b.asset); (by.get(k) ?? by.set(k, []).get(k)).push(i); });
+  for (const [kind, idx] of by) {
+    const mesh = new THREE.InstancedMesh(shapeGeo(kind), new THREE.MeshLambertMaterial({ clippingPlanes: [clip] }), idx.length);
+    idx.forEach((i, j) => mesh.setMatrixAt(j, placeMatrix(orig[i], i)));
+    mesh.userData.idx = idx;
+    scene.add(mesh); meshes.push({ mesh, idx });
+  }
   paint();
 }
 function paint() {
-  if (!mesh) return;
-  work.forEach((b, i) => {
-    if (!b) { tmpC.setRGB(0, 0, 0); M.makeScale(0, 0, 0); mesh.setMatrixAt(i, M); mesh.setColorAt(i, tmpC); return; }
-    tmpC.setRGB(...b.color.map(v => v / 255), THREE.SRGBColorSpace);
-    if (b.material === 'BMC_Glow') tmpC.offsetHSL(0, 0, 0.1);
-    if (sel.has(i)) tmpC.lerp(SEL, 0.55);
-    if (b.locked) tmpC.multiplyScalar(0.45);
-    mesh.setColorAt(i, tmpC);
-  });
-  mesh.instanceColor.needsUpdate = true; mesh.instanceMatrix.needsUpdate = true;
+  for (const { mesh, idx } of meshes) {
+    idx.forEach((i, j) => {
+      const b = work[i];
+      if (!b) { mesh.setMatrixAt(j, M.makeScale(0, 0, 0)); tmpC.setRGB(0, 0, 0); mesh.setColorAt(j, tmpC); return; }
+      mesh.setMatrixAt(j, placeMatrix(b, i));
+      tmpC.setRGB(...b.color.map(v => v / 255), THREE.SRGBColorSpace);
+      if (b.material === 'BMC_Glow') tmpC.offsetHSL(0, 0, 0.1);
+      if (sel.has(i)) tmpC.lerp(SEL, 0.55);
+      if (b.locked) tmpC.multiplyScalar(0.45);
+      mesh.setColorAt(j, tmpC);
+    });
+    mesh.instanceColor.needsUpdate = true; mesh.instanceMatrix.needsUpdate = true;
+  }
 }
 const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
 let downAt = null;
 renderer.domElement.addEventListener('pointerdown', e => (downAt = [e.clientX, e.clientY]));
 renderer.domElement.addEventListener('pointerup', e => {
-  if (!mesh || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  if (!meshes.length || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
   const r = renderer.domElement.getBoundingClientRect();
   mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(mouse, camera);
-  const hit = ray.intersectObject(mesh).find(h => h.point.z <= clip.constant + 0.01 && work[h.instanceId]);
+  const hit = ray.intersectObjects(meshes.map(m => m.mesh)).map(h => ({ ...h, i: h.object.userData.idx[h.instanceId] })).find(h => h.point.z <= clip.constant + 0.01 && work[h.i]);
   if (!hit) return;
-  const i = hit.instanceId, b = work[i];
+  const i = hit.i, b = work[i];
   if (e.shiftKey) { const k = groupKey(b); work.forEach((x, j) => x && groupKey(x) === k && sel.add(j)); }
   else sel.has(i) ? sel.delete(i) : sel.add(i);
   $('hud').textContent = describe(b);
