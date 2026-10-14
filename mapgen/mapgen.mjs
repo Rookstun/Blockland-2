@@ -24,6 +24,7 @@ import { FIXED as BUILDER_FIXED } from './builder.mjs';
 import { treeVoxels } from '../trees/tree.mjs';
 import { makeOccupancy, placeVoxelProp } from './props.mjs';
 import { buildRocks, RV } from './rocks.mjs';
+import { shrine, CHECKPOINT_AT, FOOT as SHRINE_FOOT } from './checkpoint.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -2896,12 +2897,33 @@ const swampSpawns = [];
 // end of the stairwell, clear of its top), and where the swamp road ends.
 // The hamlets' own sit by their wells (town.mjs).
 const checkpoints = [];
+// checkpoint shrines (checkpoint.mjs; owner 2026-10-13: "ornate works of masonry ... add more
+// of them"): a shrine goes in only where none of its bricks touches anything already built
+// (an index of every brick so far, kept up to date as shrines go in), else the plain checkpoint
+const shrineIdx = (() => {
+  const G = 200, m = new Map();
+  const add = b => { const [lo, hi] = worldBox(b, BUILDER_FIXED); for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G); x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G); y++) { const k = x + ',' + y; (m.get(k) ?? m.set(k, []).get(k)).push([lo, hi]); } };
+  for (const b of bricks) add(b);
+  const free = (lo, hi) => { for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G); x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G); y++) for (const [a, z] of m.get(x + ',' + y) ?? []) if ([0, 1, 2].every(k => lo[k] < z[k] && a[k] < hi[k])) return false; return true; };
+  return { add, free };
+})();
+let shrines = 0;
+function placeShrine(wx, wy, gz, seed) {
+  const sb = shrine(seed).map(b => ({ ...b, position: [b.position[0] + wx, b.position[1] + wy, b.position[2] + gz] }));
+  if (!sb.every(b => { const [lo, hi] = worldBox(b, BUILDER_FIXED); return shrineIdx.free(lo, hi); })) return null;
+  const cp = { asset: 'B_CheckPoint', size: [0, 0, 0], position: [wx, wy, gz + CHECKPOINT_AT[2]], color: [240, 200, 60] };
+  for (const b of [...sb, cp]) { bricks.push(b); shrineIdx.add(b); }
+  shrines++;
+  return cp.position;
+}
 for (const d of DUNGEONS) {
   const [ex0, ey0, ex1, ey1] = d.out.entrance, alongX = d.out.entranceSide === 'S' || d.out.entranceSide === 'N';
   const [lx, ly] = alongX ? [ex0 - 40, (ey0 + ey1) / 2] : [(ex0 + ex1) / 2, ey0 - 40];
-  const p = [d.origin[0] + lx, d.origin[1] + ly, d.topVox * VZ + 2];
-  bricks.push({ asset: 'B_CheckPoint', size: [0, 0, 0], position: p, color: [240, 200, 60] });
-  checkpoints.push({ at: p, where: d.name });
+  let p = [d.origin[0] + lx, d.origin[1] + ly, d.topVox * VZ + 2];
+  const sp = placeShrine(p[0], p[1], p[2] - 2, hash(lx, ly, 61) * 4 | 0);
+  if (sp) p = sp;
+  else { bricks.push({ asset: 'B_CheckPoint', size: [0, 0, 0], position: p, color: [240, 200, 60] }); shrineIdx.add(bricks[bricks.length - 1]); }
+  checkpoints.push({ at: p, where: d.name, shrine: !!sp });
 }
 {
   const ends = [];
@@ -2922,11 +2944,45 @@ for (const d of DUNGEONS) {
         const x = ex + dx, y = ey + dy;
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !inMap(x, y) || !fits(x, y)) continue;
         const [wx, wy, wz] = at(x, y, H[x * N + y] + 1);
-        bricks.push({ asset: 'B_CheckPoint', size: [0, 0, 0], position: [wx, wy, wz + 2], color: [240, 200, 60] });
-        checkpoints.push({ at: [wx, wy, wz + 2], where: 'Swamp road' });
+        const sp = placeShrine(wx, wy, wz, x + y);
+        if (!sp) bricks.push({ asset: 'B_CheckPoint', size: [0, 0, 0], position: [wx, wy, wz + 2], color: [240, 200, 60] });
+        checkpoints.push({ at: sp ?? [wx, wy, wz + 2], where: 'Swamp road', shrine: !!sp });
         for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) blocked[(x + a) * N + y + b] = 1;
         break done;
       }
+}
+
+// roadside shrines: level spots 2-6 cells off a road, spread out (CP_SPACING cells apart
+// and from every other checkpoint), wherever a whole shrine fits
+{
+  const WANT = tune('checkpoint.roadside', 40, 'roadside checkpoint shrines'), SPACING = tune('checkpoint.spacing', 22, 'cells between checkpoints') * K / 2;
+  const near = new Int16Array(N * N).fill(99); // Chebyshev distance to a road, up to 4
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (pathCell[x * N + y]) for (let a = -6; a <= 6; a++) for (let b = -6; b <= 6; b++) { const i = (x + a) * N + y + b; if (inMap(x + a, y + b)) near[i] = Math.min(near[i], Math.max(Math.abs(a), Math.abs(b))); }
+  const cand = [];
+  for (let x = 3; x < N - 3; x++) for (let y = 3; y < N - 3; y++) {
+    const c = x * N + y, h = H[c];
+    if (near[c] < 2 || near[c] > 6 || h <= SEA + 2 || keepOut[c] || reserved[c] || townNear[c] || swampCell[c] || volcanoCell[c] || trenchCell[c] || riverCell[c]) continue;
+    if (villageDist(x, y) <= VILLAGE.r + 4 || townDist(x, y) <= TOWN.blend || hengeDist(x, y) <= 4 || DUNGEONS.some(d => footDist(d, x, y) <= 3)) continue;
+    let flat = true;
+    // the middle 3 x 3 level; the shrine's outer ring (10 units into the next cells) is left to the brick check
+    for (let a = -1; a <= 1 && flat; a++) for (let b = -1; b <= 1; b++) { const i = (x + a) * N + y + b; if (H[i] !== h || pathCell[i] || blocked[i] || rampCol[i] || capCol[i]) { flat = false; break; } }
+    if (flat) cand.push([hash(x, y, 333), x, y]);
+  }
+  cand.sort((a, b) => a[0] - b[0]);
+  const taken = checkpoints.map(c => [(c.at[0] - X0) / CELL, (c.at[1] - Y0) / CELL]);
+  let placed = 0; const why = { spacing: 0, blocked: 0 };
+  for (const [, x, y] of cand) {
+    if (placed >= WANT) break;
+    if (taken.some(([tx, ty]) => Math.hypot(tx - x, ty - y) < SPACING)) { why.spacing++; continue; }
+    const [wx, wy, wz] = at(x, y, H[x * N + y] + 1);
+    const sp = placeShrine(wx, wy, wz, x * 3 + y);
+    if (!sp) { why.blocked++; continue; }
+    checkpoints.push({ at: sp, where: 'roadside', shrine: true });
+    taken.push([x, y]);
+    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { blocked[(x + a) * N + y + b] = 1; keepOut[(x + a) * N + y + b] = 1; }
+    placed++;
+  }
+  console.error(`checkpoints: ${checkpoints.length} (${shrines} shrines, ${placed} roadside of ${WANT}, ${cand.length} flat spots, skipped ${JSON.stringify(why)})`);
 }
 
 // swamp pools: the water plane fills them; lily pads float on top
