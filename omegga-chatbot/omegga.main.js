@@ -30,6 +30,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const shapes = require('./lib/shapes');
 
 const EVENTS = ['chatcmd:ai', 'cmd:ai']; // "!ai" and "/ai"
+// (owner 2026-10-15: "hide !ai for now") true = !ai is ignored silently and left out of help
+const AI_HIDDEN = true;
 const AGENT_EVENTS = ['chatcmd:agent', 'cmd:agent']; // "!agent" and "/agent"
 const IMAGE_EVENTS = ['chatcmd:img', 'cmd:img', 'chatcmd:image', 'cmd:image']; // "!img"/"!image" and "/img"/"/image"
 const HEIGHTMAP = path.join(__dirname, 'bin', 'heightmap');
@@ -679,7 +681,9 @@ module.exports = class Plugin {
     const bot = sanitize(this.config['bot-name'] || 'AI');
     [
       `<b><color="8cf">${bot} help</></>`,
-      '<b>!ai</> message - chat, or ask for a build: "!ai build a red castle with towers". "!ai undo" removes your last build, "!ai reset" stops everything and clears my memory.',
+      ...(AI_HIDDEN ? [] : [
+        '<b>!ai</> message - chat, or ask for a build: "!ai build a red castle with towers". "!ai undo" removes your last build, "!ai reset" stops everything and clears my memory.',
+      ]),
       '<b>!agent</> task - a bigger multi-step job, e.g. "!agent build a village of 5 houses". "!agent stop" stops yours.',
       '<b>!img</> image-link [width] [pixel size] [flat] [glow] - turns a picture into bricks.',
       '<b>Tickets</> - every request gets a number and waits its turn. <b>!ticket</> your tickets, <b>!tickets</> the whole counter, <b>!cancel</> [#] drops a waiting one.',
@@ -741,7 +745,7 @@ module.exports = class Plugin {
     // loads of this plugin would otherwise keep firing after a reload.
     for (const e of EVENTS) {
       this.omegga.removeAllListeners(e);
-      this.omegga.on(e, this.handler);
+      if (!AI_HIDDEN) this.omegga.on(e, this.handler);
     }
     this.agentHandler = (name, ...args) =>
       this.agentCommand(name, args.join(' ').trim()).catch(err => {
@@ -781,7 +785,7 @@ module.exports = class Plugin {
         this.extraHandlers.push([e, h]);
       }
     if (!fs.existsSync(HEIGHTMAP)) this.log('error', `${HEIGHTMAP} is missing, so pictures will not work`);
-    return { registeredCommands: ['ai', 'agent', 'img', 'image', 'ticket', 'tickets', 'cancel', 'rate', 'ratings', 'help', 'aihelp', 'kill'] };
+    return { registeredCommands: [...(AI_HIDDEN ? [] : ['ai']), 'agent', 'img', 'image', 'ticket', 'tickets', 'cancel', 'rate', 'ratings', 'help', 'aihelp', 'kill'] };
   }
 
   /** One line per event in logs/chatbot.log, also echoed to Omegga's console. */
