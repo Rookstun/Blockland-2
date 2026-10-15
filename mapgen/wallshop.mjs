@@ -13,13 +13,17 @@
 import { H, V, door, win, even, windows, buildFromPlan } from './wallhouse.mjs';
 
 export const SHOP_KINDS = ['smithy', 'general', 'bakery', 'apothecary'];
+// weapon shops (2026-10-15, owner: "houses that use the walltool ... shops for swords
+// and guns ... windows with merchandise"): kept out of SHOP_KINDS so the town's
+// random shop picks don't reshuffle; wider display windows
+export const WEAPON_KINDS = ['armory', 'gunsmith'];
 
 function plan(W, D, kind, rnd, variant) {
   const s1 = even(D * (0.6 + 0.06 * rnd(1)));
   const a = even(W * (0.4 + 0.2 * rnd(2)));
   const fd = even(W / 2), dw = 6;
   // display windows either side of the door: 6 studs wide (4 for the smithy, whose fire wants walls)
-  const ww = kind === 'smithy' ? 4 : 6;
+  const ww = kind === 'smithy' ? 4 : WEAPON_KINDS.includes(kind) ? 10 : 6;
   const lw = even(fd / 2), rw = even((fd + W) / 2);
   const front = [door(fd, dw), win(lw, ww), win(rw, ww)];
   // the back room door sits in whichever back room is larger, clear of the split
@@ -36,6 +40,6 @@ function plan(W, D, kind, rnd, variant) {
 }
 
 export function planShop({ W, D, storeys = 1, seed = 1, kind = 'general' }) {
-  if (!SHOP_KINDS.includes(kind)) throw new Error(`wallshop: unknown kind ${kind}`);
+  if (!SHOP_KINDS.includes(kind) && !WEAPON_KINDS.includes(kind)) throw new Error(`wallshop: unknown kind ${kind}`);
   return buildFromPlan((rnd, variant) => plan(W, D, kind, rnd, variant), { W, D, storeys, seed, label: `wallshop(${kind})` });
 }

@@ -15,7 +15,7 @@
 // buildings whose doors face the nearest street.
 
 import { planHouse, COURSES as WH_COURSES } from './wallhouse.mjs';
-import { planShop, SHOP_KINDS } from './wallshop.mjs';
+import { planShop, SHOP_KINDS, WEAPON_KINDS } from './wallshop.mjs';
 import { shapedHouse } from './shapedhouse.mjs';
 import { turnBrick } from './orient.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
@@ -307,6 +307,14 @@ const GLOW = (color, i = 5) => ({ color, material: 'BMC_Glow', material_intensit
 const STOREY = 84; // 7 bricks
 const HOUSE_SHOP_CHANCE = 0.35;
 const HOUSE_SHOP_TIERS = ['bronze', 'iron', 'steel', 'black', 'mithril', 'adamant'];
+// weapon shops (2026-10-15): blade colour per tier for the window displays, and
+// shop names (KoL-ish, no game references)
+const TIER_STEEL = { bronze: [176, 118, 62], iron: [150, 150, 156], steel: [200, 204, 212], black: [44, 44, 50], mithril: [92, 110, 190], adamant: [70, 140, 90], rune: [80, 180, 200] };
+const WEAPON_NAMES = {
+  armory: ['STABBINGTON & SONS\nFINE POINTY THINGS', 'YE OLDE\nSHARP END', 'BLADES 4 LESS\nNO REFUNDS', 'THE HONEST EDGE\nMOSTLY HONEST', 'SWORDS\nWE HAVE THEM', 'GRIM & DAUGHTER\nCUTLERY (LARGE)'],
+  gunsmith: ['BANG BROS\nFIREARMS', 'GUNS GUNS GUNS\nALSO GUNS', 'THE LOUD SHOP\nEAR PLUGS EXTRA', 'TRIGGER HAPPY\nTRADING CO', 'PEW SUPPLY\nEST. RECENTLY', 'BOOMSTICK\nBARN'],
+};
+export const WEAPON_SHOP = { W: 52, D: 40, FC: 12 }; // studs: building W x D, forecourt FC deep
 // Houses (2026-10-03, owner): shapedhouse.mjs rect / L / T houses with rounded
 // roofs and attics; the blacksmith houses (HOUSE_SHOP_CHANCE) stay wallgen
 // workshops. The wing goes behind the main body, away from the street.
@@ -887,14 +895,130 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   }
 
   /**
+   * Weapon shop fit-out (2026-10-15, owner: "make them look like shops windows
+   * with merchandise"): behind each display window a stepped plinth with a felt
+   * back panel and a spot light, swords (armory, blade colour by tier) or guns
+   * (gunsmith) mounted on it; a row of real shop stands (prefabs, stats.houseShops)
+   * across the sales floor, buttons toward the door; outside a paved forecourt
+   * with training dummies / targets and the shop's name board over the door.
+   */
+  function weaponFit({ sbox, mput, at, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC }) {
+    const MB = 'PB_DefaultMicroBrick', guns = kind === 'gunsmith';
+    const STEEL = c => ({ asset: MB, color: c, material: 'BMC_Metallic' });
+    const DARK = { asset: MB, color: [40, 40, 44], material: 'BMC_Metallic' };
+    const BRASS = { asset: MB, color: [184, 146, 66], material: 'BMC_Metallic' };
+    const WOOD = { asset: MB, color: [110, 70, 40] }, GRIP = { asset: MB, color: [70, 46, 30] };
+    const felt = guns ? [34, 70, 52] : [96, 26, 36], SILL = 48;
+    const tiers = [...new Set(wares.filter(w => !w.prefab).map(w => String(w.tier).split('_')[0]))];
+    const sword = (x, y, zb, L, c) => {
+      mput(x, y, zb + 2, [2, 1, 2], BRASS);         // pommel
+      mput(x, y, zb + 7, [1, 1, 3], GRIP);          // grip
+      mput(x, y, zb + 11, [5, 1, 1], BRASS);        // guard
+      mput(x, y, zb + 12 + L, [2, 1, L], STEEL(c)); // blade
+    };
+    const gun = (x, y, z, rifle, k) => {
+      if (!rifle) {
+        mput(x + 0.8, y, z + 3, [8, 1, 2], STEEL([150, 152, 160])); // barrel
+        mput(x - 0.3, y, z - 1, [3, 1, 2], DARK);                   // frame
+        mput(x - 0.6, y, z - 6, [2, 1, 3], k % 2 ? WOOD : DARK);    // grip
+        return;
+      }
+      mput(x - 2.8, y, z, [10, 1, 3], WOOD);       // stock
+      mput(x - 0.9, y, z + 1, [9, 1, 4], DARK);    // receiver
+      mput(x - 1.4, y, z - 6, [2, 1, 3], WOOD);    // grip
+      mput(x + 1.6, y, z, [16, 1, 2], WOOD);       // fore-end
+      mput(x + 3.6, y, z + 4, [4, 1, 1], STEEL([150, 152, 160])); // muzzle
+      if (k % 2) mput(x - 0.8, y, z + 8, [6, 1, 2], DARK); // scope
+    };
+    for (const [k, c] of [lw, rw].entries()) {
+      const x0 = c - ww / 2 + 0.5, x1 = c + ww / 2 - 0.5;
+      piece(x0, 1, x1, 5, () => {
+        // two steps of dark wood, felt-topped, a felt back panel framed in dark wood
+        sbox(x0, 1, x1, 3, f, SILL - 4, { color: PALETTE.timber[2] });
+        sbox(x0, 1, x1, 3, SILL - 4, SILL, { asset: 'PB_DefaultTile', color: felt });
+        sbox(x0, 3, x1, 4.6, f, SILL + 8, { asset: MB, color: PALETTE.timber[2] });
+        sbox(x0, 3, x1, 4.6, SILL + 8, SILL + 12, { asset: MB, color: felt });
+        sbox(x0, 4.6, x1, 5, SILL + 12, 128, { asset: MB, color: felt });
+        sbox(x0, 4.6, x1, 5, 128, 132, { asset: MB, color: PALETTE.timber[2] });
+        // spot light under the ceiling
+        sbox(c - 2, 1, c + 2, 2, 144, 148, GLOW([255, 236, 200], 4));
+        if (guns) {
+          // pistols on the front step, two long guns on the panel
+          for (const dx of [-2.5, 2.5]) gun(c + dx, 2, SILL + 10, false, k + (dx > 0 ? 1 : 0));
+          gun(c, 4.3, 76, true, k);
+          gun(c, 4.3, 98, true, k + 1);
+        } else {
+          // a dagger, sword and longsword either side of the middle, blade colour by tier
+          const tc = TIER_STEEL[tiers[k % Math.max(1, tiers.length)]] ?? TIER_STEEL.iron;
+          [[-3.6, 8, 2], [-2.2, 16, 2], [0, 18, 4.3], [2.2, 16, 2], [3.6, 8, 2]].forEach(([dx, L, y]) => sword(c + dx, y, y > 3 ? SILL + 12 : SILL, L, tc));
+        }
+      });
+    }
+    // the real stands: a row across the sales floor, an aisle to the counter in front of the door
+    const orient = fx ? (fx > 0 ? 17 : 19) : (fy > 0 ? 18 : 16); // button toward the street
+    const ys = Math.min(11, cy0 - 5); // stands reach ~3 studs: clear of the plinths (y < 5) and the counter
+    const slots = [];
+    for (let x = 6; x <= W - 6; x += 5) if (Math.abs(x - fd) >= dw / 2 + 4) slots.push(x);
+    // the wares fill from the middle outwards (round the door aisle)
+    slots.sort((a, b) => Math.abs(a - fd) - Math.abs(b - fd) || a - b);
+    let n = 0;
+    for (const x of slots) {
+      if (n >= wares.length) break;
+      if (!piece(x - 2, ys - 2, x + 2, ys + 2, () => {})) continue;
+      const [px, py] = at(x, ys), w = wares[n++];
+      stats.houseShops.push({ at: [px, py, 16 + (zCtx ?? 0)], orient, tier: w.tier, ...(w.prefab ? { prefab: w.prefab } : {}) });
+    }
+    if (n < wares.length) count('weapon shop: stands short ' + (wares.length - n));
+    // outside: a flagstone forecourt, dummies (armory) / targets (gunsmith) either side
+    for (let x = -4; x < W + 5; x += 4)
+      for (let y = -FC; y < -2; y += 4)
+        sbox(x, y, Math.min(W + 5, x + 4), Math.min(-2, y + 4), 0, 4, { asset: 'PB_DefaultTile', color: PALETTE.stone[(Math.floor(x / 4) + Math.floor(y / 4) + 99) % 3] });
+    for (const x of [-1, W + 2]) {
+      const y = -FC + 4;
+      if (guns) {
+        for (const dx of [-1.5, 1.5]) mput(x + dx, y, 4 + 30, [1, 1, 30], WOOD);
+        mput(x, y, 80, [16, 1, 16], WOOD);
+        [[255, 255, 255], [200, 40, 40], [255, 255, 255], [200, 40, 40]].forEach((col, i) => mput(x, y - 0.2 * (i + 1), 80, [13 - i * 3, 1, 13 - i * 3], { asset: MB, color: col }));
+      } else {
+        const STRAW = { asset: MB, color: [196, 170, 100] };
+        mput(x, y, 4 + 24, [2, 2, 24], WOOD);               // post
+        mput(x, y, 58, [6, 4, 6], STRAW);                   // body
+        mput(x, y, 66, [14, 2, 2], { ...STRAW, color: [180, 156, 92] }); // arms
+        mput(x, y, 70, [6, 4, 2], STRAW);                   // shoulders
+        mput(x, y, 77, [4, 4, 5], { ...STRAW, color: [214, 190, 120] }); // head
+        mput(x, y - 0.5, 60, [3, 1, 3], { asset: MB, color: [200, 40, 40] }); // a red patch on the chest
+      }
+    }
+    // name board over the awning
+    const [bx, by] = at(fd, -0.1);
+    plaque({ put, text: pick(WEAPON_NAMES[kind], s, 811), facing: [fx, fy], x: bx, y: by, z: 136, w: 70, h: 12, color: guns ? [30, 30, 34] : [70, 30, 30],
+      style: { Font: guns ? 5 : 1, LineHeight: 5.5, Color: guns ? { R: 255, G: 200, B: 60, A: 255 } : { R: 240, G: 220, B: 170, A: 255 } } });
+  }
+
+  /**
+   * A weapon shop on its own roomy lot centred (cx, cy), door toward (fx, fy):
+   * the wallgen building pushed back so its forecourt fits in front.
+   */
+  function weaponShop(kind, cx, cy, fx, fy, s, wares, { W, D, FC } = WEAPON_SHOP) {
+    const back = (FC * 10) / 2;
+    wallShop(cx - fx * back, cy - fy * back, fx, fy, W, D, 1, s, kind, {
+      wallColor: kind === 'armory' ? pick(PALETTE.stone, s, 3) : pick([PALETTE.brick[0], PALETTE.brick[5], PALETTE.brick[1]], s, 3),
+      roofColor: pick(PALETTE.roof, s, 4), rise: 108, cloth: kind === 'armory' ? [140, 30, 40] : [40, 90, 60], wares, forecourt: FC,
+    });
+    count(kind);
+  }
+  // lot half extents (across, depth) of a weapon shop
+  const weaponLot = ({ W, D, FC } = WEAPON_SHOP) => [((W + 1) * 10) / 2 + 40, ((D + 1) * 10 + FC * 10) / 2];
+
+  /**
    * A shop from the wallgen tool (wallshop.mjs): sales floor across the front
    * behind a double door and display windows, a counter with stock shelves
    * behind it, storeroom and workroom at the back, rooms upstairs; fitted out
    * by `kind` (smithy, general, bakery, apothecary), with an awning and a sign.
    */
-  function wallShop(cx, cy, fx, fy, W, D, storeys, s, kind, { wallColor, upperColor = wallColor, roofColor, rise, cloth }) {
+  function wallShop(cx, cy, fx, fy, W, D, storeys, s, kind, { wallColor, upperColor = wallColor, roofColor, rise, cloth, wares = [], forecourt = 0 }) {
     const h = planShop({ W, D, storeys, seed: s, kind });
-    const { sbox, mput, clear, gableOn, STOREY_H } = renderWallgen(h, cx, cy, fx, fy, s, { wallColor, upperColor });
+    const { sbox, mput, clear, gableOn, at, STOREY_H } = renderWallgen(h, cx, cy, fx, fy, s, { wallColor, upperColor });
     const { s1, a, fd, dw, hall, lw, rw, ww } = h.rooms;
     const timber = PALETTE.timber[0], dark = PALETTE.timber[2], stone = PALETTE.stone[0];
     const f = 4; // ground floor top
@@ -979,6 +1103,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         for (const px of [x, x + 3]) sbox(px, back - 1, px + 1, back, f, f + 28, { color: timber });
         mput(x + 2, back, f + 32 + 2, [0, 0, 0], { asset: 'B_Fern', color: [70, 130, 50] });
       });
+    } else if (WEAPON_KINDS.includes(kind)) {
+      weaponFit({ sbox, mput, at, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt });
     } else {
       // general store: crates, barrels, sacks along the walls
       for (const [x, y] of [[sideL, back], [sideL + 2, back], [sideL, back - 2], [sideR + 2, back], [sideR + 2, back - 2]])
@@ -1247,6 +1373,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       });
       count('shop'); count('shop: ' + kind);
     },
+    armory(cx, cy, fx, fy, s, small, wares) { weaponShop('armory', cx, cy, fx, fy, s, wares ?? []); },
+    gunsmith(cx, cy, fx, fy, s, small, wares) { weaponShop('gunsmith', cx, cy, fx, fy, s, wares ?? []); },
     tavern(cx, cy, fx, fy, s) {
       const g = building(cx, cy, fx, fy, 360, 240, 2, {
         wallColor: PALETTE.brick[5], upperColor: PALETTE.plaster[1], roofColor: PALETTE.roof[0], rise: 96, doorW: 60, tiles: [[170, 120, 80], [110, 76, 50]],
@@ -2033,7 +2161,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   if (single) {
     if (!TYPES[single.type]) throw new Error(`town: no building type ${single.type}`);
     const [sfx, sfy] = single.facing ?? [0, -1];
-    TYPES[single.type](0, 0, sfx, sfy, single.seed, false, single.god);
+    TYPES[single.type](0, 0, sfx, sfy, single.seed, false, single.wares ?? single.god);
     return stats;
   }
   if (village) {
@@ -2256,6 +2384,46 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       }
     throw new Error('town: no room for the soda market ' + JSON.stringify(why));
   }
+  // (2026-10-15) the spawn weapon shops: an armory and a gunsmith on roomy lots
+  // beside the roads out of town (same search as the soda market, more margin)
+  function placeWeaponShops(paths) {
+    const SPAWN = {
+      armory: ['bronze', 'iron'].flatMap(t => [`${t}_dagger`, t, `${t}_longsword`].map(tier => ({ tier }))),
+      gunsmith: [{ tier: 'derringer', prefab: 'gun_derringer' }, { tier: 'revolver', prefab: 'gun_revolver' }, { tier: 'bow', prefab: 'bow_bow' }, { tier: 'oak', prefab: 'bow_oak' }],
+    };
+    stats.weaponShops = [];
+    // the town is dense: the full-size lot first, then smaller ones
+    const SIZES = [WEAPON_SHOP, { W: 48, D: 36, FC: 10 }, { W: 44, D: 32, FC: 8 }, { W: 40, D: 32, FC: 6 }];
+    for (const [kind, wares] of Object.entries(SPAWN)) {
+      let done = false;
+      for (const size of SIZES) {
+      const [la, lb] = weaponLot(size);
+      for (const p of paths) {
+        for (let i = 0; i + 1 < p.length && !done; i++) {
+          const [x, y] = p[i], [qx, qy] = p[i + 1], d = Math.hypot(x, y);
+          if (d < 600 || d > 3200) continue;
+          const tl = Math.hypot(qx - x, qy - y) || 1;
+          for (const side of [-1, 1]) {
+            const nx = (-(qy - y) / tl) * side, ny = ((qx - x) / tl) * side;
+            const [fx, fy] = Math.abs(nx) >= Math.abs(ny) ? [-Math.sign(nx), 0] : [0, -Math.sign(ny)];
+            const off = PATH_W / 2 + lb + 30;
+            const cx = Math.round((x - fx * off) / 10) * 10, cy = Math.round((y - fy * off) / 10) * 10;
+            const [hx, hy] = fx ? [lb, la] : [la, lb];
+            const r = [cx - hx, cy - hy, cx + hx, cy + hy];
+            if (!rectClear(r, { margin: 20, edge: plan.edgeR, claim: true })) continue;
+            taken.push(r);
+            onSite(r, () => weaponShop(kind, cx, cy, fx, fy, 811 + stats.weaponShops.length, wares, size));
+            stats.weaponShops.push({ kind, at: [cx, cy], size });
+            done = true; break;
+          }
+        }
+        if (done) break;
+      }
+      if (done) break;
+      }
+      if (!done) throw new Error('town: no room for the spawn ' + kind + ' ' + JSON.stringify(why));
+    }
+  }
   function sodaMarket(cx, cy, fx, fy) {
     const MB = 'PB_DefaultMicroBrick', ux = -fy, uy = fx;
     const at = (a, b) => [cx + a * ux + b * fx, cy + a * uy + b * fy];
@@ -2400,6 +2568,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // (2026-10-12) sewer accesses on three of the roads out
   sewerAccess(plan.main.slice(0, 3));
   // (2026-10-14) the soda market beside one of the main roads
+  placeWeaponShops(plan.paths);
   placeSodaMarket(plan.paths);
   landmark(windmill, [160, 90], [1900, 1700, 1500], plan.edgeR, 502);
   // houses along every path: shops near the plaza, homes further out

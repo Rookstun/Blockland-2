@@ -1931,6 +1931,10 @@ const holy = [];
   // also stand alone by the roads): inns, a library, warehouses, a dining hall, chapels
   for (const [kind, n, r] of [['tavern', 2, 6], ['warehouse', 2, 6], ['chapel', 2, 6], ['library', 1, 5], ['dininghall', 1, 7]])
     pick1(kind, Math.round(tune('roadside.' + kind, n, `${kind}s standing alone by the roads`)), r, 5, 40 * K, [3, 18], 14);
+  // (2026-10-15, owner: "shops for swords and guns ... around the world ... give them a lot
+  // of space") wallgen weapon shops on roomy lots by the roads; picked last so no older site moves
+  for (const kind of ['armory', 'gunsmith'])
+    pick1(kind, Math.round(tune('wshop.' + kind, 3, `${kind}s (weapon shops) by the roads`)), 9, 6, 30 * K, [10, 34], 26);
   holy.forEach((v, k) => {
     v.seed = 17000 + k;
     // the door faces the nearest road cell
@@ -3081,7 +3085,7 @@ const at = (x, y, z) => [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, z * VZ];
 // ---------------------------------------- ruins, goblin camps, details --
 // (ruins.mjs) each through its own overlap guard; their cells are reserved, so
 // the trees, boulders and plants below keep off them
-const details = { count: 0, kinds: {} }, pots = [], casinoGames = [];
+const details = { count: 0, kinds: {} }, pots = [], casinoGames = [], wildShops = [];
 for (const at of sewerPots) pots.push({ at, where: 'sewer' });
 {
   const wrap = (ox, oy, oz) => { const b = makeBuilder(); return { b, put: (br, x, y, z) => b.add({ ...br, position: [ox + x, oy + y, oz + z] }, br.asset ?? 'box') }; };
@@ -3118,11 +3122,20 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
     potAt(w, o[0] - CELL / 2, o[1] - CELL / 2, o[2], st.pots, 'camp');
     v.goblins = st.spots.length;
   }
+  // weapon shops' wares: armories sell higher tiers the further out they stand, gunsmiths every gun
+  const WSHOP_TIERS = [['steel', 'black'], ['mithril', 'adamant'], ['adamant', 'rune']];
+  const WSHOP_GUNS = ['derringer', 'revolver', 'huntingshotgun', 'leveraction', 'boltaction', 'magnum'];
+  holy.filter(v => v.kind === 'armory').sort((a, b) => townDist(a.x, a.y) - townDist(b.x, b.y)).forEach((v, k) => {
+    v.wares = WSHOP_TIERS[Math.min(k, WSHOP_TIERS.length - 1)].flatMap(t => [`${t}_dagger`, t, `${t}_longsword`].map(tier => ({ tier })));
+  });
+  for (const v of holy) if (v.kind === 'gunsmith') v.wares = WSHOP_GUNS.map(g => ({ tier: g, prefab: 'gun_' + g }));
   // temples and shrines, each to its own god (gods.json lists them)
   for (const v of holy) {
     if (v.kind === 'temple' || v.kind === 'shrine') v.god = makeGod(v.seed, townRnd);
     const o = at(v.x, v.y, v.h + 1), w = wrap(o[0] - CELL / 2, o[1] - CELL / 2, o[2]);
-    const st = buildTown({ put: w.put, orientFor, rnd: townRnd, plan: null, single: { type: v.kind, seed: v.seed, god: v.god, facing: v.facing } });
+    const st = buildTown({ put: w.put, orientFor, rnd: townRnd, plan: null, single: { type: v.kind, seed: v.seed, god: v.god, facing: v.facing, wares: v.wares } });
+    for (const hs of st.houseShops ?? []) wildShops.push({ at: [o[0] - CELL / 2 + hs.at[0], o[1] - CELL / 2 + hs.at[1], o[2] + hs.at[2]], tier: hs.tier, orient: hs.orient, house: true, ...(hs.prefab ? { prefab: hs.prefab } : {}) });
+    if (v.wares) console.error(`${v.kind}: cells ${v.x},${v.y}, ${Math.round(townDist(v.x, v.y))} cells from the town, ${(st.houseShops ?? []).length} stands`);
     if (st.casino) {
       const ox = o[0] - CELL / 2, oy = o[1] - CELL / 2, oz = o[2];
       for (const gm of st.casino.games) casinoGames.push({ prefab: gm.prefab, at: [ox + gm.at[0], oy + gm.at[1], oz + gm.at[2]], orient: gm.orient });
@@ -3565,6 +3578,10 @@ for (const d of DUNGEONS) {
   dest.push({ c: [swamp.x, swamp.y], text: 'The Swamp' + NL + 'Zombies', kind: 'hazard' });
   dest.push({ c: [henge.x0 + (henge.n >> 1), henge.y0 + (henge.n >> 1)], text: 'Wizard Henge' + NL + 'Evil wizards', kind: 'magic' });
   if (casinoGames.length) dest.push({ c: [(casinoGames[0].at[0] - X0) / CELL, (casinoGames[0].at[1] - Y0) / CELL], text: 'Casino' + NL + 'Slots & dice', kind: 'trade' });
+  for (const v of holy) if (v.wares) {
+    const tiers = [...new Set(v.wares.filter(w => !w.prefab).map(w => w.tier.split('_')[0]))].map(t => t[0].toUpperCase() + t.slice(1));
+    dest.push({ c: [v.x, v.y], text: v.kind === 'armory' ? 'Armory' + NL + tiers.join(' & ') + ' swords' : 'Gunsmith' + NL + 'All the guns', kind: 'trade' });
+  }
   const WANT = tune('signs.posts', 45, 'fingerposts beside the roads'), GAP = tune('signs.spacing', 26, 'cells between fingerposts') * K / 2;
   const near = new Int16Array(N * N).fill(99);
   for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (pathCell[x * N + y]) for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const i = (x + a) * N + y + b; if (inMap(x + a, y + b)) near[i] = Math.min(near[i], Math.max(Math.abs(a), Math.abs(b))); }
@@ -4367,6 +4384,8 @@ for (const v of villages) {
   const vb = makeBuilder(), o = [X0 + v.x * CELL, Y0 + v.y * CELL, (v.h + 1) * VZ];
   const st = buildTown({
     put: (b, x, y, z) => vb.add({ ...b, position: [o[0] + x, o[1] + y, o[2] + z] }, b.asset ?? 'box'),
+    // (2026-10-15) walkway flags check the hamlet's own bricks (one hit a door case)
+    free: (x0, y0, z0, x1, y1, z1) => vb.free([o[0] + x0, o[1] + y0, o[2] + z0], [o[0] + x1, o[1] + y1, o[2] + z1]),
     orientFor,
     rnd: townRnd,
     village: { seed: v.seed, shops: v.shops?.length ?? 0, desert: v.desert, nordic: !!v.nordic },
@@ -4392,7 +4411,9 @@ if (process.env.MAPGEN_TERRACEDUMP) fs.writeFileSync(process.env.MAPGEN_TERRACED
 // thinning can be cleared with br.World.ClearRegion
 const townOrigin = [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN.cells / 2) * CELL, (town.h + 1) * VZ];
 // sword-shop stands inside some town houses (town.mjs HOUSE_SHOP_CHANCE)
-for (const hs of townStats.houseShops) shops.push({ at: hs.at.map((v, k) => townOrigin[k] + v), tier: hs.tier, orient: hs.orient, house: true });
+for (const hs of townStats.houseShops) shops.push({ at: hs.at.map((v, k) => townOrigin[k] + v), tier: hs.tier, orient: hs.orient, house: true, ...(hs.prefab ? { prefab: hs.prefab } : {}) });
+// the roadside weapon shops' stands (2026-10-15)
+for (const ws of wildShops) shops.push(ws);
 // the spawn market: every sword shop and gun stand on the plaza
 for (const [x, y] of townStats.potSpots ?? []) pots.push({ at: [townOrigin[0] + x, townOrigin[1] + y, townOrigin[2] + townPlan.levelAt(x, y) + 12], where: 'town' });
 for (const ts of townStats.townShops ?? []) shops.push({ at: ts.at.map((v, k) => townOrigin[k] + v), tier: ts.tier, orient: ts.orient, market: true, ...(ts.prefab ? { prefab: ts.prefab } : {}) });
