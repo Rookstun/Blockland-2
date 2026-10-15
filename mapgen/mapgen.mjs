@@ -188,6 +188,8 @@ const MOSSBED = [mat([58, 92, 62]), mat([66, 100, 58])]; // cove floors (2026-10
 const SHALLOWS = mat([232, 222, 184], { asset: 'PB_DefaultTile' }); // pale sand under shallow cove water: reads turquoise
 const CLIFF = [mat([204, 184, 146]), mat([186, 164, 126]), mat([216, 200, 166]), mat([168, 148, 114]), mat([196, 172, 132])]; // striped sandstone cove cliffs
 const MUD = mat([74, 56, 38]);
+// the river delta (2026-10-15): silty channel beds, wet sand, marsh grass
+const SILT = mat([128, 112, 84]), WETSAND = mat([188, 170, 122], { asset: 'PB_DefaultTile' }), MARSH = [mat([112, 134, 64]), mat([98, 122, 58]), mat([126, 140, 72])];
 const MUCK = mat([104, 92, 46]); // yellow-brown slime on the swamp banks
 const POOL_BED = mat([58, 46, 32]);
 // desert (2026-10-03): dune sand, red mesa rock on slopes, dry grass at the edge
@@ -678,7 +680,10 @@ const riverRiver = (() => {
     for (let i = 1; i < end; i++) if (L[i] < L[i - 1]) drops.push(`${L[i - 1] - L[i]}@${Math.round(X0 + pts[i][0] * CELL + sx)},${Math.round(Y0 + pts[i][1] * CELL + sy)}${inT[i - 1] ? '(town)' : ''}`);
     console.error(`river level drops: ${drops.join(' ')}`);
   }
-  return { pts: pts.slice(0, end), L: L.slice(0, end) };
+  // where the channel's floor first reaches the sea past town (the delta's coast)
+  let coast = -1;
+  for (let i = Math.max(0, lastT) + 1; i < end; i++) if (ground[i] <= SEA - 2) { coast = i; break; }
+  return { pts: pts.slice(0, end), L: L.slice(0, end), coast };
 })();
 {
   const { pts, L } = riverRiver, rw = RIVER.rw, R = rw + RIVER.bank + RIVER.valley;
@@ -2063,6 +2068,184 @@ const coves = [];
   console.error(`coves: ${coves.length} at ${coves.map(c => `${X0 + c.x * CELL},${Y0 + c.y * CELL}`).join(' ')}`);
 }
 
+// ------------------------------------------------------------------ delta --
+// (owner 2026-10-15: "add deltas to rivers") the river's last stretch fans out to the sea.
+// From an apex delta.len cells up the course from where its bed meets the sea, the fan
+// opens toward the open sea (the mean of the deep water round the mouth) and runs out
+// delta.out cells past the coast. delta.arms distributary channels spread over it
+// (octilinear like the river: 45/90 degree runs, narrowing as they go) with small creeks
+// splitting off them; the land between is levelled to low islands a brick or three over
+// the sea: sand banks along every channel, marsh on the higher ground, shallow lagoons in
+// the hollows, mouth bars round the arm ends on a shallow platform past the coast. The
+// fan's sides ease back up to the old ground on the river's valley profile. Water is the
+// sea plane: every channel sits at the sea's level.
+// It runs after every site, road, bridge and cove is placed so none of them moves: their
+// cells (and hamlets, town, dungeons, coves with their margins) are never changed, and the
+// ground near them only comes down on the valley profile from their height.
+const DELTA = { on: tune('delta.on', 1, 'river delta at the mouth (0 = off)'), len: Math.round(tune('delta.len', 14, 'apex this far up the course from the coast, cells (x K)') * K),
+  reach: Math.round(tune('delta.reach', 55, 'fan reaches at most this far from the apex, cells (x K)') * K),
+  spread: tune('delta.spread', 0.6, 'half-angle of the fan, radians'), arms: tune('delta.arms', 5, 'distributary channels'),
+  creeks: Math.round(tune('delta.creeks', 6, 'small creeks off the arms (x K)') * K), out: Math.round(tune('delta.out', 12, 'arms, levees and mouth bars run this far past the coast, cells (x K)') * K) };
+const deltaCell = new Uint8Array(N * N); // 1 channel, 2 sand bank / bar, 3 marsh, 4 lagoon / shallows
+const delta = (() => {
+  const { pts, coast } = riverRiver;
+  if (!DELTA.on || coast < 0) return null;
+  // the apex: back up the course from the coast by delta.len cells, out of town
+  let ia = coast, run = 0;
+  while (ia > 0 && run < DELTA.len && townDist(Math.round(pts[ia - 1][0]), Math.round(pts[ia - 1][1])) > 30) { run += Math.hypot(pts[ia][0] - pts[ia - 1][0], pts[ia][1] - pts[ia - 1][1]); ia--; }
+  const A = pts[ia], Ax = Math.round(A[0]), Ay = Math.round(A[1]), RR = DELTA.reach;
+  // the cells nothing may change, and round them the distance and height to ease from
+  const bx0 = Math.max(0, Ax - RR - 70), bx1 = Math.min(N - 1, Ax + RR + 70), by0 = Math.max(0, Ay - RR - 70), by1 = Math.min(N - 1, Ay + RR + 70);
+  const BW = by1 - by0 + 1, bi = (x, y) => (x - bx0) * BW + (y - by0);
+  const dP = new Float32Array((bx1 - bx0 + 1) * BW).fill(Infinity), hP = new Int16Array(dP.length);
+  const prot = (x, y) => {
+    const c = x * N + y;
+    return pathCell[c] || deck[c] || townKind[c] || townNear[c] || villagePaved[c] || reserved[c] || swampCell[c] || volcanoCell[c] || trenchCell[c] || coveCell[c] || weirCell[c]
+      || (keepOut[c] && !riverCell[c] && riverBankL[c] <= -999) || townDist(x, y) <= 6 || villageDist(x, y) <= VILLAGE.r + 3 || hengeDist(x, y) <= 4
+      || coves.some(cv => Math.hypot(cv.x - x, cv.y - y) <= cv.R + 18) || DUNGEONS.some(d => footDist(d, x, y) <= 4);
+  };
+  let q = [];
+  for (let x = bx0; x <= bx1; x++) for (let y = by0; y <= by1; y++) if (prot(x, y)) { dP[bi(x, y)] = 0; hP[bi(x, y)] = H[x * N + y]; q.push([x, y]); }
+  for (let d = 1; d <= 60 && q.length; d++) { // 8-neighbour rings, the height of the nearest protected cell carried out
+    const nq = [];
+    for (const [x, y] of q) for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const nx = x + a, ny = y + b;
+      if (nx < bx0 || nx > bx1 || ny < by0 || ny > by1) continue;
+      const k = bi(nx, ny), h = hP[bi(x, y)];
+      if (dP[k] === Infinity) { dP[k] = d; hP[k] = h; nq.push([nx, ny]); }
+      else if (dP[k] === d && h > hP[k]) hP[k] = h;
+    }
+    q = nq;
+  }
+  // the lowest the ground may go here: down from the nearest protected cell on the valley profile
+  const floorAt = (x, y) => { const k = bi(x, y), d = dP[k]; return d === Infinity ? -Infinity : hP[k] - Math.floor(valleyRise(d)); };
+  // the axis: of the directions that reach open sea (deep cells, not a cove) within
+  // delta.reach and do not turn back up the river, the one whose fan holds the most free
+  // ground (cells clear of everything that stays) for the least held back
+  const fl = pts[Math.min(pts.length - 1, ia + 8)], fdx = fl[0] - A[0], fdy = fl[1] - A[1];
+  const tanS = Math.tan(DELTA.spread);
+  let best = null;
+  for (let a = 0; a < 48; a++) {
+    const th = (a / 48) * 2 * Math.PI, ux = Math.cos(th), uy = Math.sin(th);
+    if (ux * fdx + uy * fdy < 0) continue;
+    let uc = 0;
+    while (uc < RR) { const x = Math.floor(A[0] + ux * uc), y = Math.floor(A[1] + uy * uc); if (!inBounds(x, y) || (H[x * N + y] <= SEA - 4 && !coveCell[x * N + y])) break; uc++; }
+    if (uc >= RR || uc < 16) continue;
+    let score = 0;
+    for (let u = 2; u <= uc; u += 2) for (let v = -(RIVER.rw + u * tanS); v <= RIVER.rw + u * tanS; v += 2) {
+      const x = Math.floor(A[0] + ux * u - uy * v), y = Math.floor(A[1] + uy * u + ux * v);
+      if (x < bx0 || x > bx1 || y < by0 || y > by1) { score -= 4; continue; }
+      const d = dP[bi(x, y)]; score += d > 8 ? 1 : d > 3 ? 0 : -4;
+    }
+    if (!best || score > best.score) best = { score, ux, uy, uc };
+  }
+  if (!best || best.score <= 0) { console.error(`delta: no free fan from the mouth${best ? ` (best score ${best.score})` : ''}`); return null; }
+  const dx = best.ux, dy = best.uy, Uc = best.uc;
+  const px = -dy, py = dx, U = Uc + DELTA.out;
+  // octilinear route through a curve (cell centres; two legs per run, diagonal and straight,
+  // the order that hugs it; a run grows while the curve stays within tol cells)
+  const octRoute = (cur, tol) => {
+    const C = p => [Math.floor(p[0]) + 0.5, Math.floor(p[1]) + 0.5];
+    const d2s = (qx, qy, ax, ay, bx, by) => { const ex = bx - ax, ey = by - ay, l = ex * ex + ey * ey, t = l ? Math.max(0, Math.min(1, ((qx - ax) * ex + (qy - ay) * ey) / l)) : 0; return Math.hypot(qx - ax - t * ex, qy - ay - t * ey); };
+    const legs = (a, b, df) => { const ex = b[0] - a[0], ey = b[1] - a[1], d = Math.min(Math.abs(ex), Math.abs(ey)); return [a, df ? [a[0] + Math.sign(ex) * d, a[1] + Math.sign(ey) * d] : [b[0] - Math.sign(ex) * d, b[1] - Math.sign(ey) * d], b]; };
+    const fits = (i, j) => { for (const df of [true, false]) { const Lg = legs(C(cur[i]), C(cur[j]), df); let ok = true; for (let k = i + 1; k < j && ok; k++) if (Math.min(d2s(cur[k][0], cur[k][1], Lg[0][0], Lg[0][1], Lg[1][0], Lg[1][1]), d2s(cur[k][0], cur[k][1], Lg[1][0], Lg[1][1], Lg[2][0], Lg[2][1])) > tol) ok = false; if (ok) return Lg; } return null; };
+    const route = [C(cur[0])], at = [0];
+    for (let i = 0; i < cur.length - 1;) {
+      let j = i + 1, best = legs(C(cur[i]), C(cur[j]), true);
+      for (let t = i + 2; t < cur.length; t++) { const Lg = fits(i, t); if (!Lg) break; j = t; best = Lg; }
+      if (best[1][0] !== best[0][0] || best[1][1] !== best[0][1]) { route.push(best[1]); at.push((i + j) / 2); }
+      route.push(best[2]); at.push(j);
+      i = j;
+    }
+    // half-cell steps, each with its fraction along the curve (widths taper by it)
+    const out = [[...route[0], 0]];
+    for (let i = 1; i < route.length; i++) {
+      const [a, b] = [route[i - 1], route[i]], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) * 2);
+      for (let k = 1; k <= n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n, (at[i - 1] + (at[i] - at[i - 1]) * k / n) / (cur.length - 1)]);
+    }
+    return out;
+  };
+  // a wandering curve from (x, y) heading phi (radians off the axis), len cells
+  const wander = (x, y, phi, len, seed) => {
+    const cur = [[x, y]];
+    for (let s = 0.5; s <= len; s += 0.5) {
+      const f = phi + 0.42 * Math.sin(s / 9 + seed * 2.1) * Math.min(1, s / 10) + 0.16 * Math.sin(s / 3.7 + seed * 1.3);
+      x += (dx * Math.cos(f) + px * Math.sin(f)) * 0.5; y += (dy * Math.cos(f) + py * Math.sin(f)) * 0.5;
+      if (!inBounds(Math.round(x), Math.round(y))) break;
+      cur.push([x, y]);
+    }
+    return cur;
+  };
+  const chans = []; // { line: [[x, y, frac]], w0, w1, phi }
+  const n = Math.max(2, DELTA.arms), rwA = Math.max(1.6, RIVER.rw * 0.5);
+  for (let j = 0; j < n; j++) {
+    const th = DELTA.spread * 0.82 * (2 * j / (n - 1) - 1) + (hash(j, 7, 1501) - 0.5) * 0.16;
+    const len = (Uc / Math.cos(th)) * (0.92 + 0.2 * hash(j, 8, 1501)) + DELTA.out * (0.5 + 0.5 * hash(j, 9, 1501));
+    const cur = wander(A[0], A[1], th, len, j + 1);
+    if (cur.length > 4) chans.push({ line: octRoute(cur, 1.5), w0: rwA, w1: 1.4, phi: th });
+  }
+  const arms = chans.length;
+  for (let k = 0; k < DELTA.creeks && arms; k++) {
+    const arm = chans[Math.floor(hash(k, 1, 1502) * arms)], f = 0.3 + 0.5 * hash(k, 2, 1502);
+    const p = arm.line[Math.floor(f * (arm.line.length - 1))], side = hash(k, 3, 1502) < 0.5 ? -1 : 1;
+    const cur = wander(p[0], p[1], arm.phi + side * (0.45 + 0.4 * hash(k, 4, 1502)), 8 + 16 * hash(k, 5, 1502), 10 + k);
+    if (cur.length > 4) chans.push({ line: octRoute(cur, 1.5), w0: 1.1, w1: 0.8, phi: 0 });
+  }
+  // stamp: per cell the nearest (distance - half-width) over every channel
+  const near = new Map(); // cell -> distance past a channel's edge (<= 0 inside)
+  for (const ch of chans)
+    for (const [x0, y0, fr] of ch.line) {
+      const w = ch.w0 + (ch.w1 - ch.w0) * fr, r = Math.ceil(w + 3);
+      for (let x = Math.floor(x0 - r); x <= Math.ceil(x0 + r); x++)
+        for (let y = Math.floor(y0 - r); y <= Math.ceil(y0 + r); y++) {
+          if (!inBounds(x, y)) continue;
+          const e = Math.hypot(x + 0.5 - x0, y + 0.5 - y0) - w, c = x * N + y;
+          if (e < (near.get(c) ?? Infinity)) near.set(c, e);
+        }
+    }
+  // the fan and its sides
+  const stats = { channel: 0, bank: 0, marsh: 0, sand: 0, lagoon: 0, bars: 0, shallows: 0, eased: 0, held: 0 };
+  const ends = chans.slice(0, arms).map(ch => ch.line[ch.line.length - 1]);
+  const set = (c, h, k) => { H[c] = h; deltaCell[c] = k; };
+  for (let x = bx0; x <= bx1; x++)
+    for (let y = by0; y <= by1; y++) {
+      const c = x * N + y, u = (x + 0.5 - A[0]) * dx + (y + 0.5 - A[1]) * dy, v = (x + 0.5 - A[0]) * px + (y + 0.5 - A[1]) * py;
+      if (dP[bi(x, y)] === 0 || u > U + 2 || u < -12) continue;
+      const wx = X0 + x * CELL, wy = Y0 + y * CELL, lo = floorAt(x, y);
+      const wU = RIVER.rw + Math.max(0, u) * tanS * (1 + 0.18 * fbm2(wx / 700 + 5, wy / 700 - 11, 2));
+      const e = u < 0 ? Math.hypot(u, Math.max(0, Math.abs(v) - RIVER.rw)) : Math.abs(v) - wU; // cells outside the fan
+      const ch = riverCell[c] && u >= 0 && u <= U ? Math.min(0, near.get(c) ?? 0) : near.get(c) ?? Infinity; // the river's own stem in the fan is a channel too
+      if (u > U || u < 0 ? !(ch <= 0 && u >= 0) : e > 0 && ch > 0) {
+        // the sides: ease up to the old ground on the river's valley profile (cut only)
+        if (e < 60 && !riverCell[c]) { const t = Math.max(lo, SEA + 2 + Math.floor(valleyRise(Math.max(0, e)))); if (H[c] > t) { H[c] = t; stats.eased++; } }
+        continue;
+      }
+      const f = Math.max(0, Math.min(1, u / Uc)), nI = fbm2(wx / 520 + 71, wy / 520 - 33, 3), nS = fbm2(wx / 170 - 5, wy / 170 + 19, 2);
+      // what the delta wants here
+      let t, k;
+      if (ch <= 0) { t = SEA - 2 - (ch < -1 ? 1 : 0) - (ch < -2.5 ? 1 : 0); k = 1; } // a channel, deepest mid-stream
+      else if (ch < 1.5 && ch > 0.3 && u > Uc * 0.8 && H[c] <= SEA - 1) { t = SEA + 1; k = 2; } // levees: thin sand banks running out into open water
+      else if (u > Uc * 0.8 && H[c] <= SEA - 1) { // the sea: lobes of shallows round the arm mouths, a bar ring on each
+        const r = Math.min(...ends.map(([ex, ey]) => Math.hypot(x + 0.5 - ex, y + 0.5 - ey))) / (1 + 0.25 * nS);
+        if (r > 13) continue;
+        if (r > 3 && r < 6.5 && nS > -0.1) { t = SEA + 1; k = 2; } else { t = Math.max(H[c], SEA - 2 - Math.floor(r / 3.5)); k = 4; }
+      } else if (ch < 1.5) { t = SEA + 1; k = 2; } // sand along the channels
+      else if (nI < -0.32 && u > 8) { t = SEA - 1 - (nI < -0.45 ? 1 : 0); k = 4; } // a lagoon
+      else { t = SEA + 1 + (nI > 0.02 ? 1 : 0) + (nI > 0.32 ? 1 : 0) + (f < 0.35 ? 1 : 0); k = t >= SEA + 2 || nS > 0.25 ? 3 : 2; }
+      if (lo > t) { // near something that stays: come down to it on the valley profile instead
+        if (H[c] > lo) { H[c] = lo; stats.eased++; }
+        stats.held++;
+        continue;
+      }
+      if (k === 1) { riverCell[c] = 1; riverLevel[c] = SEA - 1; noSmooth[c] = 1; keepOut[c] = 1; set(c, Math.min(H[c], t), 1); stats.channel++; }
+      else if (riverCell[c]) continue;
+      else { set(c, t, k); if (k === 2 && ch < 1.5) keepOut[c] = 1; stats[k === 3 ? 'marsh' : k === 4 ? (u > Uc ? 'shallows' : 'lagoon') : ch < 1.5 ? 'bank' : u > Uc ? 'bars' : 'sand']++; }
+      riverBankL[c] = SEA - 1;
+    }
+  const W = (x, y) => `${Math.round((x - town.fx - TOWN.cells / 2) * CELL)},${Math.round((y - town.fy - TOWN.cells / 2) * CELL)}`; // final (town-centred) coords
+  console.error(`delta: apex ${W(A[0], A[1])} (${run.toFixed(0)} cells up the course), axis ${dx.toFixed(2)},${dy.toFixed(2)}, coast ${Uc} cells out, ${arms} arms + ${chans.length - arms} creeks, ${JSON.stringify(stats)}`);
+  return { A, dx, dy, Uc, U, chans };
+})();
 // ------------------------------------------------------------ rock weirs --
 // (owner 2026-10-13: "use [rocks] as a natural wall to lower and raise water levels that
 // stray too much") wherever the river's level steps down from one cell to the next, a
@@ -2092,6 +2275,7 @@ if (tune('river.weirs', 1, 'boulder weirs where the river level steps down (0 = 
 }
 riverDiag('after cap');
 
+if (process.env.MAPGEN_HDUMP) fs.writeFileSync(process.env.MAPGEN_HDUMP, Buffer.from(H.buffer, H.byteOffset, H.byteLength));
 // ----------------------------------------------------------------- voxels --
 const V = new Uint8Array(N * N * NZ);
 const vi = (x, y, z) => (x * N + y) * NZ + z;
@@ -2118,6 +2302,10 @@ for (let x = 0; x < N; x++)
     else if (coveCell[x * N + y] === 4) [top, sub] = [SHALLOWS, SAND];
     else if (coveCell[x * N + y] === 2) [top, sub] = [SAND, SAND];
     else if (coveCell[x * N + y] === 3) [top, sub] = [GRASS[shade], CLIFF[0]];
+    else if (deltaCell[x * N + y] === 1) [top, sub] = [SILT, MUD];
+    else if (deltaCell[x * N + y] === 4) [top, sub] = [h <= SEA - 3 ? SILT : SHALLOWS, SAND];
+    else if (deltaCell[x * N + y] === 2) [top, sub] = [h <= SEA + 1 && hash(x, y, 1503) < 0.35 ? WETSAND : SAND, SAND];
+    else if (deltaCell[x * N + y] === 3) [top, sub] = [MARSH[Math.floor((fbm2(wx / 240 + 9, wy / 240 - 4, 2) + 1) * 1.5 + hash(x, y, 1504) * 0.8) % 3], MUD];
     else if (riverCell[x * N + y]) [top, sub] = [GRAVEL, STONE];
     else if (villagePaved[x * N + y]) [top, sub] = [COBBLE, STONE];
     else if (swampCell[x * N + y]) [top, sub] = [h < SEA ? POOL_BED : fbm2(wx / 300 + 5, wy / 300) > 0.1 ? MUCK : MUD, MUD];
@@ -2394,7 +2582,7 @@ let carved = 0;
         for (let z = H[cx * N + cy] + 1; z <= top; z++) V[vi(cx, cy, z)] = ROCK[(k + l) & 1];
         if (H[cx * N + cy] < top) { H[cx * N + cy] = top; surfaceMat[cx * N + cy] = ROCK[(k + l) & 1]; }
       }
-    if (MC) { carveMC(s); continue; }
+    if (MC) { const c0 = carved; carveMC(s); if (process.env.MAPGEN_CAVES) console.error(`cave ${s.x},${s.y}: ${carved - c0} voxels`); continue; }
     s.cells = cellsOf(s.x, s.y, s.dx, s.dy);
     for (const [cx, cy, t, raise] of s.cells) {
       for (let z = s.h + 1 + raise; z <= s.h + t; z++) { V[vi(cx, cy, z)] = 0; carved++; }
@@ -2402,6 +2590,7 @@ let carved = 0;
     }
   }
   console.error(`caves: ${caves.length} of ${sites.length} candidate sites`);
+  if (process.env.MAPGEN_CAVES) console.error(`cave sites: ${caves.map(c => `${c.x},${c.y}`).join(" ")}`);
 }
 
 // clear the dungeon volumes (the ground over them stays); rock fill comes from the plan
@@ -2995,7 +3184,10 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
   // details: single flat cells off the paths; logs and carts take two in a row
   const COUNT = Math.round(tune('details.count', 250, 'random details: logs, cairns, carts... (x K)') * K);
   const okCell = c => !(pathCell[c] || keepOut[c] || reserved[c] || rampCol[c] || capCol[c] || townNear[c] || swampCell[c] || siteOff(c));
-  for (let n = 0, tries = 0; n < COUNT && tries < COUNT * 200; tries++) {
+  // (2026-10-15) tries count per slot: a spot lost to a local change (the delta) re-rolls
+  // only its own slot instead of shifting every later detail across the map
+  for (let n = 0, tries = 0; n < COUNT; tries++) {
+    if (tries >= 200) { n++; tries = -1; continue; }
     const x = 6 + Math.floor(hash(n, tries, 601) * (N - 12)), y = 6 + Math.floor(hash(n, tries, 602) * (N - 12)), i = x * N + y, h = H[i];
     if (h <= SEA + 1 || !okCell(i) || townDist(x, y) <= TOWN.blend || villageDist(x, y) <= VILLAGE.r + 2 || hengeDist(x, y) <= 3) continue;
     // (a cell with no smoothing piece in it is flat on top: okCell checks rampCol / capCol)
@@ -3013,7 +3205,7 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
     buildDetail(kind, { seed: 15000 + n, rnd: townRnd, put: w.put, orientFor, alongX });
     for (const { label, ...b } of w.b.bricks) if (keep(b)) bricks.push(b);
     reserved[i] = 1; if (two) reserved[x2 * N + y2] = 1;
-    details.kinds[kind] = (details.kinds[kind] || 0) + 1; details.count++; n++;
+    details.kinds[kind] = (details.kinds[kind] || 0) + 1; details.count++; n++; tries = -1;
   }
   console.error(`settlements ${ruins.length} (${ruins.reduce((a, v) => a + (v.goblins || 0), 0)} goblins), camps ${camps.length} (${camps.reduce((a, c) => a + c.goblins, 0)} goblins), details ${details.count} ${JSON.stringify(details.kinds)}${offGridDrops ? `, ${offGridDrops} off-grid pieces dropped` : ''}`);
 }
@@ -3067,6 +3259,25 @@ for (let bx = 0; bx < N; bx += 4)
     trees++;
     treeAt.push([wx, wy, R]);
   }
+// the delta's willows (2026-10-15): on the higher marsh, after every other tree so the
+// forest pool (and its meshing) elsewhere stays as it was
+if (delta) {
+  const Ax = Math.round(delta.A[0]), Ay = Math.round(delta.A[1]), r0 = Math.ceil(delta.U + 30);
+  for (let bx = (Math.max(0, Ax - r0) >> 2) << 2; bx <= Ax + r0; bx += 4)
+    for (let by = (Math.max(0, Ay - r0) >> 2) << 2; by <= Ay + r0; by += 4) {
+      const x = bx + Math.floor(hash(bx, by, 1) * 4), y = by + Math.floor(hash(bx, by, 2) * 4), c = x * N + y;
+      if (!inMap(x, y) || deltaCell[c] !== 3 || H[c] < SEA + 2 || hash(bx, by, 1505) > 0.22 || rampCol[c] || keepOut[c] || V[vi(x, y, H[c])] === 0) continue;
+      let flat = true; for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (hAt(x + a, y + b) > H[c] + 1) flat = false;
+      const [wx, wy, wz] = at(x, y, H[c] + 1);
+      if (!flat || treeAt.some(([qx, qy]) => Math.max(Math.abs(qx - wx), Math.abs(qy - wy)) < 130)) continue;
+      const tv = treeVoxels('willow', 1 + Math.floor(hash(x, y, 6) * 1e6), 0.7 + hash(x, y, 7) * 0.3);
+      const ox = Math.round(wx / 8) * 8, oy = Math.round(wy / 8) * 8, oz = Math.floor(wz / 8) * 8;
+      const ci = tv.colors.map(cc => { const k = cc.join(); let i = forestColors.findIndex(f => f.join() === k); if (i < 0) i = forestColors.push(cc) - 1; return i; });
+      for (const [key, cc] of tv.wood) { const [i, j, k] = key.split(',').map(Number); const g = (ox / 4 + i) + ',' + (oy / 4 + j) + ',' + (oz / 4 + k); if (!forestWood.has(g)) forestWood.set(g, ci[cc]); }
+      for (const [key, cc] of tv.leaves) { const [i, j, k] = key.split(',').map(Number); const g = (ox / 8 + i) + ',' + (oy / 8 + j) + ',' + (oz / 8 + k); if (!forestLeaves.has(g)) forestLeaves.set(g, ci[cc]); }
+      treeKinds['delta willow'] = (treeKinds['delta willow'] ?? 0) + 1; trees++; treeAt.push([wx, wy, 60]);
+    }
+}
 // cove dressing (cove.mjs): computed here so its trees join the forest pool
 const coveZone = (wx, wy) => {
   const x = Math.floor((wx - X0) / CELL), y = Math.floor((wy - Y0) / CELL);
@@ -3744,6 +3955,67 @@ if (coves.length) {
   }
   console.error(`coves: ${rock} stone/moss bricks, ${small} small pieces`);
 }
+// delta dressing (2026-10-15, see 'delta'): clumps of reeds and cattails on the marsh and
+// along the banks at the water's edge, lily pads (some flowering) on the still water of
+// lagoons, shallows and creek edges, bleached driftwood on the sand. Reeds and pads are
+// walk-through (collision off); every piece through an occupancy check (never into a
+// smoothing piece, tree, rock or prop), on flat cell tops only. Willows on the higher marsh
+// come from the forest (tree spots).
+if (delta) {
+  const NOCOL = { player: false, weapon: false, interaction: false, physics: false };
+  const ax = X0 + delta.A[0] * CELL, ay = Y0 + delta.A[1] * CELL, RAD = (delta.U + 30) * CELL;
+  const occ = makeOccupancy(bricks.filter(b => Math.hypot(b.position[0] - ax, b.position[1] - ay) < RAD + 400));
+  const put = (lo, hi, color, extra = {}) => {
+    if (occ.hits(lo, hi)) return false;
+    occ.add([lo, hi]);
+    bricks.push({ asset: 'PB_DefaultMicroBrick', size: [0, 1, 2].map(k => (hi[k] - lo[k]) / 2), position: [0, 1, 2].map(k => (lo[k] + hi[k]) / 2), color, ...extra });
+    return true;
+  };
+  const STALK = [[96, 128, 58], [112, 138, 64], [128, 140, 74], [146, 146, 86], [84, 116, 52]], HEAD = [[98, 64, 36], [112, 74, 42]], DRIFT = [[168, 152, 128], [150, 134, 112], [186, 172, 150]];
+  const PAD = [[64, 122, 52], [76, 136, 58]], BLOOM = [[238, 186, 206], [246, 240, 232]];
+  const ds = { reeds: 0, stalks: 0, pads: 0, blooms: 0, drift: 0 };
+  const wetBy = (x, y) => { for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(x + a, y + b) && H[(x + a) * N + y + b] <= SEA - 1) return true; return false; };
+  const r0 = Math.ceil(delta.U + 30), Ax = Math.round(delta.A[0]), Ay = Math.round(delta.A[1]);
+  for (let x = Ax - r0; x <= Ax + r0; x++)
+    for (let y = Ay - r0; y <= Ay + r0; y++) {
+      if (!inMap(x, y)) continue;
+      const c = x * N + y, k = deltaCell[c], h = H[c];
+      if (!k || rampCol[c] || capCol[c]) continue;
+      let weir = false; for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (inMap(x + a, y + b) && weirCell[(x + a) * N + y + b]) weir = true; // the weir rocks land later
+      if (weir) continue;
+      const x0 = X0 + x * CELL, y0 = Y0 + y * CELL, z0 = (h + 1) * VZ, r = hash(x, y, 1510);
+      if (h >= SEA && (k === 3 || (k === 2 && wetBy(x, y)))) {
+        // a clump of reeds: 4-9 stalks 2 units thick, a few with a cattail head
+        if (r > (k === 3 ? 0.42 : 0.55)) continue;
+        const n = 4 + Math.floor(hash(x, y, 1511) * 6), cx = 6 + 2 * Math.floor(hash(x, y, 1512) * 10), cy = 6 + 2 * Math.floor(hash(x, y, 1513) * 10);
+        let laid = 0;
+        for (let i = 0; i < n; i++) {
+          const sx = x0 + Math.min(34, Math.max(4, cx + 2 * Math.round((hash(x, y, 1520 + i) - 0.5) * 8))), sy = y0 + Math.min(34, Math.max(4, cy + 2 * Math.round((hash(x, y, 1530 + i) - 0.5) * 8)));
+          const sh = 14 + 2 * Math.floor(hash(x, y, 1540 + i) * 14);
+          if (!put([sx, sy, z0], [sx + 2, sy + 2, z0 + sh], STALK[Math.floor(hash(x, y, 1550 + i) * STALK.length)], { collision: NOCOL })) continue;
+          laid++; ds.stalks++;
+          if (sh >= 26 && hash(x, y, 1560 + i) < 0.45 && put([sx - 2, sy - 2, z0 + sh], [sx + 2, sy + 2, z0 + sh + 8], HEAD[i & 1], { collision: NOCOL })) put([sx, sy, z0 + sh + 8], [sx + 2, sy + 2, z0 + sh + 12], STALK[3], { collision: NOCOL });
+        }
+        if (laid) ds.reeds++;
+      } else if (h <= SEA - 1 && (k === 4 || (k === 1 && hash(x, y, 1509) < 0.3)) && z0 <= WATER_Z - 6) {
+        // lily pads on the still water: a round-ish pad (a plate and a cross), now and then a flower
+        if (r > 0.2) continue;
+        const px0 = x0 + 10 + 2 * Math.floor(hash(x, y, 1514) * 6), py0 = y0 + 10 + 2 * Math.floor(hash(x, y, 1515) * 6), col = PAD[Math.floor(hash(x, y, 1516) * 2)], zw = WATER_Z;
+        if (!put([px0 + 2, py0, zw], [px0 + 10, py0 + 12, zw + 2], col, { collision: NOCOL })) continue;
+        put([px0, py0 + 2, zw], [px0 + 2, py0 + 10, zw + 2], col, { collision: NOCOL }); put([px0 + 10, py0 + 2, zw], [px0 + 12, py0 + 10, zw + 2], col, { collision: NOCOL });
+        ds.pads++;
+        if (hash(x, y, 1517) < 0.3 && put([px0 + 4, py0 + 4, zw + 2], [px0 + 8, py0 + 8, zw + 4], BLOOM[Math.floor(hash(x, y, 1518) * 2)], { collision: NOCOL })) { put([px0 + 5, py0 + 5, zw + 4], [px0 + 7, py0 + 7, zw + 6], [244, 206, 72], { collision: NOCOL }); ds.blooms++; }
+      } else if (k === 2 && h >= SEA && r > 0.975) {
+        // driftwood: a bleached log lying along x or y, a stub branch off it
+        const along = hash(x, y, 1519) < 0.5, L = 24 + 4 * Math.floor(hash(x, y, 1521) * 6), col = DRIFT[Math.floor(hash(x, y, 1522) * 3)];
+        const lo = along ? [x0 + 20 - L / 2, y0 + 16, z0] : [x0 + 16, y0 + 20 - L / 2, z0], hi = along ? [lo[0] + L, y0 + 24, z0 + 6] : [x0 + 24, lo[1] + L, z0 + 6];
+        if (!put(lo, hi, col)) continue;
+        if (along) put([x0 + 22, y0 + 24, z0 + 2], [x0 + 26, y0 + 34, z0 + 6], col); else put([x0 + 24, y0 + 22, z0 + 2], [x0 + 34, y0 + 26, z0 + 6], col);
+        ds.drift++;
+      }
+    }
+  console.error(`delta dressing: ${JSON.stringify(ds)}`);
+}
 // river water (2026-10-06, owner: "this is a water component and it should be
 // replacing the river"): a 2-unit gravel plate on the bed in runs along x, each
 // carrying the owner's water zone (Component_Internal_AttachedZone, bWater)
@@ -3990,7 +4262,6 @@ const townStats = buildTown({
   plan: townPlan,
   shopTiers: ['bronze', 'iron'], // the spawn town: low tiers only (owner 2026-10-06)
   sewerDepth,
-  groundAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) ? (H[x * N + y] - town.h) * VZ : null; },
   riverAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; },
 });
 terraceDressing(townB, town.fx, town.fy, town.fx + TOWN.cells, town.fy + TOWN.cells, c => townKind[c] === 2);
@@ -4096,8 +4367,6 @@ for (const v of villages) {
   const vb = makeBuilder(), o = [X0 + v.x * CELL, Y0 + v.y * CELL, (v.h + 1) * VZ];
   const st = buildTown({
     put: (b, x, y, z) => vb.add({ ...b, position: [o[0] + x, o[1] + y, o[2] + z] }, b.asset ?? 'box'),
-    groundAt: (ux, uy) => { const x = v.x + Math.floor(ux / CELL), y = v.y + Math.floor(uy / CELL); return inBounds(x, y) ? (H[x * N + y] - v.h) * VZ : null; },
-    free: (x0, y0, z0, x1, y1, z1) => vb.free([o[0] + x0, o[1] + y0, o[2] + z0], [o[0] + x1, o[1] + y1, o[2] + z1]),
     orientFor,
     rnd: townRnd,
     village: { seed: v.seed, shops: v.shops?.length ?? 0, desert: v.desert, nordic: !!v.nordic },

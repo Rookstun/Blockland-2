@@ -2,6 +2,7 @@
 // a region before deploying: colour of the highest brick per pixel, hill-shaded.
 //   node mapgen/viewbox.mjs OUTDIR CX CY HALF out.png [unitsPerPixel=10] [zMax]
 // zMax: drop bricks reaching above it, a cut-away (e.g. the sewer level)
+// env WATERZ=z: tint what lies under the sea plane (summary waterHeight) blue, by depth
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -34,7 +35,8 @@ for (let j = 0; j < W; j++)
   for (let i = 0; i < W; i++) {
     const n = j * W + i, nw = j > 0 && i > 0 ? zb[n - W - 1] : zb[n];
     const k = Math.max(0.55, Math.min(1.35, 1 + (zb[n] - nw) / 40));
-    for (let a = 0; a < 3; a++) img[j * (W * 3 + 1) + 1 + i * 3 + a] = Math.min(255, rgb[n * 3 + a] * k);
+    const wz = +(process.env.WATERZ ?? NaN), wet = zb[n] < wz ? Math.min(0.85, 0.45 + (wz - zb[n]) / 120) : 0;
+    for (let a = 0; a < 3; a++) img[j * (W * 3 + 1) + 1 + i * 3 + a] = Math.min(255, rgb[n * 3 + a] * k * (1 - wet) + [40, 110, 170][a] * wet);
   }
 const crcT = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crcT[n] = c >>> 0; }
 const crc = b => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
