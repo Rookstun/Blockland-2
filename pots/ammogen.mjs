@@ -26,6 +26,25 @@ const owner = w.addOwner({ id: "891c4675-d18a-4ce1-a465-f4193ffe8b39", name: "so
 const g = w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, frozen: true, owner_index: owner });
 const coin = w.addBrick({ asset: "B_1x1_Coin", position: [0, 0, 0], color: K.color, owner_index: owner, material: "BMC_Glow", material_intensity: 2,
   components: [{ type: "Component_Touch", data: { BeginTouchSound: null, EndTouchSound: null, bCollisionEnabled_Player: true, bCollisionEnabled_Player1: true, bCollisionEnabled_Player2: true, bCollisionEnabled_Player3: true } }] }, { grid: g.grid });
+// (2026-10-15, owner: "i dont see arrows": the coin looked like a copper coin) a glowing model on the coin:
+// arrows = 3 arrows standing in a fan (wood shafts, steel tips, red/white fletching),
+// bullets = 3 brass cartridges with copper tips. No collision: only the coin is touched.
+const MB = "PB_DefaultMicroBrick";
+const part = (pos, size, color, glow = true) => w.addBrick({ asset: MB, position: pos, size, color, owner_index: owner, collision: false,
+  ...(glow ? { material: "BMC_Glow", material_intensity: 1 } : {}) }, { grid: g.grid });
+if (KIND === "arrows") {
+  for (const [x, y] of [[-6, 0], [0, 4], [6, 0]]) {
+    part([x, y, 26], [1, 1, 18], [150, 96, 48]);            // shaft z 8..44
+    part([x, y, 47], [2, 2, 3], [200, 200, 210]);           // tip
+    part([x, y, 12], [4, 1, 4], [210, 30, 30], false);      // fletching
+    part([x, y, 12], [1, 4, 4], [240, 240, 240], false);
+  }
+} else {
+  for (const [x, y] of [[-6, 0], [0, 4], [6, 0]]) {
+    part([x, y, 20], [3, 3, 12], [220, 170, 60]);           // case z 8..32
+    part([x, y, 35], [2, 2, 3], [190, 90, 50]);             // bullet
+  }
+}
 // the chip rides on the coin's grid, hidden just under it
 const chipBrick = w.addBrick({ asset: "B_1x1_Microchip", position: [0, 0, -8], owner_index: owner, visibility: false, collision: false, components: [{ type: "Component_Internal_Microchip" }] }, { grid: g.grid });
 const chip = { brick: chipBrick, grid: w.addBrickGrid({ type: "Entity_MicrochipDynamicBrickGrid", location: { X: 0, Y: 0, Z: 30 }, data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 24, Y: 24 + 20 * K.ammo.length, Z: 2 } } }) };
@@ -44,7 +63,7 @@ const grants = K.ammo.map(([, amount], i) => ({
 const delay = gate("B_1x1_Gate_Pseudo_Timer", "BrickComponentType_WireGraphPseudo_Timer", { Limit: 0.1, Time: 0.1, bRunning: false });
 const self = gate("B_1x1_Gate_Internal_ReadBrickGrid", "BrickComponentType_Internal_ReadBrickGrid", {});
 const destroy = gate("B_1x1_Gate_Exec_Entity_DestroySpawnedPrefab", "BrickComponentType_WireGraph_Exec_Entity_DestroySpawnedPrefab", {});
-const sound = w.addBrick({ asset: "B_1x1_SoundEmitter", position: [0, 0, 8], owner_index: owner, visibility: false, collision: false,
+const sound = w.addBrick({ asset: "B_1x1_SoundEmitter", position: [0, 0, -18], owner_index: owner, visibility: false, collision: false,
   components: [{ type: "Component_OneShotAudioEmitter", data: { AudioDescriptor: 0, VolumeMultiplier: 1, PitchMultiplier: 1.5, InnerRadius: 15, MaxDistance: 400, bSpatialization: true, bEnableRepeat: false, RepeatTime: 1, RepeatVariance: 0, RepeatCount: 1 } }] }, { grid: g.grid });
 const P = (brick, component_type, port) => ({ brick, component_type, port });
 const TOUCH = "Component_Touch", GA = "BrickComponentType_WireGraph_Exec_Character_GetAmmo", SA = "BrickComponentType_WireGraph_Exec_Character_SetAmmo", ADD = "BrickComponentType_WireGraph_Expr_MathAdd", WR = "BrickComponentType_WireGraph_WeaponResourceReference", TM = "BrickComponentType_WireGraphPseudo_Timer";

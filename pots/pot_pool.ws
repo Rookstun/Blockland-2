@@ -4,8 +4,8 @@
 // chip (in the sky next to skeleton_drop, owned by the server owner so it may
 // pay out money) rolls the pool and drops the loot at the pot.
 //
-// Pool (out of 100): gold coin25 5, silver coin10 15, health pickup 15,
-// arrows (10) 12, bullets (every gun ammo) 8, copper coin1 x1-3 37, nothing 8
+// Pool (out of 100): gold coin25 5, silver coin10 15, health pickup 12,
+// arrows (10) 20, bullets (every gun ammo) 8, copper coin1 x1-3 32, nothing 8
 // (2026-10-10: + heal, more copper; 2026-10-11: + arrows and bullets, players
 // ran out of ammo).
 // Edit the weights here, rebuild (node build.mjs), reload the chip.
@@ -22,11 +22,11 @@ on GlobalCustomEvent("pot.smashed") -> (at: vector) {
     SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = up, lifetime = 30.0, limit = 40)
   } else if roll <= 20 {
     SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = up, lifetime = 30.0, limit = 60)
-  } else if roll <= 35 {
+  } else if roll <= 32 {
     SpawnPrefab(prefab = $./heal.brz, offset = off, lifetime = 30.0, limit = 60)
-  } else if roll <= 47 {
+  } else if roll <= 52 {
     SpawnPrefab(prefab = $./arrows.brz, offset = off, lifetime = 30.0, limit = 60)
-  } else if roll <= 55 {
+  } else if roll <= 60 {
     SpawnPrefab(prefab = $./bullets.brz, offset = off, lifetime = 30.0, limit = 60)
   } else if roll <= 92 {
     let n = Random(1, 3)
