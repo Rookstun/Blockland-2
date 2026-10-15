@@ -36,11 +36,11 @@ const TEXT = {
   Typeface: 0, Billboard: 0, Material: 1, Shading: 0, bFlipShading: false, Outline: 2, bSharpCorners: true, bSharpOutlines: true, bOverrideOutlineColor: true, bForeground: false, Text: '',
 };
 const STYLE = {
-  tile: { LineHeight: 3.2 },
-  key: { LineHeight: 1.6, OutlineWidth: 1, Color: { R: 30, G: 28, B: 26, A: 255 }, Outline: 0 },
-  title: { LineHeight: 4, Color: { R: 250, G: 214, B: 90, A: 255 } },
-  msg: { Font: 1, LineHeight: 1.5, Color: { R: INK[0], G: INK[1], B: INK[2], A: 255 }, OutlineWidth: 0, Outline: 0 },
-  note: { Font: 1, LineHeight: 1.2, Color: { R: INK[0], G: INK[1], B: INK[2], A: 255 }, OutlineWidth: 0, Outline: 0 },
+  tile: { LineHeight: 2.3 },
+  key: { LineHeight: 1.4, OutlineWidth: 1, Color: { R: 30, G: 28, B: 26, A: 255 }, Outline: 0 },
+  title: { LineHeight: 2.6, Color: { R: 250, G: 214, B: 90, A: 255 } },
+  msg: { Font: 1, LineHeight: 0.8, Color: { R: INK[0], G: INK[1], B: INK[2], A: 255 }, OutlineWidth: 0, Outline: 0 },
+  note: { Font: 1, LineHeight: 2, Color: { R: INK[0], G: INK[1], B: INK[2], A: 255 }, OutlineWidth: 0, Outline: 0 },
 };
 const box = (x, y, z, hx, hy, hz, color, extra = {}) => w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, hy, hz], position: [x, y, z], color, owner_index: O, ...extra });
 // a plank facing -y (ruins.mjs sign orientation: direction 3 rotation 1, local x -> world -x, local y -> world -z), 2 thick, front at y-1
@@ -52,26 +52,24 @@ const changer = color => ({ type: C.BrickPropertyChanger.NAME, data: { bVisibili
   bCollisionEnabled_Player1: true, bCollisionEnabled_Player2: true, bCollisionEnabled_Player3: true, bCollisionEnabled_Weapon: true,
   bCollisionEnabled_Interaction: true, bCollisionEnabled_Physics: true, Color: { R: color[0], G: color[1], B: color[2], A: 255 }, MaterialAlpha: 0, Material: 0 } });
 
-// frame: posts, cork panel, rails, header, roof
-for (const s of [-1, 1]) { box(s * 105, 2, 148, 5, 5, 148, TIMBER); box(s * 98, 2, 139, 2, 4, 123, TIMBER2); }
-box(0, 2, 139, 96, 2, 123, CORK);
-box(0, 2, 266, 100, 4, 4, TIMBER2);
-box(0, 2, 283, 100, 2, 13, [36, 60, 44]);
-box(0, 2, 299, 116, 12, 3, ROOF);
-box(0, 2, 304, 108, 8, 2, ROOF);
-plank(0, -1, 283, 86, 10, [30, 48, 36], 'WORDLE', STYLE.title);
-// pinned notes beside the grid
-plank(79, -1, 170, 15, 34, PAPER, 'HOW TO\n\nGREEN:\nright spot\n\nYELLOW:\nwrong spot\n\nGREY:\nnot in it', STYLE.note);
-plank(-79, -1, 170, 15, 34, PAPER, 'GUESS\n\npress the\nbutton\n\nor say\n/wordle\nCRANE\n\n6 tries\nshared', STYLE.note);
+// frame (owner 2026-10-15: first one was "way way way too big"; now about notice-board size, 96 x 174):
+// posts (0..150; anything crossing them above was rejected), cork panel, rails, header with the name, roof; keys z 30..58, tiles 63..133, message 136..146
+for (const s of [-1, 1]) { box(s * 47, 2, 75, 3, 3, 75, TIMBER); box(s * 43, 2, 87, 1, 3, 63, TIMBER2); }
+box(0, 2, 87, 42, 2, 63, CORK);
+box(0, 2, 152, 50, 3, 2, TIMBER2);
+box(0, 2, 162, 50, 2, 8, [36, 60, 44]);
+box(0, 2, 172, 60, 8, 2, ROOF);
+box(0, 2, 175, 54, 5, 1, ROOF);
+plank(0, -1, 162, 42, 5, [30, 48, 36], 'WORDLE', STYLE.title);
 // lectern with the button
-box(0, -40, 16, 6, 6, 16, TIMBER);
-box(0, -40, 34, 10, 8, 2, TIMBER2);
+box(0, -26, 14, 4, 4, 14, TIMBER);
+box(0, -26, 30, 7, 6, 2, TIMBER2);
 const BTN = C.AnimatedButton;
-const button = { h: w.addBrick({ asset: 'B_Button', position: [0, -40, 38], color: [92, 160, 72], owner_index: O,
+const button = { h: w.addBrick({ asset: 'B_Button', position: [0, -26, 34], color: [92, 160, 72], owner_index: O,
   components: [{ type: BTN.NAME, data: { PressSound: 2, ReleaseSound: 3, bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: 'Guess a word' } }] }), c: BTN };
 
 // ---- logic (all gates inside one microchip behind the board) -----------------
-const chip = w.addMicrochip({ position: [0, 12, 60], owner_index: O, planeExtent: { X: 40, Y: 40, Z: 2 } });
+const chip = w.addMicrochip({ position: [0, 10, 60], owner_index: O, planeExtent: { X: 40, Y: 40, Z: 2 } });
 const g = (c, data = {}) => gate(c, data, chip.grid);
 const consts = new Map();
 const K = v => { const key = typeof v + ':' + v; if (!consts.has(key)) consts.set(key, [g(C.Var, { Value: typeof v === 'string' ? str(v) : num(v) }), 'Value']); return consts.get(key); };
@@ -106,22 +104,24 @@ const isOver = gt(over, 0.5);
 
 // ---- display: tiles, keys, message ----------------------------------------
 const colors = {};
-for (const [n, c] of Object.entries(TILE)) colors['t' + n] = [g(C.Expr_MakeColorSRGB, { R: c[0], G: c[1], B: c[2], A: 255 }), 'Output'];
-for (const [n, c] of Object.entries(KEYC)) colors['k' + n] = [g(C.Expr_MakeColorSRGB, { R: c[0], G: c[1], B: c[2], A: 255 }), 'Output'];
+// channels WIRED from constants: R/G/B written into the gate's data came out wrong in game (empty showed light blue, grey dark blue)
+const mkColor = c => { const x = g(C.Expr_MakeColorSRGB, { R: 0, G: 0, B: 0, A: 255 }); wire(...K(c[0]), x, 'R'); wire(...K(c[1]), x, 'G'); wire(...K(c[2]), x, 'B'); return [x, 'Output']; };
+for (const [n, c] of Object.entries(TILE)) colors['t' + n] = mkColor(c);
+for (const [n, c] of Object.entries(KEYC)) colors['k' + n] = mkColor(c);
 const stateColor = (digit, pre) => sel(sel(sel(colors[pre + 'empty'], colors[pre + 'gray'], eq(digit, '1')), colors[pre + 'yellow'], eq(digit, '2')), colors[pre + 'green'], eq(digit, '3'));
-const PITCH = 24;
+const PITCH = 12;
 for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) {
   const t = r * 5 + c;
-  const tile = plank((2 - c) * PITCH, -1, 220 - r * PITCH, 10, 10, TILE.empty, '', STYLE.tile, [changer(TILE.empty)]);
+  const tile = plank((2 - c) * PITCH, -1, 128 - r * PITCH, 5, 5, TILE.empty, '', STYLE.tile, [changer(TILE.empty)]);
   wire(...sub(board, t, 1), tile, 'Text');
   wire(...stateColor(sub(status, t, 1), 't'), { h: tile.h, c: C.BrickPropertyChanger }, 'Color');
 }
 const KEYROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
 KEYROWS.forEach((letters, kr) => [...letters].forEach((L, i) => {
-  const key = plank(((letters.length - 1) / 2 - i) * 16, -1, 70 - kr * 20, 7, 9, KEYC.empty, L, STYLE.key, [changer(KEYC.empty)]);
+  const key = plank(((letters.length - 1) / 2 - i) * 8, -1, 54 - kr * 10, 3, 4, KEYC.empty, L, STYLE.key, [changer(KEYC.empty)]);
   wire(...stateColor(sub(keys, L.charCodeAt(0) - 65, 1), 'k'), { h: key.h, c: C.BrickPropertyChanger }, 'Color');
 }));
-const msgBoard = plank(0, -1, 246, 90, 10, PAPER, '', STYLE.msg);
+const msgBoard = plank(0, -1, 141, 40, 5, PAPER, '', STYLE.msg);
 wire(...msg, msgBoard, 'Text');
 // every message change goes to the server log ("[Wire Graph] wordle|<msg>|<board>|<status>")
 { const cd = g(C.Expr_ChangeDetectorExec); wire(...msg, cd, 'Input');
