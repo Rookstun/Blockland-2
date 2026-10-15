@@ -14,6 +14,10 @@
 // rejoin (it logs "[inv-restored] <userId>"); when it has nothing (a restart,
 // a new chip) the saved items are given back here (GiveItem, plain versions;
 // the arming sword is left to the chip, which gives it at the player's tier).
+// Names (2026-10-15): GiveItem gives plain items, so before giving them the
+// shop names go to the chip as catalog ids (itemcatalog.json index + 1, the
+// chip's copy) in leaderboards InvName0-9 + InvPend (how many); the chip turns
+// each matching plain item back into that shop's named item.
 //
 //   !progress        your saved values
 // Unsafe (plain node) plugin, like tpa and duel.
@@ -21,6 +25,7 @@
 const KEYS = ['coins', 'XP', 'Level', 'SwordTier'];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clean = s => String(s).replace(/[<>"\\;]/g, '');
+const CAT_ID = new Map(require('./itemcatalog.json').map((e, i) => [e.name, i + 1]));
 
 module.exports = class Progress {
   constructor(omegga, config, store) {
@@ -104,10 +109,13 @@ module.exports = class Progress {
     if (inv && !((this.chipRestored.get(player.id) ?? 0) >= joinedAt)) {
       // GiveItem can only give plain items: the shop names come back only from the chip's own memory
       const items = inv.slots.map((it, i) => ({ it, name: inv.names?.[i] })).filter(x => x.it && x.it !== 'Weapon_ArmingSword');
+      const ids = items.map(x => CAT_ID.get(x.name) ?? 0).filter(Boolean).slice(0, 10);
+      for (let j = 0; j < 10; j++) player.setLeaderboard('InvName' + j, ids[j] ?? 0);
+      player.setLeaderboard('InvPend', ids.length);
       for (const x of items) player.giveItem(x.it);
       if (items.length) this.omegga.whisper(player.name, `<color="8cf">Your items are back: ${items.map(x => clean(x.name ?? x.it.replace(/^Weapon_/, ''))).join(', ')}.</>`);
-      console.log(`[progress] gave ${player.name} ${items.map(x => x.it).join(', ')}`);
-    }
+      console.log(`[progress] gave ${player.name} ${items.map(x => x.it).join(', ')} (${ids.length} named)`);
+    } else player.setLeaderboard('InvPend', 0); // nothing given here: no stale names for later pickups
     const saved = await this.store.get('p:' + player.id);
     if (!saved) return;
     const now = await this.read(player);

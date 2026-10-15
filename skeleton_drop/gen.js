@@ -213,7 +213,25 @@ ${pad}        t${j} = 1
 `).join('') + `${pad}      }
 ${pad}    }
 ${pad}  }
-`).join('') + R.map(k => `${pad}  invItem.set("${I('uid')}:${k}", e${k})
+`).join('') + `${pad}  // after a restart the progress plugin gives back plain items and leaves their
+${pad}  // shop names as catalog ids in leaderboards InvName0-9 (InvPend = how many):
+${pad}  // an unnamed slot of a pending item's class becomes that shop item again
+${pad}  if ${c}.GetLeaderboard("InvPend") > 0 {
+` + R.map(j => `${pad}    var p${j} = ${c}.GetLeaderboard("InvName${j}")
+${pad}    let pc${j} = catClass(p${j})
+${pad}    let pn${j} = catName(p${j})
+`).join('') + R.map(k => `${pad}    if n${k} == "" {
+` + R.map((j, i) => `${pad}      ${i ? '} else ' : ''}if p${j} > 0 && pc${j} == e${k} {
+${pad}        p${j} = 0
+${pad}        ${c}.SetLeaderboard("InvName${j}", 0)
+${pad}        ${c}.SetLeaderboard("InvPend", ${c}.GetLeaderboard("InvPend") - 1)
+${pad}        n${k} = pn${j}
+${pad}        invFix.set("${I('uid')}:${k}", 1)
+${pad}        invFixN.set(uid, 1)
+`).join('') + `${pad}      }
+${pad}    }
+`).join('') + `${pad}  }
+` + R.map(k => `${pad}  invItem.set("${I('uid')}:${k}", e${k})
 ${pad}  invName.set("${I('uid')}:${k}", n${k})
 `).join('') + `${pad}  invHas.set(uid, 1)
 ${pad}  // (owner 2026-10-11: "they NEED to keep the data") the slots go to the log
@@ -222,6 +240,19 @@ ${pad}  let invLine = "${R.map(k => I(`e${k}`) + '=' + I(`n${k}`)).join('|')}"
 ${pad}  if !invLast.has(uid) || invLast.get(uid).Value != invLine {
 ${pad}    invLast.set(uid, invLine)
 ${pad}    PrintToConsole("[inv] ${I('uid')} ${I('invLine')}")
+${pad}  }
+${pad}}
+${pad}// one flagged slot per tick becomes its shop item (giveNamed is big: one call site)
+${pad}if invFixN.has(uid) && invFixN.get(uid) == 1 {
+${pad}  var fk = -1
+` + R.map((k, i) => `${pad}  ${i ? '} else ' : ''}if invFix.has("${I('uid')}:${k}") && invFix.get("${I('uid')}:${k}") == 1 {
+${pad}    fk = ${k}
+`).join('') + `${pad}  }
+${pad}  if fk >= 0 {
+${pad}    invFix.set("${I('uid')}:${I('fk')}", 0)
+${pad}    giveNamed(${c}.CharacterOf(), fk, invName.get("${I('uid')}:${I('fk')}").Value, invItem.get("${I('uid')}:${I('fk')}").Value)
+${pad}  } else {
+${pad}    invFixN.set(uid, 0)
 ${pad}  }
 ${pad}}
 `;
@@ -256,6 +287,19 @@ mod giveNamed(ch: character, slot: int, name: string, it: entity) {
     ch.SetInventoryItem(it, slot)
   }
 }
+// catalog id (index + 1, as the progress plugin writes it) -> item class / shop name
+mod catClass(id: int) -> entity {
+` + CAT.map((e, i) => `  if id == ${i + 1} {
+    return $BRItemBase/${e.item}
+  }
+`).join('') + `  return $BRItemBase/Weapon_ArmingSword
+}
+mod catName(id: int) -> string {
+` + CAT.map((e, i) => `  if id == ${i + 1} {
+    return "${e.name}"
+  }
+`).join('') + `  return ""
+}
 `;
 const swordGive = (ch, c, pad) => `${pad}let suid = ${c}.GetUserId()
 ${pad}if !invLive.has(suid) || invLive.get(suid) != 1 {
@@ -289,6 +333,8 @@ var invItem: Map<string, entity>
 var invName: Map<string, string>
 var invBuy: Map<string, int>
 var invChk: Map<string, int>
+var invFix: Map<string, int>
+var invFixN: Map<string, int>
 on ControllerLeft() -> (controller, userId, userName) {
   invLive.set(userId, 0)
 }

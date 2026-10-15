@@ -487,6 +487,397 @@ mod giveNamed(ch: character, slot: int, name: string, it: entity) {
     ch.SetInventoryItem(it, slot)
   }
 }
+// catalog id (index + 1, as the progress plugin writes it) -> item class / shop name
+mod catClass(id: int) -> entity {
+  if id == 1 {
+    return $BRItemBase/Weapon_Bow
+  }
+  if id == 2 {
+    return $BRItemBase/Weapon_Bow
+  }
+  if id == 3 {
+    return $BRItemBase/Weapon_Bow
+  }
+  if id == 4 {
+    return $BRItemBase/Weapon_Bow
+  }
+  if id == 5 {
+    return $BRItemBase/Weapon_Bow
+  }
+  if id == 6 {
+    return $BRItemBase/Weapon_Bow
+  }
+  if id == 7 {
+    return $BRItemBase/Weapon_BoltActionRifle
+  }
+  if id == 8 {
+    return $BRItemBase/Weapon_Derringer
+  }
+  if id == 9 {
+    return $BRItemBase/Weapon_HuntingShotgun
+  }
+  if id == 10 {
+    return $BRItemBase/Weapon_LeverActionRifle
+  }
+  if id == 11 {
+    return $BRItemBase/Weapon_MagnumPistol
+  }
+  if id == 12 {
+    return $BRItemBase/Weapon_Revolver
+  }
+  if id == 13 {
+    return $BRItemBase/Weapon_ArmingSword
+  }
+  if id == 14 {
+    return $BRItemBase/Weapon_Zweihander
+  }
+  if id == 15 {
+    return $BRItemBase/Weapon_Knife
+  }
+  if id == 16 {
+    return $BRItemBase/Weapon_Longsword
+  }
+  if id == 17 {
+    return $BRItemBase/Weapon_Sabre
+  }
+  if id == 18 {
+    return $BRItemBase/Weapon_Spatha
+  }
+  if id == 19 {
+    return $BRItemBase/Weapon_ArmingSword
+  }
+  if id == 20 {
+    return $BRItemBase/Weapon_Zweihander
+  }
+  if id == 21 {
+    return $BRItemBase/Weapon_Knife
+  }
+  if id == 22 {
+    return $BRItemBase/Weapon_Longsword
+  }
+  if id == 23 {
+    return $BRItemBase/Weapon_Sabre
+  }
+  if id == 24 {
+    return $BRItemBase/Weapon_Spatha
+  }
+  if id == 25 {
+    return $BRItemBase/Weapon_ArmingSword
+  }
+  if id == 26 {
+    return $BRItemBase/Weapon_Zweihander
+  }
+  if id == 27 {
+    return $BRItemBase/Weapon_Knife
+  }
+  if id == 28 {
+    return $BRItemBase/Weapon_Longsword
+  }
+  if id == 29 {
+    return $BRItemBase/Weapon_Sabre
+  }
+  if id == 30 {
+    return $BRItemBase/Weapon_Spatha
+  }
+  if id == 31 {
+    return $BRItemBase/Weapon_ArmingSword
+  }
+  if id == 32 {
+    return $BRItemBase/Weapon_Zweihander
+  }
+  if id == 33 {
+    return $BRItemBase/Weapon_Knife
+  }
+  if id == 34 {
+    return $BRItemBase/Weapon_Longsword
+  }
+  if id == 35 {
+    return $BRItemBase/Weapon_Sabre
+  }
+  if id == 36 {
+    return $BRItemBase/Weapon_Spatha
+  }
+  if id == 37 {
+    return $BRItemBase/Weapon_ArmingSword
+  }
+  if id == 38 {
+    return $BRItemBase/Weapon_Zweihander
+  }
+  if id == 39 {
+    return $BRItemBase/Weapon_Knife
+  }
+  if id == 40 {
+    return $BRItemBase/Weapon_Longsword
+  }
+  if id == 41 {
+    return $BRItemBase/Weapon_Sabre
+  }
+  if id == 42 {
+    return $BRItemBase/Weapon_Spatha
+  }
+  if id == 43 {
+    return $BRItemBase/Weapon_ArmingSword
+  }
+  if id == 44 {
+    return $BRItemBase/Weapon_Zweihander
+  }
+  if id == 45 {
+    return $BRItemBase/Weapon_Knife
+  }
+  if id == 46 {
+    return $BRItemBase/Weapon_Longsword
+  }
+  if id == 47 {
+    return $BRItemBase/Weapon_Sabre
+  }
+  if id == 48 {
+    return $BRItemBase/Weapon_Spatha
+  }
+  if id == 49 {
+    return $BRItemBase/Weapon_ArmingSword
+  }
+  if id == 50 {
+    return $BRItemBase/Weapon_Zweihander
+  }
+  if id == 51 {
+    return $BRItemBase/Weapon_Knife
+  }
+  if id == 52 {
+    return $BRItemBase/Weapon_Longsword
+  }
+  if id == 53 {
+    return $BRItemBase/Weapon_Sabre
+  }
+  if id == 54 {
+    return $BRItemBase/Weapon_Spatha
+  }
+  if id == 55 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 56 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 57 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 58 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 59 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 60 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 61 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 62 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 63 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  if id == 64 {
+    return $BRItemBase/Weapon_SodaCan
+  }
+  return $BRItemBase/Weapon_ArmingSword
+}
+mod catName(id: int) -> string {
+  if id == 1 {
+    return "Bow"
+  }
+  if id == 2 {
+    return "Magic Bow"
+  }
+  if id == 3 {
+    return "Maple Bow"
+  }
+  if id == 4 {
+    return "Oak Bow"
+  }
+  if id == 5 {
+    return "Willow Bow"
+  }
+  if id == 6 {
+    return "Yew Bow"
+  }
+  if id == 7 {
+    return "Bolt-Action Rifle"
+  }
+  if id == 8 {
+    return "Derringer"
+  }
+  if id == 9 {
+    return "Hunting Shotgun"
+  }
+  if id == 10 {
+    return "Lever-Action Rifle"
+  }
+  if id == 11 {
+    return "Magnum"
+  }
+  if id == 12 {
+    return "Revolver"
+  }
+  if id == 13 {
+    return "Adamant Sword"
+  }
+  if id == 14 {
+    return "Adamant 2h Sword"
+  }
+  if id == 15 {
+    return "Adamant Dagger"
+  }
+  if id == 16 {
+    return "Adamant Longsword"
+  }
+  if id == 17 {
+    return "Adamant Scimitar"
+  }
+  if id == 18 {
+    return "Adamant Spatha"
+  }
+  if id == 19 {
+    return "Black Sword"
+  }
+  if id == 20 {
+    return "Black 2h Sword"
+  }
+  if id == 21 {
+    return "Black Dagger"
+  }
+  if id == 22 {
+    return "Black Longsword"
+  }
+  if id == 23 {
+    return "Black Scimitar"
+  }
+  if id == 24 {
+    return "Black Spatha"
+  }
+  if id == 25 {
+    return "Bronze Sword"
+  }
+  if id == 26 {
+    return "Bronze 2h Sword"
+  }
+  if id == 27 {
+    return "Bronze Dagger"
+  }
+  if id == 28 {
+    return "Bronze Longsword"
+  }
+  if id == 29 {
+    return "Bronze Scimitar"
+  }
+  if id == 30 {
+    return "Bronze Spatha"
+  }
+  if id == 31 {
+    return "Iron Sword"
+  }
+  if id == 32 {
+    return "Iron 2h Sword"
+  }
+  if id == 33 {
+    return "Iron Dagger"
+  }
+  if id == 34 {
+    return "Iron Longsword"
+  }
+  if id == 35 {
+    return "Iron Scimitar"
+  }
+  if id == 36 {
+    return "Iron Spatha"
+  }
+  if id == 37 {
+    return "Mithril Sword"
+  }
+  if id == 38 {
+    return "Mithril 2h Sword"
+  }
+  if id == 39 {
+    return "Mithril Dagger"
+  }
+  if id == 40 {
+    return "Mithril Longsword"
+  }
+  if id == 41 {
+    return "Mithril Scimitar"
+  }
+  if id == 42 {
+    return "Mithril Spatha"
+  }
+  if id == 43 {
+    return "Rune Sword"
+  }
+  if id == 44 {
+    return "Rune 2h Sword"
+  }
+  if id == 45 {
+    return "Rune Dagger"
+  }
+  if id == 46 {
+    return "Rune Longsword"
+  }
+  if id == 47 {
+    return "Rune Scimitar"
+  }
+  if id == 48 {
+    return "Rune Spatha"
+  }
+  if id == 49 {
+    return "Steel Sword"
+  }
+  if id == 50 {
+    return "Steel 2h Sword"
+  }
+  if id == 51 {
+    return "Steel Dagger"
+  }
+  if id == 52 {
+    return "Steel Longsword"
+  }
+  if id == 53 {
+    return "Steel Scimitar"
+  }
+  if id == 54 {
+    return "Steel Spatha"
+  }
+  if id == 55 {
+    return "Dragonfruit Fizz"
+  }
+  if id == 56 {
+    return "Ghost Pepper Pop"
+  }
+  if id == 57 {
+    return "Glacier Mint"
+  }
+  if id == 58 {
+    return "Gold Rush Tonic"
+  }
+  if id == 59 {
+    return "Kraken Ink Soda"
+  }
+  if id == 60 {
+    return "Mango Tango"
+  }
+  if id == 61 {
+    return "Starfruit Sparkle"
+  }
+  if id == 62 {
+    return "Swamp Brew"
+  }
+  if id == 63 {
+    return "Voidberry Nectar"
+  }
+  if id == 64 {
+    return "Volcano Cola"
+  }
+  return ""
+}
 on CharacterDamaged() -> (victim, damage, attacker, attackerWeapon, attackerWeaponName) {
   let ac = attacker.ControllerOf()
   PrintToConsole("[hit debug] victim=${victim.ControllerOf().GetUserName()} attacker=${ac.GetUserName()} weapon=${attackerWeaponName} dmg=${damage} total=${victim.GetDamage()}")
@@ -770,6 +1161,8 @@ var invItem: Map<string, entity>
 var invName: Map<string, string>
 var invBuy: Map<string, int>
 var invChk: Map<string, int>
+var invFix: Map<string, int>
+var invFixN: Map<string, int>
 on ControllerLeft() -> (controller, userId, userName) {
   invLive.set(userId, 0)
 }
@@ -1201,6 +1594,771 @@ on Clock(interval = 0.25) {
           }
         }
       }
+      // after a restart the progress plugin gives back plain items and leaves their
+      // shop names as catalog ids in leaderboards InvName0-9 (InvPend = how many):
+      // an unnamed slot of a pending item's class becomes that shop item again
+      if hp.GetLeaderboard("InvPend") > 0 {
+        var p0 = hp.GetLeaderboard("InvName0")
+        let pc0 = catClass(p0)
+        let pn0 = catName(p0)
+        var p1 = hp.GetLeaderboard("InvName1")
+        let pc1 = catClass(p1)
+        let pn1 = catName(p1)
+        var p2 = hp.GetLeaderboard("InvName2")
+        let pc2 = catClass(p2)
+        let pn2 = catName(p2)
+        var p3 = hp.GetLeaderboard("InvName3")
+        let pc3 = catClass(p3)
+        let pn3 = catName(p3)
+        var p4 = hp.GetLeaderboard("InvName4")
+        let pc4 = catClass(p4)
+        let pn4 = catName(p4)
+        var p5 = hp.GetLeaderboard("InvName5")
+        let pc5 = catClass(p5)
+        let pn5 = catName(p5)
+        var p6 = hp.GetLeaderboard("InvName6")
+        let pc6 = catClass(p6)
+        let pn6 = catName(p6)
+        var p7 = hp.GetLeaderboard("InvName7")
+        let pc7 = catClass(p7)
+        let pn7 = catName(p7)
+        var p8 = hp.GetLeaderboard("InvName8")
+        let pc8 = catClass(p8)
+        let pn8 = catName(p8)
+        var p9 = hp.GetLeaderboard("InvName9")
+        let pc9 = catClass(p9)
+        let pn9 = catName(p9)
+        if n0 == "" {
+          if p0 > 0 && pc0 == e0 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn0
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e0 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn1
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e0 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn2
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e0 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn3
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e0 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn4
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e0 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn5
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e0 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn6
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e0 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn7
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e0 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn8
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e0 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n0 = pn9
+            invFix.set("${uid}:0", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n1 == "" {
+          if p0 > 0 && pc0 == e1 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn0
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e1 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn1
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e1 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn2
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e1 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn3
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e1 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn4
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e1 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn5
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e1 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn6
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e1 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn7
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e1 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn8
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e1 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n1 = pn9
+            invFix.set("${uid}:1", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n2 == "" {
+          if p0 > 0 && pc0 == e2 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn0
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e2 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn1
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e2 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn2
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e2 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn3
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e2 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn4
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e2 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn5
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e2 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn6
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e2 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn7
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e2 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn8
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e2 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n2 = pn9
+            invFix.set("${uid}:2", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n3 == "" {
+          if p0 > 0 && pc0 == e3 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn0
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e3 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn1
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e3 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn2
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e3 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn3
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e3 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn4
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e3 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn5
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e3 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn6
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e3 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn7
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e3 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn8
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e3 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n3 = pn9
+            invFix.set("${uid}:3", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n4 == "" {
+          if p0 > 0 && pc0 == e4 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn0
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e4 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn1
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e4 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn2
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e4 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn3
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e4 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn4
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e4 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn5
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e4 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn6
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e4 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn7
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e4 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn8
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e4 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n4 = pn9
+            invFix.set("${uid}:4", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n5 == "" {
+          if p0 > 0 && pc0 == e5 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn0
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e5 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn1
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e5 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn2
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e5 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn3
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e5 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn4
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e5 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn5
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e5 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn6
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e5 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn7
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e5 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn8
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e5 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n5 = pn9
+            invFix.set("${uid}:5", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n6 == "" {
+          if p0 > 0 && pc0 == e6 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn0
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e6 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn1
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e6 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn2
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e6 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn3
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e6 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn4
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e6 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn5
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e6 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn6
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e6 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn7
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e6 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn8
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e6 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n6 = pn9
+            invFix.set("${uid}:6", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n7 == "" {
+          if p0 > 0 && pc0 == e7 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn0
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e7 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn1
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e7 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn2
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e7 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn3
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e7 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn4
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e7 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn5
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e7 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn6
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e7 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn7
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e7 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn8
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e7 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n7 = pn9
+            invFix.set("${uid}:7", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n8 == "" {
+          if p0 > 0 && pc0 == e8 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn0
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e8 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn1
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e8 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn2
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e8 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn3
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e8 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn4
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e8 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn5
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e8 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn6
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e8 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn7
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e8 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn8
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e8 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n8 = pn9
+            invFix.set("${uid}:8", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+        if n9 == "" {
+          if p0 > 0 && pc0 == e9 {
+            p0 = 0
+            hp.SetLeaderboard("InvName0", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn0
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p1 > 0 && pc1 == e9 {
+            p1 = 0
+            hp.SetLeaderboard("InvName1", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn1
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p2 > 0 && pc2 == e9 {
+            p2 = 0
+            hp.SetLeaderboard("InvName2", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn2
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p3 > 0 && pc3 == e9 {
+            p3 = 0
+            hp.SetLeaderboard("InvName3", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn3
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p4 > 0 && pc4 == e9 {
+            p4 = 0
+            hp.SetLeaderboard("InvName4", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn4
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p5 > 0 && pc5 == e9 {
+            p5 = 0
+            hp.SetLeaderboard("InvName5", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn5
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p6 > 0 && pc6 == e9 {
+            p6 = 0
+            hp.SetLeaderboard("InvName6", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn6
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p7 > 0 && pc7 == e9 {
+            p7 = 0
+            hp.SetLeaderboard("InvName7", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn7
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p8 > 0 && pc8 == e9 {
+            p8 = 0
+            hp.SetLeaderboard("InvName8", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn8
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          } else if p9 > 0 && pc9 == e9 {
+            p9 = 0
+            hp.SetLeaderboard("InvName9", 0)
+            hp.SetLeaderboard("InvPend", hp.GetLeaderboard("InvPend") - 1)
+            n9 = pn9
+            invFix.set("${uid}:9", 1)
+            invFixN.set(uid, 1)
+          }
+        }
+      }
       invItem.set("${uid}:0", e0)
       invName.set("${uid}:0", n0)
       invItem.set("${uid}:1", e1)
@@ -1228,6 +2386,37 @@ on Clock(interval = 0.25) {
       if !invLast.has(uid) || invLast.get(uid).Value != invLine {
         invLast.set(uid, invLine)
         PrintToConsole("[inv] ${uid} ${invLine}")
+      }
+    }
+    // one flagged slot per tick becomes its shop item (giveNamed is big: one call site)
+    if invFixN.has(uid) && invFixN.get(uid) == 1 {
+      var fk = -1
+      if invFix.has("${uid}:0") && invFix.get("${uid}:0") == 1 {
+        fk = 0
+      } else if invFix.has("${uid}:1") && invFix.get("${uid}:1") == 1 {
+        fk = 1
+      } else if invFix.has("${uid}:2") && invFix.get("${uid}:2") == 1 {
+        fk = 2
+      } else if invFix.has("${uid}:3") && invFix.get("${uid}:3") == 1 {
+        fk = 3
+      } else if invFix.has("${uid}:4") && invFix.get("${uid}:4") == 1 {
+        fk = 4
+      } else if invFix.has("${uid}:5") && invFix.get("${uid}:5") == 1 {
+        fk = 5
+      } else if invFix.has("${uid}:6") && invFix.get("${uid}:6") == 1 {
+        fk = 6
+      } else if invFix.has("${uid}:7") && invFix.get("${uid}:7") == 1 {
+        fk = 7
+      } else if invFix.has("${uid}:8") && invFix.get("${uid}:8") == 1 {
+        fk = 8
+      } else if invFix.has("${uid}:9") && invFix.get("${uid}:9") == 1 {
+        fk = 9
+      }
+      if fk >= 0 {
+        invFix.set("${uid}:${fk}", 0)
+        giveNamed(hp.CharacterOf(), fk, invName.get("${uid}:${fk}").Value, invItem.get("${uid}:${fk}").Value)
+      } else {
+        invFixN.set(uid, 0)
       }
     }
     let total = hp.GetLeaderboard("XP")
