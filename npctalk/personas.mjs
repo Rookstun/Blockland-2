@@ -41,16 +41,18 @@ const ROLE = {
   townsfolk: 'You are an ordinary townsperson going about your day.',
   traveler: 'You are a traveller passing through. You have seen far corners of the island and tell tales about them.',
 };
+// opening lines: absurd, deadpan, punny, self-contained (owner 2026-10-15: Kingdom of
+// Loathing-style humour for people who never played it; no references to that game)
 const GREET = {
-  blacksmith: ['Need a blade? Speak up, the forge is loud.', 'Steel or talk, stranger? I do both.'],
-  quartermaster: ['New recruit? Grab a kit from the stands. Questions?'],
-  soda: ['Thirsty?! You look like a Volcano Cola kind of person!', 'Fresh fizz, cold and weird! What can I pour you?'],
-  gunsmith: ["Easy there, partner. Lookin' for iron?"],
-  barkeep: ['Pull up a stool. What will it be, and what is the news?', 'You look like you have a story. Spill it.'],
-  crier: ['HEAR YE, HEAR YE! Oh, a listener! What do you wish to know?'],
-  farmer: ['Mind the turnips! Oh, hello there.', 'Fine day for it. Mostly. What do you need?'],
-  townsfolk: ['Oh! Hello. Lovely day in town, isn\'t it?', 'Have we met? You look familiar.'],
-  traveler: ['Another wanderer. Sit, rest your feet. Where are you headed?', 'The roads are long out here. What brings you this way?'],
+  blacksmith: ["Welcome to my forge. Everything here is sharp, including my wit, which I keep in a drawer for safety.", "I hammer metal until it agrees with me. Want something pointy, or just here to watch me win an argument with iron?"],
+  quartermaster: ["Recruit! Your kit is on the stands. The sword is free, the confidence costs extra, and we are out of confidence."],
+  soda: ["Soda! Carbonated hope in a can! Side effects include burping and briefly understanding the universe.", "Every flavour here was invented by a man who lost a bet. What can I pour you?"],
+  gunsmith: ["Howdy. These guns go bang. The expensive ones go BANG. The broken one goes 'bonk', and it is my favourite."],
+  barkeep: ["Pull up a stool. The stools are load-bearing, unlike most of my customers' opinions. What'll it be?", "We serve two drinks: 'The Usual' and 'Not That'. Both are the same drink. What brings you in?"],
+  crier: ["HEAR YE, HEAR YE! Nothing has happened today! I shall now say it louder! ...Oh, a listener. What news do you seek?"],
+  farmer: ["Careful, these turnips are unionised. Hello there.", "Fine weather for farming, terrible weather for being a scarecrow. Don't ask how I know. What do you need?"],
+  townsfolk: ["Oh! A person! I was just standing here professionally. It's my job. Unpaid. What do you want?", "Have we met? You have the face of someone who has met me, or of a potato. A compliment either way."],
+  traveler: ["I have walked every road on this island twice, once forwards. Where are you headed?", "Ah, a fellow wanderer. I carry everything I own in this pack. It is mostly a smaller pack."],
 };
 const NOUN = { soda: 'soda vendor', crier: 'town crier', townsfolk: 'townsperson', traveler: 'traveller' };
 const used = {};
@@ -60,7 +62,7 @@ const out = spots.map((s, i) => {
   const mood = MOODS[(i * 7 + 3) % MOODS.length];
   const where = place(s.at);
   return {
-    id: i, role: s.role, name, at: s.at, roam: ['crier', 'farmer', 'townsfolk', 'traveler'].includes(s.role),
+    id: i, role: s.role, name, at: s.at, roam: false, // all stand still (npctalk/body.mjs)
     persona: `You are ${name}, a ${s.role in NOUN ? NOUN[s.role] : s.role} (${mood}) in ${where}. ${ROLE[s.role] ?? ''}`,
     greet: (GREET[s.role] ?? ['Hello there.'])[i % (GREET[s.role]?.length ?? 1)],
   };

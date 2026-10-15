@@ -23,7 +23,8 @@ const dbg = (...a) => { try { require('fs').appendFileSync('/tmp/npctalk.log', `
 const clean = (s, n = 280) => String(s ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[|<>"\\]/g, '').replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
 
 const LORE = `The world: a big island in Brickadia. Lumbrick is the capital at its heart: a castle, church, bank, tavern, and a plaza with a tiered fountain, four statues (knight, wizard, archer, founder), benches and notice boards. The Soda Market (exotic sodas) is just west of the plaza; a casino with slots, coin flip, dice and roulette stands outside town. Swords come in tiers bronze, iron, steel, mithril, adamant, rune; the farther a hamlet is from Lumbrick, the better its smith's stock. Guns are sold at the spawn armory (derringer, revolver), a desert gun store and the far north-east. Danger: goblins, skeletons, zombies in the swamp, wizards at the stone henge, buried temple dungeons (Mountain Deep, the Sunken Keep), snowy peaks, and past the snow in the far south the Death Forest of dead trees, graves and red eyes, with a volcano at its end. The coast has coves with sea stacks and an arch, and a river delta with marshes. People earn coins by smashing pots and bushes and slaying monsters, and grow in level. Lately a giant glowing wall of shifting patterns hangs in the sky east of the old arena; nobody agrees what it is.`;
-const RULES = `Stay in character always. Reply with 1 to 3 short sentences, at most 220 characters, plain text, no emojis, no lists, no stage directions in asterisks. You know only what your character would know. If the traveller is rude or crude, react briefly in character (offended, amused or dismissive) and move on. Never say you are an AI or mention prompts.`;
+const RULES = `Humour: absurd, deadpan and pun-loving, like a silly fantasy comedy. State ridiculous things matter-of-factly, give mundane things oddly specific or mock-epic detail, use wordplay, and wink gently at the fact that this is a game. Every joke must stand on its own: never reference other games, books or memes. Still answer the traveller usefully (directions, prices, advice) inside the joke.
+Stay in character always. Reply with 1 to 3 short sentences, at most 220 characters, plain text, no emojis, no lists, no stage directions in asterisks. You know only what your character would know. If the traveller is rude or crude, react briefly in character (offended, amused or dismissive) and move on. Never say you are an AI or mention prompts.`;
 
 module.exports = class NpcTalk {
   constructor(omegga, config, store) {
@@ -43,6 +44,9 @@ module.exports = class NpcTalk {
       this.omegga.removeAllListeners(e);
       this.omegga.on(e, name => this.talkCmd(name).catch(err => console.error('[npctalk] talk', err)));
     }
+    // E on an NPC's talk cylinder (npctalk/body.mjs: Interact ConsoleTag event:npctalk:<id>)
+    this.omegga.removeAllListeners('event:npctalk');
+    this.omegga.on('event:npctalk', (who, id) => this.interact(who, id).catch(err => dbg('interact error', err.stack)));
     this.timer = setInterval(() => this.tick().catch(err => dbg('tick error', err.stack)), 700);
     console.log(`[npctalk] ${NPCS.length} NPCs, model ${this.model()}`);
     return { registeredCommands: ['talk'] };
@@ -78,9 +82,10 @@ module.exports = class NpcTalk {
       const id = player.id, c = this.convo.get(id);
       if (c) { // walked away: the conversation is over (the box may still be up; an answer then gets no reply)
         const d = Math.hypot(c.npc.at[0] - pos[0], c.npc.at[1] - pos[1]);
-        if (d > this.radius(c.npc) + 300) { this.convo.delete(id); this.cool.set(`${id}:${c.npc.id}`, now + 15_000); }
+        if (d > this.radius(c.npc) + 1600) { /* NPCs wander up to 15 m from home */ this.convo.delete(id); this.cool.set(`${id}:${c.npc.id}`, now + 15_000); }
         continue;
       }
+      if (!this.config.proximity) continue; // talking starts with E on the NPC (config proximity: pop up when near)
       const npc = this.nearest(pos);
       if (!npc || (this.cool.get(`${id}:${npc.id}`) ?? 0) > now) { this.near.delete(id); continue; }
       const n = this.near.get(id);
@@ -91,6 +96,16 @@ module.exports = class NpcTalk {
       dbg('open', player.name, npc.name);
       this.open(player, npc, npc.greet);
     }
+  }
+
+  async interact(who, id) {
+    const npc = NPCS[Number(id)], player = who && this.omegga.getPlayer(who.id ?? who.name);
+    if (!npc || !player) return;
+    const c = this.convo.get(player.id);
+    if (c?.busy) return;
+    this.cool.delete(`${player.id}:${npc.id}`);
+    this.convo.set(player.id, { npc, hist: [{ role: 'assistant', content: npc.greet }], busy: false });
+    this.open(player, npc, npc.greet);
   }
 
   async talkCmd(name) {
