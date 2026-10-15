@@ -1139,9 +1139,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     for (const [u, k] of [[-40, 1], [20, 2]]) { F.bed(u, V, -1, 2, pick(PALETTE.blanket, 9001, k)); F.chest(u + 5, 196, u + 35, 216, 2); }
     F.lantern(0, 120, 2);
     FURN--;
-    // courtyard: lamps along the path, two trees
+    // courtyard: two trees (lamp posts removed, owner 2026-10-14)
     for (const sx of [-1, 1]) {
-      for (const y of [CY - 300, CY - 160]) lamp(CX + sx * 80, y);
       tree(CX + sx * 300, CY - 250, 9010 + sx);
     }
     count('castle');
@@ -1489,12 +1488,6 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       z = z0 + t * 12;
     }
     stats.trees++;
-  }
-
-  function lamp(x, y) {
-    pole(x, y, 0, 96, 5, { color: [46, 44, 42], material: 'BMC_Metallic' });
-    pole(x, y, 96, 108, 10, GLOW([255, 190, 100], 6));
-    stats.lamps++;
   }
 
   function stall(x, y, s) {
@@ -1907,19 +1900,6 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
       }
   }
-  /** lamps along the paths, alternating sides */
-  function lampsAlong(paths, step, edge) {
-    paths.forEach((p, pi) => {
-      for (let i = 8, k = 0; i + 4 < p.length; i += Math.round(step / 20), k++) {
-        const [x, y] = p[i], [qx, qy] = p[i + 1], tl = Math.hypot(qx - x, qy - y) || 1, side = (k + pi) % 2 ? 1 : -1;
-        const lx = Math.round((x - ((qy - y) / tl) * side * (PATH_W / 2 + 20)) / 10) * 10, ly = Math.round((y + ((qx - x) / tl) * side * (PATH_W / 2 + 20)) / 10) * 10;
-        const r = [lx - 10, ly - 10, lx + 10, ly + 10];
-        if (hits(r, 20) || onPath(lx, ly) || (edge && Math.hypot(lx, ly) > edge(lx, ly)) || [[0, 0], [40, 0], [-40, 0], [0, 40], [0, -40]].some(([a, b]) => riverAt(lx + a, ly + b))) continue;
-        taken.push(r);
-        onSite(r, () => lamp(lx, ly));
-      }
-    });
-  }
   /** stone bridges where a path crosses the river: deck over the water cells, parapets along both sides */
   function bridges(paths) {
     for (const p of paths) {
@@ -2019,7 +1999,6 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     };
     housesAlong(plan.paths, { step: 60, small: true, edge, seed: vs, margin: 20, pickType: hamletType }); // step 100 -> 60, margin 40 -> 30 (2026-10-10, denser)
     infill({ step: 80, small: true, edge, seed: vs, reach: 420, margin: 20, pickType: hamletType }); // back lots before the fields take the room
-    lampsAlong(plan.paths, 320, edge);
     // fields and a pen between the paths, out toward the edge
     const angles = plan.spokes.map(sp => sp.angle).sort((a, b) => a - b);
     let pens = 0;
@@ -2372,7 +2351,6 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   };
   housesAlong(plan.paths, { step: 60, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType }); // step 80 -> 60 (2026-10-13: bigger houses, same count)
   infill({ step: 80, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
-  lampsAlong(plan.paths, 400, plan.edgeR);
   propsAlong(plan.paths, 120, plan.edgeR, 503);
   trees(26, 7100, (x, y) => Math.hypot(x, y) < plan.edgeR(x, y) - 120);
   return stats;

@@ -2451,12 +2451,67 @@ const PAVE_BED = mat([128, 122, 112]);
 // grid (wallgen's herringboneRects), a few stone tones
 {
   // style 'paving' in floors.mjs; pick keeps the live layout's tones
-  for (const [top, cells] of paved)
-    for (const r of floorPieces(cells, 'paving', { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 91) * C.length)] }))
-      bricks.push({
-        asset: r.brick.asset, position: [X0 + ((r.x0 + r.x1) / 2) * 10, Y0 + ((r.y0 + r.y1) / 2) * 10, top - 2],
-        size: [(r.x1 - r.x0) * 5, (r.y1 - r.y0) * 5, 2], color: r.brick.color,
-      });
+  // (owner 2026-10-14: "make the brick paths have more interesting geometry") the
+  // herringbone field is framed and inlaid, by each stud's distance to the paving
+  // edge: a dark kerb course on the edge, a red brick band 3 studs in, diamonds down
+  // the middle of the lanes (spaced along them) and compass medallions (ring, 8-point
+  // star, a hub) where the paving opens into squares and greens
+  const inlay = (cells) => {
+    const d = new Map(); let q = [];
+    for (const k of cells) { const [a, b] = k.split(',').map(Number); if (!cells.has((a + 1) + ',' + b) || !cells.has((a - 1) + ',' + b) || !cells.has(a + ',' + (b + 1)) || !cells.has(a + ',' + (b - 1))) { d.set(k, 1); q.push([a, b]); } }
+    for (let dist = 1; q.length && dist < 14; dist++) {
+      const nq = [];
+      for (const [a, b] of q) for (const [p2, q2] of [[a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]]) { const k = p2 + ',' + q2; if (cells.has(k) && !d.has(k)) { d.set(k, dist + 1); nq.push([p2, q2]); } }
+      q = nq;
+    }
+    const D = k => d.get(k) ?? 14;
+    const cls = new Map(); // stud -> colour class
+    for (const k of cells) { const v = D(k); if (v === 1) cls.set(k, 'kerb'); else if (v === 3) cls.set(k, 'band'); }
+    const ridge = k => { const [a, b] = k.split(',').map(Number), v = D(k); return [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([x, y]) => D((a + x) + ',' + (b + y)) <= v); };
+    const pickSpaced = (cands, gap) => {
+      const out = [];
+      for (const [a, b, v] of cands.sort((u, w) => w[2] - u[2] || hash(u[0], u[1], 93) - hash(w[0], w[1], 93)))
+        if (!out.some(([x, y]) => Math.hypot(x - a, y - b) < gap)) out.push([a, b, v]);
+      return out;
+    };
+    // medallions first (squares), then lane diamonds clear of them
+    const med = pickSpaced([...cells].filter(k => D(k) >= 9 && ridge(k)).map(k => [...k.split(',').map(Number), D(k)]), 30);
+    for (const [ca, cb, v] of med) {
+      const R = Math.min(v - 3, 10);
+      for (let a = ca - R; a <= ca + R; a++) for (let b = cb - R; b <= cb + R; b++) {
+        const k = a + ',' + b; if (!cells.has(k)) continue;
+        const x = a - ca, y = b - cb, r = Math.hypot(x, y), t = Math.atan2(y, x);
+        if (r > R + 0.3) continue;
+        const star = r < (R - 1.6) * (0.35 + 0.65 * Math.pow(Math.abs(Math.cos(4 * t)), 6));
+        cls.set(k, r <= 1.2 ? 'hub' : r >= R - 0.9 ? 'band' : r >= R - 1.9 ? 'kerb' : star ? ((Math.round(t / (Math.PI / 4)) & 1) ? 'cream' : 'band') : 'field');
+      }
+    }
+    const dia = pickSpaced([...cells].filter(k => { const v = D(k); return v >= 6 && v <= 8 && ridge(k); }).map(k => [...k.split(',').map(Number), D(k)])
+      .filter(([a, b]) => !med.some(([x, y, v]) => Math.hypot(x - a, y - b) < Math.min(v - 3, 10) + 8)), 18);
+    for (const [ca, cb] of dia)
+      for (let x = -2; x <= 2; x++) for (let y = -2; y <= 2; y++) {
+        const m = Math.abs(x) + Math.abs(y), k = (ca + x) + ',' + (cb + y);
+        if (m <= 2 && cells.has(k) && D(k) >= 4) cls.set(k, m === 0 ? 'hub' : m === 1 ? 'cream' : 'band');
+      }
+    return cls;
+  };
+  const INLAY = {
+    kerb: [[104, 100, 96], [114, 110, 104], [96, 94, 92]],
+    band: [[150, 74, 56], [138, 68, 52], [162, 82, 60]],
+    cream: [[222, 210, 184], [212, 200, 174]],
+    hub: [[196, 160, 90]],
+  };
+  const emit = (top, r) => bricks.push({
+    asset: r.brick.asset, position: [X0 + ((r.x0 + r.x1) / 2) * 10, Y0 + ((r.y0 + r.y1) / 2) * 10, top - 2],
+    size: [(r.x1 - r.x0) * 5, (r.y1 - r.y0) * 5, 2], color: r.brick.color,
+  });
+  for (const [top, cells] of paved) {
+    const cls = inlay(cells), field = new Set(), parts = new Map();
+    for (const k of cells) { const c = cls.get(k); if (!c || c === 'field') field.add(k); else (parts.get(c) ?? parts.set(c, new Set()).get(c)).add(k); }
+    for (const r of floorPieces(field, 'paving', { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 91) * C.length)] })) emit(top, r);
+    for (const [c, set] of parts)
+      for (const r of floorPieces(set, { pattern: 'tiles', asset: 'PB_DefaultTile', maxSide: 2, colors: INLAY[c] }, { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 92) * C.length)] })) emit(top, r);
+  }
 }
 const terrainCount = bricks.length;
 
@@ -3708,17 +3763,23 @@ function terraceDressing(B, x0, y0, x1, y1, paved) {
         }
       }
     }
-  // corners of stepped edges: two strip studs touching only diagonally get the stud between
-  // them on the HIGH side (owner 2026-10-13: the corners were inverted, poking out over the
-  // low ground): the parapet and coping turn inward there, and below the upper ground the
-  // terrace itself closes the corner
+  // corners of stepped edges: two strip studs touching only diagonally. 2026-10-13 put the
+  // stud between them on the HIGH side only, which left a 1-stud hole up the outside of
+  // every outer corner from the low ground to the upper ground (owner 2026-10-14: "fix
+  // brick retaining wall corners"). Now the corner is a pier: the low outer stud closes the
+  // wall from its own ground up, and the parapet courses also take the high stud, so the
+  // parapet and coping turn inward round a solid 2-stud corner block
+  const corners = [];
   for (const [k, S] of course) for (const key of [...S]) {
     const [a, b] = key.split(',').map(Number);
     for (const [da, db] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       if (!S.has((a + da) + ',' + (b + db)) || S.has((a + da) + ',' + b) || S.has(a + ',' + (b + db))) continue;
-      const [p, q] = [[a + da, b], [a, b + db]].sort((u, v) => groundK(v[0], v[1]) - groundK(u[0], u[1]))[0];
-      if (groundK(p, q) < k) put(p, q, k);
+      corners.push([k, [[a + da, b], [a, b + db]].sort((u, v) => groundK(u[0], u[1]) - groundK(v[0], v[1]))]);
     }
+  }
+  for (const [k, [[lp, lq], [hp, hq]]] of corners) {
+    if (groundK(lp, lq) < k) put(lp, lq, k);
+    if (groundK(hp, hq) < k) put(hp, hq, k);
   }
   // every wall stud goes down to its own ground (corner studs were put on one course)
   for (const [key, t] of [...top]) { const [a, b] = key.split(',').map(Number); for (let k = groundK(a, b) + 1; k < t; k++) put(a, b, k); }

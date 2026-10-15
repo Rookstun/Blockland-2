@@ -421,6 +421,63 @@ export function shapedHouse({ shape = 'L', W = 40, D = 24, E = 16, storeys = 2, 
     const cells = new Set([...encl.interior, ...partitionCells].filter(c => !hole.has(c) && !wallCells.has(c)));
     for (const r of floorPieces(cells, 'planks', { salt: 99, colors: [PAL.board] })) box(r.x0, r.y0, Z0, r.x1, r.y1, Z0 + FLOOR_H, r.brick, 'attic floor');
   }
+  // ------------------------------------------------------------- dressing --
+  // (owner 2026-10-14: "more complex architecture") everything here stands at most a
+  // stud proud of the walls (the lots keep 2 studs between houses) and only where it
+  // is free: a pilastered door case with a stepped pediment, a sill and a stepped hood
+  // round every outside window, and chimney stacks on the ridge
+  let dressing = 0;
+  if (!west) {
+    const trimC = rs ? RS_TIMBER[1] : base.map(v => Math.min(255, Math.round(v * 0.72 + 60)));
+    const stoneC = rs ? RS_PLINTH : [196, 190, 178];
+    const tryBox = (x0, y0, z0, x1, y1, z1, color, label) => {
+      if (x1 <= x0 || y1 <= y0 || z1 <= z0 || !B.free([x0 * ST, y0 * ST, z0], [x1 * ST, y1 * ST, z1])) return false;
+      box(x0, y0, z0, x1, y1, z1, { asset: MB, color }, label); dressing++; return true;
+    };
+    // door case: the lintel is the lowest front-wall brick over the opening
+    const overDoor = model.walls.map(b => lib.toWorldBrick(b, config))
+      .filter(w => w.orient === 'H' && w.line === 0 && w.a < fd + 2 && w.b > fd - 2 && w.z - w.sz > C);
+    if (overDoor.length) {
+      const zt = Math.min(...overDoor.map(w => w.z - w.sz));
+      for (const px of [fd - 3, fd + 2]) tryBox(px, -1, 0, px + 1, 0, zt, stoneC, 'door case');
+      if (tryBox(fd - 4, -1, zt, fd + 4, 0, zt + 4, trimC, 'door case'))
+        for (let i = 1; i <= 3; i++) tryBox(fd - 4 + i, -1, zt + 4 * i, fd + 4 - i, 0, zt + 4 * i + 4, i === 3 ? stoneC : trimC, 'pediment');
+    }
+    // windows: group the glass by opening, find the outside, sill under and hood over
+    const wins = new Map();
+    for (const b of model.glass) {
+      const w = lib.toWorldBrick(b, config), k = `${w.orient}|${w.line}|${w.a}|${w.b}|${Math.floor(b.course / COURSES)}`;
+      const g = wins.get(k) ?? wins.set(k, { w, z0: Infinity, z1: -Infinity }).get(k);
+      g.z0 = Math.min(g.z0, w.z - w.sz); g.z1 = Math.max(g.z1, w.z + w.sz);
+    }
+    for (const { w, z0, z1 } of wins.values()) {
+      const m = Math.floor((w.a + w.b) / 2), L = w.line;
+      const inA = w.orient === 'H' ? encl.interior.has(key(m, L - 1)) : encl.interior.has(key(L - 1, m));
+      const inB = w.orient === 'H' ? encl.interior.has(key(m, L + 1)) : encl.interior.has(key(L + 1, m));
+      if (inA === inB) continue;
+      const o = inA ? L + 1 : L - 1; // the stud row just outside
+      const span = (p0, p1, za, zb, color, label) => w.orient === 'H' ? tryBox(p0, o, za, p1, o + 1, zb, color, label) : tryBox(o, p0, za, o + 1, p1, zb, color, label);
+      if (!span(w.a - 1, w.b + 1, z0 - 4, z0, stoneC, 'sill')) span(w.a, w.b, z0 - 4, z0, stoneC, 'sill');
+      if (span(w.a - 1, w.b + 1, z1, z1 + 4, trimC, 'hood')) span(w.a, w.b, z1 + 4, z1 + 8, stoneC, 'hood');
+    }
+    // chimneys: a 2 x 2 stack astride the ridge near one gable (both on long roofs), each
+    // stud column from the roof under it up past the crown, a corbelled cap and two pots
+    const stackC = rs ? [128, 124, 118] : [[140, 70, 52], [120, 64, 50], [150, 96, 70]][seed % 3];
+    const ends = W >= 40 ? [3, W - 5] : [(seed & 1) ? 3 : W - 5];
+    for (const cx of ends) {
+      const top = roofTop + 3 * C, cols = [];
+      for (let x = cx; x < cx + 2; x++) for (let y = mc; y < mc + 2; y++) {
+        let z = top;
+        while (z > Z0 && B.free([x * ST, y * ST, z - 2], [(x + 1) * ST, (y + 1) * ST, z])) z -= 2;
+        if (z <= Z0) { cols.length = 0; break; }
+        cols.push([x, y, z]);
+      }
+      if (cols.length !== 4) continue;
+      for (const [x, y, z] of cols) tryBox(x, y, z, x + 1, y + 1, top, stackC, 'chimney');
+      if (tryBox(cx - 1, mc - 1, top, cx + 3, mc + 3, top + 4, stoneC, 'chimney cap'))
+        for (const x of [cx, cx + 1]) tryBox(x + 0.2, mc + 0.7, top + 4, x + 0.8, mc + 1.3, top + 14, [150, 84, 60], 'chimney pot');
+    }
+  }
   let furniturePieces = 0;
   // ------------------------------------------------------------ furniture --
   // (owner 2026-10-13: "readd furniture", "make furniture better", "make template
@@ -481,7 +538,7 @@ export function shapedHouse({ shape = 'L', W = 40, D = 24, E = 16, storeys = 2, 
   }
   return {
     bricks: B.bricks.map(({ label, ...b }) => b), count: B.bricks.length, dormers: dormers.length, shape, W, D, E: wing ? E : 0, storeys, attic,
-    door: [fd, 0], top: roofTop, profile: prof, notes,
+    door: [fd, 0], top: roofTop, profile: prof, notes, dressing,
   };
 }
 
