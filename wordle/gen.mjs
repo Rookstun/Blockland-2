@@ -69,7 +69,11 @@ const button = { h: w.addBrick({ asset: 'B_Button', position: [0, -26, 34], colo
   components: [{ type: BTN.NAME, data: { PressSound: 2, ReleaseSound: 3, bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: 'Guess a word' } }] }), c: BTN };
 
 // ---- logic (all gates inside one microchip behind the board) -----------------
-const chip = w.addMicrochip({ position: [0, 10, 60], owner_index: O, planeExtent: { X: 40, Y: 40, Z: 2 } });
+// chip bricks are always invisible + no collision (house rule, as pots/bushes/heal): addMicrochip can't, so build it by hand
+const chipBrick = w.addBrick({ asset: 'B_1x1_Microchip', position: [0, 10, 60], owner_index: O, visibility: false, collision: false, components: [{ type: 'Component_Internal_Microchip' }] });
+const chip = { brick: chipBrick, grid: w.addBrickGrid({ type: 'Entity_MicrochipDynamicBrickGrid', location: { X: 0, Y: 0, Z: 40 },
+  data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 40, Y: 40, Z: 2 } } }) };
+w.registerMicrochipLink(chip.brick, chip.grid);
 const g = (c, data = {}) => gate(c, data, chip.grid);
 const consts = new Map();
 const K = v => { const key = typeof v + ':' + v; if (!consts.has(key)) consts.set(key, [g(C.Var, { Value: typeof v === 'string' ? str(v) : num(v) }), 'Value']); return consts.get(key); };
