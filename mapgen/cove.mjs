@@ -36,6 +36,11 @@ export const COVE_COLORS = [
   [92, 120, 62], [74, 104, 54],                                      // 10-11 creeping moss
   [96, 150, 62],                                                     // 12 grass top
   [124, 122, 120], [108, 108, 110],                                  // 13-14 grey stone
+  [238, 236, 228], [224, 222, 214], [246, 245, 240],                 // 15-17 chalk
+  [236, 150, 150],                                                   // 18 coral
+  [222, 132, 138],                                                   // 19 coral shade
+  [120, 72, 44], [100, 60, 38],                                      // 20-21 cave lining
+  [196, 130, 70], [176, 112, 60],                                    // 22-23 ochre headland
 ];
 const NOCOL = { player: false, weapon: false, interaction: false, physics: false };
 
@@ -51,41 +56,42 @@ export function coveDressing(site, ctx) {
   let rs = 0;
   const rnd = () => hash3(seed, rs++, 7, 31);
   const vox = new Map(), K = (i, j, k) => i + ',' + j + ',' + k;
-  const solid = new Map(); // key -> { top: stack top z, kind }
-  const stats = { stacks: 0, arch: 0, stalagmites: 0, cushions: 0, kelp: 0, drift: 0, shells: 0, starfish: 0, crabs: 0, boats: 0, pools: 0, trees: 0 };
+  const stats = { stacks: 0, arch: 0, coral: 0, stalagmites: 0, cushions: 0, kelp: 0, drift: 0, shells: 0, starfish: 0, crabs: 0, boats: 0, pools: 0, trees: 0 };
   const trees = [], bricks = [];
 
+  // voxel tags while shaping (coloured at the end): -1 sandstone, -2 chalk, -3 headland rock,
+  // -4 headland cave lining; >= 0 a fixed colour
+  const tagSet = (i, j, k, tag) => { const key = K(i, j, k), o = vox.get(key); if (o === undefined || (o < 0 && tag < o)) vox.set(key, tag); };
   // a tapering noisy column: base (bx, by) on ground gz, height hs, radii r0 -> rt, lean (lx, ly) at the top
-  function spire(bx, by, gz, hs, r0, rt, lx, ly, s) {
+  function spire(bx, by, gz, hs, r0, rt, lx, ly, s, tag = -1) {
     const z0 = Math.floor((gz - 30) / CV), z1 = Math.ceil((gz + hs) / CV);
     for (let k = z0; k <= z1; k++) {
       const z = (k + 0.5) * CV, t = clamp((z - gz) / hs, 0, 1);
       const ccx = bx + lx * Math.pow(t, 1.5), ccy = by + ly * Math.pow(t, 1.5);
       // ledges: the column swells a little every ~56 units
-      const ledge = ((z + s * 13) / 56) % 1 < 0.2 ? 0.14 : 0;
-      let rad = r0 * Math.pow(1 - t, 0.75) + rt * t;
+      const ledge = ((z + s * 13) / 56) % 1 < 0.2 ? 0.1 : 0;
+      let rad = r0 * Math.pow(1 - t, 0.6) + rt * t;
       if (t > 0.92) rad *= Math.sqrt(Math.max(0, 1 - (t - 0.92) / 0.08)) * 0.6 + 0.4; // rounded crown
       const reach = rad * 1.5 + CV;
       for (let i = Math.floor((ccx - reach) / CV); i <= Math.ceil((ccx + reach) / CV); i++)
         for (let j = Math.floor((ccy - reach) / CV); j <= Math.ceil((ccy + reach) / CV); j++) {
           const x = (i + 0.5) * CV, y = (j + 0.5) * CV, d = Math.hypot(x - ccx, y - ccy);
-          const n = noise(x / 34, y / 34, z / 70, s) * 0.55 + noise(x / 15, y / 15, z / 15, s + 3) * 0.3 - 0.42;
+          // vertical fluting (chalk / sandstone weathers in long grooves) + lumps
+          const n = noise(x / 30, y / 30, z / 140, s) * 0.5 + noise(x / 14, y / 14, z / 40, s + 3) * 0.22 - 0.36;
           if (d > rad * (1 + n + ledge) || t >= 1) continue;
-          vox.set(K(i, j, k), -1);
-          const key = i + ',' + j, top = gz + hs;
-          if (!(solid.get(key)?.top >= top)) solid.set(key, { top });
+          tagSet(i, j, k, tag);
         }
     }
   }
-  // a chain of noisy spheres (the arch)
-  function chain(pts, r, s) {
+  // a chain of spheres; amp = surface noise
+  function chain(pts, r, s, tag, amp = 0.5) {
     for (const [px, py, pz] of pts)
       for (let i = Math.floor((px - r * 1.4) / CV); i <= Math.ceil((px + r * 1.4) / CV); i++)
         for (let j = Math.floor((py - r * 1.4) / CV); j <= Math.ceil((py + r * 1.4) / CV); j++)
           for (let k = Math.floor((pz - r * 1.4) / CV); k <= Math.ceil((pz + r * 1.4) / CV); k++) {
             const x = (i + 0.5) * CV, y = (j + 0.5) * CV, z = (k + 0.5) * CV;
-            const n = noise(x / 26, y / 26, z / 26, s) * 0.5 - 0.25;
-            if (Math.hypot(x - px, y - py, (z - pz) * 1.2) <= r * (1 + n)) vox.set(K(i, j, k), -1);
+            const n = (noise(x / 26, y / 26, z / 26, s) - 0.5) * amp;
+            if (Math.hypot(x - px, y - py, z - pz) <= r * (1 + n)) { if (tag >= 0) vox.set(K(i, j, k), tag); else tagSet(i, j, k, tag); }
           }
   }
   function blob(px, py, pz, rx, rz, s, col) {
@@ -98,80 +104,101 @@ export function coveDressing(site, ctx) {
         }
   }
 
-  // ---- sea stacks: in the bay, and a couple out past the mouth
+  // ---- the headland and its great sea arch (Cathedral Cove): a rock ridge running out to
+  // sea from the cliffs on one side of the mouth, cliff-high, a tall pointed archway
+  // through it at beach level from the bay to the outer shore; warm stone, dark cave
+  // lining, grass and a tree on top
+  const hd = site.head;
+  if (hd) {
+    const gz = ground(hd.x, hd.y), top = (site.cliffTop ?? W + 360) + 10;
+    const A = 300, B = 130, TW = 170, TH = 220; // half length (seaward), half width, arch width / height
+    const cuz = (x, y) => [(x - hd.x) * hd.ax + (y - hd.y) * hd.ay, (x - hd.x) * hd.tx + (y - hd.y) * hd.ty];
+    const reach = A * 1.25 + 80;
+    for (let k = Math.floor((gz - 40) / CV); k <= Math.ceil(top / CV); k++) {
+      const z = (k + 0.5) * CV, t = clamp((z - gz) / (top - gz), 0, 1);
+      for (let i = Math.floor((hd.x - reach) / CV); i <= Math.ceil((hd.x + reach) / CV); i++)
+        for (let j = Math.floor((hd.y - reach) / CV); j <= Math.ceil((hd.y + reach) / CV); j++) {
+          const x = (i + 0.5) * CV, y = (j + 0.5) * CV, [u, v] = cuz(x, y);
+          // the ridge: long seaward, its nose rounding off and stepping back as it rises
+          const ua = u < 0 ? u / (A * 1.2) : u / (A * (1 - 0.3 * t)), vb = v / (B * (1 - 0.18 * t));
+          const n = noise(x / 40, y / 40, z / 120, seed + 61) * 0.5 + noise(x / 16, y / 16, z / 30, seed + 62) * 0.2 - 0.35;
+          if (ua * ua + vb * vb > 1 + n) continue;
+          // the archway: a pointed arch through the ridge along v, at u ~ 0
+          const ar = Math.abs(u) / (TW / 2), az = (z - gz) / TH;
+          if (z >= gz - 4 && ar < 1 && az < Math.sqrt(1 - ar * ar) * (1 - 0.25 * ar)) continue;
+          const lining = z >= gz - 4 && (Math.abs(u) / (TW / 2 + 40)) ** 2 + ((z - gz) / (TH + 40)) ** 2 < 1;
+          tagSet(i, j, k, lining ? -4 : -3);
+        }
+    }
+    trees.push({ kind: 'oak', x: hd.x + hd.ax * 120, y: hd.y + hd.ay * 120, z: top - 30, seed: seed * 53, size: 0.6 });
+    stats.arch = 1;
+  }
+
+  // ---- sea stacks: in the deep bay, and a couple out past the mouth; the last one chalk
   const pts = [];
-  for (let n = 0; n < 160 && pts.length < 7; n++) {
-    const outside = pts.length >= 4;
-    const a = rnd() * 2 * Math.PI, r = (outside ? 1.0 + rnd() * 0.45 : rnd() * 0.8) * R;
+  for (let n = 0; n < 200 && pts.length < 5; n++) {
+    const outside = pts.length >= 3;
+    const a = rnd() * 2 * Math.PI, r = (outside ? 1.1 + rnd() * 0.5 : rnd() * 0.5) * R;
     const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r, z = zone(x, y), u = ((x - cx) * nx + (y - cy) * ny) / R;
-    if (outside ? (z !== 'sea' || u > -0.5) : z !== 'water') continue;
+    if (outside ? (z !== 'sea' || u > -0.6) : z !== 'water') continue;
     const gz = ground(x, y);
-    if (W - gz < 24) continue;
-    if (pts.some(p => Math.hypot(p[0] - x, p[1] - y) < 150)) continue;
+    if (W - gz < 30) continue;
+    if (hd && Math.hypot(x - hd.x, y - hd.y) < 420) continue;
+    if (pts.some(p => Math.hypot(p[0] - x, p[1] - y) < 170)) continue;
     pts.push([x, y, gz]);
   }
   pts.forEach(([x, y, gz], n) => {
-    const big = n === 0 ? 1.35 : 0.7 + rnd() * 0.55;
-    const hs = (W - gz) + (220 + rnd() * 260) * big, r0 = (46 + rnd() * 30) * Math.sqrt(big), rt = 8 + rnd() * 10;
-    const la = rnd() * 2 * Math.PI, ll = rnd() * 0.12 * hs;
-    spire(x, y, gz, hs, r0, rt, Math.cos(la) * ll, Math.sin(la) * ll, seed * 17 + n);
+    const chalk = n === pts.length - 1, big = n === 0 ? 1.3 : 0.75 + rnd() * 0.5;
+    const hs = (W - gz) + (240 + rnd() * 240) * big, r0 = (chalk ? 80 : 50 + rnd() * 26) * Math.sqrt(big), rt = chalk ? 40 : 10 + rnd() * 10;
+    const la = rnd() * 2 * Math.PI, ll = rnd() * 0.1 * hs;
+    spire(x, y, gz, hs, r0, rt, Math.cos(la) * ll, Math.sin(la) * ll, seed * 17 + n, chalk ? -2 : -1);
     stats.stacks++;
-    // a pine on some flat-topped stacks
-    if (n < 4 && rnd() < 0.5 && rt > 12) { trees.push({ kind: 'pine', x: x + Math.cos(la) * ll, y: y + Math.sin(la) * ll, z: gz + hs - 20, seed: seed * 31 + n, size: 0.45 + rnd() * 0.15 }); }
-    // moss cushions round its foot
-    for (let m = 0; m < 4; m++) {
-      const a = rnd() * 2 * Math.PI, d = r0 + 6 + rnd() * 30, px = x + Math.cos(a) * d, py = y + Math.sin(a) * d;
+    if (!chalk && n < 3 && rnd() < 0.5 && rt > 13) trees.push({ kind: 'pine', x: x + Math.cos(la) * ll, y: y + Math.sin(la) * ll, z: gz + hs - 20, seed: seed * 31 + n, size: 0.4 + rnd() * 0.12 });
+    // moss cushions round its foot (the moss climbs from here)
+    for (let m = 0; m < 5; m++) {
+      const a = rnd() * 2 * Math.PI, d = r0 + 4 + rnd() * 26, px = x + Math.cos(a) * d, py = y + Math.sin(a) * d;
       if (zone(px, py) !== 'water' && zone(px, py) !== 'sea') continue;
-      const g = ground(px, py);
-      blob(px, py, g, 22 + rnd() * 22, 14 + rnd() * 12, seed + n * 7 + m, (i, j, k) => [4, 5, 7, 4][Math.floor(hash3(i, j, k, seed) * 4)]);
+      blob(px, py, ground(px, py), 22 + rnd() * 22, 14 + rnd() * 12, seed + n * 7 + m, (i, j, k) => [4, 5, 7, 4][Math.floor(hash3(i, j, k, seed) * 4)]);
       stats.cushions++;
     }
   });
-  // ---- sea arch on one side of the mouth: two legs and a span
-  {
-    const side = rnd() < 0.5 ? -1 : 1;
-    const ax = cx - nx * R * 0.95 + tx * side * R * 0.45, ay = cy - ny * R * 0.95 + ty * side * R * 0.45;
-    const bx = ax + tx * side * 220, by = ay + ty * side * 220;
-    const ga = ground(ax, ay), gb = ground(bx, by);
-    if (zone(ax, ay) && zone(bx, by) && ga < W + 40 && gb < W + 40) {
-      const top = W + 200 + rnd() * 80;
-      spire(ax, ay, ga, top - ga, 52, 40, 0, 0, seed * 19);
-      spire(bx, by, gb, top - gb, 48, 38, 0, 0, seed * 23);
-      const arc = [];
-      for (let s = 0; s <= 24; s++) { const t = s / 24; arc.push([ax + (bx - ax) * t, ay + (by - ay) * t, top - 30 + Math.sin(t * Math.PI) * 70]); }
-      chain(arc, 46, seed * 29);
-      stats.arch = 1;
-    }
+  // ---- a smooth coral-pink arch standing on the beach (Peach Beach)
+  for (let n = 0; n < 80 && !stats.coral; n++) {
+    const a = rnd() * 2 * Math.PI, r = (0.66 + rnd() * 0.18) * R, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    const dx = -Math.sin(a), dy = Math.cos(a), span = 90; // along the beach
+    const pA = [x - dx * span, y - dy * span], pB = [x + dx * span, y + dy * span];
+    if (zone(x, y) !== 'beach' || zone(...pA) !== 'beach' || zone(...pB) !== 'beach') continue;
+    if (hd && Math.hypot(x - hd.x, y - hd.y) < 450) continue;
+    const g = Math.min(ground(...pA), ground(...pB)), arc = [];
+    for (let s = 0; s <= 40; s++) { const th = (s / 40) * Math.PI; arc.push([x - Math.cos(th) * dx * span, y - Math.cos(th) * dy * span, g - 10 + Math.sin(th) * 170]); }
+    chain(arc, 24, seed + 71, 18, 0.12);
+    stats.coral = 1;
   }
-  // ---- little stalagmites on the beach and rim
-  for (let n = 0, made = 0; n < 60 && made < 4; n++) {
-    const a = rnd() * 2 * Math.PI, r = (0.75 + rnd() * 0.4) * R, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r, z = zone(x, y);
-    if (z !== 'beach' && z !== 'rim') continue;
-    const gz = ground(x, y);
-    spire(x, y, gz, 70 + rnd() * 110, 22 + rnd() * 16, 5, 0, 0, seed * 37 + n);
-    made++; stats.stalagmites++;
-  }
-  // ---- seabed moss cushions
-  for (let n = 0; n < 60 && stats.cushions < 40; n++) {
-    const a = rnd() * 2 * Math.PI, r = rnd() * 0.85 * R, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-    if (zone(x, y) !== 'water') continue;
+  // ---- seabed moss cushions in the deep water
+  for (let n = 0; n < 80 && stats.cushions < 40; n++) {
+    const a = rnd() * 2 * Math.PI, r = rnd() * 0.6 * R, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    if (zone(x, y) !== 'water' || W - ground(x, y) < 30) continue;
     blob(x, y, ground(x, y), 18 + rnd() * 26, 10 + rnd() * 12, seed + 300 + n, (i, j, k) => [4, 5, 6, 7, 5][Math.floor(hash3(i, j, k, seed + 1) * 5)]);
     stats.cushions++;
   }
-  // ---- colour the stone voxels by height (moss climbing from the water)
+  // ---- colour the shaped voxels: moss climbing out of the water onto clean banded stone
   for (const [key, c] of vox) {
     if (c >= 0) continue;
     const [i, j, k] = key.split(',').map(Number), z = (k + 0.5) * CV, x = (i + 0.5) * CV, y = (j + 0.5) * CV;
     const up = !vox.has(K(i, j, k + 1)), h = hash3(i, j, k, seed + 5);
-    const strata = noise(x / 300, y / 300, z / 26, seed + 9);
-    const stone = strata < 0.18 ? 13 + (h < 0.5 ? 0 : 1) : Math.min(3, Math.floor(strata * 4.4 - 0.4));
+    const band = Math.floor(z / 30 + noise(x / 90, y / 90, 0, seed + 9) * 1.5);
+    const m5 = ((band % 5) + 5) % 5;
+    const stone = c === -2 ? [15, 16, 15, 17][band & 3] : c === -3 ? [22, 0, 23, 1, 3][m5] : c === -4 ? (h < 0.5 ? 20 : 21) : [0, 1, 3, 0, 2][m5];
     let col;
-    if (z < W - 15) col = noise(x / 40, y / 40, z / 40, seed + 2) > 0.66 ? 6 : h < 0.22 ? stone : h < 0.6 ? 4 : 5;
-    else if (z < W + 25) col = h < 0.08 ? 9 : h < 0.5 ? 7 : 8;
+    if (z < W - 15) col = noise(x / 40, y / 40, z / 40, seed + 2) > 0.66 ? 6 : h < 0.25 ? stone : h < 0.62 ? 4 : 5;
+    else if (z < W + 20) col = h < 0.07 ? 9 : noise(x / 16, y / 16, z / 16, seed + 7) < 0.5 ? 7 : 8;
     else {
-      let p = clamp(1 - (z - W - 25) / 300, 0, 1) * (0.45 + 0.7 * noise(x / 24, y / 24, z / 24, seed + 4));
-      if (up) p += 0.45;
-      col = up && z > W + 160 && h < 0.7 ? 12 : h < p ? (hash3(i, j, k, seed + 6) < 0.5 ? 10 : 11) : stone;
+      // moss thins out with height: thick just above the tide, patches higher up, on ledges
+      // a flat top: open above, solid all round at this level with those open above too
+      const flat = up && [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([a, b]) => vox.has(K(i + a, j + b, k)) && !vox.has(K(i + a, j + b, k + 1)));
+      const p = clamp(1 - (z - W - 20) / 200, 0, 1) * (0.3 + 0.8 * noise(x / 30, y / 30, z / 30, seed + 4)) + (flat && z < W + 160 ? 0.3 : 0);
+      const patch = noise(x / 22, y / 22, z / 22, seed + 8) * 0.75 + h * 0.25; // moss in patches, not speckles
+      col = flat && c !== -4 && z > W + 140 ? 12 : patch < p * (c <= -3 ? 0.45 : 0.85) ? (hash3(i, j, k, seed + 6) < 0.5 ? 10 : 11) : stone;
     }
     vox.set(key, col);
   }
@@ -199,7 +226,7 @@ export function coveDressing(site, ctx) {
     stats.kelp++;
   }
   // beach clutter
-  const beachPt = () => { for (let n = 0; n < 40; n++) { const a = rnd() * 2 * Math.PI, r = (0.72 + rnd() * 0.3) * R, x = ev(cx + Math.cos(a) * r), y = ev(cy + Math.sin(a) * r); if (zone(x, y) === 'beach') return [x, y, ev(ground(x, y))]; } return null; };
+  const beachPt = () => { for (let n = 0; n < 40; n++) { const a = rnd() * 2 * Math.PI, r = (0.58 + rnd() * 0.4) * R, x = ev(cx + Math.cos(a) * r), y = ev(cy + Math.sin(a) * r); if (zone(x, y) === 'beach') return [x, y, ev(ground(x, y))]; } return null; };
   for (let n = 0; n < 5; n++) {
     const p = beachPt(); if (!p) continue; const [x, y, z] = p, L = ev(30 + rnd() * 30), alongX = rnd() < 0.5, DW = [[176, 160, 136], [150, 126, 96], [190, 176, 150]][n % 3];
     item(() => {
@@ -249,7 +276,7 @@ export function coveDressing(site, ctx) {
     stats.pools++;
   }
   // tree spots: palms on the beach, mixed on the rim
-  for (let n = 0; n < 4; n++) { const p = beachPt(); if (p) trees.push({ kind: 'palm', x: p[0], y: p[1], z: p[2], seed: seed * 41 + n, size: 0.75 + rnd() * 0.3 }); }
+  for (let n = 0; n < 7; n++) { const p = beachPt(); if (p) trees.push({ kind: 'palm', x: p[0], y: p[1], z: p[2], seed: seed * 41 + n, size: 0.75 + rnd() * 0.3 }); }
   for (let n = 0, m = 0; n < 60 && m < 7; n++) {
     const a = rnd() * 2 * Math.PI, r = (1.05 + rnd() * 0.25) * R, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
     if (zone(x, y) !== 'rim') continue;
