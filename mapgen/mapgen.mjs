@@ -26,6 +26,7 @@ import { makeOccupancy, placeVoxelProp } from './props.mjs';
 import { buildRocks, RV } from './rocks.mjs';
 import { shrine, CHECKPOINT_AT, FOOT as SHRINE_FOOT } from './checkpoint.mjs';
 import { signpost } from './signpost.mjs';
+import { coveDressing, CV as COVE_V } from './cove.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -183,6 +184,7 @@ const PLAZA = mat([150, 146, 134]);
 const COBBLE = mat([164, 156, 142]);
 const PATH = mat([142, 112, 76]);
 const GRAVEL = mat([90, 84, 78]);
+const MOSSBED = [mat([58, 92, 62]), mat([66, 100, 58])]; // cove floors (2026-10-14)
 const MUD = mat([74, 56, 38]);
 const MUCK = mat([104, 92, 46]); // yellow-brown slime on the swamp banks
 const POOL_BED = mat([58, 46, 32]);
@@ -1981,6 +1983,73 @@ riverValleyCap();
     }
   console.error(`river levees: ${raised} bank cells raised to the water line`);
 }
+// ------------------------------------------------------------------ coves --
+// (owner 2026-10-14: "make a cove ... really really beautiful like huge stalagmites, moss
+// growing upward from the ocean floor to the rocks and beaches and trees and like a
+// charcuterie of interesting coastline shit") quiet stretches of coast get a round bay:
+// its seaward part opens to the sea, the bowl is dug below the sea plane (deepest in the
+// middle, moss-green bed), a sand beach runs round the landward edge and a stone cliff rim
+// (grass on top) stands behind it. cove.mjs fills it (sea stacks, arch, moss, kelp,
+// beach clutter, trees); see 'cove dressing' after the forest.
+const coveCell = new Uint8Array(N * N); // 1 bay water, 2 beach, 3 rim
+const coves = [];
+{
+  const COUNT = Math.round(tune('cove.count', 3, 'coves along the coast (x K)') * K), R = tune('cove.r', 13, 'cove radius, cells');
+  const busy = (x, y) => {
+    if (!inBounds(x, y)) return false;
+    const c = x * N + y;
+    return townNear[c] || townKind[c] || pathCell[c] || deck[c] || riverCell[c] || swampCell[c] || volcanoCell[c] || keepOut[c] || reserved[c] || villagePaved[c]
+      || villageDist(x, y) <= VILLAGE.r + 6 || hengeDist(x, y) <= 6 || deathW[c] > 0.2 || snowW(x, y) > 0.3
+      || DUNGEONS.some(d => d.fx !== undefined && x >= d.fx - 6 && x < d.fx + d.cells + 6 && y >= d.fy - 6 && y < d.fy + d.cells + 6);
+  };
+  const cand = [];
+  for (let x = R + 8; x < N - R - 8; x += 3)
+    for (let y = R + 8; y < N - R - 8; y += 3) {
+      const h = H[x * N + y];
+      if (h <= SEA + 1 || h > SEA + 14) continue;
+      // the sea nearby: its mean direction is the way out
+      let sx = 0, sy = 0, ns = 0;
+      for (let a = -6; a <= 6; a++) for (let b = -6; b <= 6; b++) if (H[(x + a) * N + y + b] <= SEA - 2) { sx += a; sy += b; ns++; }
+      if (ns < 20 || ns > 90) continue;
+      const l = Math.hypot(sx, sy); if (l < 1) continue;
+      cand.push([hash(x, y, 801), x, y, -sx / l, -sy / l]);
+    }
+  cand.sort((a, b) => a[0] - b[0]);
+  for (const [, x, y, nx, ny] of cand) {
+    if (coves.length >= COUNT) break;
+    const cx = Math.round(x + nx * R * 0.45), cy = Math.round(y + ny * R * 0.45);
+    if (coves.some(c => Math.hypot(c.x - cx, c.y - cy) < R * 8)) continue;
+    let bad = false, sea = 0, all = 0;
+    for (let a = -R - 9; a <= R + 9 && !bad; a++) for (let b = -R - 9; b <= R + 9; b++) {
+      if (Math.hypot(a, b) > R + 9) continue;
+      if (busy(cx + a, cy + b)) { bad = true; break; }
+      if (Math.hypot(a, b) <= R) { all++; if (H[(cx + a) * N + cy + b] <= SEA) sea++; }
+      if (H[(cx + a) * N + cy + b] > SEA + 26) { bad = true; break; }
+    }
+    if (bad || sea < all * 0.12 || sea > all * 0.5) continue;
+    coves.push({ x: cx, y: cy, nx, ny, R });
+  }
+  for (const cv of coves) {
+    for (let a = -R - 9; a <= R + 9; a++) for (let b = -R - 9; b <= R + 9; b++) {
+      const x = cv.x + a, y = cv.y + b, c = x * N + y, q = Math.hypot(a, b) / R, u = (a * cv.nx + b * cv.ny) / R;
+      if (!inBounds(x, y)) continue;
+      if (q < 0.78 || (q < 1.05 && u < -0.2)) {
+        H[c] = Math.min(H[c], SEA - 2 - Math.round(6 * (1 - Math.min(q, 1)) + 3 * Math.min(1, Math.max(0, -u))));
+        coveCell[c] = 1;
+      } else if (q < 1 && u >= -0.2) {
+        H[c] = SEA + 1 + Math.round(((q - 0.78) / 0.22) * 2); coveCell[c] = 2;
+      } else if (u > -0.35) {
+        const out = (q - 1) * R; // cells beyond the beach
+        const t = SEA + 9 + Math.round(fbm2(x / 7 + 40, y / 7, 2) * 5) - Math.max(0, out - 3) * 2;
+        if (out < 9 && t > H[c]) { H[c] = t; coveCell[c] = 3; }
+        else if (out < 2) coveCell[c] = 3;
+      }
+      if (coveCell[c] === 1) noSmooth[c] = 0;
+    }
+  }
+  console.error(`coves: ${coves.length} at ${coves.map(c => `${X0 + c.x * CELL},${Y0 + c.y * CELL}`).join(' ')}`);
+}
+
 // ------------------------------------------------------------ rock weirs --
 // (owner 2026-10-13: "use [rocks] as a natural wall to lower and raise water levels that
 // stray too much") wherever the river's level steps down from one cell to the next, a
@@ -2032,6 +2101,9 @@ for (let x = 0; x < N; x++)
     const plaza = false; // dungeons are buried now: no paved plazas
     let top, sub;
     if (plaza) [top, sub] = [PLAZA, STONE];
+    else if (coveCell[x * N + y] === 1) [top, sub] = [MOSSBED[shade % 2], STONE];
+    else if (coveCell[x * N + y] === 2) [top, sub] = [SAND, SAND];
+    else if (coveCell[x * N + y] === 3) [top, sub] = [GRASS[shade], ROCK[shade & 1]];
     else if (riverCell[x * N + y]) [top, sub] = [GRAVEL, STONE];
     else if (villagePaved[x * N + y]) [top, sub] = [COBBLE, STONE];
     else if (swampCell[x * N + y]) [top, sub] = [h < SEA ? POOL_BED : fbm2(wx / 300 + 5, wy / 300) > 0.1 ? MUCK : MUD, MUD];
@@ -2980,6 +3052,24 @@ for (let bx = 0; bx < N; bx += 4)
     trees++;
     treeAt.push([wx, wy, R]);
   }
+// cove dressing (cove.mjs): computed here so its trees join the forest pool
+const coveZone = (wx, wy) => {
+  const x = Math.floor((wx - X0) / CELL), y = Math.floor((wy - Y0) / CELL);
+  if (!inMap(x, y)) return null;
+  const k = coveCell[x * N + y];
+  return k === 1 ? 'water' : k === 2 ? 'beach' : k === 3 ? 'rim' : H[x * N + y] <= SEA - 2 && !riverCell[x * N + y] ? 'sea' : null;
+};
+const coveGround = (wx, wy) => { const x = Math.floor((wx - X0) / CELL), y = Math.floor((wy - Y0) / CELL); return (hAt(x, y) + 1) * VZ; };
+const coveDress = coves.map((cv, n) => coveDressing({ cx: X0 + (cv.x + 0.5) * CELL, cy: Y0 + (cv.y + 0.5) * CELL, nx: cv.nx, ny: cv.ny, R: cv.R * CELL, seed: 9100 + n }, { ground: coveGround, water: WATER_Z, zone: coveZone }));
+for (const d of coveDress)
+  for (const t of d.trees) {
+    const tv = treeVoxels(t.kind, t.seed, t.size);
+    const ox = Math.round(t.x / 8) * 8, oy = Math.round(t.y / 8) * 8, oz = Math.floor(t.z / 8) * 8;
+    const ci = tv.colors.map(c => { const k = c.join(); let i = forestColors.findIndex(f => f.join() === k); if (i < 0) i = forestColors.push(c) - 1; return i; });
+    for (const [key, c] of tv.wood) { const [i, j, k] = key.split(',').map(Number); const g = (ox / 4 + i) + ',' + (oy / 4 + j) + ',' + (oz / 4 + k); if (!forestWood.has(g)) forestWood.set(g, ci[c]); }
+    for (const [key, c] of tv.leaves) { const [i, j, k] = key.split(',').map(Number); const g = (ox / 8 + i) + ',' + (oy / 8 + j) + ',' + (oz / 8 + k); if (!forestLeaves.has(g)) forestLeaves.set(g, ci[c]); }
+    treeKinds['cove ' + t.kind] = (treeKinds['cove ' + t.kind] ?? 0) + 1; trees++;
+  }
 // the forest: every tree's voxels pooled (see the tree loop above) and placed
 // through props.mjs in 'smooth' mode: parts inside anything already built (terrain,
 // smoothing pieces) are cut away, trunks get fillers down to sloping ground, and
@@ -3003,6 +3093,26 @@ const canopyLow = new Uint8Array(N * N); // tree bricks near the ground here: no
     cellsOf(lo, hi, (cx, cy) => { if (inMap(cx, cy) && lo[2] < groundTop(cx * N + cy) + 40) canopyLow[cx * N + cy] = 1; });
   }
   forestStats = { ...placed.stats };
+}
+// cove dressing placed: stone and moss voxels cut away inside the ground (skirts down to
+// the bed), small things whole or not at all
+if (coves.length) {
+  const near = b => coves.some(cv => Math.hypot(b.position[0] - (X0 + cv.x * CELL), b.position[1] - (Y0 + cv.y * CELL)) < (cv.R + 14) * CELL);
+  const occ = makeOccupancy(bricks.filter(near));
+  let rock = 0, small = 0;
+  for (const d of coveDress) {
+    const placed = placeVoxelProp(occ, { grids: [{ vox: d.vox, V: COVE_V, colors: d.colors }] }, { mode: 'smooth', skirt: 40 });
+    for (const b of placed) bricks.push(b);
+    rock += placed.length;
+    for (const [n0, n1, loose] of d.groups) {
+      const g = d.bricks.slice(n0, n1), boxes = g.map(b => worldBox(b, BUILDER_FIXED));
+      if (loose) { g.forEach((b, i) => { if (!occ.hits(...boxes[i])) { occ.add(boxes[i]); bricks.push(b); small++; } }); continue; }
+      if (boxes.some(([lo, hi]) => occ.hits(lo, hi))) continue;
+      boxes.forEach(bx => occ.add(bx)); g.forEach(b => bricks.push(b)); small += g.length;
+    }
+    console.error(`cove: ${JSON.stringify(d.stats)}`);
+  }
+  console.error(`coves: ${rock} stone/moss bricks, ${small} small pieces`);
 }
 // boulders: round rocks on grass and rock
 let boulders = 0;
