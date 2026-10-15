@@ -165,6 +165,7 @@ const smooth = (e0, e1, x) => {
 const MATS = [null];
 const mat = (color, extra = {}) => MATS.push({ color, ...extra }) - 1;
 const GRASS = [mat([84, 140, 58]), mat([96, 152, 64]), mat([74, 128, 52])];
+const TOWN_GRASS = [GRASS[2], GRASS[0], mat([90, 146, 54]), GRASS[1], mat([102, 156, 70])]; // the spawn town's lawns, dark to light
 const DIRT = mat([110, 80, 54]);
 const SAND = mat([214, 196, 142], { asset: 'PB_DefaultTile' });
 const SNOW = mat([236, 240, 245], { asset: 'PB_DefaultTile' });
@@ -2034,7 +2035,7 @@ for (let x = 0; x < N; x++)
     else if (riverCell[x * N + y]) [top, sub] = [GRAVEL, STONE];
     else if (villagePaved[x * N + y]) [top, sub] = [COBBLE, STONE];
     else if (swampCell[x * N + y]) [top, sub] = [h < SEA ? POOL_BED : fbm2(wx / 300 + 5, wy / 300) > 0.1 ? MUCK : MUD, MUD];
-    else if (townKind[x * N + y]) [top, sub] = townKind[x * N + y] === 1 ? [GRASS[shade], DIRT] : [COBBLE, STONE];
+    else if (townKind[x * N + y]) [top, sub] = townKind[x * N + y] === 1 ? [TOWN_GRASS[Math.floor((fbm2(wx / 260 + 3, wy / 260 - 9, 2) + 1) * 1.6 + hash(x, y, 619) * 1.2) % TOWN_GRASS.length], DIRT] : [COBBLE, STONE]; // finer mottling at spawn (2026-10-14)
     else if (keepOut[x * N + y] && !pathCell[x * N + y] && h <= riverLevelNear(x, y) + 1) [top, sub] = [SAND, DIRT];
     else if (hengeDist(x, y) <= 0) [top, sub] = [Math.hypot(x - henge.x0 - (henge.n >> 1), y - henge.y0 - (henge.n >> 1)) < 6.5 ? DIRT : GRASS[shade], DIRT];
     else if (pathCell[x * N + y] && h > SEA + 1 && (slope < 4 || roadGraded[x * N + y])) [top, sub] = [volcanoCell[x * N + y] === 2 ? GRAVEL : PATH, DIRT];
@@ -3866,6 +3867,99 @@ const townStats = buildTown({
   riverAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; },
 });
 terraceDressing(townB, town.fx, town.fy, town.fx + TOWN.cells, town.fy + TOWN.cells, c => townKind[c] === 2);
+// lawns at spawn (owner 2026-10-14: "make the grass at spawn more interesting"): on the
+// town's grass lots, through the town's guard (never into a building, tree, wall or
+// stall): clover patches (2-high plates in two greens, from a stud noise), grass tufts
+// (3-5 thin blades 6-16 high), the odd daisy on a patch, pebbles, and a few fairy rings
+// of tiny mushrooms in the widest lawns. All walk-through (collision off), nothing within
+// 4 studs of a pot / shop / spawner spot (their prefabs load later)
+const lawnStats = { patches: 0, tufts: 0, daisies: 0, pebbles: 0, rings: 0 };
+{
+  const NOCOL = { player: false, weapon: false, interaction: false, physics: false };
+  const o = [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN.cells / 2) * CELL];
+  const keep = [...(townStats.potSpots ?? []).map(([x, y]) => [o[0] + x, o[1] + y]), ...(townStats.townShops ?? []).map(t => [o[0] + t.at[0], o[1] + t.at[1]]), ...spawners.map(s => s.at)];
+  const clearOf = (wx, wy) => !keep.some(([x, y]) => Math.abs(x - wx) < 40 && Math.abs(y - wy) < 40);
+  const add = (lo, hi, color, label, extra = {}) => {
+    if (!townB.free(lo, hi)) return false;
+    townB.add({ asset: 'PB_DefaultMicroBrick', size: [0, 1, 2].map(k => (hi[k] - lo[k]) / 2), position: [0, 1, 2].map(k => (lo[k] + hi[k]) / 2), color, collision: NOCOL, ...extra }, label);
+    return true;
+  };
+  const CLOVER = [[70, 132, 50], [62, 120, 46], [92, 150, 60]], BLADE = [[78, 140, 52], [96, 156, 62], [66, 124, 46], [124, 156, 70], [104, 146, 58]];
+  const lawn = new Map(); // stud "a,b" -> top z, grass lots only
+  for (let x = town.fx; x < town.fx + TOWN.cells; x++)
+    for (let y = town.fy; y < town.fy + TOWN.cells; y++) {
+      const c = x * N + y;
+      if (!inMap(x, y) || townKind[c] !== 1 || riverCell[c]) continue;
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) lawn.set((x * 4 + i) + ',' + (y * 4 + j), (H[c] + 1) * VZ);
+    }
+  const W = (a, b) => [X0 + a * 10, Y0 + b * 10];
+  // clover patches: merged runs along x of studs over the noise, per level and tone
+  const patch = new Map();
+  for (const [k, z] of lawn) {
+    const [a, b] = k.split(',').map(Number), n = fbm2(a / 9 + 31, b / 9 - 17, 3);
+    if (n < 0.28) continue;
+    const t = n > 0.5 ? 0 : hash(a >> 2, b >> 2, 611) < 0.5 ? 1 : 2;
+    patch.set(k, [z, t]);
+  }
+  const used = new Set();
+  for (const k of [...patch.keys()].sort()) {
+    if (used.has(k)) continue;
+    const [a, b] = k.split(',').map(Number), [z, t] = patch.get(k);
+    let a1 = a + 1;
+    while (a1 - a < 8 && !used.has(a1 + ',' + b) && patch.get(a1 + ',' + b)?.[0] === z && patch.get(a1 + ',' + b)?.[1] === t) a1++;
+    for (let p = a; p < a1; p++) used.add(p + ',' + b);
+    const [x0, y0] = W(a, b), [x1, y1] = W(a1, b + 1);
+    if (!clearOf((x0 + x1) / 2, y0)) continue;
+    if (add([x0, y0, z], [x1, y1, z + 2], CLOVER[t], 'clover')) lawnStats.patches++;
+  }
+  // fairy rings: lawn studs with grass all round for 5 studs, spaced far apart
+  const cand = [];
+  for (const [k, z] of lawn) {
+    const [a, b] = k.split(',').map(Number);
+    if ((a & 3) || (b & 3) || hash(a, b, 616) > 0.5) continue;
+    let ok = true;
+    for (let i = -5; i <= 5 && ok; i++) for (let j = -5; j <= 5 && ok; j++) if (lawn.get((a + i) + ',' + (b + j)) !== z) ok = false;
+    if (ok) cand.push([a, b, z]);
+  }
+  const rings = [];
+  for (const [a, b, z] of cand.sort((p, q) => hash(p[0], p[1], 617) - hash(q[0], q[1], 617))) {
+    if (rings.length >= 6 || rings.some(([p, q]) => Math.hypot(p - a, q - b) < 60)) continue;
+    const [cx, cy] = W(a, b);
+    if (!clearOf(cx, cy) || !townB.free([cx - 45, cy - 45, z + 2], [cx + 45, cy + 45, z + 20])) continue;
+    rings.push([a, b]);
+    const cap = hash(a, b, 618) < 0.5 ? [196, 52, 44] : [150, 104, 64];
+    for (let m = 0; m < 11; m++) {
+      const t = (m / 11) * 2 * Math.PI + hash(a, b, 660 + m) * 0.3, rr = 30 + 2 * Math.floor(hash(a, b, 670 + m) * 3);
+      const mx = cx + 2 * Math.round((Math.cos(t) * rr) / 2), my = cy + 2 * Math.round((Math.sin(t) * rr) / 2), zb = patch.has(Math.floor((mx - X0) / 10) + ',' + Math.floor((my - Y0) / 10)) ? z + 2 : z;
+      const sh = 4 + 2 * Math.floor(hash(a, b, 680 + m) * 3);
+      if (add([mx - 1, my - 1, zb], [mx + 1, my + 1, zb + sh], [232, 226, 210], 'mushroom'))
+        add([mx - 3, my - 3, zb + sh], [mx + 3, my + 3, zb + sh + 2], cap, 'mushroom');
+    }
+    lawnStats.rings++;
+  }
+  // tufts, daisies, pebbles: one roll per stud
+  for (const [k, z] of lawn) {
+    const [a, b] = k.split(',').map(Number), r = hash(a, b, 612), [x0, y0] = W(a, b);
+    if (!clearOf(x0 + 5, y0 + 5)) continue;
+    const zb = patch.has(k) ? z + 2 : z;
+    if (r < 0.035) {
+      const n = 3 + Math.floor(hash(a, b, 613) * 3);
+      let laid = 0;
+      for (let i = 0; i < n; i++) {
+        const u = 2 * Math.floor(hash(a, b, 620 + i) * 4), v = 2 * Math.floor(hash(a, b, 630 + i) * 4), h = 6 + 2 * Math.floor(hash(a, b, 640 + i) * 6);
+        if (add([x0 + u, y0 + v, zb], [x0 + u + 2, y0 + v + 2, zb + h], BLADE[Math.floor(hash(a, b, 650 + i) * BLADE.length)], 'tuft')) laid++;
+      }
+      if (laid) lawnStats.tufts++;
+    } else if (r < 0.06 && patch.has(k)) {
+      // a daisy: a 2-high white head with a yellow eye
+      if (add([x0 + 2, y0 + 2, zb], [x0 + 8, y0 + 8, zb + 2], [240, 238, 228], 'daisy')) { add([x0 + 4, y0 + 4, zb + 2], [x0 + 6, y0 + 6, zb + 4], [236, 196, 60], 'daisy'); lawnStats.daisies++; }
+    } else if (r >= 0.052 && r < 0.062) {
+      const g = 120 + Math.floor(hash(a, b, 614) * 30), w = hash(a, b, 615) < 0.5 ? 10 : 6;
+      if (add([x0, y0, zb], [x0 + w, y0 + 6, zb + 4], [g, g - 4, g - 10], 'pebble')) lawnStats.pebbles++;
+    }
+  }
+  console.error('spawn lawns:', JSON.stringify(lawnStats));
+}
 if (townB.dropped.length) throw new Error(`town: ${townB.dropped.length} overlapping pieces, e.g.\n${townB.dropped.slice(0, 8).join('\n')}`);
 for (const { label, ...b } of townB.bricks) bricks.push(b);
 // hamlets, each through its own overlap guard; their shop spots become
