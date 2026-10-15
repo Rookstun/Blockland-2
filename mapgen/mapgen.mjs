@@ -3990,6 +3990,7 @@ const townStats = buildTown({
   plan: townPlan,
   shopTiers: ['bronze', 'iron'], // the spawn town: low tiers only (owner 2026-10-06)
   sewerDepth,
+  groundAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) ? (H[x * N + y] - town.h) * VZ : null; },
   riverAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; },
 });
 terraceDressing(townB, town.fx, town.fy, town.fx + TOWN.cells, town.fy + TOWN.cells, c => townKind[c] === 2);
@@ -4095,6 +4096,8 @@ for (const v of villages) {
   const vb = makeBuilder(), o = [X0 + v.x * CELL, Y0 + v.y * CELL, (v.h + 1) * VZ];
   const st = buildTown({
     put: (b, x, y, z) => vb.add({ ...b, position: [o[0] + x, o[1] + y, o[2] + z] }, b.asset ?? 'box'),
+    groundAt: (ux, uy) => { const x = v.x + Math.floor(ux / CELL), y = v.y + Math.floor(uy / CELL); return inBounds(x, y) ? (H[x * N + y] - v.h) * VZ : null; },
+    free: (x0, y0, z0, x1, y1, z1) => vb.free([o[0] + x0, o[1] + y0, o[2] + z0], [o[0] + x1, o[1] + y1, o[2] + z1]),
     orientFor,
     rnd: townRnd,
     village: { seed: v.seed, shops: v.shops?.length ?? 0, desert: v.desert, nordic: !!v.nordic },

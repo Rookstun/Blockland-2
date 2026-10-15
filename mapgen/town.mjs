@@ -346,7 +346,7 @@ const KEEP_INNER = 0.7, KEEP_OUTER = 0.2;
 export const FURNITURE = true; // back on (owner 2026-10-13: "readd furniture")
 
 // plan: planTown(rnd) or planVillage(seed, rnd); riverAt(x, y): is that point (local units) river water
-export function build({ put, orientFor, rnd, village = null, plan, riverAt = () => false, free = () => true, shopTiers = HOUSE_SHOP_TIERS, single = null, sewerDepth = 0 }) {
+export function build({ put, orientFor, rnd, village = null, plan, riverAt = () => false, free = () => true, groundAt = null, shopTiers = HOUSE_SHOP_TIERS, single = null, sewerDepth = 0 }) {
   const pick = (list, a, b, c) => list[Math.floor(rnd(a, b, c) * list.length)];
   const stats = { buildings: {}, stalls: 0, lamps: 0, trees: 0, removed: [], houseShops: [] };
   const count = t => (stats.buildings[t] = (stats.buildings[t] ?? 0) + 1);
@@ -357,6 +357,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // terraces (2026-10-12): a brick stands on its cell's level, or inside a
   // site (onSite) on the site's level, so a building never splits
   let zCtx = null;
+  let lastDoor = null; // world spot of the front door of the last building laid (walkways)
   const lv = (x, y) => (plan?.levelAt ? plan.levelAt(x, y) : 0);
   { const lay = put; put = (b, x, y, z) => lay(b, x, y, z + (zCtx ?? lv(x, y))); }
   { const fr = free; free = (x0, y0, z0, x1, y1, z1) => { const o = zCtx ?? lv((x0 + x1) / 2, (y0 + y1) / 2); return fr(x0, y0, z0 + o, x1, y1, z1 + o); }; }
@@ -679,7 +680,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     };
     // every furnish piece is furniture (FURNITURE switch)
     for (const k of Object.keys(furnish)) { const fn = furnish[k]; furnish[k] = (...a) => { FURN++; try { return fn(...a); } finally { FURN--; } }; }
-    return { x0, y0, x1, y1, h, U, V, w, d, frontPos: [cx + fx * (fx ? ex : 0), cy + fy * (fy ? ey : 0)], lbox, lpole, lput, zf, ceil, furnish };
+    lastDoor = [cx + fx * (fx ? ex : 0), cy + fy * (fy ? ey : 0)];
+    return { x0, y0, x1, y1, h, U, V, w, d, frontPos: lastDoor, lbox, lpole, lput, zf, ceil, furnish };
   }
 
   /**
@@ -746,6 +748,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       gable(Math.min(ax, bx) - 5, Math.min(ay, by) - 5, Math.max(ax, bx) + 5, Math.max(ay, by) + 5, h.top, rise, roofColor, !fx, { color: upper ? upperColor : wallColor, inset: 5 });
     };
     const at = (xs, ys) => P(xs * 10 - w / 2, ys * 10);
+    if (h.rooms?.fd != null) lastDoor = P(h.rooms.fd * 10 - w / 2, 0);
     return { sbox, mput, clear, gableOn, at, STOREY_H: WH_COURSES * 12 };
   }
 
@@ -1046,6 +1049,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // local -y (the street): 16 -y, 17 +x, 18 +y, 19 -x
     h.at = (x, y) => { let [u, v] = [x - lx, y - ly]; for (let i = 0; i < r; i++) [u, v] = [-v, u]; return [cx + u, cy + v]; };
     h.frontOrient = [16, 17, 18, 19][r];
+    if (h.door) lastDoor = h.at(h.door[0] * 10, 0);
     return h;
   }
 
@@ -1846,6 +1850,63 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // world box of a building centred (cx, cy) facing (fx, fy)
   const boxOf = (cx, cy, fx, fy, [w, d]) => (fx ? [cx - d / 2, cy - w / 2, cx + d / 2, cy + w / 2] : [cx - w / 2, cy - d / 2, cx + w / 2, cy + d / 2]);
   /**
+   * walkway (owner 2026-10-15: "make houses have paths to the main road"):
+   * 4 studs wide from the front door straight out to the nearest path, else out
+   * a little and then along to one (an L); stone flags 2 high at the lot's level.
+   * The route reads only the plan and `taken` (trial builds route the same) and
+   * goes into `taken`; flags on something already built are left out.
+   */
+  const WALK = [[150, 144, 136], [132, 126, 118], [164, 158, 148], [122, 116, 108]];
+  function walkway(own, fx, fy, door, s, reach = 520) {
+    if (!door || zCtx == null) return;
+    const lat = fx ? [0, 1] : [1, 0];
+    const ox = Math.round(door[0] / 10) * 10, oy = Math.round(door[1] / 10) * 10;
+    // world rect from along a0..a1 (out from the door) by across l0..l1
+    const rect = (a0, a1, l0, l1) => {
+      const xa = ox + fx * a0 + lat[0] * l0, xb = ox + fx * a1 + lat[0] * l1, ya = oy + fy * a0 + lat[1] * l0, yb = oy + fy * a1 + lat[1] * l1;
+      return [Math.min(xa, xb), Math.min(ya, yb), Math.max(xa, xb), Math.max(ya, yb)];
+    };
+    const blocked = q => taken.some(t => t !== own && q[0] < t[2] && t[0] < q[2] && q[1] < t[3] && t[1] < q[3]);
+    // 10-unit steps q(i) until a step lands on a path: the steps before it, or null
+    const leg = (q, n, toPath) => {
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const r = q(i), mx = (r[0] + r[2]) / 2, my = (r[1] + r[3]) / 2;
+        if (onPath(mx, my)) return toPath ? out : null;
+        if (riverAt(mx, my) || lv(mx, my) !== zCtx || blocked(r)) return null;
+        out.push(r);
+      }
+      return toPath ? null : out;
+    };
+    let route = leg(i => rect(i * 10, i * 10 + 10, -20, 20), reach / 10, true);
+    let bounds = route && [rect(0, route.length * 10, -20, 20)];
+    for (const k of [60, 100, 140, 180]) {
+      if (route) break;
+      const out = leg(i => rect(i * 10, i * 10 + 10, -20, 20), k / 10, false);
+      if (!out) continue;
+      const sides = rnd(s, 905) < 0.5 ? [1, -1] : [-1, 1];
+      let best = null;
+      for (const sd of sides) {
+        const side = leg(i => rect(k - 40, k, sd * (20 + i * 10), sd * (30 + i * 10)), (reach - k) / 10, true);
+        if (side && (!best || side.length < best.side.length)) best = { side, sd };
+      }
+      if (best) { route = [...out, ...best.side]; bounds = [rect(0, k, -20, 20), rect(k - 40, k, best.sd * 20, best.sd * (20 + best.side.length * 10))]; }
+    }
+    if (!route) { count('walkway: no route'); return; }
+    taken.push(...bounds);
+    // flags of two steps each (one at the end of a leg), shaded
+    for (let i = 0, n = 0; i < route.length; n++) {
+      const a = route[i], b = route[i + 1];
+      const pair = b && (a[0] === b[0] || a[1] === b[1]) && (a[2] - a[0] === b[2] - b[0]) && (a[3] - a[1] === b[3] - b[1]);
+      const q = pair ? [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])] : a;
+      i += pair ? 2 : 1;
+      if (groundAt && [[q[0] + 1, q[1] + 1], [q[2] - 1, q[1] + 1], [q[0] + 1, q[3] - 1], [q[2] - 1, q[3] - 1]].some(([x, y]) => groundAt(x, y) !== zCtx)) continue; // the real terrain (mapgen) off the plan's level
+      if (!free(q[0], q[1], 0, q[2], q[3], 2)) continue;
+      box(q[0], q[1], 0, q[2], q[3], 2, { asset: 'PB_DefaultMicroBrick', color: WALK[Math.floor(rnd(s, 906, n) * WALK.length)] });
+    }
+    count('walkway');
+  }
+  /**
    * houses along the paths, both sides, facing the path: walk each path every
    * `step` units; pickType(x, y, s) names the building (or null to skip)
    */
@@ -1866,7 +1927,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const r = boxOf(cx, cy, fx, fy, fp);
           if (!rectClear(r, { edge, margin, claim: true })) continue;
           taken.push(r);
-          onSite(r, () => TYPES[type](cx, cy, fx, fy, s, small));
+          onSite(r, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); });
           if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
         }
       }
@@ -1896,7 +1957,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const r = boxOf(cx, cy, fx, fy, footprint(type, s, small));
         if (!rectClear(r, { edge, margin, claim: true })) continue;
         taken.push(r);
-        onSite(r, () => TYPES[type](cx, cy, fx, fy, s, small));
+        onSite(r, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); });
         if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
       }
   }
