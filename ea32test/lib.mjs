@@ -1,6 +1,6 @@
 // Shared helpers for EA3.2 chips written with brs-js 4.0.0 (Latest format).
 // mk(distPath, { owner }) -> { w, C, gate, wire, print, loopChip, num, ... }
-export async function mk(dist, { owner = 'test' } = {}) {
+export async function mk(dist, { owner = 'test', mainBase = [0, -400], rowStep = -40 } = {}) {
   const lib = await import(new URL(`file:///${dist.replace(/\\/g, '/')}`).href);
   const { World, brdb, WorldReader } = lib;
   const C = brdb.COMPONENTS;
@@ -15,9 +15,9 @@ export async function mk(dist, { owner = 'test' } = {}) {
   const slots = new Map();
   const gate = (c, data = {}, grid, extra = {}) => {
     const k = grid ?? 'main', i = slots.get(k) ?? 0; slots.set(k, i + 1);
-    const base = k === 'main' ? [0, -400] : [0, 0];
+    const base = k === 'main' ? mainBase : [0, 0], step = k === 'main' ? rowStep : -40;
     const h = w.addBrick({
-      asset: c.BRICK, position: [base[0] + (i % 12) * 40, base[1] - Math.floor(i / 12) * 40, 2], color: [200, 200, 200],
+      asset: c.BRICK, position: [base[0] + (i % 12) * 40, base[1] + Math.floor(i / 12) * step, 2], color: [200, 200, 200],
       owner_index: ownerIdx, components: [{ type: c.NAME, data }], ...extra,
     }, grid);
     return { h, c };

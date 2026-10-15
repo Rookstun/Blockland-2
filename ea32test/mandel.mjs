@@ -19,13 +19,15 @@ const TOUR = { x: -0.743643887037151, y: 0.131825904205330 };
 const HOME = { x: -0.6, y: 0, scale: 3.4, maxit: 64 };
 // chunked rendering: CHUNK iterations every 0.05 s (~5 us each) keeps the game thread
 // light (a run-across-ticks loop took the full 10 ms budget every tick = ~60% of it)
-const CHUNK_SLOW = 600, CHUNK_FAST = 1500;
+const CHUNK_SLOW = 1500, CHUNK_FAST = 4000;
 const OWNER = { id: 'ea320d0d-0000-4b0b-9a11-000000000096', name: 'Wire Mandelbrot', display_name: 'Wire Mandelbrot' };
 
-const pixPos = p => [(p % W) * PX - (W * PX) / 2 + PX / 2, 0, WALL_Z + (H - 1 - Math.floor(p / W)) * PX + PX / 2];
+// Brickadia is left-handed: seen from the deck (local -y) +x runs to the LEFT, so column 0 sits at +x
+const pixPos = p => [(W * PX) / 2 - PX / 2 - (p % W) * PX, 0, WALL_Z + (H - 1 - Math.floor(p / W)) * PX + PX / 2];
 
 async function build(refs) {
-  const k = await mk(dist, { owner: OWNER });
+  // gates live behind the wall (y > 0), out of sight of the viewing deck
+  const k = await mk(dist, { owner: OWNER, mainBase: [-220, 80], rowStep: 40 });
   const { w, C, gate, wire, print, chip, num } = k;
   const g = (c, data, grid) => gate(c, data ?? {}, grid);
 
@@ -44,11 +46,11 @@ async function build(refs) {
     w.addBrick({ asset: 'PB_DefaultTile', size: [130, 120, 2], position: [i * 260 + 130, -140 - j * 240, -2], color: [30, 30, 38], owner_index: k.ownerIdx });
 
   // ---- status board above the wall ---------------------------------------
-  const TEXT = { Font: 0, Rotation: 0, Skew: 0, Kerning: 0, LineHeight: 1.6, WidthScale: 1, LineOffset: 0, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },
+  const TEXT = { Font: 0, Rotation: 0, Skew: 0, Kerning: 0, LineHeight: 12, WidthScale: 1, LineOffset: 0, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },
     Color: { B: 255, G: 240, R: 200, A: 255 }, MaterialSlider: 10, ShadingWidth: 2, OutlineColor: { B: 20, G: 10, R: 10, A: 255 }, OutlineWidth: 2,
     ScuffWidth: 0, GraffitiDepthLimit: 5, GraffitiAngleLimit: 45, GraffitiLayer: 0, bEnabled: true, Face: 3, bAlignToWedge: false, bOverrideColor: true,
     Typeface: 0, Billboard: 0, Material: 1, Shading: 0, bFlipShading: false, Outline: 2, bSharpCorners: true, bSharpOutlines: true, bOverrideOutlineColor: true, bForeground: false, Text: 'WIRE MANDELBROT' };
-  const board = { h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [fw, 4, 30], position: [0, 0, fz1 + 34], color: [10, 10, 16], owner_index: k.ownerIdx,
+  const board = { h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [fw, 4, 40], position: [0, 0, fz1 + 44], color: [10, 10, 16], owner_index: k.ownerIdx,
     components: [{ type: C.TextDisplay.NAME, data: TEXT }] }), c: C.TextDisplay };
 
   // ---- view state (main grid) --------------------------------------------
@@ -143,7 +145,17 @@ async function build(refs) {
   const zrE = pick(rd.zr, IK(0), fresh), ziE = pick(rd.zi, IK(0), fresh);
   const zr2 = iop(C.Expr_MathMultiply, zrE, zrE), zi2 = iop(C.Expr_MathMultiply, ziE, ziE);
   const esc = iop(C.Expr_CompareGreater, iop(C.Expr_MathAdd, zr2, zi2), IK(4));
-  const done = iop(C.Expr_CompareGreaterOrEqual, nE, P.maxit);
+  // inside the main cardioid or the period-2 bulb = in the set: finish at once (black)
+  const x4 = iop(C.Expr_MathSubtract, crE, IK(0.25));
+  const ci2 = iop(C.Expr_MathMultiply, ciE, ciE);
+  const q = iop(C.Expr_MathAdd, iop(C.Expr_MathMultiply, x4, x4), ci2);
+  const card = iop(C.Expr_CompareLessOrEqual, iop(C.Expr_MathMultiply, q, iop(C.Expr_MathAdd, q, x4)), iop(C.Expr_MathMultiply, ci2, IK(0.25)));
+  const x1 = iop(C.Expr_MathAdd, crE, IK(1));
+  const bulb = iop(C.Expr_CompareLessOrEqual, iop(C.Expr_MathAdd, iop(C.Expr_MathMultiply, x1, x1), ci2), IK(0.0625));
+  const inside = ig(C.Expr_LogicalOR); wire(...card, inside, 'bInputA'); wire(...bulb, inside, 'bInputB');
+  const outOfIt = iop(C.Expr_CompareGreaterOrEqual, nE, P.maxit);
+  const doneG = ig(C.Expr_LogicalOR); wire(...outOfIt, doneG, 'bInputA'); wire(inside, 'bOutput', doneG, 'bInputB');
+  const done = [doneG, 'bOutput'];
   const orGate = ig(C.Expr_LogicalOR); wire(...esc, orGate, 'bInputA'); wire(...done, orGate, 'bInputB');
   const br = ig(C.Exec_Branch); wire(orGate, 'bOutput', br, 'bCond');
   wire(reads[reads.length - 1], 'ExecOut', br, 'Exec');
@@ -208,7 +220,7 @@ async function build(refs) {
 
   // ---- live status text
   const zoom = op(C.Expr_MathDivide, K(HOME.scale), val('scale'));
-  const fmt = g(C.Expr_String_FormatText, { FormatString: 'WIRE MANDELBROT  |  {A}, {B}  |  zoom {C}x  |  {D} iter  |  frame {E} in {F} ms  |  /mbin /mbout /mbl /mbr /mbu /mbd /mbmore /mbless /mbauto /mbreset /mbfast' });
+  const fmt = g(C.Expr_String_FormatText, { FormatString: 'WIRE MANDELBROT   {A}, {B}   zoom {C}x   {D} iter   frame {E} in {F} ms\n/mbin /mbout /mbl /mbr /mbu /mbd /mbmore /mbless /mbauto /mbreset /mbfast' });
   wire(...val('cx'), fmt, 'InputA'); wire(...val('cy'), fmt, 'InputB'); wire(...zoom, fmt, 'InputC');
   wire(...val('maxit'), fmt, 'InputD'); wire(...val('frame'), fmt, 'InputE'); wire(...val('ms'), fmt, 'InputF');
   wire(fmt, 'Output', board, 'Text');
