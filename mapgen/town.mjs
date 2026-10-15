@@ -18,6 +18,7 @@ import { planHouse, COURSES as WH_COURSES } from './wallhouse.mjs';
 import { planShop, SHOP_KINDS, WEAPON_KINDS } from './wallshop.mjs';
 import { shapedHouse } from './shapedhouse.mjs';
 import { turnBrick } from './orient.mjs';
+import { castleStone, VX as CVX, VZ as CVZ } from './castle.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
 import { townCourses, pickRoof } from './roofs.mjs';
 import { plaque } from './ruins.mjs';
@@ -502,7 +503,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * across the front (-w/2..w/2, +u is "right" seen from the street), v runs
    * from the front face (0) to the back face (d), z up from the ground floor.
    */
-  function building(cx, cy, fx, fy, w, d, floors, { wallColor, roofColor, rise, doorW = 40, ridge, tiles, upperColor, stairs = false, shutters = null, flowerBoxes = false, plain = [], canopy = true, s = 0, flat = false, storey = STOREY } = {}) {
+  function building(cx, cy, fx, fy, w, d, floors, { wallColor, roofColor, rise, doorW = 40, ridge, tiles, upperColor, stairs = false, shutters = null, flowerBoxes = false, plain = [], canopy = true, s = 0, flat = false, storey = STOREY, winStep = 60, winW = 20, parapet = true } = {}) {
     // storey: height per floor (owner 2026-10-05: 84 is far too low for halls); doors, windows and stair flights scale with it
     const S = storey, DOOR_H = 72, nSteps = S / 12 - 1; // doors at most 6 bricks (owner 2026-10-10; was 96 on tall storeys)
     const [ex, ey] = fx ? [d / 2, w / 2] : [w / 2, d / 2];
@@ -519,12 +520,12 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     const lput = (asset, u, v, z, b = {}) => { const [px, py] = P(u, v); put({ asset, size: [0, 0, 0], ...b }, px, py, z); };
     const windows = (lo, hi, skip) => {
       const out = [];
-      const n = Math.max(1, Math.floor((hi - lo - 40) / 60));
+      const n = Math.max(1, Math.floor((hi - lo - 40) / winStep));
       for (let i = 0; i < n; i++) {
         const m = Math.round((lo + ((i + 1) * (hi - lo)) / (n + 1)) / 10) * 10;
         for (let f = 0; f < floors; f++) {
           if (f === 0 && skip != null && Math.abs(m - skip) < doorW / 2 + 30) continue; // != null: a door at 0 is still a door (owner 2026-10-05: windows ran into the keep door)
-          out.push([m - 10, m + 10, f * S + 36, f * S + Math.max(60, S - 36)]);
+          out.push([m - winW / 2, m + winW / 2, f * S + 36, f * S + Math.max(60, S - 36)]);
         }
       }
       return out;
@@ -622,10 +623,12 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       const holes = flights.filter(F => F.f + 1 === floors).map(F => F.hole);
       for (const [a, c, e, g] of minus([FX0, FY0, FX1, FY1], holes)) box(a, c, h, e, g, h + 4, { asset: 'PB_DefaultMicroBrick', color: PALETTE.stone[1] });
       const pc = { asset: 'PB_DefaultMicroBrick', color: wallColor.map(v => Math.round(v * 0.94)) };
+      if (parapet) {
       box(x0, y0, h, x1, y0 + 10, h + 24, pc); box(x0, y1 - 10, h, x1, y1, h + 24, pc);
       box(x0, y0 + 10, h, x0 + 10, y1 - 10, h + 24, pc); box(x1 - 10, y0 + 10, h, x1, y1 - 10, h + 24, pc);
       for (let x = x0; x + 20 <= x1; x += 40) for (const y of [y0, y1 - 10]) box(x, y, h + 24, x + 20, y + 10, h + 40, pc);
       for (let y = y0 + 40; y + 20 <= y1 - 20; y += 40) for (const x of [x0, x1 - 10]) box(x, y, h + 24, x + 10, y + 20, h + 40, pc);
+      }
     } else gable(x0, y0, x1, y1, h, rise, roofColor, ridge, { color: upperColor && floors > 1 ? upperColor : wallColor, inset: 0 });
 
     // ---- furniture, in the local frame (zf(f) = top of that floor's boards)
@@ -689,7 +692,12 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // every furnish piece is furniture (FURNITURE switch)
     for (const k of Object.keys(furnish)) { const fn = furnish[k]; furnish[k] = (...a) => { FURN++; try { return fn(...a); } finally { FURN--; } }; }
     lastDoor = [cx + fx * (fx ? ex : 0), cy + fy * (fy ? ey : 0)];
-    return { x0, y0, x1, y1, h, U, V, w, d, frontPos: lastDoor, lbox, lpole, lput, zf, ceil, furnish };
+    /** world rect of a strip on a wall's outer face: along [p0, p1], outward [o0, o1] */
+    const faceRect = (W, p0, p1, o0, o1) => {
+      const [f0, sg] = faceAt(W), q0 = Math.min(f0 + sg * o0, f0 + sg * o1), q1 = Math.max(f0 + sg * o0, f0 + sg * o1);
+      return W.axis === 'x' ? [p0, q0, p1, q1] : [q0, p0, q1, p1];
+    };
+    return { x0, y0, x1, y1, h, U, V, w, d, frontPos: lastDoor, lbox, lpole, lput, zf, ceil, furnish, walls, face, faceRect };
   }
 
   /**
@@ -1203,53 +1211,96 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       }
     }
   }
+  // 2026-10-15 (owner: "the castles look like shit"): the stonework comes
+  // from castle.mjs on a voxel canvas (really round towers smoothed with side
+  // wedges, slate cones and a tiled pyramid from top wedges, battered plinths,
+  // corbelled parapets, a twin-D gatehouse with a pointed arch); the keep is
+  // still building() (stairs, floors, throne room) with fewer, taller windows
+  // under pointed hood moulds, string courses, banners, and castle.mjs
+  // dressing (plinth, machicolated parapet, bartizans, a stair tower).
   function castle(CX, CY) {
-    const R = 440, T = 20, CH = 168, GREY = [138, 136, 130], CAP = { color: [120, 118, 114] };
-    const merlons = (x0, y0, x1, y1, z) => {
-      const alongX = x1 - x0 >= y1 - y0;
-      for (let p = (alongX ? x0 : y0) + 10; p + 20 <= (alongX ? x1 : y1) - 10; p += 60)
-        alongX ? box(p, y0, z, p + 20, y1, z + 24, CAP) : box(x0, p, z, x1, p + 20, z + 24, CAP);
-    };
-    const run = (x0, y0, x1, y1, sk) => { masonry(x0, y0, x1, y1, 0, CH, GREY, sk); merlons(x0, y0, x1, y1, CH); };
-    // curtain: north, west, east whole; south split round the gatehouse
-    run(CX - R + 70, CY + R - T, CX + R - 70, CY + R + T, 31);
-    for (const sx of [-1, 1]) run(CX + sx * R - T, CY - R + 70, CX + sx * R + T, CY + R - 70, 32 + sx);
-    run(CX - R + 70, CY - R - T, CX - 160, CY - R + T, 35);
-    run(CX + 160, CY - R - T, CX + R - 70, CY - R + T, 36);
-    // gatehouse: two round towers, a lintel over the arch, portcullis raised
-    for (const sx of [-1, 1]) {
-      pole(CX + sx * 110, CY - R, 0, CH + 48, 50, { color: GREY });
-      pole(CX + sx * 110, CY - R, CH + 48, CH + 56, 55, CAP);
-      put({ size: [10, 10, 6], ...GLOW([255, 160, 60], 8) }, CX + sx * 110, CY - R, CH + 62);
-    }
-    masonry(CX - 60, CY - R - T, CX + 60, CY - R + T, 96, CH, GREY, 37);
-    merlons(CX - 60, CY - R - T, CX + 60, CY - R + T, CH);
-    for (let x = -50; x <= 50; x += 20) pole(CX + x, CY - R, 76, 96, 5, { color: [46, 44, 42], material: 'BMC_Metallic' });
-    // corner towers with crenellated caps; a blue-and-gold flag on the north-east one
-    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      const tx = CX + sx * R, ty = CY + sy * R;
-      pole(tx, ty, 0, CH + 72, 70, { color: GREY });
-      pole(tx, ty, CH + 72, CH + 80, 80, CAP);
-      for (let k = 0; k < 8; k++) {
-        const a = (k * Math.PI) / 4, mx = Math.round((Math.cos(a) * 66) / 2) * 2, my = Math.round((Math.sin(a) * 66) / 2) * 2;
-        box(tx + mx - 10, ty + my - 10, CH + 80, tx + mx + 10, ty + my + 10, CH + 104, CAP);
-      }
-      if (sx > 0 && sy > 0) {
-        pole(tx, ty, CH + 80, CH + 200, 5, { color: [70, 56, 40] });
-        box(tx + 6, ty - 2, CH + 160, tx + 66, ty + 2, CH + 196, { asset: 'PB_DefaultMicroBrick', color: [40, 70, 170] });
-        box(tx + 6, ty - 2, CH + 196, tx + 66, ty + 2, CH + 200, { asset: 'PB_DefaultMicroBrick', color: [230, 190, 50] });
-      }
-    }
+    const MICRO = { asset: 'PB_DefaultMicroBrick' }, PALE = [190, 184, 172], WALLC = [154, 150, 142];
     // the keep
     const KY = CY + 130;
     const g = building(CX, KY, 0, -1, 400, 320, 3, {
-      wallColor: [150, 148, 142], roofColor: CAP.color, rise: 0, doorW: 60, tiles: [[176, 172, 164], [96, 94, 90]], stairs: true, flat: true, s: 9001, storey: 144,
+      wallColor: WALLC, roofColor: [120, 118, 114], rise: 0, doorW: 60, tiles: [[176, 172, 164], [96, 94, 90]], stairs: true, flat: true, s: 9001, storey: 144,
+      winStep: 100, parapet: false, canopy: false,
     });
-    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      const tx = CX + sx * 230, ty = KY + sy * 190;
-      pole(tx, ty, 0, g.h + 60, 30, { color: [150, 148, 142] });
-      pole(tx, ty, g.h + 60, g.h + 68, 35, CAP);
-      put({ size: [10, 10, 6], ...GLOW([255, 180, 90], 6) }, tx, ty, g.h + 76);
+    // windows: a sill under each, a pointed hood (two micro wedges) over it
+    for (const W of g.walls) for (const [p0, p1, z0, z1] of W.open) {
+      if (z0 === 0) continue;
+      const [a, b, c, d] = g.faceRect(W, p0 - 4, p1 + 4, 0, 4);
+      box(a, b, z0 - 4, c, d, z0, { ...MICRO, color: PALE });
+      const m = (p0 + p1) / 2, hw = (p1 - p0) / 2 + 4;
+      for (const sg of [-1, 1]) {
+        const [u0, v0, u1, v1] = g.faceRect(W, sg < 0 ? m - hw : m, sg < 0 ? m : m + hw, 0, 2);
+        const ext = [(u1 - u0) / 2, (v1 - v0) / 2, 6];
+        const up = W.axis === 'x' ? [[-sg, 0]] : [[0, -sg]];
+        put({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', up, ext), color: PALE }, (u0 + u1) / 2, (v0 + v1) / 2, z1 + 6);
+      }
+    }
+    // string courses at each floor, round the four faces
+    for (const W of g.walls) for (const f of [1, 2]) {
+      const [a, b, c, d] = W.axis === 'x' ? g.faceRect(W, g.x0 - 4, g.x1 + 4, 0, 4) : g.faceRect(W, g.y0, g.y1, 0, 4);
+      box(a, b, f * 144 - 2, c, d, f * 144 + 2, { ...MICRO, color: PALE });
+    }
+    // the door: a pale surround and a pointed tympanum over it
+    const fy0 = g.y0;
+    for (const sx of [-1, 1]) box(CX + sx * 30 + (sx < 0 ? -8 : 0), fy0 - 4, 4, CX + sx * 30 + (sx < 0 ? 0 : 8), fy0, 80, { ...MICRO, color: PALE });
+    box(CX - 30, fy0 - 4, 72, CX + 30, fy0, 80, { ...MICRO, color: PALE });
+    for (const sg of [-1, 1]) put({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[-sg, 0]], [19, 2, 10]), color: PALE }, CX + sg * 19, fy0 - 2, 90);
+    // banners either side of the door, hung under the parapet
+    const banner = (x, y0b, z0, z1) => {
+      box(x - 16, y0b - 2, z0, x + 16, y0b, z1, { ...MICRO, color: [150, 28, 36] });
+      box(x - 18, y0b - 4, z1 - 4, x + 18, y0b - 2, z1, { ...MICRO, color: [60, 44, 30] }); // rod
+      for (const z of [z0 + 8, z1 - 16]) box(x - 16, y0b - 4, z, x + 16, y0b - 2, z + 4, { ...MICRO, color: [222, 182, 64] });
+      box(x - 6, y0b - 4, (z0 + z1) / 2 - 12, x + 6, y0b - 2, (z0 + z1) / 2 + 12, { ...MICRO, color: [222, 182, 64] });
+      for (const sg of [-1, 1]) put({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[sg, 0]], [8, 1, 8]), color: [150, 28, 36] }, x + sg * 8, y0b - 1, z0 - 8);
+    };
+    for (const sx of [-1, 1]) banner(CX + sx * 50, fy0 - 4, 170, 400);
+    // stonework: walls, towers, gatehouse, keep dressing
+    const kv = { i0: Math.round((g.x0 - CX) / CVX), j0: Math.round((g.y0 - CY) / CVX), i1: Math.round((g.x1 - CX) / CVX), j1: Math.round((g.y1 - CY) / CVX), kTop: g.h / CVZ };
+    const { bricks, extra } = castleStone(9100, kv);
+    for (const { position: [x, y, z], ...b } of bricks) put(b, CX + x, CY + y, z);
+    // finials: an iron rod and a gold knob on every roof; a flag on the stair tower
+    for (const e of extra) {
+      const [x, y, z] = e.finial, fx = CX + x, fyy = CY + y, rod = e.flag ? 110 : 30;
+      box(fx - 2, fyy - 2, z, fx + 2, fyy + 2, z + rod, { ...MICRO, color: [52, 50, 48], material: 'BMC_Metallic' });
+      box(fx - 4, fyy - 4, z + rod, fx + 4, fyy + 4, z + rod + 8, { ...MICRO, color: [222, 182, 64], material: 'BMC_Metallic' });
+      if (e.flag) {
+        box(fx + 2, fyy - 1, z + 70, fx + 72, fyy + 1, z + 104, { ...MICRO, color: [40, 70, 170] });
+        box(fx + 2, fyy - 1, z + 64, fx + 72, fyy + 1, z + 70, { ...MICRO, color: [230, 190, 50] });
+      }
+    }
+    // gatehouse banner over the arch
+    banner(CX, CY - 480, 124, 206);
+    // courtyard: a paved way from the gate to the keep door
+    const FLAG = [[164, 156, 142], [152, 146, 134], [174, 166, 150]];
+    for (let y = CY - 480, n = 0; y < fy0 - 20; y += 30, n++) {
+      const y1 = Math.min(fy0 - 20, y + 30);
+      for (let x = CX - 30, m = 0; x < CX + 30; x += 20, m++) box(x, y, 0, x + 20, y1, 2, { ...MICRO, color: FLAG[(n + m) % 3] });
+    }
+    // a well
+    {
+      const [wx, wy] = [CX - 260, CY - 120], ST = { ...MICRO, color: [140, 136, 128] }, WOOD = { ...MICRO, color: [96, 66, 40] };
+      box(wx - 25, wy - 25, 0, wx + 25, wy - 15, 24, ST); box(wx - 25, wy + 15, 0, wx + 25, wy + 25, 24, ST);
+      box(wx - 25, wy - 15, 0, wx - 15, wy + 15, 24, ST); box(wx + 15, wy - 15, 0, wx + 25, wy + 15, 24, ST);
+      box(wx - 15, wy - 15, 0, wx + 15, wy + 15, 14, { ...MICRO, color: [40, 70, 110], material: 'BMC_Glass' });
+      for (const sx of [-1, 1]) box(wx + sx * 20 - 3, wy - 3, 24, wx + sx * 20 + 3, wy + 3, 84, WOOD);
+      box(wx - 17, wy - 2, 72, wx + 17, wy + 2, 76, WOOD);
+      box(wx - 3, wy - 3, 50, wx + 3, wy + 3, 60, { ...MICRO, color: [110, 80, 50] });
+      box(wx - 1, wy - 1, 60, wx + 1, wy + 1, 72, { ...MICRO, color: [200, 190, 160] });
+      box(wx - 30, wy - 30, 84, wx + 30, wy + 30, 88, { ...MICRO, color: [120, 56, 40] });
+      for (const sg of [-1, 1]) put({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[0, -sg]], [30, 15, 8]), color: [140, 64, 46] }, wx, wy + sg * 15, 96);
+    }
+    // a lean-to stable along the east wall: posts, a sloping roof, hay
+    {
+      const xw = CX + 380, x0 = CX + 316, ya = CY - 60, yb = CY + 200, WOOD = { ...MICRO, color: [104, 72, 44] };
+      for (const y of [ya, ya + 130, yb - 6]) box(x0, y, 0, x0 + 6, y + 6, 72, WOOD);
+      box(x0 - 4, ya - 4, 72, xw, yb + 4, 76, { ...MICRO, color: [96, 66, 40] });
+      put({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[1, 0]], [(xw - x0 + 4) / 2, (yb - ya + 8) / 2, 12]), color: [126, 90, 54] }, (x0 - 4 + xw) / 2, (ya + yb) / 2, 88);
+      for (const [y, n] of [[ya + 20, 2], [ya + 150, 1]]) for (let k = 0; k < n; k++) box(xw - 50, y + k * 34, 0, xw - 10, y + k * 34 + 30, 24, { ...MICRO, color: [214, 182, 96] });
+      box(xw - 50, ya + 100, 0, xw - 10, ya + 120, 12, { ...MICRO, color: [96, 66, 40] });
     }
     FURN++; // interior fit-out (FURNITURE switch)
     const F = g.furnish, V = g.V;
@@ -1269,10 +1320,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     for (const [u, k] of [[-40, 1], [20, 2]]) { F.bed(u, V, -1, 2, pick(PALETTE.blanket, 9001, k)); F.chest(u + 5, 196, u + 35, 216, 2); }
     F.lantern(0, 120, 2);
     FURN--;
-    // courtyard: two trees (lamp posts removed, owner 2026-10-14)
-    for (const sx of [-1, 1]) {
-      tree(CX + sx * 300, CY - 250, 9010 + sx);
-    }
+    // courtyard trees
+    for (const sx of [-1, 1]) tree(CX + sx * 250, CY - 300, 9010 + sx);
     count('castle');
   }
 
