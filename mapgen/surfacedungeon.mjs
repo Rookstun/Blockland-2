@@ -26,6 +26,7 @@
 //      studs, gate [x, y] studs (centre of the outer doorway), spawns
 //      [[x, y, z]] local units, rooms, top (wall top, units) }
 import { buildFromPlan, COURSES } from './wallhouse.mjs';
+import { canvas, masked, wrapNull, roundTower, stone, VX, VZ } from './castle.mjs';
 
 export const TILE = 8; // studs per tile: a 4-stud doorway leaves 2-stud piers
 const SOLID = -1, CORRIDOR = -2;
@@ -157,7 +158,7 @@ export function planSurfaceDungeon({ seed, hole, side, bounds, grid: G = 11, roo
   throw new Error(`surface dungeon: no layout fits (${last})`);
 }
 
-function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng }) {
+function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed }) {
   const bricks = [];
   const U = 10;
   const top = COURSES * 12;
@@ -187,8 +188,45 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng }) {
   }
   // merlons along the roof's edge, every other 2 studs
   const roofTop = top + 4;
+  // corner towers (2026-10-15, owner: "the castles look like shit"): round
+  // towers (castle.mjs) on the convex corners of the big masses (a 6x6 block of
+  // roof behind the corner, so not on corridor stubs), well apart and clear of
+  // the gate; centred on the corner, so three quarters stand outside; below the
+  // roof they never enter the keep's footprint, above it they sit on the roof
+  const towerAt = [], foot = new Set(roofCells), trng = makeRng((seed ?? 1) * 31 + 7); // own rng: the keep's spawns stay put
+  for (const k of wallAt) { const [x, y, c] = k.split(','); if (c === '0') foot.add(x + ',' + y); }
+  {
+    const [tx, ty] = L.gateTile, gwx = gx + (tx + 0.5 + side[0] * 0.5) * TILE - ox, gwy = gy + (ty + 0.5 + side[1] * 0.5) * TILE - oy;
+    const R = (x, y) => foot.has(x + ',' + y);
+    const cand = [];
+    for (const k of foot) {
+      const [x, y] = k.split(',').map(Number);
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        if (R(x + sx, y) || R(x, y + sy) || R(x + sx, y + sy)) continue;
+        let big = true;
+        for (let a = 0; a < 6 && big; a++) for (let b = 0; b < 6; b++) if (!R(x - sx * a, y - sy * b)) { big = false; break; }
+        if (!big) continue;
+        const vx = x + (sx > 0 ? 1 : 0), vy = y + (sy > 0 ? 1 : 0);
+        if (Math.hypot(vx - gwx, vy - gwy) < 14) continue;
+        cand.push([vx, vy, trng()]);
+      }
+    }
+    cand.sort((a, b) => a[2] - b[2]);
+    for (const [vx, vy] of cand) if (towerAt.length < 6 && towerAt.every(([px, py]) => Math.hypot(px - vx, py - vy) >= 22)) towerAt.push([vx, vy]);
+  }
+  if (towerAt.length) {
+    const kRoof = Math.ceil(roofTop / VZ), oxs = Math.round(ox), oys = Math.round(oy);
+    const c = masked(wrapNull(canvas()), (i, j, k) => k < kRoof && foot.has((i - oxs) + ',' + (j - oys)));
+    towerAt.forEach(([vx, vy], n) => {
+      const kTop = Math.ceil((top + 60) / VZ) + (n % 2) * 4;
+      roundTower(c, vx + oxs, vy + oys, 4, kTop, trng() < 0.4 ? 'cone' : 'crenel', 7000 + n, [], { slits: true, base: T.field[0] });
+    });
+    for (const b of c.bricks()) bricks.push({ ...b, position: [b.position[0], b.position[1], b.position[2]] });
+  }
+  const inTower = (x, y) => towerAt.some(([vx, vy]) => Math.hypot(x + 0.5 - vx, y + 0.5 - vy) <= 5.6);
   for (const k of roofCells) {
     const [x, y] = k.split(',').map(Number);
+    if (inTower(x, y)) continue;
     if ([[1, 0], [-1, 0], [0, 1], [0, -1]].every(([a, b]) => roofCells.has(`${x + a},${y + b}`))) continue;
     if (((x >> 1) + (y >> 1)) % 2) continue;
     put(x, y, x + 1, y + 1, roofTop, roofTop + 12, { color: T.mould });

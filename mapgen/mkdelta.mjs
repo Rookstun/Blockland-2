@@ -7,7 +7,11 @@ const read = dir => { const b = [], ext = []; for (const f of fs.readdirSync(dir
 const o = read(OLD), n = read(NEW);
 const key = b => JSON.stringify(b);
 const oldK = new Set(o.b.map(key)), newK = new Set(n.b.map(key));
-const removed = o.b.filter(b => !newK.has(key(b))), added = n.b.filter(b => !oldK.has(key(b)));
+// env BOXES='[[x0,y0,x1,y1],...]' (2026-10-15): only changes whose centre lies in a box
+// (ship one feature while other sessions' unshipped generator changes stay out)
+const BOXES = process.env.BOXES ? JSON.parse(process.env.BOXES) : null;
+const inBox = b => !BOXES || BOXES.some(([x0, y0, x1, y1]) => b.position[0] >= x0 && b.position[0] <= x1 && b.position[1] >= y0 && b.position[1] <= y1);
+const removed = o.b.filter(b => !newK.has(key(b)) && inBox(b)), added = n.b.filter(b => !oldK.has(key(b)) && inBox(b));
 const clear = removed.map(b => { const [lo, hi] = worldBox(b, FIXED); return [0, 1, 2].map(a => (lo[a] + hi[a]) / 2).concat([0, 1, 2].map(a => (hi[a] - lo[a]) / 2 + 1)); });
 // kept bricks entirely inside a clear box are taken with it: re-add them
 const G = new Map(), C = 400;
