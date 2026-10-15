@@ -18678,7 +18678,20 @@ var oo = class e {
 		return new e(n, r, i);
 	}
 	static fromBinary(t) {
-		let n = new qi(t), r = Ha(n);
+		let n = new qi(t), r = (n.peek() & 240) == 128 ? -1 : Ha(n);
+		if (r === -1) { /* EA3.2 named schema sections */
+			let i = new Map(), a = new Map(), o = new Map();
+			for (let k = 0, K = Ua(n); k < K; k++) {
+				let s = Ba(n);
+				if (s === "enums") for (let e = 0, t = Ua(n); e < t; e++) { let e = Ba(n), t = new Map(); for (let e = 0, r = Ua(n); e < r; e++) t.set(Ba(n), Fa(n)); i.set(e, t); }
+				else if (s === "variants") for (let e = 0, t = Ua(n); e < t; e++) { let e = Ba(n), t = []; for (let e = 0, r = Ha(n); e < r; e++) t.push(Ba(n)); a.set(e, t); }
+				else if (s === "structs") for (let e = 0, t = Ua(n); e < t; e++) { let e = Ba(n), t = new Map(); for (let e = 0, r = Ua(n); e < r; e++) t.set(Ba(n), ao(n)); o.set(e, t); }
+				else if (s === "types") for (let e = 0, t = Ha(n); e < t; e++) Ba(n);
+				else throw Error(`brdb: unknown schema section ${s}`);
+			}
+			if (n.remaining !== 0) throw Error(`brdb: ${n.remaining} trailing bytes after schema`);
+			return new e(i, a, o);
+		}
 		if (r !== 2 && r !== 3) throw Error(`brdb: invalid schema header length ${r}`);
 		let i = /* @__PURE__ */ new Map();
 		for (let e = 0, t = Ua(n); e < t; e++) {
