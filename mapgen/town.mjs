@@ -22,6 +22,7 @@ import { castleStone, VX as CVX, VZ as CVZ } from './castle.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
 import { townCourses, pickRoof } from './roofs.mjs';
 import { plaque } from './ruins.mjs';
+import { weaponFacade, artRows, windowShield } from './shopfront.mjs';
 import { NOTICES, STATUES } from './notices.mjs';
 import SODAS from './sodas.json' with { type: 'json' };
 
@@ -719,7 +720,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     const { W, D } = h;
     const w = (W + 1) * 10, d = (D + 1) * 10;
     const lat = fx ? [0, 1] : [1, 0];
-    const P = (u, v) => [cx + lat[0] * u + fx * (d / 2 - v), cy + lat[1] * u + fy * (d / 2 - v)];
+    // rounded to 1e-6: fractional studs (4.6 * 10) must not leave sizes like 0.9999999 (off the micro grid)
+    const r6 = q => Math.round(q * 1e6) / 1e6;
+    const P = (u, v) => [r6(cx + lat[0] * u + fx * (d / 2 - v)), r6(cy + lat[1] * u + fy * (d / 2 - v))];
     // stud-space box (x across the front, y back from the front face) -> world
     const sbox = (x0, y0, x1, y1, z0, z1, b) => {
       const [ax, ay] = P(x0 * 10 - w / 2, y0 * 10), [bx, by] = P(x1 * 10 - w / 2, y1 * 10);
@@ -727,7 +730,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     };
     const mput = (xs, ys, z, [eu, ev, ez], b) => {
       const [px, py] = P(xs * 10 - w / 2, ys * 10);
-      put({ ...b, size: fx ? [ev, eu, ez] : [eu, ev, ez] }, px, py, z);
+      put({ ...b, size: (fx ? [ev, eu, ez] : [eu, ev, ez]).map(r6) }, px, py, z);
     };
     // wall cells by the z their brick tops out at
     const wallTop = new Set();
@@ -910,7 +913,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * across the sales floor, buttons toward the door; outside a paved forecourt
    * with training dummies / targets and the shop's name board over the door.
    */
-  function weaponFit({ sbox, mput, at, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC }) {
+  function weaponFit({ sbox, mput, at, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC, cloth }) {
     const MB = 'PB_DefaultMicroBrick', guns = kind === 'gunsmith';
     const STEEL = c => ({ asset: MB, color: c, material: 'BMC_Metallic' });
     const DARK = { asset: MB, color: [40, 40, 44], material: 'BMC_Metallic' };
@@ -938,7 +941,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       mput(x + 3.6, y, z + 4, [4, 1, 1], STEEL([150, 152, 160])); // muzzle
       if (k % 2) mput(x - 0.8, y, z + 8, [6, 1, 2], DARK); // scope
     };
-    for (const [k, c] of [lw, rw].entries()) {
+    // wallgen openings sit one stud right of the plan positions: centre the displays in them
+    for (const [k, c] of [lw + 1, rw + 1].entries()) {
       const x0 = c - ww / 2 + 0.5, x1 = c + ww / 2 - 0.5;
       piece(x0, 1, x1, 5, () => {
         // two steps of dark wood, felt-topped, a felt back panel framed in dark wood
@@ -958,6 +962,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         } else {
           // a dagger, sword and longsword either side of the middle, blade colour by tier
           const tc = TIER_STEEL[tiers[k % Math.max(1, tiers.length)]] ?? TIER_STEEL.iron;
+          // a heater shield on the felt panel behind the middle sword
+          artRows(mput, windowShield(pick, s, k), c - 1.8, 120, 4.4, 4.6, { S: { asset: MB, color: cloth }, G: BRASS, C: { asset: MB, color: [236, 228, 206] } });
           [[-3.6, 8, 2], [-2.2, 16, 2], [0, 18, 4.3], [2.2, 16, 2], [3.6, 8, 2]].forEach(([dx, L, y]) => sword(c + dx, y, y > 3 ? SILL + 12 : SILL, L, tc));
         }
       });
@@ -977,10 +983,10 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       stats.houseShops.push({ at: [px, py, 16 + (zCtx ?? 0)], orient, tier: w.tier, ...(w.prefab ? { prefab: w.prefab } : {}) });
     }
     if (n < wares.length) count('weapon shop: stands short ' + (wares.length - n));
-    // outside: a flagstone forecourt, dummies (armory) / targets (gunsmith) either side
-    for (let x = -4; x < W + 5; x += 4)
-      for (let y = -FC; y < -2; y += 4)
-        sbox(x, y, Math.min(W + 5, x + 4), Math.min(-2, y + 4), 0, 4, { asset: 'PB_DefaultTile', color: PALETTE.stone[(Math.floor(x / 4) + Math.floor(y / 4) + 99) % 3] });
+    // the street front (shopfront.mjs): plinth, quoins, framed windows, awnings, door case, crest, fascia, blade sign, forecourt
+    weaponFacade({ sbox, mput, at, put, orientFor, rnd, pick, plaque, stone: PALETTE.stone, tierSteel: TIER_STEEL, names: WEAPON_NAMES[kind],
+      kind, W, fd, dw, lw, rw, ww, fx, fy, s, FC, cloth, tiers });
+    // dummies (armory) / targets (gunsmith) either side of the forecourt
     for (const x of [-1, W + 2]) {
       const y = -FC + 4;
       if (guns) {
@@ -997,10 +1003,6 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         mput(x, y - 0.5, 60, [3, 1, 3], { asset: MB, color: [200, 40, 40] }); // a red patch on the chest
       }
     }
-    // name board over the awning
-    const [bx, by] = at(fd, -0.1);
-    plaque({ put, text: pick(WEAPON_NAMES[kind], s, 811), facing: [fx, fy], x: bx, y: by, z: 136, w: 70, h: 12, color: guns ? [30, 30, 34] : [70, 30, 30],
-      style: { Font: guns ? 5 : 1, LineHeight: 5.5, Color: guns ? { R: 255, G: 200, B: 60, A: 255 } : { R: 240, G: 220, B: 170, A: 255 } } });
   }
 
   /**
@@ -1112,7 +1114,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         mput(x + 2, back, f + 32 + 2, [0, 0, 0], { asset: 'B_Fern', color: [70, 130, 50] });
       });
     } else if (WEAPON_KINDS.includes(kind)) {
-      weaponFit({ sbox, mput, at, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt });
+      weaponFit({ sbox, mput, at, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt, cloth });
     } else {
       // general store: crates, barrels, sacks along the walls
       for (const [x, y] of [[sideL, back], [sideL + 2, back], [sideL, back - 2], [sideR + 2, back], [sideR + 2, back - 2]])
@@ -1160,6 +1162,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     FURN--;
     // outside: a step under the double door, a striped awning over the door
     // and both display windows on posts, a hanging sign by the door
+    if (WEAPON_KINDS.includes(kind)) { gableOn(rise, roofColor); return h; } // weaponFacade dressed the front
     sbox(fd - dw / 2 - 1, -2, fd + dw / 2 + 1, 0, 0, 4, { color: PALETTE.stone[2] });
     const ax0 = lw - ww / 2 - 1, ax1 = rw + ww / 2 + 1, awZ = WH_COURSES * 12 - 40;
     for (let x = ax0; x < ax1; x += 2) sbox(x, -3, Math.min(ax1, x + 2), 0, awZ, awZ + 4, { color: ((x - ax0) / 2) % 2 ? [236, 230, 214] : cloth });
