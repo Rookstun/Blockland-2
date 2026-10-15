@@ -166,6 +166,11 @@ const swordTrack = (c, pad) => `${pad}let uid = ${c}.GetUserId()
 ${pad}let coinsNow = ${c}.GetLeaderboard("coins")
 ${pad}if invCoins.has(uid) {
 ${pad}  let spent = invCoins.get(uid) - coinsNow
+${pad}  // any purchase: remember its price a while, so the next inventory check
+${pad}  // can name the item that turns up (buyName, by item class + price)
+${pad}  if spent > 0 {
+${pad}    invBuy.set("${I('uid')}:${I('spent')}", GetUnixTime())
+${pad}  }
 ` + SWORDS.map(([n, p], i) => `${pad}  ${i ? '} else ' : ''}if spent == ${p} {\n${pad}    ${c}.SetLeaderboard("SwordTier", ${i + 1})\n`).join('') + `${pad}  }
 ${pad}}
 ${pad}invCoins.set(uid, coinsNow)
@@ -181,27 +186,86 @@ const SLOTS = 10;
 const swordAdv = (ch, pad, slotArg) => `${pad}let tier = ${ch}.ControllerOf().GetLeaderboard("SwordTier")
 ` + SWORDS.map(([n, p, d, [r, g, b]], i) => `${pad}${i ? '} else ' : ''}if tier == ${i + 1} {\n${pad}  ${ch}.${slotArg === null ? 'AddInventoryItemAdv($BRItemBase/Weapon_ArmingSword' : `SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = ${slotArg}`}, damage = ${d.toFixed(2)}, itemName = "${n} Sword", overrideColors = true, meshColors = [ColorSRGB(${r}, ${g}, ${b}, 255)])\n`).join('') + `${pad}}
 `;
-const invSnap = (c, pad) => `${pad}if invLive.has(uid) && invLive.get(uid) == 1 {
+// (owner 2026-10-14) inventory is checked every INV_EVERY s per player and
+// kept BY NAME: a slot that changes gets the shop name of what turned up (a
+// purchase of that item's price in the last BUY_KEEP s, see itemcatalog.json),
+// or the name of the slot it was moved from; restoring gives every named item
+// back as the shop's advanced item (giveNamed), the rest as plain items.
+// The game can't read an item's name, only its class: an item that arrives
+// any other way than a shop or a slot move has no name.
+const INV_EVERY = 5;
+const BUY_KEEP = 20;
+const R = Array.from({ length: SLOTS }, (_, k) => k);
+const invSnap = (c, pad) => `${pad}if invLive.has(uid) && invLive.get(uid) == 1 && (!invChk.has(uid) || GetUnixTime() - invChk.get(uid) >= ${INV_EVERY}) {
+${pad}  invChk.set(uid, GetUnixTime())
 ${pad}  let ich = ${c}.CharacterOf()
-` + Array.from({ length: SLOTS }, (_, k) => `${pad}  invItem.set("${I('uid')}:${k}", ich.GetInventoryEntry(${k}).Item)
+` + R.map(k => `${pad}  let e${k} = ich.GetInventoryEntry(${k}).Item
+${pad}  let o${k} = invItem.get("${I('uid')}:${k}").Value
+${pad}  let m${k} = invName.get("${I('uid')}:${k}").Value
+${pad}  var n${k} = m${k}
+${pad}  var t${k} = 0
+`).join('') + R.map(k => `${pad}  if e${k} != o${k} {
+${pad}    n${k} = buyName(uid, e${k})
+${pad}    if n${k} == "" {
+` + R.filter(j => j !== k).map((j, i) => `${pad}      ${i ? '} else ' : ''}if o${j} == e${k} && e${j} != o${j} && m${j} != "" && t${j} == 0 {
+${pad}        n${k} = m${j}
+${pad}        t${j} = 1
+`).join('') + `${pad}      }
+${pad}    }
+${pad}  }
+`).join('') + R.map(k => `${pad}  invItem.set("${I('uid')}:${k}", e${k})
+${pad}  invName.set("${I('uid')}:${k}", n${k})
 `).join('') + `${pad}  invHas.set(uid, 1)
 ${pad}  // (owner 2026-10-11: "they NEED to keep the data") the slots go to the log
-${pad}  // whenever they change; the progress plugin keeps them on disk
-${pad}  let invLine = "${Array.from({ length: SLOTS }, (_, k) => I(`ich.GetInventoryEntry(${k}).Item`)).join('|')}"
+${pad}  // whenever they change ("class=name" for named ones); the progress plugin keeps them on disk
+${pad}  let invLine = "${R.map(k => I(`e${k}`) + '=' + I(`n${k}`)).join('|')}"
 ${pad}  if !invLast.has(uid) || invLast.get(uid).Value != invLine {
 ${pad}    invLast.set(uid, invLine)
 ${pad}    PrintToConsole("[inv] ${I('uid')} ${I('invLine')}")
 ${pad}  }
 ${pad}}
 `;
+// shop items by name (itemcatalog.json, dumped from the shop prefabs by catalogdump.mjs)
+const CAT = require('./itemcatalog.json');
+{
+  const seen = {};
+  for (const e of CAT) {
+    for (const k of [`name ${e.name}`, `${e.item} @ ${e.price}`]) { if (seen[k]) throw new Error(`itemcatalog: ${k} twice (${seen[k]}, ${e.prefab})`); seen[k] = e.prefab; }
+    if (/["\|=$]/.test(e.name)) throw new Error(`itemcatalog: bad name ${e.name}`);
+  }
+}
+const byClass = {};
+for (const e of CAT) (byClass[e.item] ??= []).push(e);
+const advArgs = e => [e.damage != null && `damage = ${e.damage.toFixed(3)}`, e.speed != null && `speed = ${e.speed.toFixed(3)}`, e.scale != null && `scale = ${e.scale.toFixed(3)}`,
+  `itemName = "${e.name}"`, e.colors && `overrideColors = true, meshColors = [${e.colors.map(([r, g, b]) => `ColorSRGB(${r}, ${g}, ${b}, 255)`).join(', ')}]`].filter(Boolean).join(', ');
+const catalogMods = `// a purchase in the last ${BUY_KEEP} s of this item class's price -> its shop name
+mod buyName(uid: string, it: entity) -> string {
+` + Object.entries(byClass).map(([cls, es], i) => `  ${i ? '} else ' : ''}if it == $BRItemBase/${cls} {
+` + es.map(e => `    if invBuy.has("${I('uid')}:${e.price}") && GetUnixTime() - invBuy.get("${I('uid')}:${e.price}") <= ${BUY_KEEP} {
+      invBuy.remove("${I('uid')}:${e.price}")
+      return "${e.name}"
+    }
+`).join('')).join('') + `  }
+  return ""
+}
+// put an item in a slot: a shop name gives that shop's advanced item, else the plain item
+mod giveNamed(ch: character, slot: int, name: string, it: entity) {
+` + CAT.map((e, i) => `  ${i ? '} else ' : ''}if name == "${e.name}" {
+    ch.SetInventoryItemAdv($BRItemBase/${e.item}, slot = slot, ${advArgs(e)})
+`).join('') + `  } else {
+    ch.SetInventoryItem(it, slot)
+  }
+}
+`;
 const swordGive = (ch, c, pad) => `${pad}let suid = ${c}.GetUserId()
 ${pad}if !invLive.has(suid) || invLive.get(suid) != 1 {
 ${pad}  if invHas.has(suid) {
 ${pad}    PrintToConsole("[inv-restored] ${I('suid')}")
 ` + Array.from({ length: SLOTS }, (_, k) => `${pad}    let it${k} = invItem.get("${I('suid')}:${k}").Value
-${pad}    if it${k} == $BRItemBase/Weapon_ArmingSword && ${c}.GetLeaderboard("SwordTier") > 0 {
+${pad}    let nm${k} = invName.get("${I('suid')}:${k}").Value
+${pad}    if nm${k} == "" && it${k} == $BRItemBase/Weapon_ArmingSword && ${c}.GetLeaderboard("SwordTier") > 0 {
 ${swordAdv(ch, pad + '      ', k)}${pad}    } else {
-${pad}      ${ch}.SetInventoryItem(it${k}, ${k})
+${pad}      giveNamed(${ch}, ${k}, nm${k}, it${k})
 ${pad}    }
 `).join('') + `${pad}  } else if !invSeen.has(suid) || GetUnixTime() - invSeen.get(suid) > 30 {
 ${pad}    // no snapshot here (a restart or a new chip): the progress plugin gives back the rest from disk
@@ -222,6 +286,9 @@ var invHas: Map<string, int>
 var invLast: Map<string, string>
 var invJoin: Map<string, int>
 var invItem: Map<string, entity>
+var invName: Map<string, string>
+var invBuy: Map<string, int>
+var invChk: Map<string, int>
 on ControllerLeft() -> (controller, userId, userName) {
   invLive.set(userId, 0)
 }
@@ -321,7 +388,7 @@ var kc: controller
 var teamLvl: int = 1
 // who last hurt each character, for kill credit when CharacterDied gives no killer
 var hitBy: Map<character, controller>
-${enemyNameMod}on CharacterDamaged() -> (victim, damage, attacker, attackerWeapon, attackerWeaponName) {
+${enemyNameMod}${catalogMods}on CharacterDamaged() -> (victim, damage, attacker, attackerWeapon, attackerWeaponName) {
   let ac = attacker.ControllerOf()
   PrintToConsole("[hit debug] victim=${I('victim.ControllerOf().GetUserName()')} attacker=${I('ac.GetUserName()')} weapon=${I('attackerWeaponName')} dmg=${I('damage')} total=${I('victim.GetDamage()')}")
   let vc = victim.ControllerOf()

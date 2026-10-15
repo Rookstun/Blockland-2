@@ -78,6 +78,415 @@ mod enemyHud(who: controller, bot: character) {
   who.DisplayText("<b>${BARS[seg]}</>  ${floor(left + 0.5)} / ${lim}", anchorX = 0.5, anchorY = 0.0, pivotX = 0.5, pivotY = 0.0, positionX = 0.0, positionY = 182.0,
     fontSize = 22, justify = Center, outlineSize = 2, lifetime = 5.0, textId = 52011)
 }
+// a purchase in the last 20 s of this item class's price -> its shop name
+mod buyName(uid: string, it: entity) -> string {
+  if it == $BRItemBase/Weapon_Bow {
+    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 20 {
+      invBuy.remove("${uid}:50")
+      return "Bow"
+    }
+    if invBuy.has("${uid}:20000") && GetUnixTime() - invBuy.get("${uid}:20000") <= 20 {
+      invBuy.remove("${uid}:20000")
+      return "Magic Bow"
+    }
+    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 20 {
+      invBuy.remove("${uid}:4000")
+      return "Maple Bow"
+    }
+    if invBuy.has("${uid}:400") && GetUnixTime() - invBuy.get("${uid}:400") <= 20 {
+      invBuy.remove("${uid}:400")
+      return "Oak Bow"
+    }
+    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 20 {
+      invBuy.remove("${uid}:1000")
+      return "Willow Bow"
+    }
+    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 20 {
+      invBuy.remove("${uid}:8000")
+      return "Yew Bow"
+    }
+  } else if it == $BRItemBase/Weapon_BoltActionRifle {
+    if invBuy.has("${uid}:7000") && GetUnixTime() - invBuy.get("${uid}:7000") <= 20 {
+      invBuy.remove("${uid}:7000")
+      return "Bolt-Action Rifle"
+    }
+  } else if it == $BRItemBase/Weapon_Derringer {
+    if invBuy.has("${uid}:300") && GetUnixTime() - invBuy.get("${uid}:300") <= 20 {
+      invBuy.remove("${uid}:300")
+      return "Derringer"
+    }
+  } else if it == $BRItemBase/Weapon_HuntingShotgun {
+    if invBuy.has("${uid}:1800") && GetUnixTime() - invBuy.get("${uid}:1800") <= 20 {
+      invBuy.remove("${uid}:1800")
+      return "Hunting Shotgun"
+    }
+  } else if it == $BRItemBase/Weapon_LeverActionRifle {
+    if invBuy.has("${uid}:3500") && GetUnixTime() - invBuy.get("${uid}:3500") <= 20 {
+      invBuy.remove("${uid}:3500")
+      return "Lever-Action Rifle"
+    }
+  } else if it == $BRItemBase/Weapon_MagnumPistol {
+    if invBuy.has("${uid}:12000") && GetUnixTime() - invBuy.get("${uid}:12000") <= 20 {
+      invBuy.remove("${uid}:12000")
+      return "Magnum"
+    }
+  } else if it == $BRItemBase/Weapon_Revolver {
+    if invBuy.has("${uid}:800") && GetUnixTime() - invBuy.get("${uid}:800") <= 20 {
+      invBuy.remove("${uid}:800")
+      return "Revolver"
+    }
+  } else if it == $BRItemBase/Weapon_ArmingSword {
+    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 20 {
+      invBuy.remove("${uid}:8000")
+      return "Adamant Sword"
+    }
+    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 20 {
+      invBuy.remove("${uid}:2000")
+      return "Black Sword"
+    }
+    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 20 {
+      invBuy.remove("${uid}:50")
+      return "Bronze Sword"
+    }
+    if invBuy.has("${uid}:400") && GetUnixTime() - invBuy.get("${uid}:400") <= 20 {
+      invBuy.remove("${uid}:400")
+      return "Iron Sword"
+    }
+    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 20 {
+      invBuy.remove("${uid}:4000")
+      return "Mithril Sword"
+    }
+    if invBuy.has("${uid}:20000") && GetUnixTime() - invBuy.get("${uid}:20000") <= 20 {
+      invBuy.remove("${uid}:20000")
+      return "Rune Sword"
+    }
+    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 20 {
+      invBuy.remove("${uid}:1000")
+      return "Steel Sword"
+    }
+  } else if it == $BRItemBase/Weapon_Zweihander {
+    if invBuy.has("${uid}:16000") && GetUnixTime() - invBuy.get("${uid}:16000") <= 20 {
+      invBuy.remove("${uid}:16000")
+      return "Adamant 2h Sword"
+    }
+    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 20 {
+      invBuy.remove("${uid}:4000")
+      return "Black 2h Sword"
+    }
+    if invBuy.has("${uid}:100") && GetUnixTime() - invBuy.get("${uid}:100") <= 20 {
+      invBuy.remove("${uid}:100")
+      return "Bronze 2h Sword"
+    }
+    if invBuy.has("${uid}:800") && GetUnixTime() - invBuy.get("${uid}:800") <= 20 {
+      invBuy.remove("${uid}:800")
+      return "Iron 2h Sword"
+    }
+    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 20 {
+      invBuy.remove("${uid}:8000")
+      return "Mithril 2h Sword"
+    }
+    if invBuy.has("${uid}:40000") && GetUnixTime() - invBuy.get("${uid}:40000") <= 20 {
+      invBuy.remove("${uid}:40000")
+      return "Rune 2h Sword"
+    }
+    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 20 {
+      invBuy.remove("${uid}:2000")
+      return "Steel 2h Sword"
+    }
+  } else if it == $BRItemBase/Weapon_Knife {
+    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 20 {
+      invBuy.remove("${uid}:4000")
+      return "Adamant Dagger"
+    }
+    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 20 {
+      invBuy.remove("${uid}:1000")
+      return "Black Dagger"
+    }
+    if invBuy.has("${uid}:25") && GetUnixTime() - invBuy.get("${uid}:25") <= 20 {
+      invBuy.remove("${uid}:25")
+      return "Bronze Dagger"
+    }
+    if invBuy.has("${uid}:200") && GetUnixTime() - invBuy.get("${uid}:200") <= 20 {
+      invBuy.remove("${uid}:200")
+      return "Iron Dagger"
+    }
+    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 20 {
+      invBuy.remove("${uid}:2000")
+      return "Mithril Dagger"
+    }
+    if invBuy.has("${uid}:10000") && GetUnixTime() - invBuy.get("${uid}:10000") <= 20 {
+      invBuy.remove("${uid}:10000")
+      return "Rune Dagger"
+    }
+    if invBuy.has("${uid}:500") && GetUnixTime() - invBuy.get("${uid}:500") <= 20 {
+      invBuy.remove("${uid}:500")
+      return "Steel Dagger"
+    }
+  } else if it == $BRItemBase/Weapon_Longsword {
+    if invBuy.has("${uid}:12000") && GetUnixTime() - invBuy.get("${uid}:12000") <= 20 {
+      invBuy.remove("${uid}:12000")
+      return "Adamant Longsword"
+    }
+    if invBuy.has("${uid}:3000") && GetUnixTime() - invBuy.get("${uid}:3000") <= 20 {
+      invBuy.remove("${uid}:3000")
+      return "Black Longsword"
+    }
+    if invBuy.has("${uid}:75") && GetUnixTime() - invBuy.get("${uid}:75") <= 20 {
+      invBuy.remove("${uid}:75")
+      return "Bronze Longsword"
+    }
+    if invBuy.has("${uid}:600") && GetUnixTime() - invBuy.get("${uid}:600") <= 20 {
+      invBuy.remove("${uid}:600")
+      return "Iron Longsword"
+    }
+    if invBuy.has("${uid}:6000") && GetUnixTime() - invBuy.get("${uid}:6000") <= 20 {
+      invBuy.remove("${uid}:6000")
+      return "Mithril Longsword"
+    }
+    if invBuy.has("${uid}:30000") && GetUnixTime() - invBuy.get("${uid}:30000") <= 20 {
+      invBuy.remove("${uid}:30000")
+      return "Rune Longsword"
+    }
+    if invBuy.has("${uid}:1500") && GetUnixTime() - invBuy.get("${uid}:1500") <= 20 {
+      invBuy.remove("${uid}:1500")
+      return "Steel Longsword"
+    }
+  } else if it == $BRItemBase/Weapon_Sabre {
+    if invBuy.has("${uid}:10000") && GetUnixTime() - invBuy.get("${uid}:10000") <= 20 {
+      invBuy.remove("${uid}:10000")
+      return "Adamant Scimitar"
+    }
+    if invBuy.has("${uid}:2500") && GetUnixTime() - invBuy.get("${uid}:2500") <= 20 {
+      invBuy.remove("${uid}:2500")
+      return "Black Scimitar"
+    }
+    if invBuy.has("${uid}:63") && GetUnixTime() - invBuy.get("${uid}:63") <= 20 {
+      invBuy.remove("${uid}:63")
+      return "Bronze Scimitar"
+    }
+    if invBuy.has("${uid}:500") && GetUnixTime() - invBuy.get("${uid}:500") <= 20 {
+      invBuy.remove("${uid}:500")
+      return "Iron Scimitar"
+    }
+    if invBuy.has("${uid}:5000") && GetUnixTime() - invBuy.get("${uid}:5000") <= 20 {
+      invBuy.remove("${uid}:5000")
+      return "Mithril Scimitar"
+    }
+    if invBuy.has("${uid}:25000") && GetUnixTime() - invBuy.get("${uid}:25000") <= 20 {
+      invBuy.remove("${uid}:25000")
+      return "Rune Scimitar"
+    }
+    if invBuy.has("${uid}:1250") && GetUnixTime() - invBuy.get("${uid}:1250") <= 20 {
+      invBuy.remove("${uid}:1250")
+      return "Steel Scimitar"
+    }
+  } else if it == $BRItemBase/Weapon_Spatha {
+    if invBuy.has("${uid}:11200") && GetUnixTime() - invBuy.get("${uid}:11200") <= 20 {
+      invBuy.remove("${uid}:11200")
+      return "Adamant Spatha"
+    }
+    if invBuy.has("${uid}:2800") && GetUnixTime() - invBuy.get("${uid}:2800") <= 20 {
+      invBuy.remove("${uid}:2800")
+      return "Black Spatha"
+    }
+    if invBuy.has("${uid}:70") && GetUnixTime() - invBuy.get("${uid}:70") <= 20 {
+      invBuy.remove("${uid}:70")
+      return "Bronze Spatha"
+    }
+    if invBuy.has("${uid}:560") && GetUnixTime() - invBuy.get("${uid}:560") <= 20 {
+      invBuy.remove("${uid}:560")
+      return "Iron Spatha"
+    }
+    if invBuy.has("${uid}:5600") && GetUnixTime() - invBuy.get("${uid}:5600") <= 20 {
+      invBuy.remove("${uid}:5600")
+      return "Mithril Spatha"
+    }
+    if invBuy.has("${uid}:28000") && GetUnixTime() - invBuy.get("${uid}:28000") <= 20 {
+      invBuy.remove("${uid}:28000")
+      return "Rune Spatha"
+    }
+    if invBuy.has("${uid}:1400") && GetUnixTime() - invBuy.get("${uid}:1400") <= 20 {
+      invBuy.remove("${uid}:1400")
+      return "Steel Spatha"
+    }
+  } else if it == $BRItemBase/Weapon_SodaCan {
+    if invBuy.has("${uid}:40") && GetUnixTime() - invBuy.get("${uid}:40") <= 20 {
+      invBuy.remove("${uid}:40")
+      return "Dragonfruit Fizz"
+    }
+    if invBuy.has("${uid}:100") && GetUnixTime() - invBuy.get("${uid}:100") <= 20 {
+      invBuy.remove("${uid}:100")
+      return "Ghost Pepper Pop"
+    }
+    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 20 {
+      invBuy.remove("${uid}:50")
+      return "Glacier Mint"
+    }
+    if invBuy.has("${uid}:300") && GetUnixTime() - invBuy.get("${uid}:300") <= 20 {
+      invBuy.remove("${uid}:300")
+      return "Gold Rush Tonic"
+    }
+    if invBuy.has("${uid}:200") && GetUnixTime() - invBuy.get("${uid}:200") <= 20 {
+      invBuy.remove("${uid}:200")
+      return "Kraken Ink Soda"
+    }
+    if invBuy.has("${uid}:45") && GetUnixTime() - invBuy.get("${uid}:45") <= 20 {
+      invBuy.remove("${uid}:45")
+      return "Mango Tango"
+    }
+    if invBuy.has("${uid}:80") && GetUnixTime() - invBuy.get("${uid}:80") <= 20 {
+      invBuy.remove("${uid}:80")
+      return "Starfruit Sparkle"
+    }
+    if invBuy.has("${uid}:25") && GetUnixTime() - invBuy.get("${uid}:25") <= 20 {
+      invBuy.remove("${uid}:25")
+      return "Swamp Brew"
+    }
+    if invBuy.has("${uid}:150") && GetUnixTime() - invBuy.get("${uid}:150") <= 20 {
+      invBuy.remove("${uid}:150")
+      return "Voidberry Nectar"
+    }
+    if invBuy.has("${uid}:60") && GetUnixTime() - invBuy.get("${uid}:60") <= 20 {
+      invBuy.remove("${uid}:60")
+      return "Volcano Cola"
+    }
+  }
+  return ""
+}
+// put an item in a slot: a shop name gives that shop's advanced item, else the plain item
+mod giveNamed(ch: character, slot: int, name: string, it: entity) {
+  if name == "Bow" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.500, speed = 0.800, itemName = "Bow", overrideColors = true, meshColors = [ColorSRGB(75, 31, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Magic Bow" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.500, speed = 1.500, itemName = "Magic Bow", overrideColors = true, meshColors = [ColorSRGB(4, 210, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Maple Bow" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.100, speed = 1.100, itemName = "Maple Bow", overrideColors = true, meshColors = [ColorSRGB(186, 140, 157, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Oak Bow" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.800, speed = 0.900, itemName = "Oak Bow", overrideColors = true, meshColors = [ColorSRGB(186, 137, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Willow Bow" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, itemName = "Willow Bow", overrideColors = true, meshColors = [ColorSRGB(183, 186, 130, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Yew Bow" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.300, speed = 1.300, itemName = "Yew Bow", overrideColors = true, meshColors = [ColorSRGB(185, 157, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Bolt-Action Rifle" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_BoltActionRifle, slot = slot, itemName = "Bolt-Action Rifle")
+  } else if name == "Derringer" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Derringer, slot = slot, itemName = "Derringer")
+  } else if name == "Hunting Shotgun" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_HuntingShotgun, slot = slot, itemName = "Hunting Shotgun")
+  } else if name == "Lever-Action Rifle" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_LeverActionRifle, slot = slot, itemName = "Lever-Action Rifle")
+  } else if name == "Magnum" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_MagnumPistol, slot = slot, itemName = "Magnum")
+  } else if name == "Revolver" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Revolver, slot = slot, itemName = "Revolver")
+  } else if name == "Adamant Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = slot, damage = 1.500, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Adamant 2h Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Zweihander, slot = slot, damage = 1.500, itemName = "Adamant 2h Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Adamant Dagger" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Knife, slot = slot, damage = 1.500, itemName = "Adamant Dagger", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Adamant Longsword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Longsword, slot = slot, damage = 1.500, itemName = "Adamant Longsword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Adamant Scimitar" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Sabre, slot = slot, damage = 1.500, itemName = "Adamant Scimitar", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Adamant Spatha" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Spatha, slot = slot, damage = 1.500, itemName = "Adamant Spatha", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Black Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = slot, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Black 2h Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Zweihander, slot = slot, itemName = "Black 2h Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Black Dagger" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Knife, slot = slot, itemName = "Black Dagger", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Black Longsword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Longsword, slot = slot, itemName = "Black Longsword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Black Scimitar" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Sabre, slot = slot, itemName = "Black Scimitar", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Black Spatha" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Spatha, slot = slot, itemName = "Black Spatha", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Bronze Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = slot, damage = 0.500, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Bronze 2h Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Zweihander, slot = slot, damage = 0.500, itemName = "Bronze 2h Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Bronze Dagger" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Knife, slot = slot, damage = 0.500, itemName = "Bronze Dagger", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Bronze Longsword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Longsword, slot = slot, damage = 0.500, itemName = "Bronze Longsword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Bronze Scimitar" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Sabre, slot = slot, damage = 0.500, itemName = "Bronze Scimitar", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Bronze Spatha" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Spatha, slot = slot, damage = 0.500, itemName = "Bronze Spatha", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Iron Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = slot, damage = 0.650, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Iron 2h Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Zweihander, slot = slot, damage = 0.650, itemName = "Iron 2h Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Iron Dagger" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Knife, slot = slot, damage = 0.650, itemName = "Iron Dagger", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Iron Longsword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Longsword, slot = slot, damage = 0.650, itemName = "Iron Longsword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Iron Scimitar" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Sabre, slot = slot, damage = 0.650, itemName = "Iron Scimitar", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Iron Spatha" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Spatha, slot = slot, damage = 0.650, itemName = "Iron Spatha", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Mithril Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = slot, damage = 1.200, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Mithril 2h Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Zweihander, slot = slot, damage = 1.200, itemName = "Mithril 2h Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Mithril Dagger" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Knife, slot = slot, damage = 1.200, itemName = "Mithril Dagger", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Mithril Longsword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Longsword, slot = slot, damage = 1.200, itemName = "Mithril Longsword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Mithril Scimitar" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Sabre, slot = slot, damage = 1.200, itemName = "Mithril Scimitar", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Mithril Spatha" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Spatha, slot = slot, damage = 1.200, itemName = "Mithril Spatha", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Rune Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = slot, damage = 2.000, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Rune 2h Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Zweihander, slot = slot, damage = 2.000, itemName = "Rune 2h Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Rune Dagger" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Knife, slot = slot, damage = 2.000, itemName = "Rune Dagger", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Rune Longsword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Longsword, slot = slot, damage = 2.000, itemName = "Rune Longsword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Rune Scimitar" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Sabre, slot = slot, damage = 2.000, itemName = "Rune Scimitar", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Rune Spatha" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Spatha, slot = slot, damage = 2.000, itemName = "Rune Spatha", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Steel Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = slot, damage = 0.800, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Steel 2h Sword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Zweihander, slot = slot, damage = 0.800, itemName = "Steel 2h Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Steel Dagger" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Knife, slot = slot, damage = 0.800, itemName = "Steel Dagger", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Steel Longsword" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Longsword, slot = slot, damage = 0.800, itemName = "Steel Longsword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Steel Scimitar" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Sabre, slot = slot, damage = 0.800, itemName = "Steel Scimitar", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Steel Spatha" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Spatha, slot = slot, damage = 0.800, itemName = "Steel Spatha", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Dragonfruit Fizz" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Dragonfruit Fizz", overrideColors = true, meshColors = [ColorSRGB(230, 40, 140, 255), ColorSRGB(120, 220, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Ghost Pepper Pop" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Ghost Pepper Pop", overrideColors = true, meshColors = [ColorSRGB(240, 240, 240, 255), ColorSRGB(220, 30, 30, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Glacier Mint" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Glacier Mint", overrideColors = true, meshColors = [ColorSRGB(120, 220, 255, 255), ColorSRGB(240, 250, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Gold Rush Tonic" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Gold Rush Tonic", overrideColors = true, meshColors = [ColorSRGB(212, 175, 55, 255), ColorSRGB(60, 40, 10, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Kraken Ink Soda" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Kraken Ink Soda", overrideColors = true, meshColors = [ColorSRGB(20, 30, 60, 255), ColorSRGB(40, 200, 180, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Mango Tango" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Mango Tango", overrideColors = true, meshColors = [ColorSRGB(255, 150, 30, 255), ColorSRGB(250, 80, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Starfruit Sparkle" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Starfruit Sparkle", overrideColors = true, meshColors = [ColorSRGB(255, 220, 40, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Swamp Brew" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Swamp Brew", overrideColors = true, meshColors = [ColorSRGB(70, 110, 40, 255), ColorSRGB(150, 120, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Voidberry Nectar" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Voidberry Nectar", overrideColors = true, meshColors = [ColorSRGB(40, 10, 70, 255), ColorSRGB(180, 90, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Volcano Cola" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Volcano Cola", overrideColors = true, meshColors = [ColorSRGB(150, 20, 10, 255), ColorSRGB(255, 140, 0, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else {
+    ch.SetInventoryItem(it, slot)
+  }
+}
 on CharacterDamaged() -> (victim, damage, attacker, attackerWeapon, attackerWeaponName) {
   let ac = attacker.ControllerOf()
   PrintToConsole("[hit debug] victim=${victim.ControllerOf().GetUserName()} attacker=${ac.GetUserName()} weapon=${attackerWeaponName} dmg=${damage} total=${victim.GetDamage()}")
@@ -358,6 +767,9 @@ var invHas: Map<string, int>
 var invLast: Map<string, string>
 var invJoin: Map<string, int>
 var invItem: Map<string, entity>
+var invName: Map<string, string>
+var invBuy: Map<string, int>
+var invChk: Map<string, int>
 on ControllerLeft() -> (controller, userId, userName) {
   invLive.set(userId, 0)
 }
@@ -383,6 +795,11 @@ on Clock(interval = 0.25) {
     let coinsNow = hp.GetLeaderboard("coins")
     if invCoins.has(uid) {
       let spent = invCoins.get(uid) - coinsNow
+      // any purchase: remember its price a while, so the next inventory check
+      // can name the item that turns up (buyName, by item class + price)
+      if spent > 0 {
+        invBuy.set("${uid}:${spent}", GetUnixTime())
+      }
       if spent == 150 {
         hp.SetLeaderboard("SwordTier", 1)
       } else if spent == 400 {
@@ -401,22 +818,413 @@ on Clock(interval = 0.25) {
     }
     invCoins.set(uid, coinsNow)
     invSeen.set(uid, GetUnixTime())
-    if invLive.has(uid) && invLive.get(uid) == 1 {
+    if invLive.has(uid) && invLive.get(uid) == 1 && (!invChk.has(uid) || GetUnixTime() - invChk.get(uid) >= 5) {
+      invChk.set(uid, GetUnixTime())
       let ich = hp.CharacterOf()
-      invItem.set("${uid}:0", ich.GetInventoryEntry(0).Item)
-      invItem.set("${uid}:1", ich.GetInventoryEntry(1).Item)
-      invItem.set("${uid}:2", ich.GetInventoryEntry(2).Item)
-      invItem.set("${uid}:3", ich.GetInventoryEntry(3).Item)
-      invItem.set("${uid}:4", ich.GetInventoryEntry(4).Item)
-      invItem.set("${uid}:5", ich.GetInventoryEntry(5).Item)
-      invItem.set("${uid}:6", ich.GetInventoryEntry(6).Item)
-      invItem.set("${uid}:7", ich.GetInventoryEntry(7).Item)
-      invItem.set("${uid}:8", ich.GetInventoryEntry(8).Item)
-      invItem.set("${uid}:9", ich.GetInventoryEntry(9).Item)
+      let e0 = ich.GetInventoryEntry(0).Item
+      let o0 = invItem.get("${uid}:0").Value
+      let m0 = invName.get("${uid}:0").Value
+      var n0 = m0
+      var t0 = 0
+      let e1 = ich.GetInventoryEntry(1).Item
+      let o1 = invItem.get("${uid}:1").Value
+      let m1 = invName.get("${uid}:1").Value
+      var n1 = m1
+      var t1 = 0
+      let e2 = ich.GetInventoryEntry(2).Item
+      let o2 = invItem.get("${uid}:2").Value
+      let m2 = invName.get("${uid}:2").Value
+      var n2 = m2
+      var t2 = 0
+      let e3 = ich.GetInventoryEntry(3).Item
+      let o3 = invItem.get("${uid}:3").Value
+      let m3 = invName.get("${uid}:3").Value
+      var n3 = m3
+      var t3 = 0
+      let e4 = ich.GetInventoryEntry(4).Item
+      let o4 = invItem.get("${uid}:4").Value
+      let m4 = invName.get("${uid}:4").Value
+      var n4 = m4
+      var t4 = 0
+      let e5 = ich.GetInventoryEntry(5).Item
+      let o5 = invItem.get("${uid}:5").Value
+      let m5 = invName.get("${uid}:5").Value
+      var n5 = m5
+      var t5 = 0
+      let e6 = ich.GetInventoryEntry(6).Item
+      let o6 = invItem.get("${uid}:6").Value
+      let m6 = invName.get("${uid}:6").Value
+      var n6 = m6
+      var t6 = 0
+      let e7 = ich.GetInventoryEntry(7).Item
+      let o7 = invItem.get("${uid}:7").Value
+      let m7 = invName.get("${uid}:7").Value
+      var n7 = m7
+      var t7 = 0
+      let e8 = ich.GetInventoryEntry(8).Item
+      let o8 = invItem.get("${uid}:8").Value
+      let m8 = invName.get("${uid}:8").Value
+      var n8 = m8
+      var t8 = 0
+      let e9 = ich.GetInventoryEntry(9).Item
+      let o9 = invItem.get("${uid}:9").Value
+      let m9 = invName.get("${uid}:9").Value
+      var n9 = m9
+      var t9 = 0
+      if e0 != o0 {
+        n0 = buyName(uid, e0)
+        if n0 == "" {
+          if o1 == e0 && e1 != o1 && m1 != "" && t1 == 0 {
+            n0 = m1
+            t1 = 1
+          } else if o2 == e0 && e2 != o2 && m2 != "" && t2 == 0 {
+            n0 = m2
+            t2 = 1
+          } else if o3 == e0 && e3 != o3 && m3 != "" && t3 == 0 {
+            n0 = m3
+            t3 = 1
+          } else if o4 == e0 && e4 != o4 && m4 != "" && t4 == 0 {
+            n0 = m4
+            t4 = 1
+          } else if o5 == e0 && e5 != o5 && m5 != "" && t5 == 0 {
+            n0 = m5
+            t5 = 1
+          } else if o6 == e0 && e6 != o6 && m6 != "" && t6 == 0 {
+            n0 = m6
+            t6 = 1
+          } else if o7 == e0 && e7 != o7 && m7 != "" && t7 == 0 {
+            n0 = m7
+            t7 = 1
+          } else if o8 == e0 && e8 != o8 && m8 != "" && t8 == 0 {
+            n0 = m8
+            t8 = 1
+          } else if o9 == e0 && e9 != o9 && m9 != "" && t9 == 0 {
+            n0 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e1 != o1 {
+        n1 = buyName(uid, e1)
+        if n1 == "" {
+          if o0 == e1 && e0 != o0 && m0 != "" && t0 == 0 {
+            n1 = m0
+            t0 = 1
+          } else if o2 == e1 && e2 != o2 && m2 != "" && t2 == 0 {
+            n1 = m2
+            t2 = 1
+          } else if o3 == e1 && e3 != o3 && m3 != "" && t3 == 0 {
+            n1 = m3
+            t3 = 1
+          } else if o4 == e1 && e4 != o4 && m4 != "" && t4 == 0 {
+            n1 = m4
+            t4 = 1
+          } else if o5 == e1 && e5 != o5 && m5 != "" && t5 == 0 {
+            n1 = m5
+            t5 = 1
+          } else if o6 == e1 && e6 != o6 && m6 != "" && t6 == 0 {
+            n1 = m6
+            t6 = 1
+          } else if o7 == e1 && e7 != o7 && m7 != "" && t7 == 0 {
+            n1 = m7
+            t7 = 1
+          } else if o8 == e1 && e8 != o8 && m8 != "" && t8 == 0 {
+            n1 = m8
+            t8 = 1
+          } else if o9 == e1 && e9 != o9 && m9 != "" && t9 == 0 {
+            n1 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e2 != o2 {
+        n2 = buyName(uid, e2)
+        if n2 == "" {
+          if o0 == e2 && e0 != o0 && m0 != "" && t0 == 0 {
+            n2 = m0
+            t0 = 1
+          } else if o1 == e2 && e1 != o1 && m1 != "" && t1 == 0 {
+            n2 = m1
+            t1 = 1
+          } else if o3 == e2 && e3 != o3 && m3 != "" && t3 == 0 {
+            n2 = m3
+            t3 = 1
+          } else if o4 == e2 && e4 != o4 && m4 != "" && t4 == 0 {
+            n2 = m4
+            t4 = 1
+          } else if o5 == e2 && e5 != o5 && m5 != "" && t5 == 0 {
+            n2 = m5
+            t5 = 1
+          } else if o6 == e2 && e6 != o6 && m6 != "" && t6 == 0 {
+            n2 = m6
+            t6 = 1
+          } else if o7 == e2 && e7 != o7 && m7 != "" && t7 == 0 {
+            n2 = m7
+            t7 = 1
+          } else if o8 == e2 && e8 != o8 && m8 != "" && t8 == 0 {
+            n2 = m8
+            t8 = 1
+          } else if o9 == e2 && e9 != o9 && m9 != "" && t9 == 0 {
+            n2 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e3 != o3 {
+        n3 = buyName(uid, e3)
+        if n3 == "" {
+          if o0 == e3 && e0 != o0 && m0 != "" && t0 == 0 {
+            n3 = m0
+            t0 = 1
+          } else if o1 == e3 && e1 != o1 && m1 != "" && t1 == 0 {
+            n3 = m1
+            t1 = 1
+          } else if o2 == e3 && e2 != o2 && m2 != "" && t2 == 0 {
+            n3 = m2
+            t2 = 1
+          } else if o4 == e3 && e4 != o4 && m4 != "" && t4 == 0 {
+            n3 = m4
+            t4 = 1
+          } else if o5 == e3 && e5 != o5 && m5 != "" && t5 == 0 {
+            n3 = m5
+            t5 = 1
+          } else if o6 == e3 && e6 != o6 && m6 != "" && t6 == 0 {
+            n3 = m6
+            t6 = 1
+          } else if o7 == e3 && e7 != o7 && m7 != "" && t7 == 0 {
+            n3 = m7
+            t7 = 1
+          } else if o8 == e3 && e8 != o8 && m8 != "" && t8 == 0 {
+            n3 = m8
+            t8 = 1
+          } else if o9 == e3 && e9 != o9 && m9 != "" && t9 == 0 {
+            n3 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e4 != o4 {
+        n4 = buyName(uid, e4)
+        if n4 == "" {
+          if o0 == e4 && e0 != o0 && m0 != "" && t0 == 0 {
+            n4 = m0
+            t0 = 1
+          } else if o1 == e4 && e1 != o1 && m1 != "" && t1 == 0 {
+            n4 = m1
+            t1 = 1
+          } else if o2 == e4 && e2 != o2 && m2 != "" && t2 == 0 {
+            n4 = m2
+            t2 = 1
+          } else if o3 == e4 && e3 != o3 && m3 != "" && t3 == 0 {
+            n4 = m3
+            t3 = 1
+          } else if o5 == e4 && e5 != o5 && m5 != "" && t5 == 0 {
+            n4 = m5
+            t5 = 1
+          } else if o6 == e4 && e6 != o6 && m6 != "" && t6 == 0 {
+            n4 = m6
+            t6 = 1
+          } else if o7 == e4 && e7 != o7 && m7 != "" && t7 == 0 {
+            n4 = m7
+            t7 = 1
+          } else if o8 == e4 && e8 != o8 && m8 != "" && t8 == 0 {
+            n4 = m8
+            t8 = 1
+          } else if o9 == e4 && e9 != o9 && m9 != "" && t9 == 0 {
+            n4 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e5 != o5 {
+        n5 = buyName(uid, e5)
+        if n5 == "" {
+          if o0 == e5 && e0 != o0 && m0 != "" && t0 == 0 {
+            n5 = m0
+            t0 = 1
+          } else if o1 == e5 && e1 != o1 && m1 != "" && t1 == 0 {
+            n5 = m1
+            t1 = 1
+          } else if o2 == e5 && e2 != o2 && m2 != "" && t2 == 0 {
+            n5 = m2
+            t2 = 1
+          } else if o3 == e5 && e3 != o3 && m3 != "" && t3 == 0 {
+            n5 = m3
+            t3 = 1
+          } else if o4 == e5 && e4 != o4 && m4 != "" && t4 == 0 {
+            n5 = m4
+            t4 = 1
+          } else if o6 == e5 && e6 != o6 && m6 != "" && t6 == 0 {
+            n5 = m6
+            t6 = 1
+          } else if o7 == e5 && e7 != o7 && m7 != "" && t7 == 0 {
+            n5 = m7
+            t7 = 1
+          } else if o8 == e5 && e8 != o8 && m8 != "" && t8 == 0 {
+            n5 = m8
+            t8 = 1
+          } else if o9 == e5 && e9 != o9 && m9 != "" && t9 == 0 {
+            n5 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e6 != o6 {
+        n6 = buyName(uid, e6)
+        if n6 == "" {
+          if o0 == e6 && e0 != o0 && m0 != "" && t0 == 0 {
+            n6 = m0
+            t0 = 1
+          } else if o1 == e6 && e1 != o1 && m1 != "" && t1 == 0 {
+            n6 = m1
+            t1 = 1
+          } else if o2 == e6 && e2 != o2 && m2 != "" && t2 == 0 {
+            n6 = m2
+            t2 = 1
+          } else if o3 == e6 && e3 != o3 && m3 != "" && t3 == 0 {
+            n6 = m3
+            t3 = 1
+          } else if o4 == e6 && e4 != o4 && m4 != "" && t4 == 0 {
+            n6 = m4
+            t4 = 1
+          } else if o5 == e6 && e5 != o5 && m5 != "" && t5 == 0 {
+            n6 = m5
+            t5 = 1
+          } else if o7 == e6 && e7 != o7 && m7 != "" && t7 == 0 {
+            n6 = m7
+            t7 = 1
+          } else if o8 == e6 && e8 != o8 && m8 != "" && t8 == 0 {
+            n6 = m8
+            t8 = 1
+          } else if o9 == e6 && e9 != o9 && m9 != "" && t9 == 0 {
+            n6 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e7 != o7 {
+        n7 = buyName(uid, e7)
+        if n7 == "" {
+          if o0 == e7 && e0 != o0 && m0 != "" && t0 == 0 {
+            n7 = m0
+            t0 = 1
+          } else if o1 == e7 && e1 != o1 && m1 != "" && t1 == 0 {
+            n7 = m1
+            t1 = 1
+          } else if o2 == e7 && e2 != o2 && m2 != "" && t2 == 0 {
+            n7 = m2
+            t2 = 1
+          } else if o3 == e7 && e3 != o3 && m3 != "" && t3 == 0 {
+            n7 = m3
+            t3 = 1
+          } else if o4 == e7 && e4 != o4 && m4 != "" && t4 == 0 {
+            n7 = m4
+            t4 = 1
+          } else if o5 == e7 && e5 != o5 && m5 != "" && t5 == 0 {
+            n7 = m5
+            t5 = 1
+          } else if o6 == e7 && e6 != o6 && m6 != "" && t6 == 0 {
+            n7 = m6
+            t6 = 1
+          } else if o8 == e7 && e8 != o8 && m8 != "" && t8 == 0 {
+            n7 = m8
+            t8 = 1
+          } else if o9 == e7 && e9 != o9 && m9 != "" && t9 == 0 {
+            n7 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e8 != o8 {
+        n8 = buyName(uid, e8)
+        if n8 == "" {
+          if o0 == e8 && e0 != o0 && m0 != "" && t0 == 0 {
+            n8 = m0
+            t0 = 1
+          } else if o1 == e8 && e1 != o1 && m1 != "" && t1 == 0 {
+            n8 = m1
+            t1 = 1
+          } else if o2 == e8 && e2 != o2 && m2 != "" && t2 == 0 {
+            n8 = m2
+            t2 = 1
+          } else if o3 == e8 && e3 != o3 && m3 != "" && t3 == 0 {
+            n8 = m3
+            t3 = 1
+          } else if o4 == e8 && e4 != o4 && m4 != "" && t4 == 0 {
+            n8 = m4
+            t4 = 1
+          } else if o5 == e8 && e5 != o5 && m5 != "" && t5 == 0 {
+            n8 = m5
+            t5 = 1
+          } else if o6 == e8 && e6 != o6 && m6 != "" && t6 == 0 {
+            n8 = m6
+            t6 = 1
+          } else if o7 == e8 && e7 != o7 && m7 != "" && t7 == 0 {
+            n8 = m7
+            t7 = 1
+          } else if o9 == e8 && e9 != o9 && m9 != "" && t9 == 0 {
+            n8 = m9
+            t9 = 1
+          }
+        }
+      }
+      if e9 != o9 {
+        n9 = buyName(uid, e9)
+        if n9 == "" {
+          if o0 == e9 && e0 != o0 && m0 != "" && t0 == 0 {
+            n9 = m0
+            t0 = 1
+          } else if o1 == e9 && e1 != o1 && m1 != "" && t1 == 0 {
+            n9 = m1
+            t1 = 1
+          } else if o2 == e9 && e2 != o2 && m2 != "" && t2 == 0 {
+            n9 = m2
+            t2 = 1
+          } else if o3 == e9 && e3 != o3 && m3 != "" && t3 == 0 {
+            n9 = m3
+            t3 = 1
+          } else if o4 == e9 && e4 != o4 && m4 != "" && t4 == 0 {
+            n9 = m4
+            t4 = 1
+          } else if o5 == e9 && e5 != o5 && m5 != "" && t5 == 0 {
+            n9 = m5
+            t5 = 1
+          } else if o6 == e9 && e6 != o6 && m6 != "" && t6 == 0 {
+            n9 = m6
+            t6 = 1
+          } else if o7 == e9 && e7 != o7 && m7 != "" && t7 == 0 {
+            n9 = m7
+            t7 = 1
+          } else if o8 == e9 && e8 != o8 && m8 != "" && t8 == 0 {
+            n9 = m8
+            t8 = 1
+          }
+        }
+      }
+      invItem.set("${uid}:0", e0)
+      invName.set("${uid}:0", n0)
+      invItem.set("${uid}:1", e1)
+      invName.set("${uid}:1", n1)
+      invItem.set("${uid}:2", e2)
+      invName.set("${uid}:2", n2)
+      invItem.set("${uid}:3", e3)
+      invName.set("${uid}:3", n3)
+      invItem.set("${uid}:4", e4)
+      invName.set("${uid}:4", n4)
+      invItem.set("${uid}:5", e5)
+      invName.set("${uid}:5", n5)
+      invItem.set("${uid}:6", e6)
+      invName.set("${uid}:6", n6)
+      invItem.set("${uid}:7", e7)
+      invName.set("${uid}:7", n7)
+      invItem.set("${uid}:8", e8)
+      invName.set("${uid}:8", n8)
+      invItem.set("${uid}:9", e9)
+      invName.set("${uid}:9", n9)
       invHas.set(uid, 1)
       // (owner 2026-10-11: "they NEED to keep the data") the slots go to the log
-      // whenever they change; the progress plugin keeps them on disk
-      let invLine = "${ich.GetInventoryEntry(0).Item}|${ich.GetInventoryEntry(1).Item}|${ich.GetInventoryEntry(2).Item}|${ich.GetInventoryEntry(3).Item}|${ich.GetInventoryEntry(4).Item}|${ich.GetInventoryEntry(5).Item}|${ich.GetInventoryEntry(6).Item}|${ich.GetInventoryEntry(7).Item}|${ich.GetInventoryEntry(8).Item}|${ich.GetInventoryEntry(9).Item}"
+      // whenever they change ("class=name" for named ones); the progress plugin keeps them on disk
+      let invLine = "${e0}=${n0}|${e1}=${n1}|${e2}=${n2}|${e3}=${n3}|${e4}=${n4}|${e5}=${n5}|${e6}=${n6}|${e7}=${n7}|${e8}=${n8}|${e9}=${n9}"
       if !invLast.has(uid) || invLast.get(uid).Value != invLine {
         invLast.set(uid, invLine)
         PrintToConsole("[inv] ${uid} ${invLine}")
@@ -463,7 +1271,8 @@ on CharacterSpawned() -> (character) {
     if invHas.has(suid) {
       PrintToConsole("[inv-restored] ${suid}")
       let it0 = invItem.get("${suid}:0").Value
-      if it0 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm0 = invName.get("${suid}:0").Value
+      if nm0 == "" && it0 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -481,10 +1290,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it0, 0)
+        giveNamed(character, 0, nm0, it0)
       }
       let it1 = invItem.get("${suid}:1").Value
-      if it1 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm1 = invName.get("${suid}:1").Value
+      if nm1 == "" && it1 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -502,10 +1312,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it1, 1)
+        giveNamed(character, 1, nm1, it1)
       }
       let it2 = invItem.get("${suid}:2").Value
-      if it2 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm2 = invName.get("${suid}:2").Value
+      if nm2 == "" && it2 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -523,10 +1334,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it2, 2)
+        giveNamed(character, 2, nm2, it2)
       }
       let it3 = invItem.get("${suid}:3").Value
-      if it3 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm3 = invName.get("${suid}:3").Value
+      if nm3 == "" && it3 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -544,10 +1356,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it3, 3)
+        giveNamed(character, 3, nm3, it3)
       }
       let it4 = invItem.get("${suid}:4").Value
-      if it4 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm4 = invName.get("${suid}:4").Value
+      if nm4 == "" && it4 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -565,10 +1378,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it4, 4)
+        giveNamed(character, 4, nm4, it4)
       }
       let it5 = invItem.get("${suid}:5").Value
-      if it5 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm5 = invName.get("${suid}:5").Value
+      if nm5 == "" && it5 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -586,10 +1400,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it5, 5)
+        giveNamed(character, 5, nm5, it5)
       }
       let it6 = invItem.get("${suid}:6").Value
-      if it6 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm6 = invName.get("${suid}:6").Value
+      if nm6 == "" && it6 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -607,10 +1422,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it6, 6)
+        giveNamed(character, 6, nm6, it6)
       }
       let it7 = invItem.get("${suid}:7").Value
-      if it7 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm7 = invName.get("${suid}:7").Value
+      if nm7 == "" && it7 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -628,10 +1444,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it7, 7)
+        giveNamed(character, 7, nm7, it7)
       }
       let it8 = invItem.get("${suid}:8").Value
-      if it8 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm8 = invName.get("${suid}:8").Value
+      if nm8 == "" && it8 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -649,10 +1466,11 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it8, 8)
+        giveNamed(character, 8, nm8, it8)
       }
       let it9 = invItem.get("${suid}:9").Value
-      if it9 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
+      let nm9 = invName.get("${suid}:9").Value
+      if nm9 == "" && it9 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
         let tier = character.ControllerOf().GetLeaderboard("SwordTier")
         if tier == 1 {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
@@ -670,7 +1488,7 @@ on CharacterSpawned() -> (character) {
           character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
         }
       } else {
-        character.SetInventoryItem(it9, 9)
+        giveNamed(character, 9, nm9, it9)
       }
     } else if !invSeen.has(suid) || GetUnixTime() - invSeen.get(suid) > 30 {
       // no snapshot here (a restart or a new chip): the progress plugin gives back the rest from disk

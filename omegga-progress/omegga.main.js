@@ -81,10 +81,13 @@ module.exports = class Progress {
   }
 
   onLine(line) {
-    const m = /\[inv\] ([0-9a-f-]{36}) (\S+)/.exec(line);
+    // slots are "Class" (older chips) or "Class=Shop Name" (names have spaces: take the rest of the line)
+    const m = /\[inv\] ([0-9a-f-]{36}) (.+?)\s*$/.exec(line);
     if (m) {
-      const slots = m[2].split('|').map(x => (x === 'None' ? null : x.replace(/_C$/, '')));
-      if (slots.some(Boolean)) this.store.set('inv:' + m[1], { slots, at: Date.now() }).catch(() => {});
+      const parts = m[2].split('|').map(x => x.split('='));
+      const slots = parts.map(([c]) => (!c || c === 'None' ? null : c.replace(/_C$/, '')));
+      const names = parts.map(([c, n], i) => (slots[i] && n ? n : null));
+      if (slots.some(Boolean)) this.store.set('inv:' + m[1], { slots, names, at: Date.now() }).catch(() => {});
       return;
     }
     const r = /\[inv-restored\] ([0-9a-f-]{36})/.exec(line);
@@ -99,10 +102,11 @@ module.exports = class Progress {
     // items: only when the chip had nothing to give back since they joined
     const inv = await this.store.get('inv:' + player.id);
     if (inv && !((this.chipRestored.get(player.id) ?? 0) >= joinedAt)) {
-      const items = inv.slots.filter(it => it && it !== 'Weapon_ArmingSword');
-      for (const it of items) player.giveItem(it);
-      if (items.length) this.omegga.whisper(player.name, `<color="8cf">Your items are back: ${items.map(i => clean(i.replace(/^Weapon_/, ''))).join(', ')}.</>`);
-      console.log(`[progress] gave ${player.name} ${items.join(', ')}`);
+      // GiveItem can only give plain items: the shop names come back only from the chip's own memory
+      const items = inv.slots.map((it, i) => ({ it, name: inv.names?.[i] })).filter(x => x.it && x.it !== 'Weapon_ArmingSword');
+      for (const x of items) player.giveItem(x.it);
+      if (items.length) this.omegga.whisper(player.name, `<color="8cf">Your items are back: ${items.map(x => clean(x.name ?? x.it.replace(/^Weapon_/, ''))).join(', ')}.</>`);
+      console.log(`[progress] gave ${player.name} ${items.map(x => x.it).join(', ')}`);
     }
     const saved = await this.store.get('p:' + player.id);
     if (!saved) return;
