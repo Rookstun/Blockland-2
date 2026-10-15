@@ -1,0 +1,13 @@
+{
+  "name": "npctalk",
+  "description": "Talk to the town NPCs: walk up to one and a text box opens; they answer in character (LLM). !talk opens the nearest one.",
+  "author": "pooper",
+  "config": {
+    "model": { "description": "Model name sent to the proxy", "type": "string", "default": "claude-haiku-5-5" },
+    "base-url": { "description": "Anthropic-compatible proxy", "type": "string", "default": "http://127.0.0.1:8083" },
+    "radius": { "description": "Units from a standing NPC that start a conversation", "type": "number", "default": 130 },
+    "roam-radius": { "description": "Same for NPCs that wander", "type": "number", "default": 260 },
+    "cooldown-seconds": { "description": "After Cancel, seconds before that NPC speaks to you again", "type": "number", "default": 45 }
+  },
+  "commands": [{ "name": "!talk", "description": "Talk to the nearest NPC", "example": "!talk", "args": [] }]
+}

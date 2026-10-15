@@ -1,0 +1,282 @@
+[
+ {
+  "role": "blacksmith",
+  "prefab": "npc_blacksmith",
+  "at": [
+   -8147,
+   -1370,
+   482
+  ],
+  "why": "7 stand(s) near -8048,-1480"
+ },
+ {
+  "role": "quartermaster",
+  "prefab": "npc_quartermaster",
+  "at": [
+   350,
+   -30,
+   626
+  ],
+  "why": "10 stand(s) near 382,-120"
+ },
+ {
+  "role": "soda",
+  "prefab": "npc_soda",
+  "at": [
+   -1788,
+   400,
+   630
+  ],
+  "why": "5 stand(s) near -1708,380"
+ },
+ {
+  "role": "blacksmith",
+  "prefab": "npc_blacksmith",
+  "at": [
+   7053,
+   1030,
+   734
+  ],
+  "why": "4 stand(s) near 7152,920"
+ },
+ {
+  "role": "blacksmith",
+  "prefab": "npc_blacksmith",
+  "at": [
+   11978,
+   14010,
+   806
+  ],
+  "why": "8 stand(s) near 11878,13740"
+ },
+ {
+  "role": "farmer",
+  "prefab": "npc_farmer",
+  "at": [
+   -7980,
+   -1380,
+   482
+  ],
+  "why": "square at -8150,-1380"
+ },
+ {
+  "role": "townsfolk",
+  "prefab": "npc_townsfolk",
+  "at": [
+   -8276,
+   -1266,
+   482
+  ],
+  "why": "square at -8150,-1380"
+ },
+ {
+  "role": "traveler",
+  "prefab": "npc_traveler",
+  "at": [
+   -8200,
+   -1543,
+   482
+  ],
+  "why": "square at -8150,-1380"
+ },
+ {
+  "role": "crier",
+  "prefab": "npc_crier",
+  "at": [
+   -232,
+   -118,
+   626
+  ],
+  "why": "square at 0,0"
+ },
+ {
+  "role": "farmer",
+  "prefab": "npc_farmer",
+  "at": [
+   126,
+   -227,
+   626
+  ],
+  "why": "square at 0,0"
+ },
+ {
+  "role": "townsfolk",
+  "prefab": "npc_townsfolk",
+  "at": [
+   276,
+   117,
+   626
+  ],
+  "why": "square at 0,0"
+ },
+ {
+  "role": "traveler",
+  "prefab": "npc_traveler",
+  "at": [
+   -127,
+   272,
+   626
+  ],
+  "why": "square at 0,0"
+ },
+ {
+  "role": "farmer",
+  "prefab": "npc_farmer",
+  "at": [
+   6992,
+   876,
+   734
+  ],
+  "why": "square at 7030,1000"
+ },
+ {
+  "role": "townsfolk",
+  "prefab": "npc_townsfolk",
+  "at": [
+   6904,
+   1114,
+   748
+  ],
+  "why": "square at 7030,1000"
+ },
+ {
+  "role": "traveler",
+  "prefab": "npc_traveler",
+  "at": [
+   7240,
+   1000,
+   734
+  ],
+  "why": "square at 7030,1000"
+ },
+ {
+  "role": "farmer",
+  "prefab": "npc_farmer",
+  "at": [
+   11915,
+   13809,
+   806
+  ],
+  "why": "square at 12000,13780"
+ },
+ {
+  "role": "townsfolk",
+  "prefab": "npc_townsfolk",
+  "at": [
+   11962,
+   13656,
+   806
+  ],
+  "why": "square at 12000,13780"
+ },
+ {
+  "role": "traveler",
+  "prefab": "npc_traveler",
+  "at": [
+   12156,
+   13846,
+   806
+  ],
+  "why": "square at 12000,13780"
+ },
+ {
+  "role": "farmer",
+  "prefab": "npc_farmer",
+  "at": [
+   7370,
+   13300,
+   640
+  ],
+  "why": "square at 7200,13300"
+ },
+ {
+  "role": "traveler",
+  "prefab": "npc_traveler",
+  "at": [
+   7127,
+   13061,
+   640
+  ],
+  "why": "square at 7200,13300"
+ },
+ {
+  "role": "blacksmith",
+  "prefab": "npc_blacksmith",
+  "at": [
+   -8740,
+   -1463,
+   486
+  ],
+  "why": "1 stand(s) near -8735,-1398"
+ },
+ {
+  "role": "blacksmith",
+  "prefab": "npc_blacksmith",
+  "at": [
+   1650,
+   -683,
+   582
+  ],
+  "why": "1 stand(s) near 1645,-618"
+ },
+ {
+  "role": "soda",
+  "prefab": "npc_soda",
+  "at": [
+   -1802,
+   510,
+   630
+  ],
+  "why": "5 stand(s) near -1872,380"
+ },
+ {
+  "role": "gunsmith",
+  "prefab": "npc_gunsmith",
+  "at": [
+   11463,
+   13750,
+   810
+  ],
+  "why": "6 stand(s) near 11413,13465"
+ },
+ {
+  "role": "barkeep",
+  "prefab": "npc_barkeep",
+  "at": [
+   -7785,
+   -1155,
+   486
+  ],
+  "why": "bar at -7700,-1160"
+ },
+ {
+  "role": "barkeep",
+  "prefab": "npc_barkeep",
+  "at": [
+   475,
+   -615,
+   582
+  ],
+  "why": "bar at 560,-620"
+ },
+ {
+  "role": "barkeep",
+  "prefab": "npc_barkeep",
+  "at": [
+   7115,
+   13465,
+   630
+  ],
+  "why": "bar at 7200,13460"
+ },
+ {
+  "role": "barkeep",
+  "prefab": "npc_barkeep",
+  "at": [
+   13465,
+   13595,
+   762
+  ],
+  "why": "bar at 13460,13680"
+ }
+]
