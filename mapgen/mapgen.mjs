@@ -70,7 +70,11 @@ function stage(id) {
   if (last) last.ms = now - last.t;
   STAGE_LOG.push({ id, t: now });
   stageAt = i;
+  if (stageHook) stageHook(id);
 }
+// MAPGEN_SITECHECK=1: after the roadside sites are levelled, report every later stage
+// that moves the ground under a levelled lot (ruins, camps, holy/roadside/weapon shops)
+let stageHook = null;
 const stageLog = () => STAGE_LOG.map(({ id, t, ms }) => ({ id, ms: ms ?? Date.now() - t }));
 // --preview FILE: stop before meshing and write a binary snapshot (heights,
 // surface colours, feature flags + a JSON header) for the editor;
@@ -1163,7 +1167,6 @@ const deathForest = { cells: 0, x: 0, y: 0 };
   console.error(`death forest: ${deathForest.cells} cells, centre ${deathForest.x},${deathForest.y}`);
 }
 
-stage('valleyCap');
 // --------------------------------------------------------- river valley cap --
 // (owner 2026-10-10, screenshot of the river mouth between sheer stone walls)
 // the passes after the river (dunes and buttes, the volcano, the snow peaks,
@@ -1188,7 +1191,7 @@ function riverValleyCap() {
       const e = riverD[c];
       step[c] = e > R - 12 ? 6 : e <= VCAP.e1 ? VCAP.s1 : VCAP.s2;
       lim[c] = H[c]; // every cell anchors its own height: steep only where something above it is
-      if (townKind[c] || trenchCell[c] || volcanoCell[c] || pathCell[c] || noSmooth[c] || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend
+      if (townKind[c] || trenchCell[c] || volcanoCell[c] || pathCell[c] || noSmooth[c] || reserved[c] || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend
         || DUNGEONS.some(d => footDist(d, x, y) <= RAISE_BLEND)) { fixed[c] = 1; lim[c] = Math.min(lim[c], H[c]); }
     }
   // chamfer relaxation (orthogonal neighbours) until nothing changes
@@ -1995,6 +1998,20 @@ const holy = [];
 const SEWER = { floor: town.h - 13, high: 7 };
 const sewerDepth = (town.h - SEWER.floor) * VZ;
 let townTrial = null;
+if (process.env.MAPGEN_SITECHECK) {
+  const lots = [...ruins, ...camps, ...holy].map(v => ({ v, cells: [] }));
+  for (const L of lots) { const r = L.v.r ?? (ruins.includes(L.v) ? RUINS.r : CAMP.r); for (let x = Math.max(0, L.v.x - r); x <= Math.min(N - 1, L.v.x + r); x++) for (let y = Math.max(0, L.v.y - r); y <= Math.min(N - 1, L.v.y + r); y++) if (Math.hypot(x - L.v.x, y - L.v.y) <= r) L.cells.push(x * N + y); }
+  let snap = Int16Array.from(H);
+  const label = L => `${L.v.kind ?? (ruins.includes(L.v) ? 'ruins' : 'camp')}@${X0 + L.v.x * CELL},${Y0 + L.v.y * CELL}`;
+  const off = () => lots.map(L => ({ L, bad: L.cells.filter(c => H[c] !== L.v.h).length })).filter(o => o.bad);
+  console.error(`sitecheck settlements: ${off().map(o => `${label(o.L)} ${o.bad}/${o.L.cells.length} off`).join('; ') || 'all lots flat'}`);
+  stageHook = id => {
+    const moved = lots.map(L => ({ L, n: L.cells.filter(c => H[c] !== snap[c]).length })).filter(o => o.n);
+    if (moved.length) console.error(`sitecheck before ${id}: ${moved.map(o => `${label(o.L)} ${o.n} cells` + (process.env.MAPGEN_SITECHECK === '2' ? ' ' + JSON.stringify(o.L.cells.filter(c => H[c] !== snap[c]).map(c => ({ x: Math.floor(c / N), y: c % N, was: snap[c], now: H[c], res: reserved[c], river: riverCell[c], v: o.L.v.h }))) : '')).join('; ')}`);
+    snap = Int16Array.from(H);
+  };
+}
+stage('terraces');
 // terrace claims (2026-10-12): a trial town build levels each building's lot
 // to its tier (town.mjs plan.claim); raise / lower those cells to match
 {
@@ -2007,8 +2024,10 @@ let townTrial = null;
   for (const [c, l0] of base) { const x = (c / N) | 0, y = c % N, l = townLevel(x, y); if (l !== l0 && !riverCell[c]) { H[c] = town.h + l; moved++; } }
   console.error(`town terraces: ${moved} lot cells levelled to their buildings`);
 }
+stage('valleyCap');
 riverDiag('before cap');
 riverValleyCap();
+stage('levees');
 // levees (2026-10-13, "the water sticks up out of the ground"): after every ground edit
 // (the valley cap last), a dry cell lower than the water beside it is raised to the water
 // line, and a river cell's bed stays under its water; then the rock weirs
