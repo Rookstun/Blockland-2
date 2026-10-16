@@ -1,6 +1,6 @@
 {
   "name": "media",
-  "description": "/playvideo <link> plays a video on a brick screen (its music on a speaker device); /playaudio <link> builds a self-playing synth speaker device with heightmap2brz; /playaudio <sound> plays a built-in game sound; /stop ends yours.",
+  "description": "/playvideo <link> plays a video on a brick screen (its music on a speaker device); /playaudio <link> builds a self-playing synth speaker device with heightmap2brz; /playaudio <sound> plays a built-in game sound; /stop ends yours. !tv <link|search> puts a wire TV in front of you (For Loop chip recolours the screen).",
   "author": "pooper",
   "config": {
     "max-minutes": {
@@ -112,6 +112,31 @@
       "description": "Free proxy lists (space separated URLs, one ip:port or scheme://ip:port per line) tried while YouTube bot-checks the server",
       "type": "string",
       "default": "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
+    },
+    "tv-width": {
+      "description": "!tv picture width in pixels (8 units each)",
+      "type": "number",
+      "default": 48
+    },
+    "tv-max-width": {
+      "description": "Widest !tv picture a player may ask for",
+      "type": "number",
+      "default": 96
+    },
+    "tv-fps": {
+      "description": "!tv frames per second",
+      "type": "number",
+      "default": 8
+    },
+    "tv-chunk-seconds": {
+      "description": "!tv builds and swaps the screen chip in pieces this long",
+      "type": "number",
+      "default": 30
+    },
+    "tv-changes-per-tick": {
+      "description": "Most pixel recolours the TV chip does per 0.05 s tick (wire budget: 10 ms per owner)",
+      "type": "number",
+      "default": 400
     }
   },
   "commands": [

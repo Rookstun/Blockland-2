@@ -238,6 +238,11 @@ module.exports = class Media {
 
   async init() {
     this.brs = await import(pathToFileURL(path.join(__dirname, 'lib/brs.mjs')).href);
+    // !tv: wire TV (tv.mjs) writes EA3.2 loop chips with brs-js 4 (lib/brs4.mjs = tools/brs4/dist.mjs)
+    try {
+      this.brs4 = await import(pathToFileURL(path.join(__dirname, 'lib/brs4.mjs')).href);
+      this.tv = await import(pathToFileURL(path.join(__dirname, 'tv.mjs')).href);
+    } catch (e) { console.error('[media] !tv disabled', e); }
     for (const old of global.__mediaSessions?.values() ?? []) {
       try { old.stop?.(); old.clear?.(); } catch {}
     }
@@ -291,7 +296,8 @@ module.exports = class Media {
     // The chip only hears the slash command, so point "!tts" users at it
     on(['chatcmd:tts', 'chatcmd:ttsvol'], async name => this.whisper(name, '<color="9cf">Use /tts with a slash: /tts hello there</>'));
     on(['cmd:stop', 'chatcmd:stop', 'cmd:stopmedia', 'chatcmd:stopmedia'], this.stopCommand);
-    return { registeredCommands: ['playvideo', 'search', 'playaudio', 'stop', 'stopmedia'] };
+    on(['cmd:tv', 'chatcmd:tv'], this.tvCommand);
+    return { registeredCommands: ['playvideo', 'search', 'playaudio', 'stop', 'stopmedia', 'tv'] };
   }
 
   async stop() {
@@ -1089,6 +1095,148 @@ module.exports = class Media {
     }
   }
 
+  // ---------- !tv ----------
+
+  /**
+   * !tv <link | search words> [width] [fps=N] [-x|+x|-y|+y] [mute] [start=S] [len=S]
+   * A CRT television in front of the player (tv.mjs): the picture is played by
+   * a For Loop chip that recolours the screen bricks from packed colour changes,
+   * the clock/title/channel are text displays. Built in chunks (tv-chunk-seconds);
+   * each chunk replaces only the screen + chip, the cabinet stays.
+   */
+  async tvCommand(name, args) {
+    const key = `tv:${name}`;
+    if (!this.tv || !this.brs4) return this.whisper(name, '<color="f55">The TV is not installed (lib/brs4.mjs missing).</>');
+    if (!args.length) return this.whisper(name, 'Usage: !tv <link or search words> [width] [fps=N] [-x|+x|-y|+y] [mute] [start=S] [len=S]   !tv stop');
+    if (args[0] === 'stop' || args[0] === 'off') return this.stopSession(name, key) || this.whisper(name, 'Your TV is off already.');
+    const opts = [], words = [];
+    for (const a of args) (/^([+-][xy]|mute|\d+(\.\d+)?|(fps|start|len)[=:]\d+(\.\d+)?|\d+fps)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
+    if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
+    const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
+    const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
+    const nums = opts.filter(a => /^\d+(\.\d+)?$/.test(a)).map(Number);
+    const width = Math.max(16, Math.min(this.config['tv-max-width'] ?? 96, Math.round(nums[0] ?? this.config['tv-width'] ?? 48)));
+    const fpsM = opts.map(a => /^(\d+)fps$/i.exec(a)).find(Boolean);
+    const fps = Math.max(1, Math.min(20, Number(opt('fps') || fpsM?.[1] || this.config['tv-fps'] || 8)));
+    const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
+    const withSound = !opts.includes('mute');
+    const chunkSec = Math.max(10, this.config['tv-chunk-seconds'] ?? 30);
+    const perTick = Math.max(50, this.config['tv-changes-per-tick'] ?? 400);
+    const P = 8; // pixel size (units)
+
+    this.stopSession(name, key);
+    const crypto = require('crypto');
+    const owner = this.tv.ownerFor(crypto.createHash('sha1').update(name).digest('hex').slice(0, 12));
+    const session = { stopped: false, kind: 'TV' };
+    session.stop = () => (session.stopped = true);
+    const audioClears = [];
+    session.clear = () => {
+      this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
+      audioClears.splice(0).forEach(c => c());
+    };
+    this.sessions.set(key, session);
+    let file;
+    try {
+      const pos = await this.playerSpot(name);
+      this.whisper(name, link.startsWith('ytsearch') ? `<color="999">Tuning in to "${sanitize(words.join(' '))}"...</>` : '<color="999">Tuning in...</>');
+      const maxMin = this.config['video-max-minutes'] ?? 240;
+      file = await this.download(link, 'video', withSound, maxMin);
+      if (session.stopped) return;
+      const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height:format=duration:format_tags=title', '-of', 'json', file])));
+      const vs = probe.streams?.[0];
+      if (!vs?.width) throw new Error('that link has no picture');
+      const total = Number(probe.format?.duration) || maxMin * 60;
+      const startAt = Math.max(0, Math.min(total - 1, opt('start') || 0));
+      const seconds = Math.min(total - startAt, maxMin * 60, opt('len') || Infinity);
+      const height = Math.max(8, Math.min(Math.round(width * 1.2), Math.round((width * vs.height) / vs.width)));
+      const title = String(probe.format?.tags?.title || (link.startsWith('ytsearch') ? words.join(' ') : 'TONIGHT: A MYSTERY')).replace(/[<>\\]/g, '').toUpperCase();
+      const chunks = Math.max(1, Math.ceil(seconds / chunkSec));
+      const channel = 2 + (crypto.createHash('sha1').update(link).digest()[0] % 12);
+
+      // placement: the TV stands `dist` from the player, screen facing `facing` (towards them)
+      const L = this.tv.layout(width, height, P);
+      const n = NORMAL[facing];
+      const orient = 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing], T = ORIENT[orient];
+      const dist = Math.max(10, Math.round((L.SW * 0.9) / STUD)) * STUD;
+      const snap = v => Math.round(v / STUD) * STUD;
+      const at = [snap(pos[0] - n[0] * dist), snap(pos[1] - n[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
+      const world = p => T(p).map((v, i) => v + at[i]);
+      const clearScreen = () => {
+        for (const [c, h] of this.tv.screenBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
+      };
+      const load = buf => {
+        const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+        const f = path.join(this.prefabDir, ref + '.brz');
+        fs.writeFileSync(f, buf);
+        this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
+        setTimeout(() => fs.rmSync(f, { force: true }), 15_000);
+      };
+
+      const build = async k => {
+        const t0 = startAt + k * chunkSec, dur = Math.min(chunkSec, seconds - k * chunkSec);
+        const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
+          '-vf', `fps=${fps},scale=${width}:${height}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
+        const fb = width * height * 3, frames = [];
+        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(raw.subarray(o, o + fb));
+        if (!frames.length) throw new Error('no frames decoded');
+        const enc = this.tv.encodeFrames(frames, width, height, { cap: Math.floor((perTick * 20 / fps) * 0.8) });
+        const screen = this.tv.screenPrefab(this.brs4, L, enc, { fps, tOff: t0 - startAt, total: seconds, title, channel, chunk: perTick, owner });
+        let audio = null;
+        if (withSound) {
+          const wav = file.replace(/\.[^.]+$/, '') + `.tv${k}.wav`;
+          try {
+            await run('ffmpeg', ['-v', 'error', '-y', '-ss', String(t0), '-t', String(dur), '-i', file, '-vn', '-ac', '1', '-ar', '44100', wav], 300_000);
+            audio = (await this.buildAudioSet(wav, { ...PRESETS.speech }))[0];
+          } catch (e) { console.error(`[media] tv soundtrack ${k}`, e); }
+          finally { fs.rmSync(wav, { force: true }); }
+        }
+        return { screen, audio, dur, changes: enc.data.length };
+      };
+      // soundtrack chips sit under the cabinet between the legs, chunks alternate sides
+      const loadAudio = (d, k) => {
+        if (!d) return null;
+        const c = world([(k % 2 ? 1 : -1) * Math.round(L.cw / 3 / 10) * 10, L.depth / 2, 28]);
+        const spot = [0, 1, 2].map(i => Math.round((c[i] - (d.lo[i] + d.hi[i]) / 2) / 2) * 2);
+        const clr = this.loadDevice(d, {}, spot);
+        audioClears.push(clr);
+        return clr;
+      };
+
+      this.whisper(name, '<color="999">Warming up the tubes...</>');
+      const first = await build(0);
+      if (session.stopped) return;
+      this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
+      load(this.tv.buildBody(this.brs4, L, { owner }));
+      load(first.screen);
+      let prevAudio = loadAudio(first.audio, 0);
+      const mins = Math.floor(seconds / 60), secs = Math.round(seconds % 60);
+      this.whisper(name, `<color="9cf">Now showing on channel ${channel}: ${sanitize(title.slice(0, 60))} (${width}x${height}, ${mins}:${String(secs).padStart(2, '0')}, ${fps} fps). !tv stop switches it off.</>`);
+      console.log(`[media] tv ${name}: ${width}x${height} ${fps} fps, ${chunks} chunk(s), chunk 0 ${first.changes} changes, at ${at.join(',')} orient ${orient}`);
+      let start = Date.now(), durPrev = first.dur;
+      for (let k = 1; k < chunks && !session.stopped; k++) {
+        const set = await build(k).catch(e => (console.error(`[media] tv chunk ${k}`, e), null));
+        const due = start + durPrev * 1000;
+        while (!session.stopped && Date.now() < due) await sleep(Math.min(200, due - Date.now()));
+        if (session.stopped) break;
+        start = Date.now();
+        if (!set) { durPrev = chunkSec; continue; }
+        durPrev = set.dur;
+        clearScreen();
+        load(set.screen);
+        const old = prevAudio;
+        prevAudio = loadAudio(set.audio, k);
+        if (old) setTimeout(old, 1500);
+      }
+      const end = start + durPrev * 1000 + 1500;
+      while (!session.stopped && Date.now() < end) await sleep(200);
+      if (!session.stopped && !this.config['keep-last-frame']) session.clear();
+    } finally {
+      session.stopped = true;
+      if (file) setTimeout(() => this.release(file), 60_000);
+      if (this.sessions.get(key) === session) this.sessions.delete(key);
+    }
+  }
+
   async audioCommand(name, args) {
     const key = `audio:${name}`;
     if (!args.length) {
@@ -1598,7 +1746,8 @@ module.exports = class Media {
     }
     const a = this.stopSession(name, `video:${name}`);
     const b = this.stopSession(name, `audio:${name}`);
-    if (a || b) return;
+    const c = this.stopSession(name, `tv:${name}`);
+    if (a || b || c) return;
     if (!this.sessions.size) {
       // nothing playing anywhere: clear leftovers (frames/speakers from a reload or crash)
       this.omegga.writeln(`br.Bricks.Clear ${OWNER.id} 1`);
