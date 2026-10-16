@@ -1096,7 +1096,7 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
       SpawnPrefab(prefab = $./heal.brz, offset = at, lifetime = 60.0, limit = 100)
     }
     if Random(0, 99) < 35 {
-      SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), lifetime = 60.0, limit = 100)
+      SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), velocity = Vec(-40.0, 40.0, 220.0), lifetime = 60.0, limit = 100)
     }
     if Random(0, 99) < 15 {
       SpawnPrefab(prefab = $./bullets.brz, offset = at + Vec(0.0, 0.0, 24.0), lifetime = 60.0, limit = 100)

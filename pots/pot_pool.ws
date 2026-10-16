@@ -25,7 +25,8 @@ on GlobalCustomEvent("pot.smashed") -> (at: vector) {
   } else if roll <= 32 {
     SpawnPrefab(prefab = $./heal.brz, offset = off, lifetime = 30.0, limit = 60)
   } else if roll <= 52 {
-    SpawnPrefab(prefab = $./arrows.brz, offset = off, lifetime = 30.0, limit = 60)
+    // (2026-10-16) the owner's arrow pickup (pots/arrowpickup.mjs) on a loose physics grid: tossed up out of the pot
+    SpawnPrefab(prefab = $./arrows.brz, offset = off, velocity = Vec(50.0, 30.0, 220.0), lifetime = 30.0, limit = 60)
   } else if roll <= 60 {
     SpawnPrefab(prefab = $./bullets.brz, offset = off, lifetime = 30.0, limit = 60)
   } else if roll <= 92 {

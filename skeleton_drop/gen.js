@@ -43,7 +43,7 @@ const COPPER = [2, 4];   // copper coins per copper roll (owner 2026-10-10: more
 const COIN_LIFE = 180;   // seconds a dropped coin lies there (was forever: with 2-4x the coins the spawn limits filled up)
 const HEAL_PCT = 25;     // chance a kill also drops a health pickup (heal.brz, pots/healgen.mjs)
 const BULLET_PCT = 15;   // chance a kill also drops bullets (bullets.brz: every gun ammo type)
-const ARROW_PCT = 35;    // chance a kill also drops 10 arrows (arrows.brz, pots/arrowgen.mjs; owner 2026-10-11: players ran out of arrows)
+const ARROW_PCT = 35;    // chance a kill also drops 10 arrows (arrows.brz = the owner's arrow pickup, pots/arrowpickup.mjs; owner 2026-10-11: players ran out of arrows)
 const XP_SCALE = 25;
 
 const MAX = Math.max(...T.map(t => t[1]));
@@ -470,7 +470,7 @@ ${Array.from({ length: MAX }, (_, i) => slot(i + 1)).join('')}    if Random(0, 9
       SpawnPrefab(prefab = $./heal.brz, offset = at, lifetime = 60.0, limit = 100)
     }
     if Random(0, 99) < ${ARROW_PCT} {
-      SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), lifetime = 60.0, limit = 100)
+      SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), velocity = Vec(-40.0, 40.0, 220.0), lifetime = 60.0, limit = 100)
     }
     if Random(0, 99) < ${BULLET_PCT} {
       SpawnPrefab(prefab = $./bullets.brz, offset = at + Vec(0.0, 0.0, 24.0), lifetime = 60.0, limit = 100)
