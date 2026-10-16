@@ -1032,7 +1032,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           }
         })) continue;
         for (let i = 0; i < k; i++) {
-          const [px, py] = at(cx + (i - (k - 1) / 2) * SLOT, cy0 + 1.0), w = wares[n++]; // prefab origin = bounds centre, 4 units nearer the button than the pedestal: pedestal 14 behind the glass, button just outside it
+          const [px, py] = at(cx + (i - (k - 1) / 2) * SLOT, cy0 + 1.2), w = wares[n++]; // the stand's origin is 2 units nearer the button than its pedestal: pedestal 14 behind the glass edge, button flush on the glass (checked in game)
           stats.houseShops.push({ at: [px, py, f + 32 + (zCtx ?? 0)], orient, tier: w.tier, prefab: (w.prefab ?? 'shop_' + w.tier) + '_case' });
         }
       }
