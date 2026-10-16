@@ -1,0 +1,78 @@
+// The map generator's pipeline (2026-10-16, owner: "organize paths rivers ground
+// dungeons houses and everything and develop an order for it to spawn like
+// minecraft has its systems"). mapgen.mjs runs top to bottom; each section opens
+// with stage('<id>'), and stage() throws if a stage runs out of this order, so the
+// order below IS the generation order. Phases mirror Minecraft's chunk statuses /
+// feature steps (noise -> structure starts -> biomes -> ... -> features -> spawn).
+// Brickgen (wgsite/) shows it as the Pipeline page and orders its sidebar by it.
+//
+// stage fields: id, phase, title, groups (tune() prefixes it reads), what it
+// makes (writes), and why it sits where it does (after).
+
+export const PHASES = [
+  { id: 'shape', title: 'Shape', mc: 'noise', blurb: 'The bare land: the island outline along its spine and the heightmap noise. Nothing placed yet.' },
+  { id: 'starts', title: 'Structure starts', mc: 'structure_starts', blurb: 'The big fixed sites that bend the land round them: dungeons pick ground and raise hills, the town claims its square.' },
+  { id: 'landforms', title: 'Water & biomes', mc: 'biomes', blurb: 'The river cuts its valley, then each biome finds a site and reshapes the ground (swamp basin, desert, volcano cone, snow peaks, death forest).' },
+  { id: 'sites', title: 'Settlement sites', mc: 'structure placement', blurb: 'Hamlets, the henge, outposts and the spawn ring pick flat open ground on the finished landforms.' },
+  { id: 'roads', title: 'Roads', mc: 'jigsaw connections', blurb: 'A* roads join every site to the network, bridges mark water crossings, then roadside sites (ruins, camps, holy places, shops) pick spots by the roads and terraces level the lots.' },
+  { id: 'coast', title: 'Coast & fluids', mc: 'lakes / fluid features', blurb: 'Late landform edits that must not move any site: coves, the river delta, weir steps.' },
+  { id: 'carvers', title: 'Carvers', mc: 'carvers', blurb: 'The heightmap becomes voxels; tunnels, sewers and caves are carved out of them. (The Sites preview stops here.)' },
+  { id: 'surface', title: 'Surface', mc: 'surface rules', blurb: 'Voxels are greedy-meshed into bricks, dungeon interiors go in, and every step is smoothed with micro wedges; roads get the ride surface.' },
+  { id: 'structures', title: 'Structures', mc: 'surface_structures', blurb: 'Ruins, goblin camps, holy and roadside buildings, place signs and scattered details.' },
+  { id: 'features', title: 'Features', mc: 'vegetal / local decoration', blurb: 'Forest, plants, checkpoints, fingerposts, biome dressing, cave props, water plates, bridge decks: each placed against everything built so far.' },
+  { id: 'builds', title: 'Settlement builds', mc: 'structure pieces', blurb: 'The town and hamlet buildings through their own overlap guards (last, so they win any clash), lawns and shop stands.' },
+  { id: 'output', title: 'Output', mc: 'spawn / finalize', blurb: 'Filters, duplicates dropped, smashable bushes, spawners/shops/pots lists, the world shift, live-edit replay, chunk files.' },
+];
+
+export const STAGES = [
+  { id: 'island', phase: 'shape', title: 'Island spine', groups: ['island'], writes: 'spine, tail, progress()', after: 'first: everything is placed by progress up the spine' },
+  { id: 'heightmap', phase: 'shape', title: 'Heightmap', groups: ['world', 'terrain'], writes: 'H, tail ground', after: 'needs the spine (coast) and the Deep anchor (mountain ring)' },
+  { id: 'dungeons', phase: 'starts', title: 'Dungeon sites + keeps', groups: ['dungeon', 'crypt', 'keep', 'deep'], writes: 'dungeon footprints, raised hills, trenches, surface keeps', after: 'they raise ground, so before anything reads heights' },
+  { id: 'town', phase: 'starts', title: 'Town square', groups: [], writes: 'town plan, levelled square, townKind', after: 'pinned site; the river and roads route round it' },
+  { id: 'river', phase: 'landforms', title: 'River course + valley', groups: ['river'], writes: 'riverCell, levels, valley cut', after: 'needs the town (passes through it) and dungeons (avoids them)' },
+  { id: 'swamp', phase: 'landforms', title: 'Swamp', groups: ['swamp'], writes: 'swampCell, basin', after: 'needs the river and town distance' },
+  { id: 'desert', phase: 'landforms', title: 'Desert site', groups: ['desert'], writes: 'desert site', after: 'keeps clear of swamp and river' },
+  { id: 'volcano', phase: 'landforms', title: 'Tail + volcano', groups: ['volcano'], writes: 'tail merged into H, cone, crater, lava, spiral road', after: 'tail ground merges here so earlier sites saw the old island' },
+  { id: 'snow', phase: 'landforms', title: 'Snow peaks', groups: ['snow'], writes: 'snowW, raised peaks', after: 'clear of the volcano' },
+  { id: 'deathForest', phase: 'landforms', title: 'Death forest zone', groups: ['death'], writes: 'deathW', after: 'between snow and volcano on the tail' },
+  { id: 'valleyCap', phase: 'landforms', title: 'River valley cap', groups: ['river'], writes: 'H (sides capped)', after: 'after every landform that cuts near the river' },
+  { id: 'shrub', phase: 'landforms', title: 'Shrubland', groups: ['shrub'], writes: 'shrubW', after: 'a surface-only biome: any free land' },
+  { id: 'villages', phase: 'sites', title: 'Hamlets + viking hamlet', groups: ['village', 'nordic'], writes: 'villages (levelled footprints)', after: 'on finished landforms' },
+  { id: 'henge', phase: 'sites', title: 'Wizard henge', groups: ['henge'], writes: 'henge site', after: 'clear of the hamlets' },
+  { id: 'outposts', phase: 'sites', title: 'Outposts + spawn ring', groups: ['outposts', 'spawnring'], writes: 'outposts, spawn ring spots', after: 'flat open ground left after hamlets' },
+  { id: 'roads', phase: 'roads', title: 'Road network', groups: ['road'], writes: 'pathCell, roadGraded, tunnelZ, volcano road join', after: 'needs every site it joins' },
+  { id: 'bridges', phase: 'roads', title: 'Bridge cells', groups: [], writes: 'deck', after: 'roads crossing water' },
+  { id: 'settlements', phase: 'roads', title: 'Roadside sites + terraces', groups: ['ruins', 'goblins', 'holy', 'roadside', 'wshop'], writes: 'ruins, camps, holy/roadside/weapon-shop sites, terraces, levees', after: 'picked by road distance; weapon shops last so older sites keep their spots' },
+  { id: 'coves', phase: 'coast', title: 'Coves', groups: ['cove'], writes: 'coveCell, carved bays', after: 'late: only quiet coast no site uses' },
+  { id: 'delta', phase: 'coast', title: 'River delta', groups: ['delta'], writes: 'deltaCell, arms, creeks', after: 'after coves; protected cells never change' },
+  { id: 'weirs', phase: 'coast', title: 'Weir steps', groups: [], writes: 'weirCell', after: 'needs final river levels' },
+  { id: 'voxels', phase: 'carvers', title: 'Voxels', groups: [], writes: 'V (solid columns from H)', after: 'heights are final' },
+  { id: 'desertGround', phase: 'carvers', title: 'Desert ground', groups: [], writes: 'dune/mesa materials', after: 'voxels exist' },
+  { id: 'tunnels', phase: 'carvers', title: 'Road tunnels', groups: [], writes: 'carved tunnel voxels', after: 'roads + voxels' },
+  { id: 'sewers', phase: 'carvers', title: 'Town sewers', groups: [], writes: 'carved sewer voxels, kiosks', after: 'under the town paths' },
+  { id: 'caves', phase: 'carvers', title: 'Caves', groups: ['caves'], writes: 'carved cave voxels', after: 'last carver; avoids tunnels and sewers' },
+  { id: 'meshing', phase: 'surface', title: 'Greedy meshing', groups: [], writes: 'bricks (terrain)', after: 'voxels are final' },
+  { id: 'dungeonBricks', phase: 'surface', title: 'Dungeon interiors', groups: [], writes: 'dungeon bricks', after: 'their buried shells are carved' },
+  { id: 'smoothing', phase: 'surface', title: 'Wedge smoothing + ride surface', groups: ['smooth', 'road'], writes: 'micro wedges, ride surface', after: 'on the meshed terrain' },
+  { id: 'decor', phase: 'structures', title: 'Ruins, camps, holy places, signs, details', groups: ['details'], writes: 'settlement bricks, signs, details', after: 'on the smoothed surface' },
+  { id: 'forest', phase: 'features', title: 'Forest', groups: [], writes: 'trees (incl. cove trees)', after: 'after structures, so trees avoid them' },
+  { id: 'plants', phase: 'features', title: 'Plants + swamp spawners', groups: [], writes: 'plants, zombie spawners', after: 'needs free cells after trees' },
+  { id: 'checkpoints', phase: 'features', title: 'Checkpoint shrines', groups: ['checkpoint'], writes: 'checkpoints', after: 'checks every brick so far' },
+  { id: 'fingerposts', phase: 'features', title: 'Fingerposts', groups: ['signs'], writes: 'signposts', after: 'needs all destinations' },
+  { id: 'swampDecor', phase: 'features', title: 'Swamp dressing', groups: [], writes: 'lily pads, dead trees', after: 'swamp pools exist' },
+  { id: 'deathDecor', phase: 'features', title: 'Death forest dressing', groups: ['death'], writes: 'graves, pikes, lanterns, spawners', after: 'after the forest (dead trees)' },
+  { id: 'groundCover', phase: 'features', title: 'Ground cover', groups: [], writes: 'swamp floor, grass', after: 'fills what is left' },
+  { id: 'hengeStones', phase: 'features', title: 'Henge stones + wizards', groups: [], writes: 'stones, wizard spawners', after: 'its site was kept clear' },
+  { id: 'caveProps', phase: 'features', title: 'Cave interiors', groups: [], writes: 'fires, chests, stalactites, crystals', after: 'caves are meshed' },
+  { id: 'coveDressing', phase: 'features', title: 'Cove dressing', groups: ['cove'], writes: 'sea stacks, arch, kelp, beach props', after: 'after plants and cave props, so it sees them' },
+  { id: 'deltaDressing', phase: 'features', title: 'Delta dressing', groups: ['delta'], writes: 'reeds, lily pads, driftwood', after: 'occupancy-checked against everything' },
+  { id: 'riverWater', phase: 'features', title: 'River water plates', groups: [], writes: 'water zone plates', after: 'levels final' },
+  { id: 'weirRocks', phase: 'features', title: 'Weir boulders', groups: [], writes: 'rock voxels', after: 'above the water plates' },
+  { id: 'bridgeDecks', phase: 'features', title: 'Bridge decks', groups: [], writes: 'planks, rails', after: 'over the water plates' },
+  { id: 'tunnelDecor', phase: 'features', title: 'Tunnel ramps + lights', groups: [], writes: 'ramps, lights', after: 'tunnels meshed' },
+  { id: 'townBuildings', phase: 'builds', title: 'Town buildings', groups: [], writes: 'town bricks (own guard)', after: 'last big build: wins clashes' },
+  { id: 'lawns', phase: 'builds', title: 'Spawn lawns', groups: [], writes: 'clover, tufts, fairy rings', after: 'through the town guard' },
+  { id: 'hamlets', phase: 'builds', title: 'Hamlet buildings', groups: ['village'], writes: 'hamlet bricks, stands, pots', after: 'own guards' },
+  { id: 'shops', phase: 'builds', title: 'Shop stands', groups: [], writes: 'shops.json entries', after: 'buildings placed' },
+  { id: 'output', phase: 'output', title: 'Output', groups: ['bush'], writes: 'chunks, spawners/shops/pots/bushes json', after: 'last' },
+];

@@ -1,5 +1,8 @@
-// Sidebar catalogue: tune() key prefixes -> generator pages. Keys whose prefix
-// is not listed here land in "Other", so new tune() calls show up on their own.
+// Sidebar catalogue: tune() key prefixes -> generator pages (title, icon, blurb).
+// The sidebar orders them by the generation pipeline (../pipeline.mjs): each page
+// sits under the phase of the first stage that reads it. Keys whose prefix no stage
+// lists land in "Other", so new tune() calls show up on their own.
+import { PHASES, STAGES } from '/pipeline.mjs';
 
 export const CATEGORIES = [
   { name: 'World', groups: [
@@ -48,6 +51,17 @@ export const CATEGORIES = [
     { id: 'bush', title: 'Bushes', icon: 'leaf', blurb: 'Smashable bushes.' },
   ] },
 ];
+
+// [{ name, phase, groups }] in pipeline order
+export function pipelineCategories() {
+  const meta = new Map(CATEGORIES.flatMap(c => c.groups).map(g => [g.id, g]));
+  const seen = new Set();
+  return PHASES.map(ph => ({
+    name: ph.title, phase: ph,
+    groups: STAGES.filter(st => st.phase === ph.id).flatMap(st => st.groups).filter(g => !seen.has(g) && seen.add(g)).map(g => meta.get(g) || { id: g, title: g, icon: 'dot', blurb: '' }),
+  })).filter(c => c.groups.length);
+}
+export { PHASES, STAGES };
 
 // keys previewed instantly in the browser (terrain.mjs); markers for these move live too
 export const INSTANT = /^(terrain\.|island\.|sea$|deep\.(t|off)$)/;

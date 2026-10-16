@@ -27,6 +27,7 @@ import { buildRocks, RV } from './rocks.mjs';
 import { shrine, CHECKPOINT_AT, FOOT as SHRINE_FOOT } from './checkpoint.mjs';
 import { signpost } from './signpost.mjs';
 import { coveDressing, CV as COVE_V } from './cove.mjs';
+import { STAGES } from './pipeline.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -56,6 +57,21 @@ const tune = (key, def, note = '') => {
   TUNED[key] = { def, val, note };
   return val;
 };
+// pipeline.mjs (2026-10-16): each section opens with stage('<id>'); a stage that runs
+// out of the registry's order throws, so pipeline.mjs is the generation order.
+// STAGE_LOG (ms per stage) goes into preview headers and OUT/pipeline.json.
+const STAGE_LOG = [];
+let stageAt = -1;
+function stage(id) {
+  const i = STAGES.findIndex(s => s.id === id);
+  if (i < 0) throw new Error(`stage '${id}' is not in pipeline.mjs`);
+  if (i <= stageAt) throw new Error(`stage '${id}' runs out of order (after '${STAGES[stageAt].id}'): fix pipeline.mjs or the code`);
+  const now = Date.now(), last = STAGE_LOG[STAGE_LOG.length - 1];
+  if (last) last.ms = now - last.t;
+  STAGE_LOG.push({ id, t: now });
+  stageAt = i;
+}
+const stageLog = () => STAGE_LOG.map(({ id, t, ms }) => ({ id, ms: ms ?? Date.now() - t }));
 // --preview FILE: stop before meshing and write a binary snapshot (heights,
 // surface colours, feature flags + a JSON header) for the editor;
 // --preview-full also runs the decor and rasterises every brick's top
@@ -223,6 +239,7 @@ const SPAWN_CHANCE = tune('dungeon.spawnChance', 0.35, 'share of rooms with a sp
 const TOWN_PIN = { fx: Math.round(237 * K) - 65, fy: Math.round(261 * K) - 65, h: 47 }; // centre kept when the town shrank 250 -> 130 cells // see the town section
 const COVER = tune('dungeon.cover', 3, 'voxels of ground over a roof');        // voxels of ground over a dungeon's roof
 const RAISE_BLEND = tune('dungeon.raiseBlend', 30, 'cells the hill over a dungeon fades over'); // cells over which a hill over a dungeon fades out
+stage('island');
 // ------------------------------------------------------------------ island --
 // (owner, 2026-10-03: "more island like, not a square; harder the further up the
 // island, spawn town first") A long island along a curved SPINE (cells,
@@ -315,6 +332,7 @@ for (const d of DUNGEONS) {
 const footDist = (d, x, y) =>
   Math.max(d.fx - x, x - (d.fx + d.cells - 1), d.fy - y, y - (d.fy + d.cells - 1));
 
+stage('heightmap');
 // -------------------------------------------------------------- heightmap --
 const H = new Int16Array(N * N);
 const surfaceMat = new Uint8Array(N * N);
@@ -364,7 +382,7 @@ if (PREVIEW && args.includes('--preview-height')) {
   for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) Hr[y * N + x] = H[x * N + y];
   writePreview(PREVIEW, {
     seed: SEED, scale: K, N, CELL, VZ, X0, Y0, SEA, waterZ: WATER_Z, stage: 'height', ms: Date.now() - T0,
-    shift: [-(X0 + tcx * CELL), -(Y0 + tcy * CELL)], params: TUNED,
+    shift: [-(X0 + tcx * CELL), -(Y0 + tcy * CELL)], params: TUNED, stages: stageLog(),
     features: {
       spine: ISLAND.spine.map(([a, b]) => [tcx + a, tcy + b]), half: ISLAND.half,
       spinePts: spine.pts.map(p => [+p[0].toFixed(2), +p[1].toFixed(2), +p[2].toFixed(2), +p[3].toFixed(1)]), sTown: spine.sTown, L: spine.L,
@@ -378,6 +396,7 @@ if (PREVIEW && args.includes('--preview-height')) {
 
 const inBounds = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
 
+stage('dungeons');
 // dungeon sites: the deepest picks first. A site costs the ground it would
 // have to raise (average voxels) plus a little for straying from the anchor.
 for (const d of [...DUNGEONS].sort((a, b) => b.levels - a.levels)) {
@@ -468,6 +487,7 @@ for (const d of DUNGEONS) {
 }
 
 
+stage('town');
 // ------------------------------------------------------------------- town --
 // The spawn hub: the flattest dryish square near the island centre, clear of the
 // dungeons, flattened like a dungeon plaza and paved. Dirt paths run from it
@@ -538,6 +558,7 @@ const townLevel = (x, y) => townPlan.levelAt(...townLocal(x, y)) / VZ;
     }
 }
 
+stage('river');
 // ------------------------------------------------------------------ river --
 // (owner 2026-10-05: "make this river big and long and goes through the
 // world") One river from the far mountains down the island, through the town
@@ -721,6 +742,7 @@ const riverNear = (cx, cy, r) => {
   for (let x = cx - r; x <= cx + r; x += 2) for (let y = cy - r; y <= cy + r; y += 2) if (inBounds(x, y) && riverCell[x * N + y]) return true;
   return false;
 };
+stage('swamp');
 // ------------------------------------------------------------------ swamp --
 // The piss-and-shit swamp: a marsh outside one of the town gates, sunk to sea
 // level so the water plane floods its pools (lily pads on them); the rest is
@@ -808,6 +830,7 @@ SWAMP.basin = Math.round(tune('swamp.basin', 45, 'low ground round the marsh, ce
       if (H[c] > low) H[c] = Math.round(lerp(H[c], low, w));
     }
 }
+stage('desert');
 // ------------------------------------------------------------ desert site --
 // A desert biome (2026-10-03): the flattest broad stretch of land well away
 // from the town and the swamp: dune sand, red mesa rock on slopes and peaks, a
@@ -884,6 +907,7 @@ const desertW = (x, y) => {
     }
 }
 
+stage('volcano');
 // ---------------------------------------------------------------- volcano --
 // (owner 2026-10-10: "make a volcano biome with spiral pathing to the top") A
 // lone cone of dark basalt and ash, a crater with a glowing lava lake, lava
@@ -1052,6 +1076,7 @@ const volcano = volcanoSite(true);
   console.error(`volcano: cells ${vx},${vy}, foot ${foot}, rim ${volcano.rim}, lava lake ${lake}, road ${volcano.road.length} cells, ${(arc / (2 * Math.PI)).toFixed(1)} turns, ${flows} lava runs`);
 }
 
+stage('snow');
 // ------------------------------------------------------------------- snow --
 // (owner 2026-10-10: "make a snow biome with mountains") A range of ridged
 // peaks raised out of the land (never lowered) far up the island, white with
@@ -1116,6 +1141,7 @@ const nordicCalm = (x, y) => (nordicSpot ? smooth(NORDIC_R + 4, NORDIC_R + 34, M
   console.error(`snow: cells ${snowSite.x},${snowSite.y}, r ${SNOWB.r}, highest peak ${top}`);
 }
 
+stage('deathForest');
 // ----------------------------------------------------------- death forest --
 // (owner 2026-10-14: "the fucking scary evil death forest at the end of the map after the snow biome", the
 // volcano after it) The tail past the snow down to the volcano's foot: black rotten ground, dead black trees
@@ -1137,6 +1163,7 @@ const deathForest = { cells: 0, x: 0, y: 0 };
   console.error(`death forest: ${deathForest.cells} cells, centre ${deathForest.x},${deathForest.y}`);
 }
 
+stage('valleyCap');
 // --------------------------------------------------------- river valley cap --
 // (owner 2026-10-10, screenshot of the river mouth between sheer stone walls)
 // the passes after the river (dunes and buttes, the volcano, the snow peaks,
@@ -1251,6 +1278,7 @@ function riverDiag(tag) {
   globalThis.__riverHits = hits;
 }
 
+stage('shrub');
 // -------------------------------------------------------------- shrubland --
 // (owner 2026-10-10: "add ... shrubland biome") olive scrub ground thick with
 // bushes (a quarter of them smashable, see bushes.json), ferns and dead branches,
@@ -1283,6 +1311,7 @@ const shrubW = (x, y) => {
   return 1 - smooth(SHRUB.r - SHRUB.blend / 2, SHRUB.r + SHRUB.blend / 2, rho);
 };
 
+stage('villages');
 // --------------------------------------------------------------- villages --
 // Hamlets round the island (town.mjs lays them out: well, checkpoint, houses
 // round a square), joined to the town and to each other by dirt roads. Four of
@@ -1446,6 +1475,7 @@ for (const v of villages) {
     }
 }
 
+stage('henge');
 // ------------------------------------------------------------------ henge --
 // The Evil Wizard's stonehenge (from stonehenge.mjs, 2026-10-03; owner: wizards
 // only, no goblins): the flattest HENGE.n-cell square patch near the anchor,
@@ -1479,6 +1509,7 @@ const henge = (() => {
   if (!best) throw new Error('henge: no site');
   return best;
 })();
+stage('outposts');
 // --------------------------------------------------------------- outposts --
 // two skeleton spawners every so often up the island, tier 1 near the town to
 // 7 at the far end (dungeon_spawner_<tier> prefabs, spawners.json), on flat
@@ -1548,6 +1579,7 @@ for (let x = henge.x0 - HENGE.blend; x < henge.x0 + henge.n + HENGE.blend; x++)
   }
 console.error(`henge: site cells ${henge.x0},${henge.y0}, ground ${henge.h}`);
 
+stage('roads');
 const pathCell = new Uint8Array(N * N);
 // Roads through the mountains (owner 2026-10-05: "make paths continue through
 // the mountains either by pathing around and up and over or tunneling
@@ -1736,6 +1768,7 @@ const tunnelLights = [];
   }
 }
 
+stage('bridges');
 // ---------------------------------------------------------------- bridges --
 // (owner 2026-10-05: "make bridges spawn over paths with bodies of water")
 // every road cell over water (the river, or ground under the sea plane) gets a
@@ -1757,6 +1790,7 @@ const weirs = [];                          // rock weirs: filled in just before 
 const weirCell = new Uint8Array(N * N);
 
 
+stage('settlements');
 // ------------------------------------------------------------- settlements --
 // Abandoned settlements (2026-10-06, owner: "abandoned settlements", ruins.mjs):
 // flat ground well off the roads, away from everything built; levelled like a
@@ -1994,6 +2028,7 @@ riverValleyCap();
     }
   console.error(`river levees: ${raised} bank cells raised to the water line`);
 }
+stage('coves');
 // ------------------------------------------------------------------ coves --
 // (owner 2026-10-14: "make a cove ... really really beautiful like huge stalagmites, moss
 // growing upward from the ocean floor to the rocks and beaches and trees and like a
@@ -2072,6 +2107,7 @@ const coves = [];
   console.error(`coves: ${coves.length} at ${coves.map(c => `${X0 + c.x * CELL},${Y0 + c.y * CELL}`).join(' ')}`);
 }
 
+stage('delta');
 // ------------------------------------------------------------------ delta --
 // (owner 2026-10-15: "add deltas to rivers") the river's last stretch fans out to the sea.
 // From an apex delta.len cells up the course from where its bed meets the sea, the fan
@@ -2250,6 +2286,7 @@ const delta = (() => {
   console.error(`delta: apex ${W(A[0], A[1])} (${run.toFixed(0)} cells up the course), axis ${dx.toFixed(2)},${dy.toFixed(2)}, coast ${Uc} cells out, ${arms} arms + ${chans.length - arms} creeks, ${JSON.stringify(stats)}`);
   return { A, dx, dy, Uc, U, chans };
 })();
+stage('weirs');
 // ------------------------------------------------------------ rock weirs --
 // (owner 2026-10-13: "use [rocks] as a natural wall to lower and raise water levels that
 // stray too much") wherever the river's level steps down from one cell to the next, a
@@ -2280,12 +2317,14 @@ if (tune('river.weirs', 1, 'boulder weirs where the river level steps down (0 = 
 riverDiag('after cap');
 
 if (process.env.MAPGEN_HDUMP) fs.writeFileSync(process.env.MAPGEN_HDUMP, Buffer.from(H.buffer, H.byteOffset, H.byteLength));
+stage('voxels');
 // ----------------------------------------------------------------- voxels --
 const V = new Uint8Array(N * N * NZ);
 const vi = (x, y, z) => (x * N + y) * NZ + z;
 const inMap = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
 const hAt = (x, y) => H[Math.min(N - 1, Math.max(0, x)) * N + Math.min(N - 1, Math.max(0, y))];
 
+stage('desertGround');
 // ----------------------------------------------------------------- desert --
 // (the desert's site and its levelling moved up, before the hamlets: see 'desert site')
 for (const v of villages) v.desert = desertW(v.x, v.y) > 0.5;
@@ -2349,6 +2388,7 @@ for (let x = 0; x < N; x++)
     // no water bricks: the environment water plane fills the sea
   }
 
+stage('tunnels');
 // ---------------------------------------------------------------- tunnels --
 // road tunnels (see the roads): clear TUNNEL.high bricks over the road level,
 // path floor
@@ -2363,6 +2403,7 @@ for (let c = 0; c < N * N; c++) {
 }
 console.error(`tunnels: ${tunnelCells} cells`);
 
+stage('sewers');
 // ----------------------------------------------------------------- sewers --
 // (owner 2026-10-12: "make towns have layered heights, with retaining walls
 // and sewers") Brick tunnels under every town path: a sludge channel a brick
@@ -2430,6 +2471,7 @@ const sewerPots = [];
   console.error(`sewers: ${cells} cells, ${(townTrial.sewerShafts ?? []).length} stair kiosks, ${sewerPots.length} pots`);
 }
 
+stage('caves');
 // ------------------------------------------------------------------ caves --
 // Zelda-style caves: a dark doorway cut into a cliff face, a short passage,
 // and one room inside the mountain. A site is a walkable cell at the foot of
@@ -2625,7 +2667,7 @@ function previewOut(full) {
   const header = {
     seed: SEED, scale: K, N, CELL, VZ, X0, Y0, SEA, waterZ: WATER_Z, stage: full ? 'full' : 'sites', ms: Date.now() - T0,
     shift: [-(X0 + (town.fx + TOWN.cells / 2) * CELL), -(Y0 + (town.fy + TOWN.cells / 2) * CELL)],
-    params: TUNED,
+    params: TUNED, stages: stageLog(),
     features: {
       spine: ISLAND.spine.map(([a, b]) => [tcx + a, tcy + b]), half: ISLAND.half,
       spinePts: spine.pts.map(p => [+p[0].toFixed(2), +p[1].toFixed(2), +p[2].toFixed(2), +p[3].toFixed(1)]), sTown: spine.sTown, L: spine.L,
@@ -2660,6 +2702,7 @@ function previewOut(full) {
 }
 if (PREVIEW && !PREVIEW_FULL) { previewOut(false); process.exit(0); }
 
+stage('meshing');
 // --------------------------------------------------------- greedy meshing --
 const bricks = [];
 const pushBox = (m, x0, y0, z0, x1, y1, z1) => {
@@ -2803,6 +2846,7 @@ const terrainCount = bricks.length;
 const SPAWNERS = ['Handaxe', 'Arming Sword', 'Spear', 'Longsword', 'Bow', 'Zweihander', 'Battleaxe'];
 const spawners = []; // { at: [x, y, z], tier, dungeon, level }
 
+stage('dungeonBricks');
 // ------------------------------------------------------- dungeon bricks --
 for (const d of DUNGEONS) {
   const [ox, oy, oz] = d.origin;
@@ -2819,6 +2863,7 @@ for (const d of DUNGEONS) {
 }
 const dungeonCount = bricks.length - terrainCount;
 
+stage('smoothing');
 // ------------------------------------------------------------- smoothing --
 // Every terrain step of 1 to MAX_RISE bricks gets a micro wedge on the low
 // cell rising to the higher neighbour, as tall as the step (taller steps stay
@@ -3080,6 +3125,7 @@ if (opt('--probe', null)) {
   }
 }
 
+stage('decor');
 // ------------------------------------------------------------------ decor --
 const at = (x, y, z) => [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, z * VZ];
 // ---------------------------------------- ruins, goblin camps, details --
@@ -3222,6 +3268,7 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
   }
   console.error(`settlements ${ruins.length} (${ruins.reduce((a, v) => a + (v.goblins || 0), 0)} goblins), camps ${camps.length} (${camps.reduce((a, c) => a + c.goblins, 0)} goblins), details ${details.count} ${JSON.stringify(details.kinds)}${offGridDrops ? `, ${offGridDrops} off-grid pieces dropped` : ''}`);
 }
+stage('forest');
 let trees = 0, treeBricks = 0;
 let forestStats = {};
 const treeKinds = {}, forestWood = new Map(), forestLeaves = new Map(), forestColors = [];
@@ -3351,6 +3398,7 @@ for (let bx = 2; bx < N; bx += 7)
     boulders++;
     boulderCells.push(x * N + y);
   }
+stage('plants');
 // ---------------------------------------------------------------- plants --
 // Brickadia's plant bricks over the grass (ferns and bushes in the woods,
 // flower meadows in patches of one colour), then the swamp: lily pads on the
@@ -3465,6 +3513,7 @@ const swampSpawns = [];
   }
 }
 
+stage('checkpoints');
 // checkpoints: on each dungeon's roof in the entrance pit (beside the bottom
 // end of the stairwell, clear of its top), and where the swamp road ends.
 // The hamlets' own sit by their wells (town.mjs).
@@ -3557,6 +3606,7 @@ for (const d of DUNGEONS) {
   console.error(`checkpoints: ${checkpoints.length} (${shrines} shrines, ${placed} roadside of ${WANT}, ${cand.length} flat spots, skipped ${JSON.stringify(why)})`);
 }
 
+stage('fingerposts');
 // fingerposts (signpost.mjs; owner 2026-10-13: "make signs indicating where things are, like
 // iron steel copper"): beside the roads, spread out, each pointing to its nearest places
 // (what the hamlets sell, dungeons, the volcano, the swamp, the henge, the casino)
@@ -3611,6 +3661,7 @@ for (const d of DUNGEONS) {
   console.error(`fingerposts: ${posts.length} of ${WANT} (${cand.length} spots, ${dest.length} destinations)`);
 }
 
+stage('swampDecor');
 // swamp pools: the water plane fills them; lily pads float on top
 {
   const kind = new Uint8Array(N * N);
@@ -3654,6 +3705,7 @@ for (let bx = swamp.x - SWAMP.r; bx <= swamp.x + SWAMP.r; bx += 5)
     deadTrees++;
   }
 
+stage('deathDecor');
 // the death forest's dressing (2026-10-14): graves in little yards, skulls on pikes, ghost lanterns, red
 // eyes hanging in the dark, and its enemies (the hardest skeletons, bloated zombies) on clear flat ground
 const deathProps = { graves: 0, pikes: 0, lanterns: 0, eyes: 0, spawners: 0 };
@@ -3735,6 +3787,7 @@ const deathProps = { graves: 0, pikes: 0, lanterns: 0, eyes: 0, spawners: 0 };
   console.error(`death forest: ${JSON.stringify(deathProps)}`);
 }
 
+stage('groundCover');
 // swamp floor and the grass everywhere else
 let turds = 0;
 for (let x = 1; x < N - 1; x++)
@@ -3798,6 +3851,7 @@ for (let x = 1; x < N - 1; x++)
     }
   }
 
+stage('hengeStones');
 // the henge's stones (micro bricks: a regular brick's underside is ugly) and wizards
 {
   const [cx, cy] = at(henge.x0 + (henge.n >> 1), henge.y0 + (henge.n >> 1), 0), G = (henge.h + 1) * VZ;
@@ -3847,6 +3901,7 @@ for (const s of spawnRing) {
   spawners.push({ at: [wx, wy, (H[s.x * N + s.y] + 1) * VZ + 2], tier: s.tier, dungeon: 'Spawn ring', level: 0 }); // H read late: roads may have regraded the cell
 }
 
+stage('caveProps');
 // cave interiors: two fires, then an old man with a sword or a chest, on the
 // ledge at the back; stalactites under the high ceiling, stalagmites and
 // glowing crystal clusters round the walls
@@ -3952,6 +4007,7 @@ for (const [n, c] of caves.entries()) {
   }
 }
 
+stage('coveDressing');
 // cove dressing placed (after plants and cave props, so it sees them): stone and moss voxels cut away inside the ground (skirts down to
 // the bed), small things whole or not at all
 if (coves.length) {
@@ -3972,6 +4028,7 @@ if (coves.length) {
   }
   console.error(`coves: ${rock} stone/moss bricks, ${small} small pieces`);
 }
+stage('deltaDressing');
 // delta dressing (2026-10-15, see 'delta'): clumps of reeds and cattails on the marsh and
 // along the banks at the water's edge, lily pads (some flowering) on the still water of
 // lagoons, shallows and creek edges, bleached driftwood on the sand. Reeds and pads are
@@ -4033,6 +4090,7 @@ if (delta) {
     }
   console.error(`delta dressing: ${JSON.stringify(ds)}`);
 }
+stage('riverWater');
 // river water (2026-10-06, owner: "this is a water component and it should be
 // replacing the river"): a 2-unit gravel plate on the bed in runs along x, each
 // carrying the owner's water zone (Component_Internal_AttachedZone, bWater)
@@ -4060,6 +4118,7 @@ const WATER_ZONE = {
       x = x1;
     }
 }
+stage('weirRocks');
 // rock weirs (see 'rock weirs' above): boulders on every step edge, voxels only in weir
 // columns and above each column's ground (and its water plate)
 if (weirs.length) {
@@ -4096,6 +4155,7 @@ if (weirs.length) {
   console.error(`river weirs: ${blobs.length} boulders, ${rocks.length} bricks`);
 }
 
+stage('bridgeDecks');
 // bridge decks (planks) and their rails over open water
 {
   const PLANK = [[150, 104, 64], [134, 92, 56], [160, 114, 72]], RAIL = [96, 66, 42], MB = 'PB_DefaultMicroBrick';
@@ -4127,6 +4187,7 @@ if (weirs.length) {
     }
   console.error(`bridges: ${decks} deck cells`);
 }
+stage('tunnelDecor');
 // tunnel ramps (a micro wedge on each 1-brick step of the floor) and ceiling lights
 {
   const FLOOR = MATS[PATH].color;
@@ -4266,6 +4327,7 @@ const terraceDump = []; // MAPGEN_TERRACEDUMP=file: every wall/coping box tried
 const COBBLE_C = MATS[COBBLE].color;
 const PAVE_C = [[164, 156, 142], [152, 146, 134], [174, 166, 150], [158, 148, 130], [146, 140, 132]]; // floors.mjs paving
 
+stage('townBuildings');
 // town buildings (town.mjs), positioned from the square's centre on its paving
 const townBricks = bricks.length;
 // through the overlap guard: the game would reject overlapping bricks
@@ -4282,6 +4344,7 @@ const townStats = buildTown({
   riverAt: (ux, uy) => { const x = town.fx + TOWN.cells / 2 + Math.floor(ux / CELL), y = town.fy + TOWN.cells / 2 + Math.floor(uy / CELL); return inBounds(x, y) && riverCell[x * N + y] === 1; },
 });
 terraceDressing(townB, town.fx, town.fy, town.fx + TOWN.cells, town.fy + TOWN.cells, c => townKind[c] === 2);
+stage('lawns');
 // lawns at spawn (owner 2026-10-14: "make the grass at spawn more interesting"): on the
 // town's grass lots, through the town's guard (never into a building, tree, wall or
 // stall): clover patches (2-high plates in two greens, from a stud noise), grass tufts
@@ -4377,6 +4440,7 @@ const lawnStats = { patches: 0, tufts: 0, daisies: 0, pebbles: 0, rings: 0 };
 }
 if (townB.dropped.length) throw new Error(`town: ${townB.dropped.length} overlapping pieces, e.g.\n${townB.dropped.slice(0, 8).join('\n')}`);
 for (const { label, ...b } of townB.bricks) bricks.push(b);
+stage('hamlets');
 // hamlets, each through its own overlap guard; their shop spots become
 // sword-shop prefab placements (shops.json)
 const shops = [];
@@ -4410,6 +4474,7 @@ if (process.env.MAPGEN_TERRACEDUMP) fs.writeFileSync(process.env.MAPGEN_TERRACED
 // thinned-out town buildings as world boxes, so a live world built before the
 // thinning can be cleared with br.World.ClearRegion
 const townOrigin = [X0 + (town.fx + TOWN.cells / 2) * CELL, Y0 + (town.fy + TOWN.cells / 2) * CELL, (town.h + 1) * VZ];
+stage('shops');
 // sword-shop stands inside some town houses (town.mjs HOUSE_SHOP_CHANCE)
 for (const hs of townStats.houseShops) shops.push({ at: hs.at.map((v, k) => townOrigin[k] + v), tier: hs.tier, orient: hs.orient, house: true, ...(hs.prefab ? { prefab: hs.prefab } : {}) });
 // the roadside weapon shops' stands (2026-10-15)
@@ -4465,6 +4530,7 @@ const offGrid = bricks.filter(b => b.size[0] && (/^PB_DefaultMicro/.test(b.asset
   : b.size[0] % 5 || b.size[1] % 5 || b.size[2] % 2));
 if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid, e.g. ${JSON.stringify(offGrid[0])}`);
 
+stage('output');
 // ----------------------------------------------------------------- output --
 // World shift (owner 2026-10-05: spawn points don't work, the game drops you on
 // the highest surface round (-200, 0), "make this area the centre of the
@@ -4549,6 +4615,8 @@ if (!DRY) {
     fs.promises.writeFile(path.join(OUT, `chunk_${String(n).padStart(3, '0')}.json`), JSON.stringify(job)).catch(e => { console.error(e); process.exitCode = 1; });
   }
   console.error(`wrote ${n} chunks to ${OUT}`);
+  fs.writeFileSync(path.join(OUT, 'pipeline.json'), JSON.stringify(stageLog()));
+  console.error(`pipeline: ${stageLog().map(s => `${s.id} ${s.ms}`).join(', ')}`);
   fs.writeFileSync(path.join(OUT, 'spawners.json'), JSON.stringify(spawners));
   for (const sh of shops) sh.prefab ??= `shop_${sh.tier}`; // house and market stands name only their tier (2026-10-08: they loaded as "undefined")
   fs.writeFileSync(path.join(OUT, 'shops.json'), JSON.stringify(shops));

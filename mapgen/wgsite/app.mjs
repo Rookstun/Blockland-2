@@ -1,7 +1,7 @@
 // Brickgen front end: schema-driven settings editor (misode style), synced
 // JSON, instant terrain preview (worker.mjs / terrain.mjs) and server previews.
 import { island, CELL, VZ, TOWN_CELLS } from './terrain.mjs';
-import { CATEGORIES, INSTANT, MARKER, groupOf, validate } from './groups.mjs';
+import { INSTANT, MARKER, groupOf, validate, pipelineCategories, PHASES, STAGES } from './groups.mjs';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -9,7 +9,7 @@ const clone = v => JSON.parse(JSON.stringify(v));
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const S = {
-  seed: 487675143, scale: 2, params: {}, schema: {}, group: 'terrain', search: '',
+  seed: 487675143, scale: 2, params: {}, schema: {}, group: 'pipeline', search: '',
   src: 'instant', layer: { instant: 'terrain', server: 'surface' },
   ovl: { shade: true, spine: true, sites: true, grid: false },
   view: { cx: 0, cy: 0, zoom: 1 }, fitted: false,
@@ -44,6 +44,7 @@ const ICON = {
   sword: '<path d="M13 1L6 8M4 8l4 4M5 11l-3 3M13 1h2v2L8 10"/>',
   door: '<path d="M3 15V5a5 5 0 0110 0v10zM8 15V8"/>',
   pin: '<path d="M8 15s5-5 5-8.5a5 5 0 00-10 0C3 10 8 15 8 15z"/><circle cx="8" cy="6.5" r="1.7"/>',
+  flow: '<rect x="1" y="1.5" width="5" height="3.5" rx="1"/><rect x="10" y="6.25" width="5" height="3.5" rx="1"/><rect x="1" y="11" width="5" height="3.5" rx="1"/><path d="M6 3.25h2v9.5H6M8 8h2"/>',
   cave: '<path d="M1 14c0-7 3-11 7-11s7 4 7 11M5 14c0-3 1.5-5 3-5s3 2 3 5"/>',
   road: '<path d="M5 1L2 15M11 1l3 14M8 2v2M8 7v2M8 12v2"/>',
   flag: '<path d="M3 15V1M3 2h9l-2 3 2 3H3"/>',
@@ -102,12 +103,13 @@ async function api(p, body) {
 async function loadSchema() { S.schema = await api(`/api/schema?scale=${S.scale}`); }
 
 // -------------------------------------------------------------------- nav --
+const PIPE = { id: 'pipeline', title: 'Pipeline', icon: 'flow', blurb: 'The order the world generates in, phase by phase (like the chunk statuses in Minecraft and feature steps). mapgen enforces it: each section calls stage(id) and a stage out of this order throws. Click a setting chip to edit what a stage reads.' };
 function groupsList() {
-  const known = new Set(CATEGORIES.flatMap(c => c.groups.map(g => g.id)));
+  const cats = pipelineCategories().map(c => ({ ...c, groups: c.groups.filter(g => Object.keys(S.schema).some(k => groupOf(k) === g.id)) }));
+  const known = new Set(cats.flatMap(c => c.groups.map(g => g.id)));
   const other = [...new Set(Object.keys(S.schema).map(groupOf))].filter(g => !known.has(g));
-  const cats = CATEGORIES.map(c => ({ ...c, groups: c.groups.filter(g => Object.keys(S.schema).some(k => groupOf(k) === g.id)) }));
   if (other.length) cats.push({ name: 'Other', groups: other.map(id => ({ id, title: id, icon: 'dot', blurb: '' })) });
-  return cats.filter(c => c.groups.length);
+  return [{ name: 'Worldgen', groups: [PIPE] }, ...cats.filter(c => c.groups.length)];
 }
 const groupInfo = id => groupsList().flatMap(c => c.groups).find(g => g.id === id) || { id, title: id, icon: 'dot', blurb: '' };
 const keysOf = id => Object.keys(S.schema).filter(k => groupOf(k) === id).sort((a, b) => S.schema[a].line - S.schema[b].line);
@@ -188,7 +190,40 @@ function islandHtml() {
   return tbl('island.spine', 'island.half', 'spine', 'Points in cells from the town centre, half-width in cells (both ×K). Drag them on the preview.') +
     tbl('island.tail', 'island.tailHalf', 'tail', 'Offsets in cells from the last spine point, half-widths in cells (both ×K).');
 }
+// the last mapgen run's stage timings (a server preview header or none)
+function stageTimes() {
+  const pv = S.server.full || S.server.sites;
+  return pv?.stages ? Object.fromEntries(pv.stages.map(s => [s.id, s.ms])) : null;
+}
+function pipelineHtml() {
+  const times = stageTimes(), tmax = times ? Math.max(...Object.values(times)) : 1;
+  const hIdx = STAGES.findIndex(s => s.id === 'heightmap'), cIdx = STAGES.findIndex(s => s.id === 'caves');
+  let n = 0;
+  return PHASES.map(ph => {
+    const st = STAGES.filter(s => s.phase === ph.id);
+    if (!st.length) return '';
+    return `<div class="phase"><div class="phead"><b>${esc(ph.title)}</b><span class="badge mc" title="Minecraft analogue">${esc(ph.mc)}</span></div><p class="pblurb">${esc(ph.blurb)}</p>` +
+      st.map(s => {
+        const i = STAGES.indexOf(s), num = ++n;
+        const pv = i <= hIdx ? ['instant', 'instant'] : i <= cIdx ? ['sites', 'sites'] : ['full', 'full'];
+        const ms = times?.[s.id];
+        const chips = s.groups.filter(g => keysOf(g).length).map(g => { const m = keysOf(g).filter(isMod).length; return `<button class="chip${m ? ' mod' : ''}" data-g="${g}">${esc(groupInfo(g).title)}${m ? ` · ${m}` : ''}</button>`; }).join('');
+        return `<div class="stage" data-st="${s.id}"><span class="sn">${num}</span><div class="sb"><div class="st1"><b>${esc(s.title)}</b><code>${s.id}</code><span class="badge ${pv[0]}" title="Shown by the ${pv[1]} preview">${pv[1]}</span>` +
+          (ms !== undefined ? `<span class="tm" title="last run">${ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1) + ' s'}</span><span class="tbar"><i style="width:${Math.max(2, ms / tmax * 100)}%"></i></span>` : '') +
+          `</div><div class="st2">makes ${esc(s.writes)}<span class="dim"> · ${esc(s.after)}</span></div>${chips ? `<div class="chips">${chips}</div>` : ''}</div></div>`;
+      }).join('') + '</div>';
+  }).join('');
+}
 function renderEditor() {
+  if (!S.search && S.group === 'pipeline') {
+    $('#crumb').textContent = 'Pipeline';
+    const times = stageTimes();
+    $('#ghead').innerHTML = `<h1>${icon('flow')}Pipeline</h1><p>${esc(PIPE.blurb)}</p><div class="badges"><span class="badge">${PHASES.length} phases</span><span class="badge">${STAGES.length} stages</span>` +
+      `<span class="badge">${times ? 'timings from the last Sites/Full preview' : 'run a Sites or Full preview for timings'}</span></div>`;
+    $('#errors').innerHTML = '';
+    $('#fields').innerHTML = pipelineHtml();
+    return;
+  }
   if (S.search) {
     const q = S.search, hits = Object.keys(S.schema).filter(k => k.toLowerCase().includes(q) || S.schema[k].note.toLowerCase().includes(q));
     $('#crumb').textContent = 'Search';
@@ -246,6 +281,7 @@ $('#fields').addEventListener('input', e => {
 $('#fields').addEventListener('click', e => {
   const el = e.target.closest('button, h3');
   if (!el) return;
+  if (el.classList.contains('chip')) { S.group = el.dataset.g; renderNav(); renderEditor(); renderCode(); drawPreview(); return; }
   if (el.tagName === 'H3') { S.group = el.dataset.g; S.search = ''; $('#search').value = ''; renderNav(); renderEditor(); renderCode(); return; }
   const k = el.dataset.k, w = el.dataset.w;
   if (el.dataset.rst) return commit('reset', () => { for (const kk of el.dataset.rst.split('|')) delete S.params[kk]; });
@@ -297,6 +333,7 @@ function groupObj() {
   return o;
 }
 function codeText() {
+  if (S.codeTab === 'group' && S.group === 'pipeline') { const t = stageTimes(); return fmt(PHASES.map(ph => ({ phase: ph.id, mc: ph.mc, stages: STAGES.filter(s => s.phase === ph.id).map(s => t?.[s.id] !== undefined ? `${s.id} (${t[s.id]} ms)` : s.id) }))); }
   if (S.codeTab === 'group') return fmt(groupObj());
   if (S.codeTab === 'params') return fmt(S.params);
   if (S.codeTab === 'cmd') {
@@ -312,7 +349,7 @@ function renderCode() {
   if (codeEditing) return;
   const t = codeText();
   const ta = $('#src');
-  ta.readOnly = S.codeTab !== 'group';
+  ta.readOnly = S.codeTab !== 'group' || S.group === 'pipeline';
   if (ta.value !== t) ta.value = t;
   $('#hl').innerHTML = S.codeTab === 'log' ? esc(t) : highlight(t) + '\n';
   $('#jsonErr').textContent = '';
@@ -439,6 +476,7 @@ async function pollServer() {
     const pv = parsePreview(await r.arrayBuffer());
     pv.key = j.key; pv.runMs = st.ms;
     S.server[j.stage] = pv;
+    if (S.group === 'pipeline' && !S.search) renderEditor();
     S.log.push(`done in ${(st.ms / 1000).toFixed(1)} s`);
     if (S.src === j.stage) { baseDirty = true; pvMsg(''); drawPreview(); }
     markStale();

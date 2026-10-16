@@ -106,6 +106,7 @@ const MIME = { html: 'text/html; charset=utf-8', mjs: 'text/javascript; charset=
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   try {
+    if (u.pathname === '/pipeline.mjs') return send(res, 200, fs.readFileSync(path.join(MAPDIR, 'pipeline.mjs')), MIME.mjs);
     if (STATIC[u.pathname]) {
       const f = STATIC[u.pathname];
       return send(res, 200, fs.readFileSync(path.join(HERE, f)), MIME[f.split('.').pop()]);
