@@ -22,6 +22,10 @@ import { pathToFileURL } from 'url';
 const brs = await import(pathToFileURL(path.join(process.env.HOME, 'omegga-server/plugins/bridge/lib/brs.mjs')).href);
 const PREFABS = path.join(process.env.HOME, 'omegga-server/data/Saved/Prefabs');
 const PICKUP_DIR = Number(process.env.PICKUP_DIR ?? 5), PICKUP_DROP = Number(process.env.PICKUP_DROP ?? 6), PICKUP_BOB = Number(process.env.PICKUP_BOB ?? 1);
+// CASE=1 (2026-10-16, the owner's glass gun case in the spawn gunsmith): writes <name>_case.brz
+// instead, the same plus the price button moved BUTTON_OUT units further out and BUTTON_DOWN down,
+// so it sits on the case's front glass (mapgen gunCase: stand 13 units behind the glass centre)
+const CASE = !!process.env.CASE, BUTTON_OUT = Number(process.env.BUTTON_OUT ?? 4), BUTTON_DOWN = Number(process.env.BUTTON_DOWN ?? 6);
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 const PEDESTAL = new Set(['B_2x2_Round', 'B_2x2F_Octo_Converter']);
 const FLAGS = ['CollisionFlags_Player', 'CollisionFlags_Player1', 'CollisionFlags_Player2', 'CollisionFlags_Player3', 'CollisionFlags_Weapon',
@@ -58,6 +62,15 @@ for (const f of names) {
     if (!idx.length) continue;
     const copy = { ...soa };
     for (const k of FLAGS) copy[k] = clearBits(soa[k], idx);
+    if (CASE) {
+      // the button stands out from the stand centre along one axis: push it further that way
+      const bi = soa.BrickTypeIndices.findIndex(t => assets[t] === 'B_Button_Square'), ci = soa.BrickTypeIndices.findIndex(t => assets[t] === 'B_2x2_Round');
+      if (bi < 0 || ci < 0) throw new Error(`${f}: no button/round in ${p}`);
+      const B = soa.RelativePositions[bi], C = soa.RelativePositions[ci];
+      const dx = B.X - C.X, dy = B.Y - C.Y;
+      if ((dx !== 0) === (dy !== 0)) throw new Error(`${f}: button not on one axis (${dx},${dy})`);
+      copy.RelativePositions = soa.RelativePositions.map((q, i) => i !== bi ? q : { X: q.X + Math.sign(dx) * BUTTON_OUT, Y: q.Y + Math.sign(dy) * BUTTON_OUT, Z: q.Z - BUTTON_DOWN });
+    }
     files.set(p, new Uint8Array(schema.encode(structName, copy)));
     hidden += idx.length;
   }
@@ -84,7 +97,7 @@ for (const f of names) {
   if (vis.some(v => /^(B_2x2_Round|B_2x2F_Octo_Converter):(v|.c)/.test(v)) || !vis.some(v => /^B_Button_Square:vc/.test(v))) throw new Error(`${f}: read back wrong: ${vis.join(' ')}`);
   for (const p of paths) { const m = p.match(/^World\/0\/Bricks\/Grids\/(\d+)\/Components\/(-?\d+)_(-?\d+)_(-?\d+)\.mps$/); if (m) for (const c of check.componentChunk(+m[1], { x: +m[2], y: +m[3], z: +m[4] }).components) if (c.typeName === 'Component_ItemSpawn' && (c.data.PickupOffsetDirection !== PICKUP_DIR || c.data.PickupOffsetDistance !== PICKUP_DROP)) throw new Error(`${f}: pickup offset read back wrong`); }
   for (const p of paths) if (!/\/Grids\/1\/(Chunks|Components)\//.test(p) && !Buffer.from(check.fs.readFile(p)).equals(Buffer.from(reader.fs.readFile(p)))) throw new Error(`${f}: ${p} changed`);
-  const name = f.replace(/\.brz$/, '_bare.brz');
+  const name = f.replace(/\.brz$/, CASE ? '_case.brz' : '_bare.brz');
   fs.writeFileSync(path.join(PREFABS, name), out);
   console.log(`${name}: ${vis.join(' ')}`);
 }
