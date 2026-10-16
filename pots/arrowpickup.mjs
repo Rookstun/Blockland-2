@@ -13,7 +13,10 @@ const brs = await import(path.join(process.env.HOME, "omegga-server/plugins/brid
 const PRE = path.join(process.env.HOME, "omegga-server/data/Saved/Prefabs");
 const w = new brs.World();
 const owner = w.addOwner({ id: "891c4675-d18a-4ce1-a465-f4193ffe8b39", name: "soapstain22", display_name: "renderman" });
-const g = w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, frozen: false, owner_index: owner });
+// (2026-10-16, owner: "still flying away") the writer's default grid data is bEnableGravity false,
+// MassScale 0 = antigravity: the coins' grid values (gravity on, mass 0.1, buoyancy 0.2)
+const g = w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, frozen: false, owner_index: owner,
+  data: { BouyancyScale: 0.2, MassScale: 0.1, bEnableGravity: true, bUseNewMassCalculation: true, bReceivesDecals: true, EntityTag: "" } });
 const hidden = { owner_index: owner, visibility: false };
 const NOT = "BrickComponentType_WireGraph_Expr_LogicalNOT", RG = "BrickComponentType_Internal_ReadBrickGrid";
 const DS = "BrickComponentType_WireGraph_Exec_Entity_DestroySpawnedPrefab", IS = "Component_ItemSpawn";
