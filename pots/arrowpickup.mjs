@@ -1,10 +1,10 @@
 // Arrow pickup (2026-10-16, owner: "here is an arrow entity that i want u to physics spawn out
 // of pots instead of whatever the fuck u made"): the owner's clipboard (pots/arrow_owner.brz) =
 // 3 hidden gate bricks stacked 4 apart:
-//   (top NOT + bottom DestroySpawnedPrefab dropped 2026-10-16, see below)
+//   top     NOT                    (bShowPickupEnabled -> NOT -> Exec: the pickup was taken)
 //   middle  ReadBrickGrid + the game's arrow ammo pickup (Component_ItemSpawn of BRPickupBase
 //           BP_Pickup_Ammo_Arrows, spinning/bobbing) + a gyroscope that keeps it upright
-
+//   bottom  DestroySpawnedPrefab   (Entity = this grid): the prefab goes once it is picked up
 // Rebuilt here on a loose (not frozen) physics grid so pot_pool can throw it out of the pot.
 // Replaces ammogen.mjs KIND=arrows (coin + GetAmmo/SetAmmo chip + brick model).
 //   node arrowpickup.mjs -> Saved/Prefabs/arrows.brz   (run on the server, brs-js 3 like the coins)
@@ -18,19 +18,23 @@ const hidden = { owner_index: owner, visibility: false };
 const NOT = "BrickComponentType_WireGraph_Expr_LogicalNOT", RG = "BrickComponentType_Internal_ReadBrickGrid";
 const DS = "BrickComponentType_WireGraph_Exec_Entity_DestroySpawnedPrefab", IS = "Component_ItemSpawn";
 const white = Array.from({ length: 8 }, () => ({ R: 255, G: 255, B: 255, A: 255 }));
+const destroy = w.addBrick({ asset: "B_1x1_Gate_Exec_Entity_DestroySpawnedPrefab", position: [0, 0, -4], ...hidden, components: [{ type: DS, data: {} }] }, { grid: g.grid });
 const core = w.addBrick({ asset: "B_1x1_Gate_Internal_ReadBrickGrid", position: [0, 0, 0], ...hidden, components: [
   { type: RG, data: {} },
-  { type: IS, data: { PickupClass: 0, bPickupEnabled: true, bPickupRespawnOnMinigameReset: false, PickupMinigameResetRespawnDelay: 0, bPickupAutoDisableOnPickup: true,
-    PickupRespawnTime: 9999, bRenderTranslucentWhenDisabled: false, DamageMultiplier: 1, WeaponSpeedMultiplier: 1, ItemNameOverride: "", ProjectileOverride: null,
+  { type: IS, data: { PickupClass: 0, bPickupEnabled: true, bPickupRespawnOnMinigameReset: true, PickupMinigameResetRespawnDelay: 0, bPickupAutoDisableOnPickup: true,
+    PickupRespawnTime: 5, bRenderTranslucentWhenDisabled: true, DamageMultiplier: 1, WeaponSpeedMultiplier: 1, ItemNameOverride: "", ProjectileOverride: null,
     WeaponAmmoOverride: { bOverrideStartingAmmo: false, Resources: Array.from({ length: 8 }, () => ({ Loaded: 0, Reserve: 0 })) },
     PickupOffsetDirection: 4, PickupOffsetDistance: 5, PickupRotation: { Pitch: 0, Yaw: 0, Roll: 0 }, PickupScale: 1,
     bOverridePickupColors: false, PickupMeshColors: white, bPickupAnimationEnabled: true, PickupAnimationAxis: 2, bPickupAnimationAxisLocal: false,
     PickupSpinSpeed: 0.2, PickupBobSpeed: 0.1, PickupBobHeight: 4, PickupAnimationPhase: 0.37 } },
   { type: "Component_Internal_Gyroscope", data: { bEnabled: true, bDiscoverable: true, Strength: 25, Damping: 1, MaxForce: 0, TargetAxis: { X: 0, Y: 0, Z: 1 } } },
 ] }, { grid: g.grid });
-// (2026-10-16, owner: "the arrows arent spawning") no self-destroy: the pickup reports bShowPickupEnabled
-// false before it is set up, so NOT -> DestroySpawnedPrefab could delete it as it spawned. Taken = hidden
-// (auto disable, not translucent, no respawn); SpawnPrefab's lifetime removes the grid after 30 s.
+const not = w.addBrick({ asset: "B_1x1_Gate_Expr_LogicalNOT", position: [0, 0, 4], ...hidden, components: [{ type: NOT, data: { bInput: true } }] }, { grid: g.grid });
+const P = (brick, component_type, port) => ({ brick, component_type, port });
+w.addWire(P(core, IS, "bShowPickupEnabled"), P(not, NOT, "bInput"));
+w.addWire(P(not, NOT, "bOutput"), P(destroy, DS, "Exec"));
+w.addWire(P(core, RG, "BrickGrid"), P(destroy, DS, "Entity"));
+// (2026-10-16) owner: keep these wires, they remove the pickup once it is taken (a rebuild without them was wrong)
 w.makePrefab({});
 const out = w.toBrz({ externalAssets: [{ type: "BRPickupBase", name: "BP_Pickup_Ammo_Arrows" }] });
 fs.writeFileSync(path.join(PRE, "arrows.brz"), out);
