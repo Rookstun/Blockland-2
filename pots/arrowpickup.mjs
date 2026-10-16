@@ -35,7 +35,9 @@ w.addWire(P(core, IS, "bShowPickupEnabled"), P(not, NOT, "bInput"));
 w.addWire(P(not, NOT, "bOutput"), P(destroy, DS, "Exec"));
 w.addWire(P(core, RG, "BrickGrid"), P(destroy, DS, "Entity"));
 // (2026-10-16) owner: keep these wires, they remove the pickup once it is taken (a rebuild without them was wrong)
-w.makePrefab({});
+// (2026-10-16, owner: "the pickup is antigravity and floats away") saved as a physics-grid prefab like the
+// coins (bIsPhysicsGrid): without it the spawned grid kept its toss velocity and never fell
+w.makePrefab({ isPhysicsGrid: true });
 const out = w.toBrz({ externalAssets: [{ type: "BRPickupBase", name: "BP_Pickup_Ammo_Arrows" }] });
 fs.writeFileSync(path.join(PRE, "arrows.brz"), out);
 console.log("arrows.brz", out.length, "bytes");
