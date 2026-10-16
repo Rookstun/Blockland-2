@@ -14,7 +14,7 @@ import { createRequire } from 'module';
 import { makeGod } from './gods.mjs';
 import { TOWN_CELLS, build as buildTown, surface as townSurface, planTown, planVillage, RIVER_LOCAL, PLAZA_R, distToLine } from './town.mjs';
 import { floorPieces } from './floors.mjs';
-import { orientFor, worldBox } from './orient.mjs';
+import { orientFor, worldBox, ORIENT } from './orient.mjs';
 import { makeBuilder } from './builder.mjs';
 import { buildDungeon, SIZE as DSIZE, STOREY as DSTOREY, THEMES as DTHEMES } from './dungeon.mjs';
 import { planSurfaceDungeon } from './surfacedungeon.mjs';
@@ -2911,9 +2911,9 @@ const roadSurf = new Uint8Array(N * N);
 for (let x = 1; x < N - 1; x++)
   for (let y = 1; y < N - 1; y++) {
     const c = x * N + y;
-    if (!pathCell[c] || townKind[c] || villagePaved[c] || deck[c] || tunnelZ[c] >= 0 || riverCell[c] || weirCell[c] || H[c] <= SEA) continue;
+    if ((!pathCell[c] && tunnelZ[c] < 0) || townKind[c] || villagePaved[c] || deck[c] || riverCell[c] || weirCell[c] || (H[c] <= SEA && tunnelZ[c] < 0)) continue;
     let nearDeck = false;
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const n = (x + a) * N + y + b; if (deck[n] || tunnelZ[n] >= 0 || terraceCell[n]) nearDeck = true; } // terrace walls stand on the low cell
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const n = (x + a) * N + y + b; if (deck[n] || terraceCell[n]) nearDeck = true; } // terrace walls stand on the low cell (tunnels ride since 2026-10-16)
     if (!nearDeck) roadSurf[c] = 1;
   }
 // MAPGEN_ROADDIAG=1: why road cells miss the ride surface (first reason per cell) + a few world spots each
@@ -3076,7 +3076,7 @@ let rideBricks = 0;
   const studs = [];
   for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
     if (!roadSurf[x * N + y]) continue;
-    const t = (H[x * N + y] + 1) * VZ;
+    const t = ((tunnelZ[x * N + y] >= 0 ? tunnelZ[x * N + y] : H[x * N + y]) + 1) * VZ; // a road tunnel's floor
     for (let a = 0; a < SPC; a++) for (let b = 0; b < SPC; b++) { const i = idx(x * SPC + a, y * SPC + b); S[i] = T[i] = t; studs.push(i); }
   }
   // 1. membrane (Gauss-Seidel, alternating sweep order)
@@ -3161,7 +3161,53 @@ let rideBricks = 0;
     bricks.push({ asset, ...orientFor(asset, dirs, ext), position: [wx(t.tx * 2) + ext[0], wy(t.ty * 2) + ext[1], t.base + d / 2], color: PC, ride: 1 });
     rideBricks++;
   }
-  console.error(`ride surface: ${studs.length} road studs, ${tiles.length} tiles, ${rideBricks} bricks`);
+  // road tunnels (2026-10-16, owner: "when paths cut through caves it looks really bad": the floor
+  // was 1-brick steps with a wedge each, the ceiling a brick step per cell): a ceiling skin hanging
+  // under the bored ceiling, TUNNEL_CLEAR over the ride surface at every tile corner (never above
+  // the bore), micro brick fill from the bore down to its highest corner and the same cap pieces
+  // turned upside down (half a turn about x: y mirrored, so the pattern is picked y-mirrored first)
+  const TUNNEL_CLEAR = tune('road.tunnelClear', 66, 'tunnel ceiling skin: units over the ride surface');
+  const FLIP = o => {
+    const c = o.direction * 4 + o.rotation, ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    const want = ax.map(v => { const [a, b, d] = ORIENT[c](v); return [a + 0, -b + 0, -d + 0].join(); });
+    const c2 = ORIENT.findIndex(f => ax.every((v, i) => f(v).map(q => q + 0).join() === want[i]));
+    return { ...o, direction: c2 >> 2, rotation: c2 & 3 };
+  };
+  const skinLo = new Map();
+  let skin = 0;
+  for (const t of tiles) {
+    const cx = t.tx >> 1, cy = t.ty >> 1, zr = tunnelZ[cx * N + cy];
+    if (zr < 0) continue;
+    const top = (zr + 1 + TUNNEL.high) * VZ;
+    const ROCK = MATS[V[vi(cx, cy, zr + TUNNEL.high + 1)]]?.color ?? MATS[STONE].color; // the bore's own rock
+    const hc = t.h.map(v => Math.min(top, v + TUNNEL_CLEAR));
+    const hi = Math.max(...hc), lo = Math.min(...hc), d = hi - lo;
+    skinLo.set(t.tx * TW + t.ty, lo);
+    if (top - hi >= 2) { bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx(t.tx * 2) + 10, wy(t.ty * 2) + 10, (hi + top) / 2], size: [10, 10, (top - hi) / 2], color: ROCK, ride: 1 }); skin++; }
+    if (!d) continue;
+    // corners hanging lowest = "up" for the flipped piece; corner (sx, sy) lands at (sx, -sy) after the flip
+    const deep = [[-1, -1], [1, -1], [-1, 1], [1, 1]].filter((_, k) => hc[k] - lo <= d / 2).map(([sx, sy]) => [sx, -sy]);
+    const has = (sx, sy) => deep.some(([a, b]) => a === sx && b === sy);
+    let cap = null;
+    if (deep.length === 1) cap = ['PB_DefaultMicroWedgeCorner', [[deep[0][0], 0], [0, deep[0][1]]]];
+    else if (deep.length === 3) { const [lx, ly] = [[-1, -1], [1, -1], [-1, 1], [1, 1]].find(([a, b]) => !has(a, b)); cap = ['PB_DefaultMicroWedgeOuterCorner', [[-lx, 0], [0, -ly]]]; }
+    else if (deep.length === 2) {
+      const [[ax, ay], [bx, by]] = deep;
+      if (ax === bx) cap = ['PB_DefaultMicroWedge', [[ax, 0]]]; else if (ay === by) cap = ['PB_DefaultMicroWedge', [[0, ay]]];
+    }
+    if (!cap) { bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx(t.tx * 2) + 10, wy(t.ty * 2) + 10, hi - d / 2], size: [10, 10, d / 2], color: ROCK, ride: 1 }); skin++; continue; } // saddle: flat at the lowest
+    const o = FLIP(orientFor(cap[0], cap[1], [10, 10, d / 2]));
+    bricks.push({ asset: cap[0], ...o, position: [wx(t.tx * 2) + 10, wy(t.ty * 2) + 10, hi - d / 2], color: ROCK, ride: 1 });
+    skin++;
+  }
+  // ceiling lights where the 4 tiles round a lit cell's centre meet, just under their lowest point
+  for (const [x, y] of tunnelLights) {
+    const tx = x * 2, ty = y * 2;
+    const los = [[0, 0], [-1, 0], [0, -1], [-1, -1]].map(([a, b]) => skinLo.get((tx + a + 1) * TW + ty + b + 1)).filter(v => v !== undefined);
+    if (los.length < 4) continue;
+    bricks.push({ asset: 'PB_DefaultMicroBrick', size: [6, 6, 2], color: [255, 200, 130], material: 'BMC_Glow', material_intensity: 5, position: [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, Math.min(...los) - 2] });
+  }
+  console.error(`ride surface: ${studs.length} road studs, ${tiles.length} tiles, ${rideBricks} bricks, tunnel ceiling skin ${skin} bricks`);
 }
 // --gaps: count cells still below an orthogonal neighbour with no piece, by step height
 if (args.includes('--gaps')) {
@@ -4266,7 +4312,7 @@ stage('tunnelDecor');
   for (let x = 0; x < N; x++)
     for (let y = 0; y < N; y++) {
       const zr = tunnelZ[x * N + y];
-      if (zr < 0) continue;
+      if (zr < 0 || roadSurf[x * N + y]) continue; // ride surface tunnels (2026-10-16) have their own
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         if (!inMap(x + dx, y + dy) || tunnelZ[(x + dx) * N + y + dy] !== zr + 1) continue;
         bricks.push({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[dx, dy]], [20, 20, 6]), color: FLOOR,
@@ -4274,7 +4320,7 @@ stage('tunnelDecor');
         break;
       }
     }
-  for (const [x, y, zr] of tunnelLights)
+  for (const [x, y, zr] of tunnelLights) if (!roadSurf[x * N + y])
     bricks.push({ asset: 'PB_DefaultMicroBrick', size: [6, 6, 2], color: [255, 200, 130], material: 'BMC_Glow', material_intensity: 5, position: [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, (zr + 1 + TUNNEL.high) * VZ - 2] });
 }
 
