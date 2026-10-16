@@ -4,7 +4,7 @@
 // chip (in the sky next to skeleton_drop, owned by the server owner so it may
 // pay out money) rolls the pool and drops the loot at the pot.
 //
-// Pool (out of 100): gold coin25 5, silver coin10 15, health pickup 12,
+// Pool (out of 100): gold coin25 5, silver coin10 15, health pickup 12 (small/medium/large),
 // arrows 20, a random gun ammo pickup 8, copper coin1 x1-3 32, nothing 8
 // (2026-10-10: + heal, more copper; 2026-10-11: + arrows and bullets, players
 // ran out of ammo).
@@ -23,7 +23,15 @@ on GlobalCustomEvent("pot.smashed") -> (at: vector) {
   } else if roll <= 20 {
     SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = up, lifetime = 30.0, limit = 60)
   } else if roll <= 32 {
-    SpawnPrefab(prefab = $./heal.brz, offset = off, lifetime = 30.0, limit = 60)
+    // (2026-10-16) the game's health pickups (pots/ammopickup.mjs): small 55, medium 30, large 15
+    let h = Random(1, 100)
+    if h <= 55 {
+      SpawnPrefab(prefab = $./heal_small.brz, offset = off, velocity = Vec(30.0, -50.0, 220.0), lifetime = 30.0, limit = 60)
+    } else if h <= 85 {
+      SpawnPrefab(prefab = $./heal_medium.brz, offset = off, velocity = Vec(30.0, -50.0, 220.0), lifetime = 30.0, limit = 60)
+    } else {
+      SpawnPrefab(prefab = $./heal_large.brz, offset = off, velocity = Vec(30.0, -50.0, 220.0), lifetime = 30.0, limit = 60)
+    }
   } else if roll <= 52 {
     // (2026-10-16) the owner's arrow pickup (pots/arrowpickup.mjs) on a loose physics grid: tossed up out of the pot
     SpawnPrefab(prefab = $./arrows.brz, offset = off, velocity = Vec(50.0, 30.0, 220.0), lifetime = 30.0, limit = 60)

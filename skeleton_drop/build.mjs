@@ -11,7 +11,7 @@ if (typeof wasm.default === 'function') await wasm.default({ module_or_path: rea
 const compileWs = wasm.wirescript_compile ?? wasm.default?.wirescript_compile;
 
 const registry = {};
-for (const c of ['coin1', 'coin10', 'coin25', 'heal', 'arrows', 'ammo_blackpowder', 'ammo_explosive', 'ammo_heavy', 'ammo_light', 'ammo_magnum', 'ammo_medium', 'ammo_plasma', 'ammo_pulse', 'ammo_shotgun']) registry[`./${c}.brz`] = Array.from(readFileSync(join(here, `${c}.brz`)));
+for (const c of ['coin1', 'coin10', 'coin25', 'heal_small', 'heal_medium', 'heal_large', 'arrows', 'ammo_blackpowder', 'ammo_explosive', 'ammo_heavy', 'ammo_light', 'ammo_magnum', 'ammo_medium', 'ammo_plasma', 'ammo_pulse', 'ammo_shotgun']) registry[`./${c}.brz`] = Array.from(readFileSync(join(here, `${c}.brz`)));
 const bytes = compileWs(readFileSync(join(here, 'skeleton_drop.ws'), 'utf-8'), 'skeleton_drop', '{}', JSON.stringify(registry));
 // (2026-10-16) the game (EA3.2) can't Prefab.Load the compiler's old-format output (its map Vars:
 // "While reading dynamic map length: mpack_error_type"): migrate to the Latest format with brs-js 4

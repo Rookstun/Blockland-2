@@ -1093,7 +1093,14 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
       }
     }
     if Random(0, 99) < 25 {
-      SpawnPrefab(prefab = $./heal.brz, offset = at, lifetime = 60.0, limit = 100)
+      let h = Random(1, 100)
+      if h <= 55 {
+        SpawnPrefab(prefab = $./heal_small.brz, offset = at, velocity = Vec(-30.0, -40.0, 220.0), lifetime = 30.0, limit = 100)
+      } else if h <= 85 {
+        SpawnPrefab(prefab = $./heal_medium.brz, offset = at, velocity = Vec(-30.0, -40.0, 220.0), lifetime = 30.0, limit = 100)
+      } else {
+        SpawnPrefab(prefab = $./heal_large.brz, offset = at, velocity = Vec(-30.0, -40.0, 220.0), lifetime = 30.0, limit = 100)
+      }
     }
     if Random(0, 99) < 35 {
       SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), velocity = Vec(-40.0, 40.0, 220.0), lifetime = 30.0, limit = 100)

@@ -41,7 +41,7 @@ const ENEMY = {
 const DEFAULT = [3, 70, 65, 30, 12];
 const COPPER = [2, 4];   // copper coins per copper roll (owner 2026-10-10: more coins)
 const COIN_LIFE = 180;   // seconds a dropped coin lies there (was forever: with 2-4x the coins the spawn limits filled up)
-const HEAL_PCT = 25;     // chance a kill also drops a health pickup (heal.brz, pots/healgen.mjs)
+const HEAL_PCT = 25;     // chance a kill also drops a health pickup (the game's health pickups heal_small/medium/large.brz, pots/ammopickup.mjs)
 const BULLET_PCT = 15;   // chance a kill also drops one of the game's 9 gun ammo pickups (ammo_<kind>.brz, pots/ammopickup.mjs)
 const ARROW_PCT = 35;    // chance a kill also drops 10 arrows (arrows.brz = the owner's arrow pickup, pots/arrowpickup.mjs; owner 2026-10-11: players ran out of arrows)
 const XP_SCALE = 25;
@@ -467,7 +467,14 @@ ${pick}
     offset = location - GetOwnTransform().Location
     let at = offset + Vec(0.0, 0.0, 20.0)
 ${Array.from({ length: MAX }, (_, i) => slot(i + 1)).join('')}    if Random(0, 99) < ${HEAL_PCT} {
-      SpawnPrefab(prefab = $./heal.brz, offset = at, lifetime = 60.0, limit = 100)
+      let h = Random(1, 100)
+      if h <= 55 {
+        SpawnPrefab(prefab = $./heal_small.brz, offset = at, velocity = Vec(-30.0, -40.0, 220.0), lifetime = 30.0, limit = 100)
+      } else if h <= 85 {
+        SpawnPrefab(prefab = $./heal_medium.brz, offset = at, velocity = Vec(-30.0, -40.0, 220.0), lifetime = 30.0, limit = 100)
+      } else {
+        SpawnPrefab(prefab = $./heal_large.brz, offset = at, velocity = Vec(-30.0, -40.0, 220.0), lifetime = 30.0, limit = 100)
+      }
     }
     if Random(0, 99) < ${ARROW_PCT} {
       SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), velocity = Vec(-40.0, 40.0, 220.0), lifetime = 30.0, limit = 100)

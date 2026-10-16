@@ -1,7 +1,7 @@
-// Ammo pickups (2026-10-16, owner screenshot of the game's Ammo tab: "make a type for all of these"): one
+// Ammo + health pickups (2026-10-16, owner screenshot of the game's Ammo tab: "make a type for all of these"): one
 // prefab per game ammo pickup (BRPickupBase BP_Pickup_Ammo_<Kind>, names grepped from the server .utoc):
 // arrows.brz (Arrows) + ammo_<kind>.brz for the other 9, all built like the arrow pickup below.
-//   node ammopickup.mjs   (run on the server) -> Saved/Prefabs/arrows.brz + ammo_*.brz
+//   node ammopickup.mjs   (run on the server) -> Saved/Prefabs/arrows.brz + ammo_*.brz + heal_*.brz
 // Arrow pickup (2026-10-16, owner: "here is an arrow entity that i want u to physics spawn out
 // of pots instead of whatever the fuck u made"): the owner's clipboard (pots/arrow_owner.brz) =
 // 3 hidden gate bricks stacked 4 apart:
@@ -15,8 +15,12 @@ import fs from "fs"; import path from "path";
 const brs = await import(path.join(process.env.HOME, "omegga-server/plugins/bridge/lib/brs.mjs"));
 const PRE = path.join(process.env.HOME, "omegga-server/data/Saved/Prefabs");
 export const KINDS = ["Arrows", "BlackPowder", "Explosive", "Heavy", "Light", "Magnum", "Medium", "Plasma", "Pulse", "Shotgun"];
-for (const kind of KINDS) {
-  const file = kind === "Arrows" ? "arrows.brz" : `ammo_${kind.toLowerCase()}.brz`;
+// (2026-10-16, owner: "remove the old heart thing and add a health pickup like the other ones") the game's
+// 3 health pickups, heal_<size>.brz (the old coin + heart heal.brz / healgen.mjs is gone)
+export const HEALTH = ["Small", "Medium", "Large"];
+const PICKUPS = [...KINDS.map(kind => [kind === "Arrows" ? "arrows.brz" : `ammo_${kind.toLowerCase()}.brz`, "BP_Pickup_Ammo_" + kind]),
+  ...HEALTH.map(size => [`heal_${size.toLowerCase()}.brz`, "BP_Pickup_Health_" + size])];
+for (const [file, pickup] of PICKUPS) {
   const w = new brs.World();
   const owner = w.addOwner({ id: "891c4675-d18a-4ce1-a465-f4193ffe8b39", name: "soapstain22", display_name: "renderman" });
   // (2026-10-16, owner: "still flying away") the writer's default grid data is bEnableGravity false,
@@ -48,7 +52,7 @@ for (const kind of KINDS) {
   // (2026-10-16, owner: "the pickup is antigravity and floats away") saved as a physics-grid prefab like the
   // coins (bIsPhysicsGrid): without it the spawned grid kept its toss velocity and never fell
   w.makePrefab({ isPhysicsGrid: true });
-  const out = w.toBrz({ externalAssets: [{ type: "BRPickupBase", name: "BP_Pickup_Ammo_" + kind }] });
+  const out = w.toBrz({ externalAssets: [{ type: "BRPickupBase", name: pickup }] });
   fs.writeFileSync(path.join(PRE, file), out);
   console.log(file, out.length, "bytes");
 }
