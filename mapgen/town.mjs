@@ -31,12 +31,7 @@ import SODAS from './sodas.json' with { type: 'json' };
 import OWNER_PROPS from './models/ownerprops.json' with { type: 'json' };
 // gameSize: sizes the owner placed in game (stall poles 2 x 2 x 13), exempt from mapgen's stud-grid check
 const asProp = bricks => bricks.map(({ intensity, ...b }) => ({ ...b, gameSize: true, ...(intensity != null ? { material_intensity: intensity } : {}) }));
-// the stall with its awning raised 3 bricks, so long blades stand clear under it
-const STALL_LIFT = 36;
-const STALL = asProp(OWNER_PROPS.stall).map(b => b.position[2] < 30 ? b
-  : b.asset === 'PB_DefaultPole' ? { ...b, size: [b.size[0], b.size[1], b.size[2] + STALL_LIFT / 2], position: [b.position[0], b.position[1], b.position[2] + STALL_LIFT / 2] }
-  : { ...b, position: [b.position[0], b.position[1], b.position[2] + STALL_LIFT] });
-const CHEST = asProp(OWNER_PROPS.chest);
+const STALL0 = asProp(OWNER_PROPS.stall); // the owner's market stall (spawn market, stallsAlong)
 const STALL_TOP = 30; // counter top over the floor (the stall's top tile)
 let propSerial = 0;
 // the game's water (same settings as mapgen's river WATER_ZONE): a brick's attached zone, filled
@@ -1002,21 +997,26 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         }
       });
     }
-    // the real stands (2026-10-16, owner: "take these off their pedestals"): the owner's market
-    // stall either side of the door aisle (a second row if the wares need it), three wares on
-    // each counter as pedestal-less stands (<prefab>_bare, bridge-tools/barestand.mjs: the
-    // weapon floats over the counter, the price button toward the street)
+    // the real stands (2026-10-16, owner: "take these off their pedestals"): pedestal-less stands
+    // (<prefab>_bare, bridge-tools/barestand.mjs: the weapon floats over the top, the price button
+    // toward the street), three on each display table either side of the door aisle (a second row
+    // if the wares need it). The owner's market stall stood here first; owner: "remove the market
+    // stalls from inside the building. that was supposed to be in spawn" (it is in stallsAlong now)
     const orient = fx ? (fx > 0 ? 17 : 19) : (fy > 0 ? 18 : 16); // button toward the street
-    const SY = Math.min(10, cy0 - 5); // stall centre row: clear of the plinths (y < 5) and the counter
+    const SY = Math.min(10, cy0 - 5); // table centre row: clear of the plinths (y < 5) and the counter
+    const TOP = 32;                   // table top over the floor (the stands' bases sit on it)
     let n = 0;
     for (const [sx, sy] of [[fd - 12, SY], [fd + 12, SY], [fd - 12, SY + 6], [fd + 12, SY + 6]]) {
       if (n >= wares.length) break;
-      if (!piece(sx - 6, sy - 2, sx + 6, sy + 2, () => {})) continue;
-      const spot = prop(STALL, sx, sy, f);
-      for (const dx of [-35, 0, 35]) {
+      if (!piece(sx - 6, sy - 2, sx + 6, sy + 2, () => {
+        sbox(sx - 5, sy - 2, sx + 5, sy + 2, f + TOP - 4, f + TOP, { color: PALETTE.timber[1] });  // top
+        sbox(sx - 4, sy - 2, sx + 4, sy - 1, f + TOP - 8, f + TOP - 4, { color: PALETTE.timber[0] }); // apron between the legs
+        for (const [lx, ly] of [[sx - 5, sy - 2], [sx + 4, sy - 2], [sx - 5, sy + 1], [sx + 4, sy + 1]]) sbox(lx, ly, lx + 1, ly + 1, f, f + TOP - 4, { color: PALETTE.timber[0] });
+      })) continue;
+      for (const dx of [-3.5, 0, 3.5]) {
         if (n >= wares.length) break;
-        const [px, py] = spot(dx, -4), w = wares[n++];
-        stats.houseShops.push({ at: [px, py, f + STALL_TOP + 12 + (zCtx ?? 0)], orient, tier: w.tier, prefab: (w.prefab ?? 'shop_' + w.tier) + '_bare' });
+        const [px, py] = at(sx + dx, sy), w = wares[n++];
+        stats.houseShops.push({ at: [px, py, f + TOP + 12 + (zCtx ?? 0)], orient, tier: w.tier, prefab: (w.prefab ?? 'shop_' + w.tier) + '_bare' });
       }
     }
     if (n < wares.length) count('weapon shop: stands short ' + (wares.length - n));
@@ -1183,18 +1183,14 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (WEAPON_KINDS.includes(kind)) backRooms.forEach(([x0, y0, x1, y1], r) => {
       const mx = Math.floor((x0 + x1) / 2), my = Math.floor((y0 + y1) / 2);
       if (r === 0) {
-        // the smith's quarters: a bed in a back corner (headboard to the wall), the owner's chest beside it,
+        // the smith's quarters: a bed in a back corner (headboard to the wall),
         // a wardrobe, a rug, a desk with a candle
         first(wallSpots([x0, y0, x1, y1], 3, 6, ['back']), (bx0, by0, bx1) => {
           sbox(bx0, by0, bx1, y1, f, f + 12, { color: timber });
           sbox(bx0, y1 - 1, bx1, y1, f + 12, f + 28, { color: dark });                                   // headboard
           sbox(bx0, y1 - 3, bx1, y1 - 1, f + 12, f + 20, { asset: MBK, color: [236, 232, 222] });          // pillow
           sbox(bx0, by0, bx1, y1 - 3, f + 12, f + 16, { asset: 'PB_DefaultTile', color: pick(PALETTE.blanket, s, 7) });
-          // the owner's chest (5.6 x 3.6 studs) on a 6 x 4 spot: along the back wall facing into the room,
-          // else along the room's front wall turned round (still facing into the room)
-          const front = []; for (let x = x0; x + 6 <= x1; x++) front.push([x, y0, x + 6, y0 + 4]);
-          [...wallSpots([x0, y0, x1, y1], 6, 4, ['back']).map(r => [r, false]), ...front.map(r => [r, true])]
-            .some(([[cx0, cy0, cx1, cy1], back]) => fit(cx0, cy0, cx1, cy1, () => prop(CHEST, (cx0 + cx1) / 2, (cy0 + cy1) / 2, f, back)));
+          // (the owner's chest stood beside it until 2026-10-16: owner "take that chest out of it")
         });
         first(wallSpots([x0, y0, x1, y1], 3, 2, ['back']), (wx0, wy0, wx1, wy1) => {
           sbox(wx0, wy0, wx1, wy1, f, f + 64, { color: dark });                                            // wardrobe
@@ -1791,11 +1787,17 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     stats.trees++;
   }
 
-  function stall(x, y, s) {
-    box(x - 30, y - 15, 0, x + 30, y + 15, 36, { color: PALETTE.timber[1] });
-    for (const [px, py] of [[-40, -30], [40, -30], [-40, 30], [40, 30]]) pole(x + px, y + py, 0, 96, 5, { color: PALETTE.timber[0] });
-    box(x - 50, y - 40, 96, x + 50, y + 40, 100, { color: pick(PALETTE.cloth, s, 1) });
-    for (let g = -1; g <= 1; g++) put({ asset: 'B_1x1_Round', size: [0, 0, 0], color: pick(PALETTE.goods, s, g + 5) }, x + g * 20, y, 42);
+  // a market stall = the owner's hand-built stall (2026-10-16, owner: "that was supposed to be in
+  // spawn"; models/ownerprops.json, awning not raised), counter front toward (fx, fy), goods on it
+  // the quarter turn that points the stall's front (local +y) nearest (fx, fy)
+  const stallTurn = (fx, fy) => [[0, 1], [-1, 0], [0, -1], [1, 0]].reduce((b, [ux, uy], k, a) => ux * fx + uy * fy > a[b][0] * fx + a[b][1] * fy ? k : b, 0);
+  function stall(x, y, s, fx = 0, fy = 1) {
+    const r = stallTurn(fx, fy), group = ++propSerial;
+    for (const b of STALL0) { const t = turnBrick(b, r); put({ ...t, group }, x + t.position[0], y + t.position[1], t.position[2]); }
+    for (let g = -1; g <= 1; g++) {
+      const t = turnBrick({ asset: 'B_1x1_Round', size: [0, 0, 0], color: pick(PALETTE.goods, s, g + 5), position: [g * 35, 0, STALL_TOP + 6] }, r);
+      put(t, x + t.position[0], y + t.position[1], t.position[2]);
+    }
     stats.stalls++;
   }
 
@@ -1890,10 +1892,11 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         for (const side of [-1, 1]) {
           const nx = (-(qy - y) / tl) * side, ny = ((qx - x) / tl) * side, off = PATH_W / 2 + 70;
           const cx = Math.round((x + nx * off) / 10) * 10, cy = Math.round((y + ny * off) / 10) * 10;
-          const r = [cx - 50, cy - 40, cx + 50, cy + 40];
+          const [hx, hy] = stallTurn(-nx, -ny) % 2 ? [30, 70] : [70, 30]; // the owner's stall: 12 x 5 studs + a margin
+          const r = [cx - hx, cy - hy, cx + hx, cy + hy];
           if (!rectClear(r, { margin: 20 })) continue;
           taken.push(r);
-          onSite(r, () => stall(cx, cy, seed * 100 + pi * 10 + k++));
+          onSite(r, () => stall(cx, cy, seed * 100 + pi * 10 + k++, -nx, -ny));
         }
       }
     });
