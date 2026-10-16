@@ -17,7 +17,8 @@ const owner = w.addOwner({ id: "891c4675-d18a-4ce1-a465-f4193ffe8b39", name: "so
 // MassScale 0 = antigravity: the coins' grid values (gravity on, mass 0.1, buoyancy 0.2)
 const g = w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, frozen: false, owner_index: owner,
   data: { BouyancyScale: 0.2, MassScale: 0.1, bEnableGravity: true, bUseNewMassCalculation: true, bReceivesDecals: true, EntityTag: "" } });
-const hidden = { owner_index: owner, visibility: false };
+// (2026-10-16, owner: "turn off all collision for the arrows") every collision channel off
+const hidden = { owner_index: owner, visibility: false, collision: false };
 const NOT = "BrickComponentType_WireGraph_Expr_LogicalNOT", RG = "BrickComponentType_Internal_ReadBrickGrid";
 const DS = "BrickComponentType_WireGraph_Exec_Entity_DestroySpawnedPrefab", IS = "Component_ItemSpawn";
 const white = Array.from({ length: 8 }, () => ({ R: 255, G: 255, B: 255, A: 255 }));

@@ -470,7 +470,7 @@ ${Array.from({ length: MAX }, (_, i) => slot(i + 1)).join('')}    if Random(0, 9
       SpawnPrefab(prefab = $./heal.brz, offset = at, lifetime = 60.0, limit = 100)
     }
     if Random(0, 99) < ${ARROW_PCT} {
-      SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), velocity = Vec(-40.0, 40.0, 220.0), lifetime = 60.0, limit = 100)
+      SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), velocity = Vec(-40.0, 40.0, 220.0), lifetime = 30.0, limit = 100)
     }
     if Random(0, 99) < ${BULLET_PCT} {
       SpawnPrefab(prefab = $./bullets.brz, offset = at + Vec(0.0, 0.0, 24.0), lifetime = 60.0, limit = 100)
