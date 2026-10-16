@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brickgen</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='5' width='14' height='9' rx='1' fill='%23e8743b'/%3E%3Crect x='3' y='2' width='4' height='3' rx='1' fill='%23e8743b'/%3E%3Crect x='9' y='2' width='4' height='3' rx='1' fill='%23e8743b'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header id="top">
+  <a class="logo" href="#" title="Brickgen: worldgen generator for the Brickadia RPG map">
+    <svg viewBox="0 0 16 16" width="22" height="22"><rect x="1" y="5" width="14" height="9" rx="1" fill="currentColor"/><rect x="3" y="2" width="4" height="3" rx="1" fill="currentColor"/><rect x="9" y="2" width="4" height="3" rx="1" fill="currentColor"/></svg>
+    <span>Brickgen</span>
+  </a>
+  <div class="crumb"><span class="dim">Worldgen</span> <span class="dim">/</span> <b id="crumb">Terrain noise</b></div>
+  <div class="spacer"></div>
+  <label class="fld">Seed <input id="seed" type="number" step="1"><button id="dice" class="ico" title="Random seed">⚄</button></label>
+  <label class="fld">Scale <select id="scale"><option>1</option><option>1.5</option><option>2</option><option>2.5</option><option>3</option></select></label>
+  <label class="fld">Preset <select id="preset"></select></label>
+  <div class="btns">
+    <button id="undo" class="ico" title="Undo (Ctrl+Z)">↶</button>
+    <button id="redo" class="ico" title="Redo (Ctrl+Y)">↷</button>
+    <button id="savePreset" title="Save these settings as a preset">Save</button>
+    <button id="share" title="Copy a link holding these settings">Share</button>
+    <button id="import" title="Paste a params.json or preset">Import</button>
+    <button id="build" class="primary" title="Run the full generator into mapgen/out_&lt;name&gt; (never deploys)">Build</button>
+  </div>
+</header>
+
+<main id="app">
+  <nav id="nav">
+    <div class="search"><input id="search" type="search" placeholder="Search settings…"></div>
+    <div id="navlist"></div>
+    <div class="navfoot"><span id="modcount"></span> <button id="resetAll" class="link">Reset all</button></div>
+  </nav>
+
+  <section id="editor">
+    <div id="ghead"></div>
+    <div id="errors"></div>
+    <div id="fields"></div>
+  </section>
+
+  <section id="right">
+    <div id="pv">
+      <div class="pvbar">
+        <div class="seg" id="srcSeg">
+          <button data-src="instant" class="on" title="Computed in your browser from the same code as mapgen (exact)">Instant</button>
+          <button data-src="sites" title="mapgen.mjs --preview: town, river, roads, sites (~30 s)">Sites</button>
+          <button data-src="full" title="mapgen.mjs --preview-full: every brick (~1-2 min)">Full</button>
+        </div>
+        <select id="layer"></select>
+        <div class="spacer"></div>
+        <div class="ovl" id="ovl"></div>
+        <button id="fit" class="ico" title="Fit">⤢</button>
+      </div>
+      <div id="canvasWrap">
+        <canvas id="cv"></canvas>
+        <div id="pvmsg"></div>
+        <div id="legend"></div>
+      </div>
+      <div class="pvfoot"><span id="hover">Hover the map. Drag to pan, wheel to zoom, right-click to copy a /TP command.</span><span class="spacer"></span><span id="pvstat"></span></div>
+    </div>
+    <div id="splitter" title="Drag to resize"></div>
+    <div id="code">
+      <div class="codebar">
+        <div class="seg" id="codeSeg">
+          <button data-tab="group" class="on">Group JSON</button>
+          <button data-tab="params">params.json</button>
+          <button data-tab="cmd">Command</button>
+          <button data-tab="log">Log</button>
+        </div>
+        <span class="spacer"></span>
+        <span id="jsonErr"></span>
+        <button id="copy" class="ico" title="Copy">⧉</button>
+        <button id="download" class="ico" title="Download">⭳</button>
+      </div>
+      <div id="codeBody">
+        <pre id="hl" aria-hidden="true"></pre>
+        <textarea id="src" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<dialog id="dlg"><form method="dialog"><h3 id="dlgTitle"></h3><p id="dlgText" class="dim"></p><textarea id="dlgArea"></textarea><input id="dlgInput"><menu><button value="cancel">Cancel</button><button value="ok" class="primary" id="dlgOk">OK</button></menu></form></dialog>
+<script type="module" src="/app.mjs"></script>
+</body>
+</html>

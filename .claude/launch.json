@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "brickgen",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["mapgen/wgsite/server.mjs"],
+      "port": 8788
+    }
+  ]
+}
