@@ -1,7 +1,7 @@
 // Ammo + health pickups (2026-10-16, owner screenshot of the game's Ammo tab: "make a type for all of these"): one
 // prefab per game ammo pickup (BRPickupBase BP_Pickup_Ammo_<Kind>, names grepped from the server .utoc):
 // arrows.brz (Arrows) + ammo_<kind>.brz for the other 9, all built like the arrow pickup below.
-//   node ammopickup.mjs   (run on the server) -> Saved/Prefabs/arrows.brz + ammo_*.brz + heal_*.brz
+//   node ammopickup.mjs   (run on the server) -> Saved/Prefabs/arrows.brz + ammo_*.brz + heal_*.brz + item_*.brz
 // Arrow pickup (2026-10-16, owner: "here is an arrow entity that i want u to physics spawn out
 // of pots instead of whatever the fuck u made"): the owner's clipboard (pots/arrow_owner.brz) =
 // 3 hidden gate bricks stacked 4 apart:
@@ -18,8 +18,12 @@ export const KINDS = ["Arrows", "BlackPowder", "Explosive", "Heavy", "Light", "M
 // (2026-10-16, owner: "remove the old heart thing and add a health pickup like the other ones") the game's
 // 3 health pickups, heal_<size>.brz (the old coin + heart heal.brz / healgen.mjs is gone)
 export const HEALTH = ["Small", "Medium", "Large"];
+// (2026-10-16, owner: "make them also drop soda cans med syringes health potions and bandages") the game's
+// item pickups (BP_ItemPickup_*, grepped from the server .utoc), item_<key>.brz; enemies drop them
+export const ITEMS = [["soda", "BP_ItemPickup_Soda"], ["syringe", "BP_ItemPickup_MediSyringe"], ["potion", "BP_ItemPickup_HealthPotion"], ["bandage", "BP_ItemPickup_Bandage"]];
 const PICKUPS = [...KINDS.map(kind => [kind === "Arrows" ? "arrows.brz" : `ammo_${kind.toLowerCase()}.brz`, "BP_Pickup_Ammo_" + kind]),
-  ...HEALTH.map(size => [`heal_${size.toLowerCase()}.brz`, "BP_Pickup_Health_" + size])];
+  ...HEALTH.map(size => [`heal_${size.toLowerCase()}.brz`, "BP_Pickup_Health_" + size]),
+  ...ITEMS.map(([key, pickup]) => [`item_${key}.brz`, pickup])];
 for (const [file, pickup] of PICKUPS) {
   const w = new brs.World();
   const owner = w.addOwner({ id: "891c4675-d18a-4ce1-a465-f4193ffe8b39", name: "soapstain22", display_name: "renderman" });

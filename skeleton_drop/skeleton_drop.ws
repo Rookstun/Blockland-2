@@ -1105,6 +1105,18 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
     if Random(0, 99) < 35 {
       SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), velocity = Vec(-40.0, 40.0, 220.0), lifetime = 30.0, limit = 100)
     }
+    if Random(0, 99) < 30 {
+      let it = Random(1, 4)
+      if it == 1 {
+        SpawnPrefab(prefab = $./item_soda.brz, offset = at + Vec(0.0, 0.0, 16.0), velocity = Vec(0.0, 50.0, 220.0), lifetime = 30.0, limit = 100)
+      } else if it == 2 {
+        SpawnPrefab(prefab = $./item_syringe.brz, offset = at + Vec(0.0, 0.0, 16.0), velocity = Vec(0.0, 50.0, 220.0), lifetime = 30.0, limit = 100)
+      } else if it == 3 {
+        SpawnPrefab(prefab = $./item_potion.brz, offset = at + Vec(0.0, 0.0, 16.0), velocity = Vec(0.0, 50.0, 220.0), lifetime = 30.0, limit = 100)
+      } else if it == 4 {
+        SpawnPrefab(prefab = $./item_bandage.brz, offset = at + Vec(0.0, 0.0, 16.0), velocity = Vec(0.0, 50.0, 220.0), lifetime = 30.0, limit = 100)
+      }
+    }
     if Random(0, 99) < 15 {
       let a = Random(1, 9)
       if a == 1 {
