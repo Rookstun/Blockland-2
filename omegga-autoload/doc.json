@@ -3,7 +3,7 @@
   "description": "Loads the live world again after Omegga's auto-restart (or whenever the server is left with no world loaded).",
   "author": "pooper",
   "config": {
-    "world": { "description": "World to load", "type": "string", "default": "rizz" },
+    "world": { "description": "World to load", "type": "string", "default": "site 2026-10-16" },
     "delay": { "description": "Seconds to wait after the server comes up before loading", "type": "number", "default": 10 }
   },
   "commands": []
