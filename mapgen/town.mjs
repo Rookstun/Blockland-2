@@ -41,7 +41,7 @@ const STALL_TOP = 30; // counter top over the floor (the stall's top tile)
 let propSerial = 0;
 // prop bricks' centre over their base (measured in game, 2026-10-16)
 const PROP_BELOW = { B_Cauldron: 10, B_Turkey_Body: 7, B_Turkey_Leg: 3, B_Sausage: 2 };
-const INGOT_COLORS = [[184, 115, 51], [196, 150, 84], [168, 170, 178], [205, 208, 216], [232, 186, 40]]; // copper, bronze, iron, steel, gold
+const INGOT_COLORS = [[168, 170, 178], [150, 152, 160], [196, 150, 84]]; // iron, dark iron, bronze (one colour per stack)
 
 // Organic layout (owner 2026-10-05: "make spawn town less square and more
 // connected by herringbone paths", RuneScape's Lumbridge map as the model):
@@ -1088,7 +1088,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         for (let x = x0; x + 1 < x1; x += 2) {
           if (kind === 'apothecary' || kind === 'general') mput(x + 1, s1 - 1, f + 56 + 12, [0, 0, 0], { asset: 'B_Jar', color: pick(PALETTE.goods, s, x, 21), material: 'BMC_Glass' });
           else if (kind === 'bakery') mput(x + 1, s1 - 1, f + 56 + 4, [8, 4, 4], { asset: 'PB_DefaultMicroBrick', color: [196, 140, 70] });
-          else for (const [dy, dz] of [[-1.5, 2], [-0.5, 2], [-1, 6]]) mput(x + 1, s1 + dy, f + 56 + dz, [0, 0, 0], ingot(x, dz)); // two ingots and one on top
+          // (2026-10-16, owner: "why are there so many gold bars") one small stack every 10 studs, no gold
+          else if ((x - x0) % 10 === 4) for (const [dy, dz] of [[-1.5, 2], [-0.5, 2], [-1, 6]]) mput(x + 1, s1 + dy, f + 56 + dz, [0, 0, 0], ingot(x, 0)); // two ingots and one on top
         }
       });
     }
@@ -1099,7 +1100,6 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       if (kind === 'bakery') mput(x + 0.5, cy0 + 1, z + 4, [8, 4, 4], { asset: 'PB_DefaultMicroBrick', color: [206, 150, 80] });
       else if (kind === 'apothecary') mput(x + 0.5, cy0 + 1, z + 10, [0, 0, 0], { asset: 'B_Chalice', color: [200, 160, 70], material: 'BMC_Metallic' });
       else if (kind === 'general') mput(x + 0.5, cy0 + 1, z + 8, [0, 0, 0], { asset: 'B_Pumpkin', color: [230, 120, 30] });
-      else for (const [dy, dz] of [[0.5, 2], [1.5, 2], [1, 6]]) mput(x + 0.5, cy0 + dy, z + dz, [0, 0, 0], ingot(x + 1, dz));
     }
 
     // the trade itself, on the customers' side (y 1 .. counter - 2)
