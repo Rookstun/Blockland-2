@@ -1008,7 +1008,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // stalls from inside the building. that was supposed to be in spawn" (it is in stallsAlong now)
     const orient = fx ? (fx > 0 ? 17 : 19) : (fy > 0 ? 18 : 16); // button toward the street
     const SY = Math.min(10, cy0 - 5); // table centre row: clear of the plinths (y < 5) and the counter
-    const TOP = 32;                   // table top over the floor (the stands' bases sit on it)
+    // table top over the floor (the stands' hidden bases sit on it): counter height (2026-10-16, owner on the
+    // low tables: "this looks very wrong"); the bare stands hang the weapon down onto the top (barestand.mjs)
+    const TOP = 44;
     let n = 0;
     for (const [sx, sy] of [[fd - 12, SY], [fd + 12, SY], [fd - 12, SY + 6], [fd + 12, SY + 6]]) {
       if (n >= wares.length) break;

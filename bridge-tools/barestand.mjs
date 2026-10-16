@@ -4,6 +4,10 @@
 // top) invisible and without collision. The item spawn, price button and chip are
 // untouched, so the weapon floats where the octagon top was; mapgen stands these
 // on stall counters in the weapon shops.
+// (2026-10-16, owner screenshot of the spawn gunsmith: "this looks very wrong": the hidden
+// pedestal still held the weapon ~2 bricks over a low table) the display pickup now hangs
+// DOWN from the pedestal top (PickupOffsetDirection Z-, PICKUP_DROP units, bob PICKUP_BOB),
+// so it rests just over the counter the stand stands on; env overrides for tuning.
 //
 //   node barestand.mjs            (server: reads/writes data/Saved/Prefabs)
 //
@@ -17,6 +21,8 @@ import { pathToFileURL } from 'url';
 
 const brs = await import(pathToFileURL(path.join(process.env.HOME, 'omegga-server/plugins/bridge/lib/brs.mjs')).href);
 const PREFABS = path.join(process.env.HOME, 'omegga-server/data/Saved/Prefabs');
+const PICKUP_DIR = Number(process.env.PICKUP_DIR ?? 5), PICKUP_DROP = Number(process.env.PICKUP_DROP ?? 6), PICKUP_BOB = Number(process.env.PICKUP_BOB ?? 1);
+const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 const PEDESTAL = new Set(['B_2x2_Round', 'B_2x2F_Octo_Converter']);
 const FLAGS = ['CollisionFlags_Player', 'CollisionFlags_Player1', 'CollisionFlags_Player2', 'CollisionFlags_Player3', 'CollisionFlags_Weapon',
   'CollisionFlags_Interaction', 'CollisionFlags_Physics', 'VisibilityFlags'];
@@ -34,7 +40,7 @@ function bundle(files) {
 }
 const clearBits = (flags, idx) => ({ ...flags, Flags: flags.Flags.map((byte, k) => { let b = byte; for (const i of idx) if ((i >> 3) === k) b &= ~(1 << (i & 7)); return b; }) });
 
-const names = fs.readdirSync(PREFABS).filter(f => /^(shop|gun|bow)_[a-z0-9_]+\.brz$/.test(f) && !/_bare\.brz$|_copy\.brz$|pre_/.test(f));
+const names = fs.readdirSync(PREFABS).filter(f => /^(shop|gun|bow)_[a-z0-9_]+\.brz$/.test(f) && !/_bare\.brz$|_copy\.brz$|pre_/.test(f) && (!ONLY || ONLY.test(f)));
 for (const f of names) {
   const reader = brs.WorldReader.from(fs.readFileSync(path.join(PREFABS, f)));
   const paths = reader.fs.listPaths();
@@ -56,11 +62,28 @@ for (const f of names) {
     hidden += idx.length;
   }
   if (hidden !== 2) { console.log(`${f}: ${hidden} pedestal bricks (expected 2), skipped`); continue; }
+  // the display pickup: down from the pedestal top onto the counter
+  const cschema = reader.schemaAt(reader.path('Bricks/ComponentsShared.schema'), 0);
+  let moved = 0;
+  for (const p of paths) {
+    const m = p.match(/^World\/0\/Bricks\/Grids\/(\d+)\/Components\/(-?\d+)_(-?\d+)_(-?\d+)\.mps$/);
+    if (!m) continue;
+    const chunk = reader.componentChunk(+m[1], { x: +m[2], y: +m[3], z: +m[4] });
+    if (!chunk.components.some(c => c.typeName === 'Component_ItemSpawn')) continue;
+    for (const c of chunk.components) if (c.typeName === 'Component_ItemSpawn') {
+      c.data.PickupOffsetDirection = PICKUP_DIR; c.data.PickupOffsetDistance = PICKUP_DROP; c.data.PickupBobHeight = PICKUP_BOB; moved++;
+    }
+    const parts = [cschema.encode('BRSavedComponentChunkSoA', chunk.soa)];
+    for (const c of chunk.components) if (c.structName) parts.push(cschema.encode(c.structName, c.data));
+    files.set(p, new Uint8Array(Buffer.concat(parts.map(x => Buffer.from(x)))));
+  }
+  if (moved !== 1) { console.log(`${f}: ${moved} item spawns (expected 1), skipped`); continue; }
   const out = bundle(files);
   const check = brs.WorldReader.from(Buffer.from(out));
   const vis = [...check.bricks(1)].map(b => `${assets[b.asset_name_index] ?? b.asset_name_index}:${b.visibility ? 'v' : '-'}${b.collision?.player ? 'c' : '-'}`);
   if (vis.some(v => /^(B_2x2_Round|B_2x2F_Octo_Converter):(v|.c)/.test(v)) || !vis.some(v => /^B_Button_Square:vc/.test(v))) throw new Error(`${f}: read back wrong: ${vis.join(' ')}`);
-  for (const p of paths) if (!/\/Grids\/1\/Chunks\//.test(p) && !Buffer.from(check.fs.readFile(p)).equals(Buffer.from(reader.fs.readFile(p)))) throw new Error(`${f}: ${p} changed`);
+  for (const p of paths) { const m = p.match(/^World\/0\/Bricks\/Grids\/(\d+)\/Components\/(-?\d+)_(-?\d+)_(-?\d+)\.mps$/); if (m) for (const c of check.componentChunk(+m[1], { x: +m[2], y: +m[3], z: +m[4] }).components) if (c.typeName === 'Component_ItemSpawn' && (c.data.PickupOffsetDirection !== PICKUP_DIR || c.data.PickupOffsetDistance !== PICKUP_DROP)) throw new Error(`${f}: pickup offset read back wrong`); }
+  for (const p of paths) if (!/\/Grids\/1\/(Chunks|Components)\//.test(p) && !Buffer.from(check.fs.readFile(p)).equals(Buffer.from(reader.fs.readFile(p)))) throw new Error(`${f}: ${p} changed`);
   const name = f.replace(/\.brz$/, '_bare.brz');
   fs.writeFileSync(path.join(PREFABS, name), out);
   console.log(`${name}: ${vis.join(' ')}`);
