@@ -2904,18 +2904,31 @@ if (process.env.MAPGEN_RIVERDIAG) {
   console.error([...cl.values()].sort((a, b) => b.n - a.n).slice(0, 12).map(v => `  ${v.n} cells, tallest ${v.m} at ${v.at}`).join(' | '));
 }
 // ride surface (owner 2026-10-13: "make the paths use micro bricks and ramps and wedges for the
-// absolute best riding experience"): open-country road cells (not town or hamlet paving,
+// absolute best riding experience"): road cells (not town or hamlet paving; hamlet lanes too since 2026-10-16,
 // bridges and their ends, tunnels, rivers, weirs) get their own stud-fine surface below,
 // so the cell smoothing leaves them alone
 const roadSurf = new Uint8Array(N * N);
 for (let x = 1; x < N - 1; x++)
   for (let y = 1; y < N - 1; y++) {
     const c = x * N + y;
-    if (!pathCell[c] || townKind[c] || villagePaved[c] || villageDist(x, y) <= VILLAGE.r + 2 || deck[c] || tunnelZ[c] >= 0 || riverCell[c] || weirCell[c] || H[c] <= SEA) continue;
+    if (!pathCell[c] || townKind[c] || villagePaved[c] || deck[c] || tunnelZ[c] >= 0 || riverCell[c] || weirCell[c] || H[c] <= SEA) continue;
     let nearDeck = false;
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const n = (x + a) * N + y + b; if (deck[n] || tunnelZ[n] >= 0 || terraceCell[n]) nearDeck = true; } // terrace walls stand on the low cell
     if (!nearDeck) roadSurf[c] = 1;
   }
+// MAPGEN_ROADDIAG=1: why road cells miss the ride surface (first reason per cell) + a few world spots each
+if (process.env.MAPGEN_ROADDIAG) {
+  const why = {}, at = {}, SH = [-(X0 + (town.fx + TOWN.cells / 2) * CELL), -(Y0 + (town.fy + TOWN.cells / 2) * CELL)];
+  for (let x = 1; x < N - 1; x++) for (let y = 1; y < N - 1; y++) {
+    const c = x * N + y;
+    if (!pathCell[c] || roadSurf[c]) continue;
+    const r = townKind[c] ? 'town' : villagePaved[c] ? 'villagePaved' : villageDist(x, y) <= VILLAGE.r + 2 ? 'village' : deck[c] ? 'deck' : tunnelZ[c] >= 0 ? 'tunnel'
+      : riverCell[c] ? 'river' : weirCell[c] ? 'weir' : H[c] <= SEA ? 'sea' : 'nearDeckOrTerrace';
+    why[r] = (why[r] ?? 0) + 1; (at[r] ??= []).length < 4 && at[r].push([Math.round(X0 + x * CELL + SH[0]), Math.round(Y0 + y * CELL + SH[1])]);
+  }
+  let on = 0; for (let c = 0; c < N * N; c++) on += roadSurf[c];
+  console.error('road diag: ride surface', on, 'cells; missing', JSON.stringify(why), JSON.stringify(at));
+}
 const SMOOTH = opt('--smooth', 'wedge'); // 'ramp' (micro ramps on straight slopes) or 'wedge' (tipped micro wedges)
 let ramps = 0, triCaps = 0;
 const smoothStat = { tidy: 0, notch: 0, risers: 0 }; // in the river corridor (MAPGEN_RIVERDIAG)
@@ -3040,16 +3053,25 @@ for (let x = 0; x < N; x++)
   }
 
 if (process.env.MAPGEN_RIVERDIAG) console.error('river corridor smoothing pieces:', JSON.stringify(smoothStat));
-// ride surface: per stud the lowest surface over the ground whose slope never passes
-// ROAD_G units per stud (max-propagation over the road studs), filled with micro bricks
-// (merged into rectangles of equal fill) and capped with micro wedges climbing to the next
-// stud (merged along runs across the road), all in the path colour
-const ROAD_G = tune('road.rideSlope', 3, 'ride surface: steepest climb, units per stud');
+// ride surface v2 (2026-10-16, owner: "paths look really really bad. use smaller blocks like
+// micro ramps wedges corners etc to make the bike path as smooth as possible. like imagine
+// rollercoaster tycoon 2 coaster construction"; v1 = a slope-limited envelope capped 2 bricks
+// over the ground, which fell back into brick steps on steep mountain roads):
+//  1. per stud a taut membrane over the ground: relaxed toward the mean of its road neighbours,
+//     never below the ground (an obstacle problem), so a staircase of cell steps turns into the
+//     straight slope through the step edges, uphill and downhill alike, crests kept
+//  2. heights at the corners of 2 x 2-stud tiles (highest stud touching the corner, rounded up to
+//     the 2-unit micro grid; shared by neighbouring tiles, so the surface has no seams)
+//  3. per tile a micro brick fill from the ground to its lowest corner and one cap from there to
+//     the highest: by the corners above the middle height, one = a micro wedge corner, two side by
+//     side = a micro wedge, three = a micro wedge outer corner (the cell smoothing's tested pieces)
+//  fills merged into rectangles, wedges merged along runs across the slope; path colour
+const RIDE_ITERS = tune('road.rideIters', 240, 'ride surface: membrane relaxation passes (more = smoother over longer runs)');
+const RIDE_MAXFILL = tune('road.rideMaxFill', 60, 'ride surface: most units the surface may stand over its ground');
 let rideBricks = 0;
 {
   const SPC = CELL / 10, W = N * SPC; // studs per cell, studs per map side
   const idx = (sx, sy) => sx * W + sy;
-  const on = sx => true;
   const S = new Float32Array(W * W).fill(-1e9), T = new Float32Array(W * W).fill(-1e9);
   const studs = [];
   for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
@@ -3057,61 +3079,89 @@ let rideBricks = 0;
     const t = (H[x * N + y] + 1) * VZ;
     for (let a = 0; a < SPC; a++) for (let b = 0; b < SPC; b++) { const i = idx(x * SPC + a, y * SPC + b); S[i] = T[i] = t; studs.push(i); }
   }
-  // relax: S(p) = max(S(p), S(n) - G * |p - n|) over 8 neighbours on the road, until it settles
-  const NB8 = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2]];
-  for (let pass = 0, changed = true; changed && pass < 60; pass++) {
-    changed = false;
-    const order = pass % 2 ? studs.slice().reverse() : studs;
-    for (const i of order) {
-      const sx = (i / W) | 0, sy = i % W;
-      for (const [dx, dy, d] of NB8) {
-        const n = idx(sx + dx, sy + dy);
-        if (T[n] < -1e8) continue;
-        const v = S[n] - ROAD_G * d;
-        if (v > S[i] + 0.01) { S[i] = v; changed = true; }
-      }
+  // 1. membrane (Gauss-Seidel, alternating sweep order)
+  const nb = new Int32Array(studs.length * 4).fill(-1);
+  studs.forEach((i, k) => { const sx = (i / W) | 0, sy = i % W; [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy], m) => { const n = idx(sx + dx, sy + dy); if (T[n] > -1e8) nb[k * 4 + m] = n; }); });
+  for (let pass = 0; pass < RIDE_ITERS; pass++) {
+    const fwd = pass % 2 === 0;
+    for (let q = 0; q < studs.length; q++) {
+      const k = fwd ? q : studs.length - 1 - q, i = studs[k];
+      let sum = 0, c = 0;
+      for (let m = 0; m < 4; m++) { const n = nb[k * 4 + m]; if (n >= 0) { sum += S[n]; c++; } }
+      if (!c) continue;
+      const v = sum / c;
+      S[i] = Math.min(T[i] + RIDE_MAXFILL, Math.max(T[i], v));
     }
   }
-  // quantize to 2 units (micro grid); a stud never more than 3 bricks over its ground
-  const Q = new Float32Array(W * W);
-  for (const i of studs) Q[i] = Math.min(T[i] + 24, Math.floor(S[i] / 2) * 2);
-  const PC = MATS[PATH].color;
-  const wx = sx => X0 + sx * 10, wy = sy => Y0 + sy * 10;
-  // fills: greedy rectangles of equal (ground, level)
-  const used = new Uint8Array(W * W);
-  for (const i of studs) {
-    if (used[i] || Q[i] - T[i] < 2) continue;
-    const sx = (i / W) | 0, sy = i % W, t = T[i], q = Q[i];
-    const same = j => T[j] === t && Q[j] === q && !used[j];
-    let l = 1; while (l < 40 && same(idx(sx, sy + l))) l++;
-    let w = 1; grow: while (w < 40) { for (let b = 0; b < l; b++) if (!same(idx(sx + w, sy + b))) break grow; w++; }
-    for (let a = 0; a < w; a++) for (let b = 0; b < l; b++) used[idx(sx + a, sy + b)] = 1;
-    bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx(sx) + w * 5, wy(sy) + l * 5, (t + q) / 2], size: [w * 5, l * 5, (q - t) / 2], color: PC });
-    rideBricks++;
-  }
-  // wedges: each stud climbs toward its highest orthogonal neighbour (up to 6 units)
-  const wedge = new Int8Array(W * W).fill(-1), wh = new Uint8Array(W * W);
-  const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  // 2. tile corners: corner (cx, cy) sits at the stud boundary; tiles are 2 x 2 studs, inside one cell
+  const TW = W / 2, cIdx = (cx, cy) => cx * (W + 1) + cy;
+  const C = new Float32Array((W + 1) * (W + 1)).fill(-1e9);
   for (const i of studs) {
     const sx = (i / W) | 0, sy = i % W;
-    let best = -1, bh = 0;
-    D4.forEach(([dx, dy], k) => { const n = idx(sx + dx, sy + dy); if (T[n] < -1e8) return; const h = Q[n] - Q[i]; if (h > bh) { bh = h; best = k; } });
-    if (best >= 0) { wedge[i] = best; wh[i] = Math.min(6, bh); }
+    for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const j = cIdx(sx + a, sy + b); if (S[i] > C[j]) C[j] = S[i]; }
   }
-  // merge runs across the climb (perpendicular to it) with the same level, height and direction
-  const usedW = new Uint8Array(W * W);
+  const tiles = [];
+  const seen = new Uint8Array(TW * TW);
   for (const i of studs) {
-    if (wedge[i] < 0 || usedW[i]) continue;
-    const k = wedge[i], [dx, dy] = D4[k], sx = (i / W) | 0, sy = i % W;
-    const [px, py] = dx ? [0, 1] : [1, 0]; // run direction
-    let len = 1;
-    while (len < 40) { const j = idx(sx + px * len, sy + py * len); if (wedge[j] !== k || wh[j] !== wh[i] || Q[j] !== Q[i] || usedW[j]) break; len++; }
-    for (let m = 0; m < len; m++) usedW[idx(sx + px * m, sy + py * m)] = 1;
-    const ext = [px ? len * 5 : 5, py ? len * 5 : 5, wh[i] / 2];
-    bricks.push({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[dx, dy]], ext), position: [wx(sx) + ext[0], wy(sy) + ext[1], Q[i] + wh[i] / 2], color: PC });
+    const tx = ((i / W) | 0) >> 1, ty = (i % W) >> 1, t = tx * TW + ty;
+    if (seen[t]) continue;
+    seen[t] = 1;
+    const g = T[idx(tx * 2, ty * 2)];
+    // corners 00 10 01 11, rounded up to 2 units, never more than RIDE_MAXFILL over this tile's ground
+    const h = [[0, 0], [2, 0], [0, 2], [2, 2]].map(([a, b]) => Math.min(g + RIDE_MAXFILL, Math.ceil(C[cIdx(tx * 2 + a, ty * 2 + b)] / 2) * 2));
+    tiles.push({ tx, ty, g, h });
+  }
+  const PC = MATS[PATH].color;
+  const wx = sx => X0 + sx * 10, wy = sy => Y0 + sy * 10;
+  // 3. per tile: base (lowest corner), cap shape
+  const tileAt = new Map(tiles.map(T0 => [T0.tx * TW + T0.ty, T0]));
+  const CORNER = [[-1, -1], [1, -1], [-1, 1], [1, 1]]; // direction of corners 00 10 01 11 from the tile centre
+  for (const t of tiles) {
+    const lo = Math.min(...t.h), hi = Math.max(...t.h), d = hi - lo;
+    t.base = lo; t.cap = null;
+    if (!d) continue;
+    const up = t.h.map(v => v - lo >= d / 2);
+    const n = up.filter(Boolean).length;
+    if (n === 1) { const [sx, sy] = CORNER[up.indexOf(true)]; t.cap = ['PB_DefaultMicroWedgeCorner', [[sx, 0], [0, sy]], d]; }
+    else if (n === 3) { const [lx, ly] = CORNER[up.indexOf(false)]; t.cap = ['PB_DefaultMicroWedgeOuterCorner', [[-lx, 0], [0, -ly]], d]; }
+    else if (n === 2) {
+      const [a, b] = up.map((u, k) => (u ? k : -1)).filter(k => k >= 0);
+      const [ax, ay] = CORNER[a], [bx, by] = CORNER[b];
+      if (ax === bx) t.cap = ['PB_DefaultMicroWedge', [[ax, 0]], d];
+      else if (ay === by) t.cap = ['PB_DefaultMicroWedge', [[0, ay]], d];
+      else t.base = hi; // a saddle (two opposite corners up): flat at the top
+    }
+  }
+  // fills: greedy rectangles of equal (ground, base) over the tile grid
+  const used = new Uint8Array(TW * TW);
+  for (const t of tiles) {
+    const k0 = t.tx * TW + t.ty;
+    if (used[k0] || t.base - t.g < 2) continue;
+    const same = (a, b) => { const o = tileAt.get((t.tx + a) * TW + t.ty + b); return o && o.g === t.g && o.base === t.base && !used[(t.tx + a) * TW + t.ty + b]; };
+    let l = 1; while (l < 20 && same(0, l)) l++;
+    let w = 1; grow: while (w < 20) { for (let b = 0; b < l; b++) if (!same(w, b)) break grow; w++; }
+    for (let a = 0; a < w; a++) for (let b = 0; b < l; b++) used[(t.tx + a) * TW + t.ty + b] = 1;
+    bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx(t.tx * 2) + w * 10, wy(t.ty * 2) + l * 10, (t.g + t.base) / 2], size: [w * 10, l * 10, (t.base - t.g) / 2], color: PC, ride: 1 });
     rideBricks++;
   }
-  console.error(`ride surface: ${studs.length} road studs, ${rideBricks} bricks`);
+  // caps: wedges merged along runs across their slope (same base, height, direction); corners alone
+  const usedC = new Uint8Array(TW * TW);
+  const ck = c => c && c[0] + c[1].join(';') + c[2];
+  for (const t of tiles) {
+    const k0 = t.tx * TW + t.ty;
+    if (!t.cap || usedC[k0]) continue;
+    const [asset, dirs, d] = t.cap;
+    let len = 1, px = 0, py = 0;
+    if (asset === 'PB_DefaultMicroWedge') {
+      [px, py] = dirs[0][0] ? [0, 1] : [1, 0];
+      while (len < 20) { const o = tileAt.get((t.tx + px * len) * TW + t.ty + py * len); if (!o || o.base !== t.base || ck(o.cap) !== ck(t.cap) || usedC[(t.tx + px * len) * TW + t.ty + py * len]) break; len++; }
+    }
+    for (let m = 0; m < len; m++) usedC[(t.tx + px * m) * TW + t.ty + py * m] = 1;
+    const ext = [px ? len * 10 : 10, py ? len * 10 : 10, d / 2];
+    bricks.push({ asset, ...orientFor(asset, dirs, ext), position: [wx(t.tx * 2) + ext[0], wy(t.ty * 2) + ext[1], t.base + d / 2], color: PC, ride: 1 });
+    rideBricks++;
+  }
+  console.error(`ride surface: ${studs.length} road studs, ${tiles.length} tiles, ${rideBricks} bricks`);
 }
 // --gaps: count cells still below an orthogonal neighbour with no piece, by step height
 if (args.includes('--gaps')) {
@@ -4551,7 +4601,28 @@ const offGrid = bricks.filter(b => b.size[0] && !b.gameSize && (/^PB_DefaultMicr
   ? b.size.some(v => !Number.isInteger(v))
   : b.size[0] % 5 || b.size[1] % 5 || b.size[2] % 2));
 if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid, e.g. ${JSON.stringify(offGrid[0])}`);
-for (const b of bricks) { delete b.gameSize; delete b.group; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups)
+// ride surface pieces (ride: 1) give way to anything placed on the road after them (roadside stones,
+// tunnel trim, walkway flags): the game would reject one of each overlapping pair anyway
+{
+  const G = 200, idx = new Map(), rideBox = [];
+  bricks.forEach((b, i) => { if (b.ride) rideBox.push([i, ...worldBox(b, BUILDER_FIXED)]); });
+  const cells = new Set(); for (const [, lo, hi] of rideBox) for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G); x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G); y++) cells.add(x + ',' + y);
+  for (const b of bricks) {
+    if (b.ride) continue;
+    const [lo, hi] = worldBox(b, BUILDER_FIXED);
+    for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G); x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G); y++) { const k = x + ',' + y; if (cells.has(k)) (idx.get(k) ?? idx.set(k, []).get(k)).push([lo, hi]); }
+  }
+  const drop = new Set();
+  for (const [i, lo, hi] of rideBox) {
+    let hit = false;
+    for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G) && !hit; x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G) && !hit; y++)
+      for (const [a0, a1] of idx.get(x + ',' + y) ?? []) if (lo[0] < a1[0] && a0[0] < hi[0] && lo[1] < a1[1] && a0[1] < hi[1] && lo[2] < a1[2] && a0[2] < hi[2]) { hit = true; break; }
+    if (hit) drop.add(i);
+  }
+  if (drop.size) { let k = 0; for (let i = 0; i < bricks.length; i++) if (!drop.has(i)) bricks[k++] = bricks[i]; bricks.length = k; }
+  console.error(`ride surface pieces dropped for objects on the road: ${drop.size}`);
+}
+for (const b of bricks) { delete b.gameSize; delete b.group; delete b.ride; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups; ride surface marks)
 
 stage('output');
 // ----------------------------------------------------------------- output --
