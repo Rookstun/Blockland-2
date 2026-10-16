@@ -238,11 +238,13 @@ module.exports = class Media {
 
   async init() {
     this.brs = await import(pathToFileURL(path.join(__dirname, 'lib/brs.mjs')).href);
+    this.autostart = await import(pathToFileURL(path.join(__dirname, 'autostart.mjs')).href);
     // !tv: wire TV (tv.mjs) writes EA3.2 loop chips with brs-js 4 (lib/brs4.mjs = tools/brs4/dist.mjs)
     try {
       this.brs4 = await import(pathToFileURL(path.join(__dirname, 'lib/brs4.mjs')).href);
       // ?v=mtime: Omegga reloads keep the process, and its ESM cache would keep an old tv.mjs
       this.tv = await import(pathToFileURL(path.join(__dirname, 'tv.mjs')).href + '?v=' + fs.statSync(path.join(__dirname, 'tv.mjs')).mtimeMs);
+      this.og = await import(pathToFileURL(path.join(__dirname, 'ogrid.mjs')).href + '?v=' + fs.statSync(path.join(__dirname, 'ogrid.mjs')).mtimeMs);
     } catch (e) { console.error('[media] !tv disabled', e); }
     for (const old of global.__mediaSessions?.values() ?? []) {
       try { old.stop?.(); old.clear?.(); } catch {}
@@ -299,7 +301,8 @@ module.exports = class Media {
     on(['cmd:stop', 'chatcmd:stop', 'cmd:stopmedia', 'chatcmd:stopmedia'], this.stopCommand);
     on(['cmd:tv', 'chatcmd:tv'], this.tvCommand);
     on(['cmd:textvideo', 'chatcmd:textvideo'], (name, args) => this.tvCommand(name, args, 'text'));
-    return { registeredCommands: ['playvideo', 'search', 'playaudio', 'stop', 'stopmedia', 'tv', 'textvideo'] };
+    on(['cmd:ogrid', 'chatcmd:ogrid'], this.oGridCommand);
+    return { registeredCommands: ['playvideo', 'search', 'playaudio', 'stop', 'stopmedia', 'tv', 'textvideo', 'ogrid'] };
   }
 
   async stop() {
@@ -1255,6 +1258,128 @@ module.exports = class Media {
     }
   }
 
+  /**
+   * /ogrid: the video as a SQUARE n x n grid of coloured O's on one text
+   * display (ogrid.mjs; 7 bricks a chunk: screen + 6 hidden gates). The
+   * soundtrack is a speech device cut from the same seconds and loaded on the
+   * same tick, its timer starting on load like the picture's stopwatch.
+   */
+  async oGridCommand(name, args) {
+    const key = `ogrid:${name}`;
+    if (!this.og || !this.brs4) return this.whisper(name, '<color="f55">/ogrid is not installed (lib/brs4.mjs missing).</>');
+    if (!args.length) return this.whisper(name, 'Usage: /ogrid <link or search words> [size 32] [fps=N] [-x|+x|-y|+y] [mute] [start=S] [len=S]   /ogrid stop');
+    if (args[0] === 'stop' || args[0] === 'off') return this.stopSession(name, key) || this.whisper(name, 'Nothing is showing.');
+    const opts = [], words = [];
+    for (const a of args) (/^([+-][xy]|mute|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
+    if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
+    const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
+    const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
+    const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 64, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 32)));
+    const fps = Math.max(1, Math.min(20, opt('fps') || this.config['ogrid-fps'] || 8));
+    const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
+    const withSound = !opts.includes('mute');
+    const chunkSec = Math.max(5, this.config['ogrid-chunk-seconds'] ?? 20);
+    const crypto = require('crypto');
+    const owner = this.og.ownerFor(crypto.createHash('sha1').update('ogrid:' + name).digest('hex').slice(0, 12));
+    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 4, charW: this.config['ogrid-char-width'] ?? 0.55 });
+
+    this.stopSession(name, key);
+    const session = { stopped: false, kind: 'O grid' };
+    session.stop = () => (session.stopped = true);
+    const audioClears = [];
+    session.clear = () => { this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`); audioClears.splice(0).forEach(c => c()); };
+    this.sessions.set(key, session);
+    let file;
+    try {
+      const pos = await this.playerSpot(name);
+      this.whisper(name, '<color="999">Fetching...</>');
+      const maxMin = this.config['video-max-minutes'] ?? 240;
+      file = await this.download(link, 'video', withSound, maxMin);
+      if (session.stopped) return;
+      const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width:format=duration', '-of', 'json', file])));
+      if (!probe.streams?.[0]?.width) throw new Error('that link has no picture');
+      const total = Number(probe.format?.duration) || maxMin * 60;
+      const startAt = Math.max(0, Math.min(total - 1, opt('start') || 0));
+      const seconds = Math.min(total - startAt, maxMin * 60, opt('len') || Infinity);
+      const chunks = Math.max(1, Math.ceil(seconds / chunkSec));
+
+      // the screen stands in front of the player, facing them
+      const nv = NORMAL[facing];
+      const orient = 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing], T = ORIENT[orient];
+      const dist = Math.max(10, Math.round((L.side * 0.9) / STUD)) * STUD;
+      const snap = v => Math.round(v / STUD) * STUD;
+      const at = [snap(pos[0] - nv[0] * dist), snap(pos[1] - nv[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
+      const world = p => T(p).map((v, i) => v + at[i]);
+      const clearScreen = () => { for (const [c, h] of this.og.oBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs)); };
+      const loadBuf = buf => {
+        const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+        const f = path.join(this.prefabDir, ref + '.brz');
+        fs.writeFileSync(f, buf);
+        this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
+        setTimeout(() => fs.rmSync(f, { force: true }), 15_000);
+      };
+      const build = async k => {
+        const t0 = startAt + k * chunkSec, dur = Math.min(chunkSec, seconds - k * chunkSec);
+        const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
+          '-vf', `fps=${fps},crop='min(iw,ih)':'min(iw,ih)',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
+        const fb = n * n * 3, frames = [];
+        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(raw.subarray(o, o + fb));
+        if (!frames.length) throw new Error('no frames decoded');
+        const strs = this.og.oFrames(frames, n, { max: this.config['ogrid-max-chars'] ?? this.og.MAX_CHARS });
+        const screen = this.og.buildOGrid(this.brs4, L, strs, { fps, dur, owner });
+        let audio = null;
+        if (withSound) {
+          const wav = file.replace(/\.[^.]+$/, '') + `.og${k}.wav`;
+          try {
+            await run('ffmpeg', ['-v', 'error', '-y', '-ss', String(t0), '-t', String(dur), '-i', file, '-vn', '-ac', '1', '-ar', '44100', wav], 300_000);
+            audio = await this.buildAudioDevice(wav, { mode: 'voice', flags: [...SPEECH_FLAGS, '--no-control-buttons'] });
+          } catch (e) { console.error(`[media] ogrid soundtrack ${k}`, e); }
+          finally { fs.rmSync(wav, { force: true }); }
+        }
+        return { screen, audio, dur, chars: Math.max(...strs.map(s => s.length)) };
+      };
+      // the soundtrack chip sits behind the screen, chunks alternate sides so a swap never clears the playing one
+      const loadAudio = (d, k) => {
+        if (!d) return null;
+        const c = world([(k % 2 ? 1 : -1) * 60, 100, 28]);
+        const spot = [0, 1, 2].map(i => Math.round((c[i] - (d.lo[i] + d.hi[i]) / 2) / 2) * 2);
+        const clr = this.loadDevice(d, {}, spot);
+        audioClears.push(clr);
+        return clr;
+      };
+      // picture + sound go out back to back: one tick, one zero
+      const show = (set, k) => { loadBuf(set.screen); return loadAudio(set.audio, k); };
+
+      const first = await build(0);
+      if (session.stopped) return;
+      this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
+      let prevAudio = show(first, 0);
+      this.whisper(name, `<color="9cf">Showing ${n}x${n} O's at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). /ogrid stop ends it.</>`);
+      console.log(`[media] ogrid ${name}: ${n}x${n} ${fps} fps, ${chunks} chunk(s), longest frame ${first.chars} chars, at ${at.join(',')} orient ${orient}`);
+      let start = Date.now(), durPrev = first.dur;
+      for (let k = 1; k < chunks && !session.stopped; k++) {
+        const set = await build(k).catch(e => (console.error(`[media] ogrid chunk ${k}`, e), null));
+        const due = start + durPrev * 1000;
+        while (!session.stopped && Date.now() < due) await sleep(Math.min(100, due - Date.now()));
+        if (session.stopped) break;
+        start = Date.now();
+        if (!set) { durPrev = chunkSec; continue; }
+        durPrev = set.dur;
+        clearScreen();
+        const old = prevAudio;
+        prevAudio = show(set, k);
+        if (old) setTimeout(old, 1500);
+      }
+      const end = start + durPrev * 1000 + 1500;
+      while (!session.stopped && Date.now() < end) await sleep(200);
+      if (!session.stopped && !this.config['keep-last-frame']) session.clear();
+    } finally {
+      session.stopped = true;
+      if (file) setTimeout(() => this.release(file), 60_000);
+      if (this.sessions.get(key) === session) this.sessions.delete(key);
+    }
+  }
+
   async audioCommand(name, args) {
     const key = `audio:${name}`;
     if (!args.length) {
@@ -1658,43 +1783,9 @@ module.exports = class Media {
     return { buf: Buffer.from(w.toBrz({ externalAssets: ext })), boxes };
   }
 
-  /**
-   * heightmap builds its clock Timer stopped (bRunning false), so the device
-   * waits for its Resume button. Rewrite the component chunks with the timer
-   * running so it plays as soon as it loads; every other file is copied as is.
-   */
+  /** Start the device's timer on load (autostart.mjs; also used by tools/ogrid.mjs). */
   autoStart(buf) {
-    const { brdb, WorldReader } = this.brs;
-    const reader = WorldReader.from(buf);
-    const schema = reader.schemaAt(reader.path('Bricks/ComponentsShared.schema'), 0);
-    const files = new Map(reader.fs.listPaths().map(p => [p, reader.fs.readFile(p)]));
-    let started = 0;
-    for (const p of files.keys()) {
-      const m = p.match(/^World\/0\/Bricks\/Grids\/(\d+)\/Components\/(-?\d+)_(-?\d+)_(-?\d+)\.mps$/);
-      if (!m) continue;
-      const chunk = reader.componentChunk(Number(m[1]), { x: Number(m[2]), y: Number(m[3]), z: Number(m[4]) });
-      const timers = chunk.components.filter(c => c.typeName === 'BrickComponentType_WireGraphPseudo_Timer' && c.data);
-      if (!timers.length) continue;
-      for (const c of timers) c.data.bRunning = true;
-      started += timers.length;
-      const parts = [schema.encode('BRSavedComponentChunkSoA', chunk.soa)];
-      for (const c of chunk.components) if (c.structName) parts.push(schema.encode(c.structName, c.data));
-      files.set(p, new Uint8Array(Buffer.concat(parts.map(x => Buffer.from(x)))));
-    }
-    if (!started) return buf;
-    // rebuild the folder tree for the bundle writer (same as bridge/tools/shopgen.mjs)
-    const root = new Map();
-    for (const [p, content] of files) {
-      const parts = p.split('/');
-      let node = root;
-      for (const dir of parts.slice(0, -1)) {
-        if (!node.has(dir)) node.set(dir, new Map());
-        node = node.get(dir);
-      }
-      node.set(parts.at(-1), content);
-    }
-    const toNodes = m => [...m].map(([n, v]) => [n, v instanceof Map ? brdb.folder(toNodes(v)) : brdb.file(v)]);
-    return Buffer.from(brdb.writeBrzContainer(toNodes(root)));
+    return this.autostart.autoStart(this.brs, buf);
   }
 
   /** Where a speaker device goes: just above the player's head. */
