@@ -39,6 +39,14 @@ const STALL = asProp(OWNER_PROPS.stall).map(b => b.position[2] < 30 ? b
 const CHEST = asProp(OWNER_PROPS.chest);
 const STALL_TOP = 30; // counter top over the floor (the stall's top tile)
 let propSerial = 0;
+// the game's water (same settings as mapgen's river WATER_ZONE): a brick's attached zone, filled
+const WATER_ZONE_TOWN = {
+  ZoneStartDistance: 0, ZoneEndDistance: 60, bIsBuildingZone: false, bIsLooseZone: false, bIsShareZone: false, bWater: true,
+  WaterScattering: { X: 0.000007, Y: 0.000018, Z: 0.000031 }, WaterAbsorption: { X: 0.0065, Y: 0.000708, Z: 0.000196 },
+  WaterFogIntensity: 0.0002, WaterFogScatteringColor: { R: 0.5, G: 1, B: 0.75, A: 1 }, WaterFogAmbientColor: { R: 0.1, G: 0.409524, B: 0.75, A: 1 },
+  WaterFogScatteringScale: 3, WaterFogAmbientScale: 0.25, bDetectPlayers: true, bDetectPlayers1: true, bDetectPlayers2: true, bDetectPlayers3: true,
+  bDetectEntities: false, bDetectProjectiles: false, TagFilter: '', ZoneWindForce: 0,
+};
 // prop bricks' centre over their base (measured in game, 2026-10-16)
 const PROP_BELOW = { B_Cauldron: 10, B_Turkey_Body: 7, B_Turkey_Leg: 3, B_Sausage: 2 };
 const INGOT_COLORS = [[168, 170, 178], [150, 152, 160], [196, 150, 84]]; // iron, dark iron, bronze (one colour per stack)
@@ -2399,39 +2407,75 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   function plazaDecor() {
     const MB = 'PB_DefaultMicroBrick';
     const PALE = [206, 198, 182], CUT = [170, 162, 150], DARK = [96, 104, 110], MID = [150, 144, 134];
-    const WATER = { color: [70, 150, 210], material: 'BMC_Glass' }, FALL = { color: [190, 225, 245], material: 'BMC_Glass' };
-    // octagonal ring dIn < d <= dOut (d = octagon radius), laid as 4-unit row strips
-    const oct = (z0, z1, dIn, dOut, b) => {
-      const C = 4;
-      for (let y = -dOut; y < dOut; y += C) {
-        let run = null;
-        for (let x = -dOut; x <= dOut; x += C) {
-          const mx = Math.abs(x + C / 2), my = Math.abs(y + C / 2);
-          const d = Math.max(mx, my, (mx + my) * Math.SQRT1_2);
-          const inside = x < dOut && d > dIn && d <= dOut;
-          if (inside && run === null) run = x;
-          else if (!inside && run !== null) { box(run, y, z0, x, y + C, z1, { asset: MB, ...b }); run = null; }
+    // (2026-10-16, owner: "the fountain doesnt use such a bad meshing method", "the fountain's
+    // water is plastic make it real") octagonal rings dIn < d <= dOut on a 4-unit raster, meshed:
+    // identical rows merge into big micro bricks, every 45-degree staircase step gets a micro
+    // wedge (where no other part fills that cell at those heights), so the diagonals are smooth.
+    // Water is the game's water: a 2-unit plate whose water zone (Component_Internal_AttachedZone,
+    // like the river) fills up to `zone`.
+    const C = 4, parts = [];
+    const ring = (z0, z1, dIn, dOut, b, zone = 0) => parts.push({ z0, z1, dIn, dOut, b, zone });
+    const insideOf = P => (x, y) => { // cell (x, y) = [x, x + C) x [y, y + C)
+      if (x < -P.dOut || x >= P.dOut || y < -P.dOut || y >= P.dOut) return false;
+      const mx = Math.abs(x + C / 2), my = Math.abs(y + C / 2), d = Math.max(mx, my, (mx + my) * Math.SQRT1_2);
+      return d > P.dIn && d <= P.dOut;
+    };
+    const meshParts = () => {
+      for (const P of parts) P.in = insideOf(P);
+      const ZW = { ...WATER_ZONE_TOWN };
+      for (const P of parts) {
+        // rows of runs, then runs that repeat down the rows merge into one brick
+        const open = new Map(); // "x0,x1" -> y start
+        const emit = (x0, x1, y0, y1) => {
+          if (P.zone) put({ asset: MB, ...P.b, size: [(x1 - x0) / 2, (y1 - y0) / 2, 1],
+            components: [{ type: 'Component_Internal_AttachedZone', data: { ...ZW, ZoneEndDistance: P.zone - P.z0 - 2 } }] }, (x0 + x1) / 2, (y0 + y1) / 2, P.z0 + 1);
+          else box(x0, y0, P.z0, x1, y1, P.z1, { asset: MB, ...P.b });
+        };
+        for (let y = -P.dOut; y <= P.dOut; y += C) {
+          const runs = new Set();
+          if (y < P.dOut) for (let x = -P.dOut, r0 = null; x <= P.dOut; x += C) {
+            const inside = P.in(x, y);
+            if (inside && r0 === null) r0 = x;
+            else if (!inside && r0 !== null) { runs.add(r0 + ',' + x); r0 = null; }
+          }
+          for (const [k, y0] of [...open]) if (!runs.has(k)) { const [a, b] = k.split(',').map(Number); emit(a, b, y0, y); open.delete(k); }
+          for (const k of runs) if (!open.has(k)) open.set(k, y);
         }
+        // staircase steps: an empty cell with filled neighbours on two adjacent sides gets a wedge solid toward them
+        if (P.zone) continue;
+        const zt = P.z1;
+        for (let y = -P.dOut - C; y <= P.dOut; y += C)
+          for (let x = -P.dOut - C; x <= P.dOut; x += C) {
+            if (P.in(x, y)) continue;
+            const W = P.in(x - C, y), E = P.in(x + C, y), S = P.in(x, y - C), N = P.in(x, y + C);
+            if (W + E + S + N !== 2 || (W && E) || (S && N)) continue;
+            if (parts.some(Q => Q !== P && Q.z0 < zt && P.z0 < Q.z1 && Q.in(x, y))) continue; // another part fills it
+            const sx = W ? -1 : 1, sy = S ? -1 : 1; // solid toward the filled sides
+            const rot = sx < 0 ? (sy < 0 ? 0 : 3) : (sy < 0 ? 1 : 2);
+            put({ asset: 'PB_DefaultMicroWedge', ...P.b, size: [C / 2, C / 2, (zt - P.z0) / 2], direction: 4, rotation: rot }, x + C / 2, y + C / 2, (P.z0 + zt) / 2);
+          }
       }
     };
     // ---- fountain: stepped octagonal basin, two tiers of bowls with falling water
-    oct(0, 4, 0, 144, { color: PALE });                 // step
-    oct(4, 8, 0, 120, { color: DARK });                 // basin floor
-    oct(4, 28, 120, 136, { color: CUT });               // basin wall
-    oct(28, 32, 116, 140, { color: PALE });             // coping
-    oct(8, 24, 32, 120, WATER);                         // pool
-    oct(8, 48, 0, 32, { color: MID });                  // pedestal
-    oct(24, 64, 48, 56, FALL);                          // curtain from the lower bowl
-    oct(48, 64, 0, 12, { color: MID });                 // column
-    oct(64, 70, 0, 60, { color: PALE });                // lower bowl
-    oct(70, 76, 52, 60, { color: PALE });               //   its lip
-    oct(70, 74, 12, 52, WATER);                         //   its water
-    oct(70, 116, 0, 12, { color: MID });                // upper column
-    oct(74, 116, 24, 28, FALL);                         // curtain from the upper bowl
-    oct(116, 120, 0, 32, { color: PALE });              // upper bowl
-    oct(120, 126, 24, 32, { color: PALE });             //   its lip
-    oct(120, 124, 8, 24, WATER);                        //   its water
-    oct(120, 140, 0, 8, { color: MID });                // finial stem
+    const BED = { color: [62, 78, 86] };
+    ring(0, 4, 0, 144, { color: PALE });                 // step
+    ring(4, 8, 0, 120, { color: DARK });                 // basin floor
+    ring(4, 28, 120, 136, { color: CUT });               // basin wall
+    ring(28, 32, 116, 140, { color: PALE });             // coping
+    ring(8, 10, 32, 120, BED, 25);                       // pool: water to z 25
+    ring(8, 48, 0, 32, { color: MID });                  // pedestal
+    ring(25, 27, 48, 56, BED, 64);                       // curtain from the lower bowl: a water sheet to its underside
+    ring(48, 64, 0, 12, { color: MID });                 // column
+    ring(64, 70, 0, 60, { color: PALE });                // lower bowl
+    ring(70, 76, 52, 60, { color: PALE });               //   its lip
+    ring(70, 72, 12, 52, BED, 75);                       //   its water
+    ring(70, 116, 0, 12, { color: MID });                // upper column
+    ring(75, 77, 24, 28, BED, 116);                      // curtain from the upper bowl
+    ring(116, 120, 0, 32, { color: PALE });              // upper bowl
+    ring(120, 126, 24, 32, { color: PALE });             //   its lip
+    ring(120, 122, 8, 24, BED, 125);                     //   its water
+    ring(120, 140, 0, 8, { color: MID });                // finial stem
+    meshParts();
     pole(0, 0, 140, 148, 10, GLOW([120, 220, 255], 4)); // glowing orb
     for (let k = 0; k < 8; k++) {                       // lanterns on the coping
       const a = (k * Math.PI) / 4, x = Math.round(Math.cos(a) * 64) * 2, y = Math.round(Math.sin(a) * 64) * 2;
@@ -2449,22 +2493,25 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       return { at, bx };
     };
     const toCentre = (x, y) => (Math.abs(x) >= Math.abs(y) ? [-Math.sign(x), 0] : [0, -Math.sign(y)]);
-    // ---- benches: two each side, facing the fountain, between the spawn points
-    for (let k = 0; k < 4; k++) {
-      const [cx, cy] = [[260, 0], [0, 260], [-260, 0], [0, -260]][k], [fx, fy] = toCentre(cx, cy);
-      for (const s of [-1, 1]) {
-        const { bx } = frame(cx + -fy * s * 60, cy + fx * s * 60, fx, fy);
+    // (2026-10-16, owner: "make the benches and statues off the path") benches and statues stand
+    // on the grass in the plaza square's four corners, outside the paved octagon (the town keeps
+    // its buildings out of the whole square, taken below): a statue on the diagonal, two benches
+    // in an L round it facing in; each on its own spot's ground level
+    const CORNERS = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+    // ---- benches
+    for (const [sx, sy] of CORNERS) {
+      for (const [cx, cy, fx, fy] of [[300 * sx, 400 * sy, 0, -sy], [400 * sx, 300 * sy, -sx, 0]]) onSite([cx - 42, cy - 42, cx + 42, cy + 42], () => {
+        const { bx } = frame(cx, cy, fx, fy);
         for (const a of [-1, 1]) bx(a * 40, -10, 0, a * 34, 12, 16, { color: CUT });               // stone ends
         for (const [b0, b1] of [[-10, -4], [-2, 4], [6, 12]]) bx(-40, b0, 16, 40, b1, 20, { color: PALETTE.timber[1] }); // seat planks
         for (const a of [-1, 1]) bx(a * 40, -14, 0, a * 32, -10, 44, { color: PALETTE.timber[0] }); // back posts
         for (const z of [26, 36]) bx(-32, -14, z, 32, -10, z + 6, { color: PALETTE.timber[1] });   // back rails
-      }
+      });
     }
-    // ---- statues on plinths, facing the fountain
+    // ---- statues on plinths, facing in
     const MARBLE = { color: [228, 224, 214] }, BRONZE = { color: [176, 132, 66] };
-    STATUES.forEach(([text, kind], k) => {
-      const ang = Math.PI / 4 + (k * Math.PI) / 2;
-      const x = Math.round((Math.cos(ang) * 300) / 2) * 2, y = Math.round((Math.sin(ang) * 300) / 2) * 2, [fx, fy] = toCentre(x, y);
+    STATUES.forEach(([text, kind], k) => onSite([370 * CORNERS[k % 4][0] - 30, 370 * CORNERS[k % 4][1] - 30, 370 * CORNERS[k % 4][0] + 30, 370 * CORNERS[k % 4][1] + 30], () => {
+      const [x, y] = [370 * CORNERS[k % 4][0], 370 * CORNERS[k % 4][1]], [fx, fy] = toCentre(x, y);
       const { at, bx } = frame(x, y, fx, fy);
       bx(-26, -26, 0, 26, 26, 8, { color: PALE });   // base
       bx(-22, -22, 8, 22, 22, 44, { color: CUT });   // die
@@ -2494,7 +2541,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         for (const [a0, b0, a1, b1] of [[-8, 8, 8, 10], [-8, -10, 8, -8], [-10, -10, -8, 10], [8, -10, 10, 10]]) bx(a0, b0, 146, a1, b1, 150, BRONZE); // crown band
         for (const a of [-8, 0, 6]) bx(a, 8, 150, a + 2, 10, 154, BRONZE);     // crown points
       }
-    });
+    }));
     // ---- notice boards: one each side behind the spawn point, both faces written
     NOTICES.forEach((n, k) => {
       const [cx, cy] = [[330, 0], [0, 330], [-330, 0], [0, -330]][k], [fx, fy] = toCentre(cx, cy);
