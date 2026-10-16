@@ -204,6 +204,9 @@ const PLAZA = mat([150, 146, 134]);
 const COBBLE = mat([164, 156, 142]);
 const PATH = mat([142, 112, 76]);
 const GRAVEL = mat([90, 84, 78]);
+// show-cave limestone (2026-10-16, owner: caves "need to look like these" + a photo of a lit show cave):
+// cream, tan, ochre and buff bands for the rock round cave air and the formations
+const LIME = [[226, 206, 166], [208, 178, 132], [190, 150, 104], [234, 220, 190], [172, 128, 84], [218, 192, 150]].map(c => mat(c));
 const MOSSBED = [mat([58, 92, 62]), mat([66, 100, 58])]; // cove floors (2026-10-14)
 const SHALLOWS = mat([232, 222, 184], { asset: 'PB_DefaultTile' }); // pale sand under shallow cove water: reads turquoise
 const CLIFF = [mat([204, 184, 146]), mat([186, 164, 126]), mat([216, 200, 166]), mat([168, 148, 114]), mat([196, 172, 132])]; // striped sandstone cove cliffs
@@ -2657,6 +2660,27 @@ let carved = 0;
     }
   }
   console.error(`caves: ${caves.length} of ${sites.length} candidate sites`);
+  // limestone: every solid voxel next to a tunnel cave's air takes a limestone band (by height,
+  // wobbled by noise so the bands meander like strata)
+  let limed = 0;
+  for (const c of caves) {
+    if (!c.mc) continue;
+    const air = (x, y, z) => { const o = c.mc.cols.get(x * N + y); return o && z > o[0] && z <= o[1]; };
+    const band = (x, y, z) => LIME[(((Math.floor(z * 0.55 + fbm2(x / 6, y / 6, 3) * 3) % LIME.length) + LIME.length) % LIME.length)];
+    for (const [cc, [f, t]] of c.mc.cols) {
+      const cx = (cc / N) | 0, cy = cc % N;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const x = cx + a, y = cy + b;
+        if (!inMap(x, y)) continue;
+        for (let z = f; z <= t + 1; z++) {
+          const v = V[vi(x, y, z)];
+          if (!v || v === WATER || LIME.includes(v)) continue;
+          if (air(x + 1, y, z) || air(x - 1, y, z) || air(x, y + 1, z) || air(x, y - 1, z) || air(x, y, z + 1) || air(x, y, z - 1)) { V[vi(x, y, z)] = band(x, y, z); limed++; }
+        }
+      }
+    }
+  }
+  console.error(`caves: ${limed} rock voxels limestone`);
   if (process.env.MAPGEN_CAVES) console.error(`cave sites: ${caves.map(c => `${c.x},${c.y}`).join(" ")}`);
 }
 
@@ -4019,6 +4043,102 @@ for (const s of spawnRing) {
   spawners.push({ at: [wx, wy, (H[s.x * N + s.y] + 1) * VZ + 2], tier: s.tier, dungeon: 'Spawn ring', level: 0 }); // H read late: roads may have regraded the cell
 }
 
+// show-cave formations (2026-10-16): per tunnel-cave cell, inside its own air column (so nothing
+// crosses into a wall) and clear of its ramps, torch/uplight and end cells:
+//  - stalactites: tapered drips from the ceiling, 1-3 per cell, the odd long one
+//  - stalagmites: fat rounded cones on the floor; where a cell is low, a column (both meet, waist)
+//  - draperies: along a cell side that is wall (no air next door at the ceiling), a ribbed curtain of
+//    4-unit fins hanging from the ceiling, lengths swinging in waves, 2 units off the wall
+//  - warm glow uplights at the foot of some stalagmites
+// Cross-sections are plus shapes of micro bricks (a bar and two caps, all even half sizes) so they
+// read round; equal layers merge. Pieces carry soft: 1 and give way to anything else at output.
+function caveFormations(c, cols, busy, rampUp, rampDown, limeAt) {
+  const R = (cx, cy, k) => hash(cx * 7 + k * 131, cy * 13 + k * 17, 9100 + (c.x * 31 + c.y) % 977);
+  const ev = v => Math.min(10, Math.max(2, Math.round(v / 2) * 2)); // half widths 2..10: everything stays 4+ units inside the cell's side strips
+  const layer = (x0, y0, z0, z1, a, color) => {
+    // a plus-shaped slab z0..z1 of half width a (even) round (x0, y0) (both even)
+    const hz = (z1 - z0) / 2, zc = (z0 + z1) / 2;
+    if (a <= 4) { bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x0, y0, zc], size: [a, a, hz], color, soft: 1 }); return; }
+    const b = a - 4;
+    bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x0, y0, zc], size: [a, b, hz], color, soft: 1 });
+    for (const s of [-1, 1]) bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x0, y0 + s * (b + 2), zc], size: [b, 2, hz], color, soft: 1 });
+  };
+  // a cone of plus layers from zBase (wide end) toward zTip, radius r(frac) given; merges equal layers
+  const cone = (x0, y0, zBase, zTip, rOf, colorOf) => {
+    const dir = Math.sign(zTip - zBase), n = Math.max(1, Math.round(Math.abs(zTip - zBase) / 4));
+    let run = null;
+    const flush = () => { if (run) layer(x0, y0, Math.min(run.z0, run.z1), Math.max(run.z0, run.z1), run.a, run.color); run = null; };
+    for (let k = 0; k < n; k++) {
+      const a = ev(rOf((k + 0.5) / n)), color = colorOf(k / n), z0 = zBase + dir * k * 4, z1 = z0 + dir * 4;
+      if (run && run.a === a && run.color === color) run.z1 = z1; else { flush(); run = { z0, z1, a, color }; }
+    }
+    flush();
+  };
+  const tint = (base, k) => base.map(v => Math.max(0, Math.min(255, Math.round(v * k))));
+  let n = 0;
+  for (const [cc, [f, t]] of cols) {
+    if (busy.has(cc)) continue;
+    const cx = (cc / N) | 0, cy = cc % N, [wx, wy] = at(cx, cy, 0);
+    const floorZ = (f + 1) * VZ, ceilZ = (t + 1) * VZ, hgt = ceilZ - floorZ;
+    if (hgt < 48) continue;
+    const top = rampDown.has(cc) ? ceilZ - VZ : ceilZ, bot = rampUp.has(cc) ? floorZ + VZ : floorZ, avail = top - bot;
+    let hangs = 0; // the longest stalactite here: a stalagmite stops 8 short of it
+    const stone = limeAt(cx, cy, t), pale = tint(stone, 1.08), deep = tint(stone, 0.86);
+    const spot = (k, inset) => [ // inset 16: centre +-4, so a half width <= 10 keeps 14+ off the cell sides (the drapery strip)
+      Math.round((wx - 20 + inset + R(cx, cy, k) * (40 - 2 * inset)) / 2) * 2, Math.round((wy - 20 + inset + R(cx, cy, k + 1) * (40 - 2 * inset)) / 2) * 2];
+    // draperies on wall sides (cells whose ceiling is not ramped)
+    if (!rampDown.has(cc))
+      for (const [dx, dy, k] of [[1, 0, 1], [-1, 0, 2], [0, 1, 3], [0, -1, 4]]) {
+        const o = cols.get((cx + dx) * N + cy + dy);
+        if (o && o[1] >= t) continue; // air next door at this height: not a wall
+        if (R(cx, cy, 40 + k) > 0.3) continue;
+        const ph = R(cx, cy, 50 + k) * 6.28, maxL = Math.min(hgt * 0.55, 64);
+        for (let u = -12; u <= 12; u += 4) { // (corners left open: two walls' fins would meet there)
+          const L = Math.max(8, Math.round((maxL * (0.45 + 0.4 * Math.sin(u / 7 + ph) + 0.15 * R(cx, cy, 60 + k + u))) / 4) * 4);
+          const px = dx ? wx + dx * 16 : wx + u, py = dy ? wy + dy * 16 : wy + u;
+          bricks.push({ asset: 'PB_DefaultMicroBrick', position: [px, py, ceilZ - L / 2], size: [dx ? 2 : 2, dy ? 2 : 2, L / 2], color: (u / 4) & 1 ? pale : stone, soft: 1 });
+        }
+        n++;
+      }
+    // centre region (inset 8): stalactites / stalagmite / column, sized to the height
+    const roll = R(cx, cy, 70);
+    if (roll < 0.12 && hgt <= 96 && !rampUp.has(cc) && !rampDown.has(cc)) {
+      // column: a stalactite and a stalagmite meeting at a narrow waist
+      const [x0, y0] = spot(80, 16), mid = Math.round((floorZ + hgt * (0.4 + 0.2 * R(cx, cy, 81))) / 4) * 4, r0 = 8 + 4 * R(cx, cy, 82);
+      cone(x0, y0, ceilZ, mid, q => r0 * (1 - 0.65 * q), q => q < 0.5 ? stone : pale);
+      cone(x0, y0, floorZ, mid, q => (r0 + 2) * (1 - 0.6 * q), q => q < 0.3 ? deep : stone);
+      n++;
+      continue;
+    }
+    const nT = roll < 0.55 ? 1 + Math.floor(R(cx, cy, 71) * 3) : 0;
+    const used = [];
+    for (let i = 0; i < nT; i++) {
+      const [x0, y0] = spot(90 + i * 3, 16);
+      if (used.some(([a, b]) => Math.abs(a - x0) < 12 && Math.abs(b - y0) < 12)) continue;
+      const long = R(cx, cy, 99 + i) < 0.15;
+      const L = Math.floor(Math.min(avail * (long ? 0.55 : 0.28), (long ? 72 : 36) * (0.5 + R(cx, cy, 100 + i))) / 4) * 4;
+      if (L < 8) continue;
+      const r0 = (long ? 7 : 4) + 3 * R(cx, cy, 110 + i);
+      cone(x0, y0, top, top - L, q => r0 * Math.pow(1 - q, 0.8) + 1, q => q > 0.7 ? pale : stone);
+      used.push([x0, y0]);
+      hangs = Math.max(hangs, L);
+      n++;
+    }
+    if (roll > 0.35 && roll < 0.65) {
+      const [x0, y0] = spot(120, 16);
+      if (!used.some(([a, b]) => Math.abs(a - x0) < 14 && Math.abs(b - y0) < 14) || true) {
+        const L = Math.floor(Math.min(avail * 0.35, avail - hangs - 8, 44 * (0.5 + R(cx, cy, 121))) / 4) * 4;
+        if (L >= 8) {
+          const r0 = 6 + 5 * R(cx, cy, 122);
+          cone(x0, y0, bot, bot + L, q => r0 * Math.sqrt(1 - q * q * 0.85), q => q < 0.25 ? deep : stone);
+          if (R(cx, cy, 123) < 0.4) bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x0 + (x0 < wx ? 12 : -12), y0, bot + 2], size: [2, 2, 2], color: [255, 176, 92], material: 'BMC_Glow', material_intensity: 8, soft: 1 });
+          n++;
+        }
+      }
+    }
+  }
+  return n;
+}
 stage('caveProps');
 // cave interiors: two fires, then an old man with a sword or a chest, on the
 // ledge at the back; stalactites under the high ceiling, stalagmites and
@@ -4027,10 +4147,10 @@ for (const [n, c] of caves.entries()) {
   if (c.mc) {
     // torches by the tunnel, and the old man or a chest at the end
     const { cols, torches, end } = c.mc;
+    // (2026-10-16) show-cave lighting instead of torches: a warm glow stone low on the floor
     for (const [tx, ty] of torches) {
       const [f] = cols.get(tx * N + ty), [wx, wy] = at(tx, ty, 0), fz = (f + 1) * VZ;
-      bricks.push({ asset: 'PB_DefaultPole', position: [wx, wy, fz + 10], size: [5, 5, 10], color: [110, 76, 40] });
-      bricks.push({ position: [wx, wy, fz + 26], size: [5, 5, 6], color: [255, 170, 40], material: 'BMC_Glow', material_intensity: 10 });
+      bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx - 10, wy - 10, fz + 2], size: [4, 4, 2], color: [255, 176, 92], material: 'BMC_Glow', material_intensity: 8, soft: 1 });
     }
     // LEGO-style ramps (owner 2026-10-07): a PB_DefaultRamp on every cell whose
     // neighbour's floor is one brick higher (rising toward it), and an inverted
@@ -4039,7 +4159,8 @@ for (const [n, c] of caves.entries()) {
     const RISE = [[-1, 0, 0], [0, -1, 1], [1, 0, 2], [0, 1, 3]];
     const busy = new Set(torches.map(([tx, ty]) => tx * N + ty));
     if (end) busy.add(end[0] * N + end[1]);
-    const rockC = MATS[STONE].color;
+    const limeAt = (cx, cy, z) => MATS[LIME[(((Math.floor(z * 0.55 + fbm2(cx / 6, cy / 6, 3) * 3) % LIME.length) + LIME.length) % LIME.length)]].color;
+    const rampUp = new Set(), rampDown = new Set();
     for (const [cc, [f, t]] of cols) {
       const cx = (cc / N) | 0, cy = cc % N, [wx, wy] = at(cx, cy, 0);
       let up = null, down = null;
@@ -4049,9 +4170,10 @@ for (const [n, c] of caves.entries()) {
         if (!up && o[0] === f + 1 && !busy.has(cc) && t - f >= 4) up = rot;
         if (!down && o[1] === t - 1 && t - f >= 4) down = rot;
       }
-      if (up !== null) bricks.push({ asset: 'PB_DefaultRamp', position: [wx, wy, (f + 1) * VZ + VZ / 2], size: [CELL / 2, CELL / 2, VZ / 2], color: rockC, direction: 4, rotation: up });
-      if (down !== null && (up === null || t - f >= 5)) bricks.push({ asset: 'PB_DefaultRampInverted', position: [wx, wy, t * VZ + VZ / 2], size: [CELL / 2, CELL / 2, VZ / 2], color: rockC, direction: 4, rotation: down });
+      if (up !== null) { bricks.push({ asset: 'PB_DefaultRamp', position: [wx, wy, (f + 1) * VZ + VZ / 2], size: [CELL / 2, CELL / 2, VZ / 2], color: limeAt(cx, cy, f), direction: 4, rotation: up }); rampUp.add(cc); }
+      if (down !== null && (up === null || t - f >= 5)) { bricks.push({ asset: 'PB_DefaultRampInverted', position: [wx, wy, t * VZ + VZ / 2], size: [CELL / 2, CELL / 2, VZ / 2], color: limeAt(cx, cy, t + 1), direction: 4, rotation: down }); rampDown.add(cc); }
     }
+    caveFormations(c, cols, busy, rampUp, rampDown, limeAt);
     if (end) {
       const [f] = cols.get(end[0] * N + end[1]), [mx, my] = at(end[0], end[1], 0), fz = (f + 1) * VZ;
       if (n % 2 === 0) {
@@ -4651,10 +4773,10 @@ if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid,
 // tunnel trim, walkway flags): the game would reject one of each overlapping pair anyway
 {
   const G = 200, idx = new Map(), rideBox = [];
-  bricks.forEach((b, i) => { if (b.ride) rideBox.push([i, ...worldBox(b, BUILDER_FIXED)]); });
+  bricks.forEach((b, i) => { if (b.ride || b.soft) rideBox.push([i, ...worldBox(b, BUILDER_FIXED)]); });
   const cells = new Set(); for (const [, lo, hi] of rideBox) for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G); x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G); y++) cells.add(x + ',' + y);
   for (const b of bricks) {
-    if (b.ride) continue;
+    if (b.ride || b.soft) continue;
     const [lo, hi] = worldBox(b, BUILDER_FIXED);
     for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G); x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G); y++) { const k = x + ',' + y; if (cells.has(k)) (idx.get(k) ?? idx.set(k, []).get(k)).push([lo, hi]); }
   }
@@ -4668,7 +4790,7 @@ if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid,
   if (drop.size) { let k = 0; for (let i = 0; i < bricks.length; i++) if (!drop.has(i)) bricks[k++] = bricks[i]; bricks.length = k; }
   console.error(`ride surface pieces dropped for objects on the road: ${drop.size}`);
 }
-for (const b of bricks) { delete b.gameSize; delete b.group; delete b.ride; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups; ride surface marks)
+for (const b of bricks) { delete b.gameSize; delete b.group; delete b.ride; delete b.soft; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups; ride surface marks)
 
 stage('output');
 // ----------------------------------------------------------------- output --
