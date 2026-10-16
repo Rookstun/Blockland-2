@@ -3158,7 +3158,7 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
   let offGridDrops = 0;
   const keep = br => {
     const a = br.asset ?? '';
-    if (/^PB_Default/.test(a) && !/^PB_DefaultMicro/.test(a) && (br.size[0] % 5 || br.size[1] % 5 || br.size[2] % 2)) { offGridDrops++; return false; }
+    if (/^PB_Default/.test(a) && !/^PB_DefaultMicro/.test(a) && !br.gameSize && (br.size[0] % 5 || br.size[1] % 5 || br.size[2] % 2)) { offGridDrops++; return false; }
     return true;
   };
   const spawn = (x, y, z, prefab, what) => spawners.push({ at: [x, y, z], prefab, dungeon: what, level: 0 });
@@ -4544,10 +4544,11 @@ console.error(JSON.stringify({
 
 // Procedural sizes off the stud/plate grid load as "Missing brick type".
 // Micro bricks snap to 1/5 stud (2 units), so only whole half-extents there.
-const offGrid = bricks.filter(b => b.size[0] && (/^PB_DefaultMicro/.test(b.asset ?? '')
+const offGrid = bricks.filter(b => b.size[0] && !b.gameSize && (/^PB_DefaultMicro/.test(b.asset ?? '')
   ? b.size.some(v => !Number.isInteger(v))
   : b.size[0] % 5 || b.size[1] % 5 || b.size[2] % 2));
 if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid, e.g. ${JSON.stringify(offGrid[0])}`);
+for (const b of bricks) { delete b.gameSize; delete b.group; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups)
 
 stage('output');
 // ----------------------------------------------------------------- output --

@@ -5,6 +5,10 @@
 // Owned by the server owner (renderman), like the pots.
 //   node healgen.mjs          -> Saved/Prefabs/heal.brz (run on the server)
 // Spawned by pot_pool.ws (pots and bushes) and skeleton_drop (bots).
+// (2026-10-16, owner: "a heart for the coin replacement for health ... its at a 45 degree
+// angle") the coin is now an invisible touch trigger; the owner's heart (a glowing cube
+// with rounded caps on its top and +x faces, mapgen/models/ownerprops.json) rides on the
+// grid, which is tilted -45 degrees about y so the corner between the caps points up.
 import fs from "fs"; import path from "path";
 const brs = await import(path.join(process.env.HOME, "omegga-server/plugins/bridge/lib/brs.mjs"));
 const PRE = path.join(process.env.HOME, "omegga-server/data/Saved/Prefabs");
@@ -13,9 +17,17 @@ const w = new brs.World();
 const owner = w.addOwner({ id: "891c4675-d18a-4ce1-a465-f4193ffe8b39", name: "soapstain22", display_name: "renderman" });
 const RED = [214, 32, 40];
 // frozen (owner 2026-10-10: "hearts fly away too fast"): it hovers where it drops
-const g = w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, frozen: true, owner_index: owner });
-const coin = w.addBrick({ asset: "B_1x1_Coin", position: [0, 0, 0], color: RED, owner_index: owner, material: "BMC_Glow", material_intensity: 2,
+const TILT = -Math.PI / 4; // about y
+const g = w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, rotation: { X: 0, Y: Math.sin(TILT / 2), Z: 0, W: Math.cos(TILT / 2) }, frozen: true, owner_index: owner });
+const coin = w.addBrick({ asset: "B_1x1_Coin", position: [0, 0, 0], color: RED, owner_index: owner, material: "BMC_Glow", material_intensity: 2, visibility: false,
   components: [{ type: "Component_Touch", data: { BeginTouchSound: null, EndTouchSound: null, bCollisionEnabled_Player: true, bCollisionEnabled_Player1: true, bCollisionEnabled_Player2: true, bCollisionEnabled_Player3: true } }] }, { grid: g.grid });
+// the heart (walk-through: the coin does the touching), a stud behind the coin so no brick overlaps it
+const HEART = [
+  { asset: "PB_DefaultMicroBrick", size: [5, 5, 5], position: [-4, 10, -4], direction: 4, rotation: 3 },
+  { asset: "PB_RoundedCap", size: [5, 5, 4], position: [5, 10, -4], direction: 0, rotation: 3 },
+  { asset: "PB_RoundedCap", size: [5, 5, 4], position: [-4, 10, 5], direction: 4, rotation: 1 },
+];
+for (const h of HEART) w.addBrick({ ...h, color: [246, 42, 42], owner_index: owner, material: "BMC_Glow", material_intensity: 3, collision: false }, { grid: g.grid });
 // the chip rides on the coin's grid, hidden just under it
 const chipBrick = w.addBrick({ asset: "B_1x1_Microchip", position: [0, 0, -8], owner_index: owner, visibility: false, collision: false, components: [{ type: "Component_Internal_Microchip" }] }, { grid: g.grid });
 const chip = { brick: chipBrick, grid: w.addBrickGrid({ type: "Entity_MicrochipDynamicBrickGrid", location: { X: 0, Y: 0, Z: 30 }, data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 24, Y: 24, Z: 2 } } }) };

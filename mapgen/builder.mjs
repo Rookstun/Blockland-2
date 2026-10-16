@@ -12,6 +12,8 @@ export const FIXED = {
   B_1x1_Cone: [5, 5, 6], B_Jar: [9, 9, 12], B_Cauldron: [10, 10, 10], B_Chalice: [5, 5, 10], B_Flame: [5, 5, 10],
   // plants: collision half extents measured in-game (sky probes, 2026-10-02)
   B_Flower: [10, 10, 2], B_Small_Flower: [6, 6, 2], B_Fern: [10, 10, 2], B_Pumpkin: [10, 10, 8], B_Tulip: [6, 6, 6], B_Rose: [6, 6, 4],
+  // props measured in-game by overlap probes (2026-10-16)
+  B_1x2_MetalIngot: [10, 5, 2], B_Turkey_Body: [14, 10, 7], B_Turkey_Leg: [10, 5, 3], B_Sausage: [10, 5, 2], B_Fork: [4, 10, 2], B_Spoon: [4, 10, 2],
   B_Bush: [14, 14, 16], B_Leaf_Bush: [26, 26, 20], B_Pine_Tree: [16, 16, 38], B_Branch: [20, 10, 2], B_Lotus_1x1: [6, 6, 4], B_Lotus_2x2: [10, 10, 6],
 };
 
@@ -31,6 +33,7 @@ export function makeBuilder({ cell = 100 } = {}) {
     for (const k of keys)
       for (const j of grid.get(k) ?? []) {
         const [a0, a1] = boxes[j];
+        if (b.group != null && bricks[j].group === b.group) continue; // one captured model's own pieces interlock (town.mjs prop)
         if (lo[0] < a1[0] && a0[0] < hi[0] && lo[1] < a1[1] && a0[1] < hi[1] && lo[2] < a1[2] && a0[2] < hi[2]) {
           dropped.push(`${label} ${JSON.stringify(bx)} hits ${bricks[j].label} ${JSON.stringify(boxes[j])}`);
           return false;

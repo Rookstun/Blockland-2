@@ -14,7 +14,7 @@
 // is cut into 3 x 3 lots (about 48 studs); the middle lot is a garden or park, the rest hold
 // buildings whose doors face the nearest street.
 
-import { planHouse, COURSES as WH_COURSES } from './wallhouse.mjs';
+import { planHouse, COURSES as WH_COURSES, even } from './wallhouse.mjs';
 import { planShop, SHOP_KINDS, WEAPON_KINDS } from './wallshop.mjs';
 import { shapedHouse } from './shapedhouse.mjs';
 import { turnBrick } from './orient.mjs';
@@ -25,6 +25,23 @@ import { plaque } from './ruins.mjs';
 import { weaponFacade, artRows, windowShield } from './shopfront.mjs';
 import { NOTICES, STATUES } from './notices.mjs';
 import SODAS from './sodas.json' with { type: 'json' };
+// the owner's hand-built props (2026-10-16: a market stall, a chest, a heart), captured from the
+// site world by models/capture_ownerprops.mjs: bricks relative to the floor under each prop's
+// centre, local +y = its front
+import OWNER_PROPS from './models/ownerprops.json' with { type: 'json' };
+// gameSize: sizes the owner placed in game (stall poles 2 x 2 x 13), exempt from mapgen's stud-grid check
+const asProp = bricks => bricks.map(({ intensity, ...b }) => ({ ...b, gameSize: true, ...(intensity != null ? { material_intensity: intensity } : {}) }));
+// the stall with its awning raised 3 bricks, so long blades stand clear under it
+const STALL_LIFT = 36;
+const STALL = asProp(OWNER_PROPS.stall).map(b => b.position[2] < 30 ? b
+  : b.asset === 'PB_DefaultPole' ? { ...b, size: [b.size[0], b.size[1], b.size[2] + STALL_LIFT / 2], position: [b.position[0], b.position[1], b.position[2] + STALL_LIFT / 2] }
+  : { ...b, position: [b.position[0], b.position[1], b.position[2] + STALL_LIFT] });
+const CHEST = asProp(OWNER_PROPS.chest);
+const STALL_TOP = 30; // counter top over the floor (the stall's top tile)
+let propSerial = 0;
+// prop bricks' centre over their base (measured in game, 2026-10-16)
+const PROP_BELOW = { B_Cauldron: 10, B_Turkey_Body: 7, B_Turkey_Leg: 3, B_Sausage: 2 };
+const INGOT_COLORS = [[184, 115, 51], [196, 150, 84], [168, 170, 178], [205, 208, 216], [232, 186, 40]]; // copper, bronze, iron, steel, gold
 
 // Organic layout (owner 2026-10-05: "make spawn town less square and more
 // connected by herringbone paths", RuneScape's Lumbridge map as the model):
@@ -716,7 +733,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * [across, depth, up] in world units), clear (off the stair and its
    * stairwell by 2 studs), gableOn (the roof), STOREY_H.
    */
-  function renderWallgen(h, cx, cy, fx, fy, s, { wallColor, upperColor = wallColor }) {
+  function renderWallgen(h, cx, cy, fx, fy, s, { wallColor, upperColor = wallColor, floorStyle = 'checker' }) {
     const { W, D } = h;
     const w = (W + 1) * 10, d = (D + 1) * 10;
     const lat = fx ? [0, 1] : [1, 0];
@@ -746,7 +763,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       else if (b.kind === 'floor') {
         // checkerboard floors (owner, 2026-10-03); under every upper floor a
         // ceiling of face-down tiles, so no studded undersides show from below
-        for (const p of floorPieces(slabCells(b), 'checker')) sbox(p.x0, p.y0, p.x1, p.y1, b.z0, b.z1, p.brick);
+        for (const p of floorPieces(slabCells(b), floorStyle)) sbox(p.x0, p.y0, p.x1, p.y1, b.z0, b.z1, p.brick);
         if (b.z0 > 0) {
           // the ceiling below it, skipping cells over a wall top (the floor runs over door lintels)
           const open = new Set([...slabCells(b)].filter(k => !wallTop.has(k + ',' + b.z0)));
@@ -767,8 +784,17 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       gable(Math.min(ax, bx) - 5, Math.min(ay, by) - 5, Math.max(ax, bx) + 5, Math.max(ay, by) + 5, h.top, rise, roofColor, !fx, { color: upper ? upperColor : wallColor, inset: 5 });
     };
     const at = (xs, ys) => P(xs * 10 - w / 2, ys * 10);
+    // a captured model (local +y = its front) at stud (xs, ys), z over the ground floor's
+    // base, its front toward the street, or the other way round with `back`
+    const frontTurn = fy > 0 ? 0 : fx < 0 ? 1 : fy < 0 ? 2 : 3;
+    const prop = (bricks, xs, ys, z, back = false) => {
+      const [px, py] = at(xs, ys), r = (frontTurn + (back ? 2 : 0)) % 4;
+      const group = ++propSerial; // the model's own pieces may interlock (micro wedges in ramps): builder skips clashes within a group
+      for (const b of bricks) { const t = turnBrick(b, r); put({ ...t, group }, px + t.position[0], py + t.position[1], z + t.position[2]); }
+      return (lx, ly) => { let [u, v] = [lx, ly]; for (let i = 0; i < r; i++) [u, v] = [-v, u]; return [px + u, py + v]; }; // world spot of a model-local point
+    };
     if (h.rooms?.fd != null) lastDoor = P(h.rooms.fd * 10 - w / 2, 0);
-    return { sbox, mput, clear, gableOn, at, STOREY_H: WH_COURSES * 12 };
+    return { sbox, mput, clear, gableOn, at, prop, STOREY_H: WH_COURSES * 12 };
   }
 
   /**
@@ -913,7 +939,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * across the sales floor, buttons toward the door; outside a paved forecourt
    * with training dummies / targets and the shop's name board over the door.
    */
-  function weaponFit({ sbox, mput, at, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC, cloth }) {
+  function weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC, cloth }) {
     const MB = 'PB_DefaultMicroBrick', guns = kind === 'gunsmith';
     const STEEL = c => ({ asset: MB, color: c, material: 'BMC_Metallic' });
     const DARK = { asset: MB, color: [40, 40, 44], material: 'BMC_Metallic' };
@@ -968,19 +994,22 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         }
       });
     }
-    // the real stands: a row across the sales floor, an aisle to the counter in front of the door
+    // the real stands (2026-10-16, owner: "take these off their pedestals"): the owner's market
+    // stall either side of the door aisle (a second row if the wares need it), three wares on
+    // each counter as pedestal-less stands (<prefab>_bare, bridge-tools/barestand.mjs: the
+    // weapon floats over the counter, the price button toward the street)
     const orient = fx ? (fx > 0 ? 17 : 19) : (fy > 0 ? 18 : 16); // button toward the street
-    const ys = Math.min(11, cy0 - 5); // stands reach ~3 studs: clear of the plinths (y < 5) and the counter
-    const slots = [];
-    for (let x = 6; x <= W - 6; x += 5) if (Math.abs(x - fd) >= dw / 2 + 4) slots.push(x);
-    // the wares fill from the middle outwards (round the door aisle)
-    slots.sort((a, b) => Math.abs(a - fd) - Math.abs(b - fd) || a - b);
+    const SY = Math.min(10, cy0 - 5); // stall centre row: clear of the plinths (y < 5) and the counter
     let n = 0;
-    for (const x of slots) {
+    for (const [sx, sy] of [[fd - 12, SY], [fd + 12, SY], [fd - 12, SY + 6], [fd + 12, SY + 6]]) {
       if (n >= wares.length) break;
-      if (!piece(x - 2, ys - 2, x + 2, ys + 2, () => {})) continue;
-      const [px, py] = at(x, ys), w = wares[n++];
-      stats.houseShops.push({ at: [px, py, 16 + (zCtx ?? 0)], orient, tier: w.tier, ...(w.prefab ? { prefab: w.prefab } : {}) });
+      if (!piece(sx - 6, sy - 2, sx + 6, sy + 2, () => {})) continue;
+      const spot = prop(STALL, sx, sy, f);
+      for (const dx of [-35, 0, 35]) {
+        if (n >= wares.length) break;
+        const [px, py] = spot(dx, -4), w = wares[n++];
+        stats.houseShops.push({ at: [px, py, f + STALL_TOP + 12 + (zCtx ?? 0)], orient, tier: w.tier, prefab: (w.prefab ?? 'shop_' + w.tier) + '_bare' });
+      }
     }
     if (n < wares.length) count('weapon shop: stands short ' + (wares.length - n));
     // the street front (shopfront.mjs): plinth, quoins, framed windows, awnings, door case, crest, fascia, blade sign, forecourt
@@ -1028,7 +1057,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    */
   function wallShop(cx, cy, fx, fy, W, D, storeys, s, kind, { wallColor, upperColor = wallColor, roofColor, rise, cloth, wares = [], forecourt = 0 }) {
     const h = planShop({ W, D, storeys, seed: s, kind });
-    const { sbox, mput, clear, gableOn, at, STOREY_H } = renderWallgen(h, cx, cy, fx, fy, s, { wallColor, upperColor });
+    const { sbox, mput, clear, gableOn, at, prop, STOREY_H } = renderWallgen(h, cx, cy, fx, fy, s, { wallColor, upperColor, floorStyle: WEAPON_KINDS.includes(kind) ? 'greyChecker' : 'checker' });
     const { s1, a, fd, dw, hall, lw, rw, ww } = h.rooms;
     const timber = PALETTE.timber[0], dark = PALETTE.timber[2], stone = PALETTE.stone[0];
     const f = 4; // ground floor top
@@ -1039,6 +1068,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       taken.push([x0, y0, x1, y1]); fn(); return true;
     };
     const crate = (x, y, z = f) => sbox(x, y, x + 2, y + 2, z, z + 20, { color: [150, 110, 70] });
+    // (2026-10-16, owner: "make the metal bars use the ingot model in the special tab"): the
+    // game's metal ingot (2 x 1 studs, a plate high, long along local x), lying along the shelf
+    const ingot = (k, j) => ({ asset: 'B_1x2_MetalIngot', size: [0, 0, 0], rotation: fx ? 1 : 0, color: pick(INGOT_COLORS, s, k, j + 23), material: 'BMC_Metallic' });
     const barrel = (x, y) => mput(x + 1, y + 1, f + 14, [10, 10, 14], { asset: 'PB_DefaultPole', color: [120, 84, 50] });
 
     FURN++; // fit-out (FURNITURE switch)
@@ -1056,7 +1088,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         for (let x = x0; x + 1 < x1; x += 2) {
           if (kind === 'apothecary' || kind === 'general') mput(x + 1, s1 - 1, f + 56 + 12, [0, 0, 0], { asset: 'B_Jar', color: pick(PALETTE.goods, s, x, 21), material: 'BMC_Glass' });
           else if (kind === 'bakery') mput(x + 1, s1 - 1, f + 56 + 4, [8, 4, 4], { asset: 'PB_DefaultMicroBrick', color: [196, 140, 70] });
-          else mput(x + 1, s1 - 1, f + 56 + 2, [8, 4, 2], { asset: 'PB_DefaultMicroBrick', color: [170, 172, 180], material: 'BMC_Metallic' });
+          else for (const [dy, dz] of [[-1.5, 2], [-0.5, 2], [-1, 6]]) mput(x + 1, s1 + dy, f + 56 + dz, [0, 0, 0], ingot(x, dz)); // two ingots and one on top
         }
       });
     }
@@ -1067,7 +1099,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       if (kind === 'bakery') mput(x + 0.5, cy0 + 1, z + 4, [8, 4, 4], { asset: 'PB_DefaultMicroBrick', color: [206, 150, 80] });
       else if (kind === 'apothecary') mput(x + 0.5, cy0 + 1, z + 10, [0, 0, 0], { asset: 'B_Chalice', color: [200, 160, 70], material: 'BMC_Metallic' });
       else if (kind === 'general') mput(x + 0.5, cy0 + 1, z + 8, [0, 0, 0], { asset: 'B_Pumpkin', color: [230, 120, 30] });
-      else mput(x + 0.5, cy0 + 1, z + 2, [14, 2, 2], { asset: 'PB_DefaultMicroBrick', color: [200, 204, 214], material: 'BMC_Metallic' });
+      else for (const [dy, dz] of [[0.5, 2], [1.5, 2], [1, 6]]) mput(x + 0.5, cy0 + dy, z + dz, [0, 0, 0], ingot(x + 1, dz));
     }
 
     // the trade itself, on the customers' side (y 1 .. counter - 2)
@@ -1114,7 +1146,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         mput(x + 2, back, f + 32 + 2, [0, 0, 0], { asset: 'B_Fern', color: [70, 130, 50] });
       });
     } else if (WEAPON_KINDS.includes(kind)) {
-      weaponFit({ sbox, mput, at, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt, cloth });
+      weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt, cloth });
     } else {
       // general store: crates, barrels, sacks along the walls
       for (const [x, y] of [[sideL, back], [sideL + 2, back], [sideL, back - 2], [sideR + 2, back], [sideR + 2, back - 2]])
@@ -1124,7 +1156,84 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
 
     // back rooms: storeroom crates and barrels, a workbench
     const backRooms = [[1, s1 + 1, a, D], [a + 1, s1 + 1, W, D]];
-    backRooms.forEach(([x0, y0, x1, y1], r) => {
+    // weapon shops (2026-10-16, owner: "give a room that grows off where the blacksmith lives and
+    // another one as a kitchen"): the back rooms are the smith's quarters and a kitchen. Nothing
+    // goes in front of a window or a doorway (hall door, the door between the two rooms).
+    const glass = h.boxes.filter(b => b.kind === 'glass');
+    const midDoor = even((s1 + D) / 2);
+    taken.push([hall - 2, s1 - 1, hall + 2, s1 + 4], [a - 3, midDoor - 2, a + 4, midDoor + 2]);
+    const fit = (x0, y0, x1, y1, fn) => !glass.some(g => x0 - 1 < g.x1 && g.x0 < x1 + 1 && y0 - 1 < g.y1 && g.y0 < y1 + 1) && piece(x0, y0, x1, y1, fn);
+    const first = (cands, fn) => cands.some(([x0, y0, x1, y1]) => fit(x0, y0, x1, y1, () => fn(x0, y0, x1, y1)));
+    // spots of a u x v piece sliding along a room's walls: 'back' (against y1, u across), 'side' (against x0 or x1, u along y)
+    const wallSpots = ([x0, y0, x1, y1], u, v, walls) => walls.flatMap(wl => {
+      const out = [];
+      if (wl === 'back') for (let x = x0; x + u <= x1; x++) out.push([x, y1 - v, x + u, y1]);
+      if (wl === 'side') for (let y = y1 - u; y >= y0; y--) out.push([x0, y, x0 + v, y + u], [x1 - v, y, x1, y + u]);
+      return out;
+    });
+    const MBK = 'PB_DefaultMicroBrick', ceilZ = STOREY_H - 4;
+    if (WEAPON_KINDS.includes(kind)) backRooms.forEach(([x0, y0, x1, y1], r) => {
+      const mx = Math.floor((x0 + x1) / 2), my = Math.floor((y0 + y1) / 2);
+      if (r === 0) {
+        // the smith's quarters: a bed in a back corner (headboard to the wall), the owner's chest beside it,
+        // a wardrobe, a rug, a desk with a candle
+        first(wallSpots([x0, y0, x1, y1], 3, 6, ['back']), (bx0, by0, bx1) => {
+          sbox(bx0, by0, bx1, y1, f, f + 12, { color: timber });
+          sbox(bx0, y1 - 1, bx1, y1, f + 12, f + 28, { color: dark });                                   // headboard
+          sbox(bx0, y1 - 3, bx1, y1 - 1, f + 12, f + 20, { asset: MBK, color: [236, 232, 222] });          // pillow
+          sbox(bx0, by0, bx1, y1 - 3, f + 12, f + 16, { asset: 'PB_DefaultTile', color: pick(PALETTE.blanket, s, 7) });
+          // the owner's chest (5.6 x 3.6 studs) on a 6 x 4 spot: along the back wall facing into the room,
+          // else along the room's front wall turned round (still facing into the room)
+          const front = []; for (let x = x0; x + 6 <= x1; x++) front.push([x, y0, x + 6, y0 + 4]);
+          [...wallSpots([x0, y0, x1, y1], 6, 4, ['back']).map(r => [r, false]), ...front.map(r => [r, true])]
+            .some(([[cx0, cy0, cx1, cy1], back]) => fit(cx0, cy0, cx1, cy1, () => prop(CHEST, (cx0 + cx1) / 2, (cy0 + cy1) / 2, f, back)));
+        });
+        first(wallSpots([x0, y0, x1, y1], 3, 2, ['back']), (wx0, wy0, wx1, wy1) => {
+          sbox(wx0, wy0, wx1, wy1, f, f + 64, { color: dark });                                            // wardrobe
+          for (const dx of [-0.4, 0.4]) mput((wx0 + wx1) / 2 + dx, wy0 - 0.1, f + 34, [1, 1, 2], { asset: MBK, color: [184, 146, 66], material: 'BMC_Metallic' }); // knobs
+        });
+        fit(mx - 3, my - 2, mx + 3, my + 2, () => sbox(mx - 3, my - 2, mx + 3, my + 2, f, f + 4, { asset: 'PB_DefaultTile', color: pick([[128, 34, 40], [46, 70, 120], [120, 88, 40]], s, 9) }));
+        first(wallSpots([x0, y0, x1, y1], 3, 2, ['side']), (dx0, dy0, dx1, dy1) => {
+          sbox(dx0, dy0, dx1, dy1, f + 28, f + 32, { color: PALETTE.timber[1] });                            // desk top
+          for (const [px, py] of [[dx0, dy0], [dx1 - 1, dy0], [dx0, dy1 - 1], [dx1 - 1, dy1 - 1]]) sbox(px, py, px + 1, py + 1, f, f + 28, { color: timber });
+          mput((dx0 + dx1) / 2, (dy0 + dy1) / 2, f + 32 + 4, [2, 2, 4], { asset: MBK, color: [236, 228, 206] });   // candle
+          mput((dx0 + dx1) / 2, (dy0 + dy1) / 2, f + 40 + 2, [1, 1, 2], { asset: MBK, ...GLOW([255, 190, 90], 6) });
+        });
+      } else {
+        // the kitchen: a stone hearth with a fire and a cauldron, a worktop with jars, a table with dinner
+        first(wallSpots([x0, y0, x1, y1], 4, 3, ['back']).reverse(), (hx0, hy0, hx1) => {
+          const st = PALETTE.stone;
+          sbox(hx0, hy0, hx1, y1, f, f + 8, { color: st[1] });                                             // hearth base
+          sbox(hx0, hy0, hx0 + 1, y1, f + 8, f + 32, { color: st[0] });                                    // cheeks
+          sbox(hx1 - 1, hy0, hx1, y1, f + 8, f + 32, { color: st[0] });
+          sbox(hx0 + 1, y1 - 1, hx1 - 1, y1, f + 8, f + 32, { color: st[2] });                             // fireback
+          sbox(hx0 + 1, hy0 + 1, hx1 - 1, y1 - 1, f + 8, f + 12, GLOW([255, 120, 40], 6));                   // embers
+          sbox(hx0, hy0, hx1, y1, f + 32, f + 36, { asset: 'PB_DefaultTile', color: PALETTE.timber[2] });    // mantel
+          sbox(hx0, hy0 + 1, hx1, y1, f + 36, ceilZ, { color: st[0] });                                     // chimney breast
+          mput((hx0 + hx1) / 2, (hy0 + y1) / 2 - 0.5, f + 12 + PROP_BELOW.B_Cauldron, [0, 0, 0], { asset: 'B_Cauldron', color: [44, 44, 48], material: 'BMC_Metallic' });
+        });
+        first([...wallSpots([x0, y0, x1, y1], 7, 2, ['back']), ...wallSpots([x0, y0, x1, y1], 7, 2, ['side']), ...wallSpots([x0, y0, x1, y1], 5, 2, ['back', 'side'])], (kx0, ky0, kx1, ky1) => {
+          sbox(kx0, ky0, kx1, ky1, f, f + 32, { color: timber });                                           // worktop
+          sbox(kx0, ky0, kx1, ky1, f + 32, f + 36, { asset: 'PB_DefaultTile', color: [196, 190, 176] });
+          const alongX = kx1 - kx0 > ky1 - ky0;
+          for (let k = 1; k < (alongX ? kx1 - kx0 : ky1 - ky0) - 1; k += 2)
+            mput(alongX ? kx0 + k + 0.5 : (kx0 + kx1) / 2, alongX ? (ky0 + ky1) / 2 : ky0 + k + 0.5, f + 36 + 12, [0, 0, 0], { asset: 'B_Jar', color: pick(PALETTE.goods, s, k, 41), material: 'BMC_Glass' });
+        });
+        fit(mx - 4, my - 3, mx + 4, my + 3, () => {
+          sbox(mx - 3, my - 1, mx + 3, my + 1, f + 28, f + 32, { color: PALETTE.timber[1] });               // table
+          for (const [px, py] of [[mx - 3, my - 1], [mx + 2, my - 1], [mx - 3, my], [mx + 2, my]]) sbox(px, py, px + 1, py + 1, f, f + 28, { color: timber });
+          for (const sy of [my - 3, my + 2]) sbox(mx - 0.5, sy, mx + 0.5, sy + 1, f, f + 16, { asset: MBK, color: timber }); // stools
+          // dinner, long sides along the table (props turn with the building, like the ingots)
+          const top = f + 32, along = { rotation: fx ? 1 : 0 };
+          mput(mx - 0.6, my, top + PROP_BELOW.B_Turkey_Body, [0, 0, 0], { asset: 'B_Turkey_Body', color: [176, 104, 50], ...along });
+          mput(mx + 1.9, my - 0.5, top + PROP_BELOW.B_Sausage, [0, 0, 0], { asset: 'B_Sausage', color: [150, 70, 50], ...along });
+          mput(mx + 1.9, my + 0.5, top + PROP_BELOW.B_Turkey_Leg, [0, 0, 0], { asset: 'B_Turkey_Leg', color: [176, 104, 50], ...along });
+          mput(mx - 2.5, my, top + 10, [0, 0, 0], { asset: 'B_Chalice', color: [200, 160, 70], material: 'BMC_Metallic' });
+        });
+        first([[x0, y1 - 2, x0 + 2, y1], [x1 - 2, y0 + 1, x1, y0 + 3]], (bx, by) => barrel(bx, by));
+      }
+    });
+    else backRooms.forEach(([x0, y0, x1, y1], r) => {
       if (r === 0) {
         for (const [x, y] of [[x0 + 1, y1 - 3], [x0 + 3, y1 - 3], [x0 + 1, y1 - 5]]) piece(x, y, x + 2, y + 2, () => crate(x, y));
         piece(x1 - 3, y1 - 3, x1 - 1, y1 - 1, () => barrel(x1 - 3, y1 - 3));

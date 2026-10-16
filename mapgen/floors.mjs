@@ -28,6 +28,7 @@ export const STYLES = {
   checker:        { pattern: 'checker', sq: 2, asset: TILE, colors: [[232, 226, 212], [58, 56, 56]] },           // cream / charcoal
   checkerCeiling: { pattern: 'checker', sq: 2, asset: TILE, colors: [[238, 234, 224], [178, 172, 162]], extra: FACE_DOWN },
   hallChecker:    { pattern: 'checker', sq: 4, asset: TILE, colors: [[206, 200, 188], [120, 116, 110]] },        // big halls; pass colors to recolour
+  greyChecker:    { pattern: 'checker', sq: 2, asset: TILE, colors: [[176, 176, 180], [104, 104, 108]] },        // weapon shops (owner 2026-10-16: "make the floor tiled grey checkers")
   planks:         { pattern: 'planks', maxLen: 12, asset: MB, colors: [[160, 114, 72]] },                        // shapedhouse boards
   townPlanks:     { pattern: 'planks', maxLen: 12, asset: MB, colors: [[150, 104, 64], [134, 92, 56], [160, 114, 72]] },
   terracotta:     { pattern: 'herringbone', asset: TILE, colors: [[224, 85, 75], [212, 80, 70], [230, 96, 82], [204, 78, 66]] },
