@@ -10,7 +10,7 @@ const wasm = await import(pathToFileURL(join(sdk, 'wasm.js')).href);
 if (typeof wasm.default === 'function') await wasm.default({ module_or_path: readFileSync(join(sdk, 'wasm_bg.wasm')) });
 const compileWs = wasm.wirescript_compile ?? wasm.default?.wirescript_compile;
 const registry = {};
-for (const c of ['coin1', 'coin10', 'coin25', 'heal', 'arrows', 'bullets']) registry[`./${c}.brz`] = Array.from(readFileSync(join(here, `${c}.brz`)));
+for (const c of ['coin1', 'coin10', 'coin25', 'heal', 'arrows', 'ammo_blackpowder', 'ammo_explosive', 'ammo_heavy', 'ammo_light', 'ammo_magnum', 'ammo_medium', 'ammo_plasma', 'ammo_pulse', 'ammo_shotgun']) registry[`./${c}.brz`] = Array.from(readFileSync(join(here, `${c}.brz`)));
 const bytes = compileWs(readFileSync(join(here, 'pot_pool.ws'), 'utf-8'), 'pot_pool', '{}', JSON.stringify(registry));
 writeFileSync(join(here, 'pot_pool.compiled.brz'), new Uint8Array(bytes));
 console.log(`compiled pot_pool (${bytes.length} bytes)`);

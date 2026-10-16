@@ -1099,7 +1099,26 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
       SpawnPrefab(prefab = $./arrows.brz, offset = at + Vec(0.0, 0.0, 12.0), velocity = Vec(-40.0, 40.0, 220.0), lifetime = 30.0, limit = 100)
     }
     if Random(0, 99) < 15 {
-      SpawnPrefab(prefab = $./bullets.brz, offset = at + Vec(0.0, 0.0, 24.0), lifetime = 60.0, limit = 100)
+      let a = Random(1, 9)
+      if a == 1 {
+        SpawnPrefab(prefab = $./ammo_blackpowder.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      } else if a == 2 {
+        SpawnPrefab(prefab = $./ammo_explosive.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      } else if a == 3 {
+        SpawnPrefab(prefab = $./ammo_heavy.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      } else if a == 4 {
+        SpawnPrefab(prefab = $./ammo_light.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      } else if a == 5 {
+        SpawnPrefab(prefab = $./ammo_magnum.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      } else if a == 6 {
+        SpawnPrefab(prefab = $./ammo_medium.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      } else if a == 7 {
+        SpawnPrefab(prefab = $./ammo_plasma.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      } else if a == 8 {
+        SpawnPrefab(prefab = $./ammo_pulse.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      } else if a == 9 {
+        SpawnPrefab(prefab = $./ammo_shotgun.brz, offset = at + Vec(0.0, 0.0, 24.0), velocity = Vec(40.0, -40.0, 220.0), lifetime = 30.0, limit = 60)
+      }
     }
     // XP and level for the killer. CharacterDied leaves the killer empty when a
     // bot dies, so fall back to the last player who damaged it (hitBy)
