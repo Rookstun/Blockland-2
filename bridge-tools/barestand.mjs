@@ -44,7 +44,7 @@ function bundle(files) {
 }
 const clearBits = (flags, idx) => ({ ...flags, Flags: flags.Flags.map((byte, k) => { let b = byte; for (const i of idx) if ((i >> 3) === k) b &= ~(1 << (i & 7)); return b; }) });
 
-const names = fs.readdirSync(PREFABS).filter(f => /^(shop|gun|bow)_[a-z0-9_]+\.brz$/.test(f) && !/_bare\.brz$|_copy\.brz$|pre_/.test(f) && (!ONLY || ONLY.test(f)));
+const names = fs.readdirSync(PREFABS).filter(f => /^(shop|gun|bow)_[a-z0-9_]+\.brz$/.test(f) && !/_bare\.brz$|_case\.brz$|_copy\.brz$|pre_/.test(f) && (!ONLY || ONLY.test(f)));
 for (const f of names) {
   const reader = brs.WorldReader.from(fs.readFileSync(path.join(PREFABS, f)));
   const paths = reader.fs.listPaths();
