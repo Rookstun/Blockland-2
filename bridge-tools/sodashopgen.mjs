@@ -4,6 +4,8 @@
 // (Weapon_SodaCan / BP_ItemPickup_Soda), the name and price set, and the can
 // recoloured per flavour (colour overrides on the stand and on the item given).
 // Flavours live in mapgen/sodas.json (the market layout reads the same file).
+// (2026-10-16, owner: "make sodas heal alot more") the item has no heal field; `heal` goes into
+// the item's DamageMultiplier, which a heal item is assumed to scale its heal by (check in game).
 //
 //   node sodashopgen.mjs sodas.json   (reads Saved/Prefabs/shop_bronze.brz)
 //
@@ -48,9 +50,9 @@ function patch(c, t) {
     case 'BrickComponentType_WireGraphPseudo_Var': d.Value = setVariant(d.Value, p); break;
     case 'Component_TextDisplay': d.Text = String(p); break;
     case 'Component_ItemSpawn':
-      d.ItemNameOverride = t.name; d.DamageMultiplier = 1; d.bOverridePickupColors = true; d.PickupMeshColors = recolor(d.PickupMeshColors, t); break;
+      d.ItemNameOverride = t.name; d.DamageMultiplier = t.heal ?? 1; d.bOverridePickupColors = true; d.PickupMeshColors = recolor(d.PickupMeshColors, t); break;
     case 'BrickComponentType_WireGraph_Exec_Character_AddInventoryItemAdv':
-      d.ItemNameOverride = t.name; d.DamageMultiplier = 1; d.bOverrideColors = true; d.MeshColors = recolor(d.MeshColors, t); break;
+      d.ItemNameOverride = t.name; d.DamageMultiplier = t.heal ?? 1; d.bOverrideColors = true; d.MeshColors = recolor(d.MeshColors, t); break;
     // cached values inside the chip, so a fresh copy reads right before its first press
     case 'BrickComponentType_WireGraph_Exec_Gamemode_IncrementLeaderboardValue': d.Value = sameType(d.Value, -p); break;
     case 'BrickComponentType_WireGraph_Expr_MathSubtract': d.InputA = setVariant(d.InputA, p); break;

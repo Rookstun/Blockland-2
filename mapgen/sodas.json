@@ -1,12 +1,12 @@
 [
-  { "key": "dragonfruit", "name": "Dragonfruit Fizz", "price": 40, "body": [230, 40, 140], "accent": [120, 220, 60] },
-  { "key": "volcano", "name": "Volcano Cola", "price": 60, "body": [150, 20, 10], "accent": [255, 140, 0] },
-  { "key": "glacier", "name": "Glacier Mint", "price": 50, "body": [120, 220, 255], "accent": [240, 250, 255] },
-  { "key": "swamp", "name": "Swamp Brew", "price": 25, "body": [70, 110, 40], "accent": [150, 120, 60] },
-  { "key": "starfruit", "name": "Starfruit Sparkle", "price": 80, "body": [255, 220, 40], "accent": [255, 255, 255] },
-  { "key": "voidberry", "name": "Voidberry Nectar", "price": 150, "body": [40, 10, 70], "accent": [180, 90, 255] },
-  { "key": "goldrush", "name": "Gold Rush Tonic", "price": 300, "body": [212, 175, 55], "accent": [60, 40, 10] },
-  { "key": "ghostpepper", "name": "Ghost Pepper Pop", "price": 100, "body": [240, 240, 240], "accent": [220, 30, 30] },
-  { "key": "mango", "name": "Mango Tango", "price": 45, "body": [255, 150, 30], "accent": [250, 80, 60] },
-  { "key": "kraken", "name": "Kraken Ink Soda", "price": 200, "body": [20, 30, 60], "accent": [40, 200, 180] }
+  {"key": "dragonfruit", "name": "Dragonfruit Fizz", "price": 15, "heal": 5, "body": [230, 40, 140], "accent": [120, 220, 60]},
+  {"key": "volcano", "name": "Volcano Cola", "price": 25, "heal": 7, "body": [150, 20, 10], "accent": [255, 140, 0]},
+  {"key": "glacier", "name": "Glacier Mint", "price": 20, "heal": 6, "body": [120, 220, 255], "accent": [240, 250, 255]},
+  {"key": "swamp", "name": "Swamp Brew", "price": 10, "heal": 4, "body": [70, 110, 40], "accent": [150, 120, 60]},
+  {"key": "starfruit", "name": "Starfruit Sparkle", "price": 30, "heal": 8, "body": [255, 220, 40], "accent": [255, 255, 255]},
+  {"key": "voidberry", "name": "Voidberry Nectar", "price": 50, "heal": 12, "body": [40, 10, 70], "accent": [180, 90, 255]},
+  {"key": "goldrush", "name": "Gold Rush Tonic", "price": 80, "heal": 16, "body": [212, 175, 55], "accent": [60, 40, 10]},
+  {"key": "ghostpepper", "name": "Ghost Pepper Pop", "price": 40, "heal": 10, "body": [240, 240, 240], "accent": [220, 30, 30]},
+  {"key": "mango", "name": "Mango Tango", "price": 18, "heal": 5, "body": [255, 150, 30], "accent": [250, 80, 60]},
+  {"key": "kraken", "name": "Kraken Ink Soda", "price": 60, "heal": 14, "body": [20, 30, 60], "accent": [40, 200, 180]}
 ]

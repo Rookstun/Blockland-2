@@ -332,6 +332,10 @@ const HOUSE_SHOP_TIERS = ['bronze', 'iron', 'steel', 'black', 'mithril', 'adaman
 // weapon shops (2026-10-15): blade colour per tier for the window displays, and
 // shop names (KoL-ish, no game references)
 const TIER_STEEL = { bronze: [176, 118, 62], iron: [150, 150, 156], steel: [200, 204, 212], black: [44, 44, 50], mithril: [92, 110, 190], adamant: [70, 140, 90], rune: [80, 180, 200] };
+// soda shacks (TYPES.sodashack): half size across / deep, name boards
+const SS_A = 70, SS_B = 50;
+const SHACK_NAMES = ['FIZZ HUT\nNO REFUNDS ON BURPS', 'THE CARBONATION\nSTATION', 'SUSPICIOUS SODA\nPROBABLY FINE', 'BUBBLES & SONS\nEST. RECENTLY',
+  'LIQUID CANDY\nNOW 40% LIQUID', 'POP SHOP\nPOP IN', 'THE THIRSTY GOBLIN\nGOBLIN NOT FOR SALE', 'SODA\nIT HEALS (ALLEGEDLY)'];
 const WEAPON_NAMES = {
   armory: ['STABBINGTON & SONS\nFINE POINTY THINGS', 'YE OLDE\nSHARP END', 'BLADES 4 LESS\nNO REFUNDS', 'THE HONEST EDGE\nMOSTLY HONEST', 'SWORDS\nWE HAVE THEM', 'GRIM & DAUGHTER\nCUTLERY (LARGE)'],
   gunsmith: ['BANG BROS\nFIREARMS', 'GUNS GUNS GUNS\nALSO GUNS', 'THE LOUD SHOP\nEAR PLUGS EXTRA', 'TRIGGER HAPPY\nTRADING CO', 'PEW SUPPLY\nEST. RECENTLY', 'BOOMSTICK\nBARN'],
@@ -1540,6 +1544,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     },
     armory(cx, cy, fx, fy, s, small, wares) { weaponShop('armory', cx, cy, fx, fy, s, wares ?? []); },
     gunsmith(cx, cy, fx, fy, s, small, wares) { weaponShop('gunsmith', cx, cy, fx, fy, s, wares ?? []); },
+    sodashack(cx, cy, fx, fy, s) { sodaShack(cx, cy, fx, fy, s); },
     tavern(cx, cy, fx, fy, s) {
       const g = building(cx, cy, fx, fy, 360, 240, 2, {
         wallColor: PALETTE.brick[5], upperColor: PALETTE.plaster[1], roofColor: PALETTE.roof[0], rise: 96, doorW: 60, tiles: [[170, 120, 80], [110, 76, 50]],
@@ -2705,6 +2710,50 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     can(84, 88, 0, 28, { color: [200, 200, 205] });
     bx(-4, -91, 88, 4, -79, 90, { color: [170, 170, 176] }); // ring pull
     { const [p, q] = at(0, -85 + 33); plaque({ put, text: 'FIZZ', facing: [fx, fy], x: p, y: q, z: 50, w: 12, h: 8, color: WHITE, style: { Font: 5, LineHeight: 6, Color: { R: 200, G: 30, B: 20, A: 255 } } }); }
+  }
+
+  // ---------------------------------------------------------- soda shack --
+  // (2026-10-16, owner: "make shops like the soda spawn randomly") a roadside soda shack
+  // (mapgen picks the sites, TYPES.sodashack): checker pad, a back wall with shelves of
+  // cans, a striped awning on two posts with lanterns, a name board on top, and three
+  // soda_<key> stands of seeded flavours in front, buttons toward the road.
+  // Local frame: a across, b from the back (-SS_B) to the road (+SS_B).
+  function sodaShack(cx, cy, fx, fy, s) {
+    const MB = 'PB_DefaultMicroBrick', ux = -fy, uy = fx;
+    const at = (a, b) => [cx + a * ux + b * fx, cy + a * uy + b * fy];
+    const bx = (a0, b0, z0, a1, b1, z1, br) => {
+      const [p, q] = at(a0, b0), [r, t] = at(a1, b1);
+      box(Math.min(p, r), Math.min(q, t), z0, Math.max(p, r), Math.max(q, t), z1, { asset: MB, ...br });
+    };
+    const orient = fy > 0 ? 18 : fx > 0 ? 17 : fy < 0 ? 16 : 19; // stand button toward the road (+b)
+    const WHITE = [244, 242, 236];
+    // three different flavours, by seed
+    const flav = SODAS.map((f, k) => [rnd(s, k, 5), f]).sort((x, y) => x[0] - y[0]).slice(0, 3).map(([, f]) => f);
+    const [F0] = flav;
+    for (let a = -SS_A + 10; a < SS_A; a += 20)
+      for (let b = -SS_B + 10; b < SS_B; b += 20) {
+        const [p, q] = at(a, b);
+        box(p - 10, q - 10, 0, p + 10, q + 10, 4, { asset: 'PB_DefaultTile', color: (Math.round((a + b) / 20) & 1) ? WHITE : F0.accent });
+      }
+    bx(-SS_A, -SS_B, 4, SS_A, -SS_B + 6, 84, { color: F0.body });                          // back wall
+    for (const e of [-1, 1]) {
+      bx(e > 0 ? SS_A - 6 : -SS_A, -14, 4, e > 0 ? SS_A : -SS_A + 6, -10, 84, { color: WHITE }); // posts
+      bx(e > 0 ? SS_A - 5 : -SS_A + 1, -13, 88, e > 0 ? SS_A - 1 : -SS_A + 5, -11, 94, GLOW([255, 200, 120], 4)); // lanterns
+    }
+    for (let b = -SS_B, n = 0; b < -8; b += 6, n++) bx(-SS_A, b, 84, SS_A, Math.min(b + 6, -8), 88, { color: n & 1 ? WHITE : flav[(n >> 1) % 3].body }); // striped awning
+    flav.forEach((f, k) => {
+      const a0 = -60 + k * 40;
+      for (const z of [22, 42]) {                                                           // shelves of cans
+        bx(a0, -SS_B + 6, z - 2, a0 + 40, -SS_B + 12, z, { color: [120, 90, 60] });
+        for (let c = 4; c < 40; c += 8) bx(a0 + c, -SS_B + 7, z, a0 + c + 4, -SS_B + 11, z + 10, { color: (c >> 3) & 1 ? f.accent : f.body });
+      }
+      const [sx, sy] = at(-40 + k * 40, 14);
+      stats.houseShops.push({ at: [sx, sy, 16 + (zCtx ?? 0)], tier: f.key, orient, prefab: 'soda_' + f.key });
+    });
+    const [p, q] = at(0, -11);
+    plaque({ put, text: pick(SHACK_NAMES, s, 11), facing: [fx, fy], x: p, y: q, z: 98, w: 44, h: 10, color: F0.body,
+      style: { Font: 5, LineHeight: 4, Color: { R: 255, G: 255, B: 255, A: 255 }, OutlineColor: { R: 20, G: 20, B: 30, A: 255 } } });
+    count('soda shack');
   }
 
   // --------------------------------------------------------------- town --

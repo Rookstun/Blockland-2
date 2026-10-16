@@ -310,44 +310,44 @@ mod buyName(uid: string, it: entity) -> string {
       return "Steel Spatha"
     }
   } else if it == $BRItemBase/Weapon_SodaCan {
-    if invBuy.has("${uid}:40") && GetUnixTime() - invBuy.get("${uid}:40") <= 20 {
-      invBuy.remove("${uid}:40")
+    if invBuy.has("${uid}:15") && GetUnixTime() - invBuy.get("${uid}:15") <= 20 {
+      invBuy.remove("${uid}:15")
       return "Dragonfruit Fizz"
     }
-    if invBuy.has("${uid}:100") && GetUnixTime() - invBuy.get("${uid}:100") <= 20 {
-      invBuy.remove("${uid}:100")
+    if invBuy.has("${uid}:40") && GetUnixTime() - invBuy.get("${uid}:40") <= 20 {
+      invBuy.remove("${uid}:40")
       return "Ghost Pepper Pop"
     }
-    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 20 {
-      invBuy.remove("${uid}:50")
+    if invBuy.has("${uid}:20") && GetUnixTime() - invBuy.get("${uid}:20") <= 20 {
+      invBuy.remove("${uid}:20")
       return "Glacier Mint"
-    }
-    if invBuy.has("${uid}:300") && GetUnixTime() - invBuy.get("${uid}:300") <= 20 {
-      invBuy.remove("${uid}:300")
-      return "Gold Rush Tonic"
-    }
-    if invBuy.has("${uid}:200") && GetUnixTime() - invBuy.get("${uid}:200") <= 20 {
-      invBuy.remove("${uid}:200")
-      return "Kraken Ink Soda"
-    }
-    if invBuy.has("${uid}:45") && GetUnixTime() - invBuy.get("${uid}:45") <= 20 {
-      invBuy.remove("${uid}:45")
-      return "Mango Tango"
     }
     if invBuy.has("${uid}:80") && GetUnixTime() - invBuy.get("${uid}:80") <= 20 {
       invBuy.remove("${uid}:80")
-      return "Starfruit Sparkle"
-    }
-    if invBuy.has("${uid}:25") && GetUnixTime() - invBuy.get("${uid}:25") <= 20 {
-      invBuy.remove("${uid}:25")
-      return "Swamp Brew"
-    }
-    if invBuy.has("${uid}:150") && GetUnixTime() - invBuy.get("${uid}:150") <= 20 {
-      invBuy.remove("${uid}:150")
-      return "Voidberry Nectar"
+      return "Gold Rush Tonic"
     }
     if invBuy.has("${uid}:60") && GetUnixTime() - invBuy.get("${uid}:60") <= 20 {
       invBuy.remove("${uid}:60")
+      return "Kraken Ink Soda"
+    }
+    if invBuy.has("${uid}:18") && GetUnixTime() - invBuy.get("${uid}:18") <= 20 {
+      invBuy.remove("${uid}:18")
+      return "Mango Tango"
+    }
+    if invBuy.has("${uid}:30") && GetUnixTime() - invBuy.get("${uid}:30") <= 20 {
+      invBuy.remove("${uid}:30")
+      return "Starfruit Sparkle"
+    }
+    if invBuy.has("${uid}:10") && GetUnixTime() - invBuy.get("${uid}:10") <= 20 {
+      invBuy.remove("${uid}:10")
+      return "Swamp Brew"
+    }
+    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 20 {
+      invBuy.remove("${uid}:50")
+      return "Voidberry Nectar"
+    }
+    if invBuy.has("${uid}:25") && GetUnixTime() - invBuy.get("${uid}:25") <= 20 {
+      invBuy.remove("${uid}:25")
       return "Volcano Cola"
     }
   }
@@ -464,25 +464,25 @@ mod giveNamed(ch: character, slot: int, name: string, it: entity) {
   } else if name == "Steel Spatha" {
     ch.SetInventoryItemAdv($BRItemBase/Weapon_Spatha, slot = slot, damage = 0.800, itemName = "Steel Spatha", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255), ColorSRGB(255, 255, 0, 255), ColorSRGB(90, 90, 90, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Dragonfruit Fizz" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Dragonfruit Fizz", overrideColors = true, meshColors = [ColorSRGB(230, 40, 140, 255), ColorSRGB(120, 220, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 5.000, itemName = "Dragonfruit Fizz", overrideColors = true, meshColors = [ColorSRGB(230, 40, 140, 255), ColorSRGB(120, 220, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Ghost Pepper Pop" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Ghost Pepper Pop", overrideColors = true, meshColors = [ColorSRGB(240, 240, 240, 255), ColorSRGB(220, 30, 30, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 10.000, itemName = "Ghost Pepper Pop", overrideColors = true, meshColors = [ColorSRGB(240, 240, 240, 255), ColorSRGB(220, 30, 30, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Glacier Mint" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Glacier Mint", overrideColors = true, meshColors = [ColorSRGB(120, 220, 255, 255), ColorSRGB(240, 250, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 6.000, itemName = "Glacier Mint", overrideColors = true, meshColors = [ColorSRGB(120, 220, 255, 255), ColorSRGB(240, 250, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Gold Rush Tonic" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Gold Rush Tonic", overrideColors = true, meshColors = [ColorSRGB(212, 175, 55, 255), ColorSRGB(60, 40, 10, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 16.000, itemName = "Gold Rush Tonic", overrideColors = true, meshColors = [ColorSRGB(212, 175, 55, 255), ColorSRGB(60, 40, 10, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Kraken Ink Soda" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Kraken Ink Soda", overrideColors = true, meshColors = [ColorSRGB(20, 30, 60, 255), ColorSRGB(40, 200, 180, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 14.000, itemName = "Kraken Ink Soda", overrideColors = true, meshColors = [ColorSRGB(20, 30, 60, 255), ColorSRGB(40, 200, 180, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Mango Tango" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Mango Tango", overrideColors = true, meshColors = [ColorSRGB(255, 150, 30, 255), ColorSRGB(250, 80, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 5.000, itemName = "Mango Tango", overrideColors = true, meshColors = [ColorSRGB(255, 150, 30, 255), ColorSRGB(250, 80, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Starfruit Sparkle" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Starfruit Sparkle", overrideColors = true, meshColors = [ColorSRGB(255, 220, 40, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 8.000, itemName = "Starfruit Sparkle", overrideColors = true, meshColors = [ColorSRGB(255, 220, 40, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Swamp Brew" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Swamp Brew", overrideColors = true, meshColors = [ColorSRGB(70, 110, 40, 255), ColorSRGB(150, 120, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 4.000, itemName = "Swamp Brew", overrideColors = true, meshColors = [ColorSRGB(70, 110, 40, 255), ColorSRGB(150, 120, 60, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Voidberry Nectar" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Voidberry Nectar", overrideColors = true, meshColors = [ColorSRGB(40, 10, 70, 255), ColorSRGB(180, 90, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 12.000, itemName = "Voidberry Nectar", overrideColors = true, meshColors = [ColorSRGB(40, 10, 70, 255), ColorSRGB(180, 90, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Volcano Cola" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, itemName = "Volcano Cola", overrideColors = true, meshColors = [ColorSRGB(150, 20, 10, 255), ColorSRGB(255, 140, 0, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 7.000, itemName = "Volcano Cola", overrideColors = true, meshColors = [ColorSRGB(150, 20, 10, 255), ColorSRGB(255, 140, 0, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else {
     ch.SetInventoryItem(it, slot)
   }

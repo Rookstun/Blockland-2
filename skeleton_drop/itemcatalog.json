@@ -2388,8 +2388,9 @@
  {
   "name": "Dragonfruit Fizz",
   "item": "Weapon_SodaCan",
-  "price": 40,
+  "price": 15,
   "prefab": "soda_dragonfruit",
+  "damage": 5,
   "colors": [
    [
     230,
@@ -2436,8 +2437,9 @@
  {
   "name": "Ghost Pepper Pop",
   "item": "Weapon_SodaCan",
-  "price": 100,
+  "price": 40,
   "prefab": "soda_ghostpepper",
+  "damage": 10,
   "colors": [
    [
     240,
@@ -2484,8 +2486,9 @@
  {
   "name": "Glacier Mint",
   "item": "Weapon_SodaCan",
-  "price": 50,
+  "price": 20,
   "prefab": "soda_glacier",
+  "damage": 6,
   "colors": [
    [
     120,
@@ -2532,8 +2535,9 @@
  {
   "name": "Gold Rush Tonic",
   "item": "Weapon_SodaCan",
-  "price": 300,
+  "price": 80,
   "prefab": "soda_goldrush",
+  "damage": 16,
   "colors": [
    [
     212,
@@ -2580,8 +2584,9 @@
  {
   "name": "Kraken Ink Soda",
   "item": "Weapon_SodaCan",
-  "price": 200,
+  "price": 60,
   "prefab": "soda_kraken",
+  "damage": 14,
   "colors": [
    [
     20,
@@ -2628,8 +2633,9 @@
  {
   "name": "Mango Tango",
   "item": "Weapon_SodaCan",
-  "price": 45,
+  "price": 18,
   "prefab": "soda_mango",
+  "damage": 5,
   "colors": [
    [
     255,
@@ -2676,8 +2682,9 @@
  {
   "name": "Starfruit Sparkle",
   "item": "Weapon_SodaCan",
-  "price": 80,
+  "price": 30,
   "prefab": "soda_starfruit",
+  "damage": 8,
   "colors": [
    [
     255,
@@ -2724,8 +2731,9 @@
  {
   "name": "Swamp Brew",
   "item": "Weapon_SodaCan",
-  "price": 25,
+  "price": 10,
   "prefab": "soda_swamp",
+  "damage": 4,
   "colors": [
    [
     70,
@@ -2772,8 +2780,9 @@
  {
   "name": "Voidberry Nectar",
   "item": "Weapon_SodaCan",
-  "price": 150,
+  "price": 50,
   "prefab": "soda_voidberry",
+  "damage": 12,
   "colors": [
    [
     40,
@@ -2820,8 +2829,9 @@
  {
   "name": "Volcano Cola",
   "item": "Weapon_SodaCan",
-  "price": 60,
+  "price": 25,
   "prefab": "soda_volcano",
+  "damage": 7,
   "colors": [
    [
     150,
