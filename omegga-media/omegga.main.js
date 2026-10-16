@@ -241,7 +241,8 @@ module.exports = class Media {
     // !tv: wire TV (tv.mjs) writes EA3.2 loop chips with brs-js 4 (lib/brs4.mjs = tools/brs4/dist.mjs)
     try {
       this.brs4 = await import(pathToFileURL(path.join(__dirname, 'lib/brs4.mjs')).href);
-      this.tv = await import(pathToFileURL(path.join(__dirname, 'tv.mjs')).href);
+      // ?v=mtime: Omegga reloads keep the process, and its ESM cache would keep an old tv.mjs
+      this.tv = await import(pathToFileURL(path.join(__dirname, 'tv.mjs')).href + '?v=' + fs.statSync(path.join(__dirname, 'tv.mjs')).mtimeMs);
     } catch (e) { console.error('[media] !tv disabled', e); }
     for (const old of global.__mediaSessions?.values() ?? []) {
       try { old.stop?.(); old.clear?.(); } catch {}
@@ -297,7 +298,8 @@ module.exports = class Media {
     on(['chatcmd:tts', 'chatcmd:ttsvol'], async name => this.whisper(name, '<color="9cf">Use /tts with a slash: /tts hello there</>'));
     on(['cmd:stop', 'chatcmd:stop', 'cmd:stopmedia', 'chatcmd:stopmedia'], this.stopCommand);
     on(['cmd:tv', 'chatcmd:tv'], this.tvCommand);
-    return { registeredCommands: ['playvideo', 'search', 'playaudio', 'stop', 'stopmedia', 'tv'] };
+    on(['cmd:textvideo', 'chatcmd:textvideo'], (name, args) => this.tvCommand(name, args, 'text'));
+    return { registeredCommands: ['playvideo', 'search', 'playaudio', 'stop', 'stopmedia', 'tv', 'textvideo'] };
   }
 
   async stop() {
@@ -1104,20 +1106,24 @@ module.exports = class Media {
    * the clock/title/channel are text displays. Built in chunks (tv-chunk-seconds);
    * each chunk replaces only the screen + chip, the cabinet stays.
    */
-  async tvCommand(name, args) {
+  async tvCommand(name, args, mode = 'tv') {
+    // /textvideo = the same player with the picture as coloured text on one text display
+    const text = mode === 'text', cmdName = text ? '/textvideo' : '!tv';
     const key = `tv:${name}`;
     if (!this.tv || !this.brs4) return this.whisper(name, '<color="f55">The TV is not installed (lib/brs4.mjs missing).</>');
-    if (!args.length) return this.whisper(name, 'Usage: !tv <link or search words> [width] [fps=N] [-x|+x|-y|+y] [mute] [start=S] [len=S]   !tv stop');
+    if (!args.length) return this.whisper(name, `Usage: ${cmdName} <link or search words> [width] [fps=N] [-x|+x|-y|+y] [mute] [mono] [start=S] [len=S]   ${cmdName} stop`);
     if (args[0] === 'stop' || args[0] === 'off') return this.stopSession(name, key) || this.whisper(name, 'Your TV is off already.');
     const opts = [], words = [];
-    for (const a of args) (/^([+-][xy]|mute|\d+(\.\d+)?|(fps|start|len)[=:]\d+(\.\d+)?|\d+fps)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
+    for (const a of args) (/^([+-][xy]|mute|mono|\d+(\.\d+)?|(fps|start|len)[=:]\d+(\.\d+)?|\d+fps)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
     if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
     const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
     const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
     const nums = opts.filter(a => /^\d+(\.\d+)?$/.test(a)).map(Number);
-    const width = Math.max(16, Math.min(this.config['tv-max-width'] ?? 96, Math.round(nums[0] ?? this.config['tv-width'] ?? 48)));
+    const width = text
+      ? Math.max(16, Math.min(this.config['textvideo-max-cols'] ?? 120, Math.round(nums[0] ?? this.config['textvideo-cols'] ?? 64)))
+      : Math.max(16, Math.min(this.config['tv-max-width'] ?? 96, Math.round(nums[0] ?? this.config['tv-width'] ?? 48)));
     const fpsM = opts.map(a => /^(\d+)fps$/i.exec(a)).find(Boolean);
-    const fps = Math.max(1, Math.min(20, Number(opt('fps') || fpsM?.[1] || this.config['tv-fps'] || 8)));
+    const fps = Math.max(1, Math.min(20, Number(opt('fps') || fpsM?.[1] || (text ? this.config['textvideo-fps'] : this.config['tv-fps']) || (text ? 6 : 8))));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(10, this.config['tv-chunk-seconds'] ?? 30);
@@ -1148,21 +1154,25 @@ module.exports = class Media {
       const total = Number(probe.format?.duration) || maxMin * 60;
       const startAt = Math.max(0, Math.min(total - 1, opt('start') || 0));
       const seconds = Math.min(total - startAt, maxMin * 60, opt('len') || Infinity);
-      const height = Math.max(8, Math.min(Math.round(width * 1.2), Math.round((width * vs.height) / vs.width)));
+      // text: a glyph is about half as wide as a line is tall, so half the rows
+      const charW = this.config['textvideo-char-width'] ?? 0.55;
+      const height = text
+        ? Math.max(6, Math.min(width, Math.round((width * vs.height * charW) / vs.width)))
+        : Math.max(8, Math.min(Math.round(width * 1.2), Math.round((width * vs.height) / vs.width)));
       const title = String(probe.format?.tags?.title || (link.startsWith('ytsearch') ? words.join(' ') : 'TONIGHT: A MYSTERY')).replace(/[<>\\]/g, '').toUpperCase();
       const chunks = Math.max(1, Math.ceil(seconds / chunkSec));
       const channel = 2 + (crypto.createHash('sha1').update(link).digest()[0] % 12);
 
       // placement: the TV stands `dist` from the player, screen facing `facing` (towards them)
-      const L = this.tv.layout(width, height, P);
+      const L = text ? this.tv.textLayout(width, height, { lh: this.config['textvideo-line-height'] ?? 6, charW }) : this.tv.layout(width, height, P);
       const n = NORMAL[facing];
       const orient = 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing], T = ORIENT[orient];
-      const dist = Math.max(10, Math.round((L.SW * 0.9) / STUD)) * STUD;
+      const dist = Math.max(10, Math.round(((text ? L.TW : L.SW) * 0.9) / STUD)) * STUD;
       const snap = v => Math.round(v / STUD) * STUD;
       const at = [snap(pos[0] - n[0] * dist), snap(pos[1] - n[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
       const world = p => T(p).map((v, i) => v + at[i]);
       const clearScreen = () => {
-        for (const [c, h] of this.tv.screenBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
+        for (const [c, h] of text ? this.tv.textBoxes(L) : this.tv.screenBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
       };
       const load = buf => {
         const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
@@ -1179,8 +1189,16 @@ module.exports = class Media {
         const fb = width * height * 3, frames = [];
         for (let o = 0; o + fb <= raw.length; o += fb) frames.push(raw.subarray(o, o + fb));
         if (!frames.length) throw new Error('no frames decoded');
-        const enc = this.tv.encodeFrames(frames, width, height, { cap: Math.floor((perTick * 20 / fps) * 0.8) });
-        const screen = this.tv.screenPrefab(this.brs4, L, enc, { fps, tOff: t0 - startAt, total: seconds, title, channel, chunk: perTick, owner });
+        let screen, changes;
+        if (text) {
+          const strs = this.tv.asciiFrames(frames, width, height, { color: !opts.includes('mono'), max: this.config['textvideo-max-chars'] ?? 12000 });
+          screen = this.tv.buildTextScreen(this.brs4, L, strs, { fps, tOff: t0 - startAt, total: seconds, title, owner });
+          changes = strs.reduce((a, x) => a + x.length, 0);
+        } else {
+          const enc = this.tv.encodeFrames(frames, width, height, { cap: Math.floor((perTick * 20 / fps) * 0.8) });
+          screen = this.tv.screenPrefab(this.brs4, L, enc, { fps, tOff: t0 - startAt, total: seconds, title, channel, chunk: perTick, owner });
+          changes = enc.data.length;
+        }
         let audio = null;
         if (withSound) {
           const wav = file.replace(/\.[^.]+$/, '') + `.tv${k}.wav`;
@@ -1190,12 +1208,12 @@ module.exports = class Media {
           } catch (e) { console.error(`[media] tv soundtrack ${k}`, e); }
           finally { fs.rmSync(wav, { force: true }); }
         }
-        return { screen, audio, dur, changes: enc.data.length };
+        return { screen, audio, dur, changes };
       };
       // soundtrack chips sit under the cabinet between the legs, chunks alternate sides
       const loadAudio = (d, k) => {
         if (!d) return null;
-        const c = world([(k % 2 ? 1 : -1) * Math.round(L.cw / 3 / 10) * 10, L.depth / 2, 28]);
+        const c = text ? world([(k % 2 ? 1 : -1) * 60, L.depth + 60, 28]) : world([(k % 2 ? 1 : -1) * Math.round(L.cw / 3 / 10) * 10, L.depth / 2, 28]);
         const spot = [0, 1, 2].map(i => Math.round((c[i] - (d.lo[i] + d.hi[i]) / 2) / 2) * 2);
         const clr = this.loadDevice(d, {}, spot);
         audioClears.push(clr);
@@ -1206,12 +1224,12 @@ module.exports = class Media {
       const first = await build(0);
       if (session.stopped) return;
       this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
-      load(this.tv.buildBody(this.brs4, L, { owner }));
+      if (!text) load(this.tv.buildBody(this.brs4, L, { owner }));
       load(first.screen);
       let prevAudio = loadAudio(first.audio, 0);
       const mins = Math.floor(seconds / 60), secs = Math.round(seconds % 60);
-      this.whisper(name, `<color="9cf">Now showing on channel ${channel}: ${sanitize(title.slice(0, 60))} (${width}x${height}, ${mins}:${String(secs).padStart(2, '0')}, ${fps} fps). !tv stop switches it off.</>`);
-      console.log(`[media] tv ${name}: ${width}x${height} ${fps} fps, ${chunks} chunk(s), chunk 0 ${first.changes} changes, at ${at.join(',')} orient ${orient}`);
+      this.whisper(name, `<color="9cf">Now showing on channel ${channel}: ${sanitize(title.slice(0, 60))} (${width}x${height}, ${mins}:${String(secs).padStart(2, '0')}, ${fps} fps). ${cmdName} stop switches it off.</>`);
+      console.log(`[media] ${mode} ${name}: ${width}x${height} ${fps} fps, ${chunks} chunk(s), chunk 0 ${first.changes} changes, at ${at.join(',')} orient ${orient}`);
       let start = Date.now(), durPrev = first.dur;
       for (let k = 1; k < chunks && !session.stopped; k++) {
         const set = await build(k).catch(e => (console.error(`[media] tv chunk ${k}`, e), null));

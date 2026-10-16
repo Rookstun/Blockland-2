@@ -308,3 +308,137 @@ export function screenBoxes(L) {
   out.push([[0, (40 + L.depth - 20) / 2, L.bottom + 20], [L.cw - 9, (L.depth - 20 - 40) / 2 + 22, 18]]); // gates
   return out;
 }
+
+// ---------- TEXT VIDEO: the picture as coloured text on one TextDisplay ----------
+// Frames are strings in an Any Value array; a 20 Hz clock picks the frame due
+// (Server Uptime) and sets a Var wired into the screen's Text. Colour = rich
+// text runs <color="rrggbb">...</> (Brickadia's tag, owner 2026-10-16), merged
+// over similar neighbours; quantisation gets coarser when a frame gets too long.
+
+const RAMP = " .:-=+*%#@";
+export const TEXT_MAX = 4500; // one wire string 34k chars failed to load, 4.8k was fine
+
+/** rgb24 frames (cols x rows) -> strings. color false = green mono ASCII. */
+export function asciiFrames(frames, cols, rows, { color = true, max = TEXT_MAX } = {}) {
+  const hex2 = v => Math.min(255, Math.round(v / 17) * 17).toString(16).padStart(2, '0');
+  return frames.map(fr => {
+    if (color) for (const tol of [20, 32, 48, 64, 96, 128, 192]) {
+      // a run keeps its first cell's colour while later cells stay within tol of it
+      const lines = [];
+      for (let r = 0; r < rows; r++) {
+        let line = '', run = '', rc = null;
+        const flush = () => { if (run) line += rc ? `<color="${rc.map(hex2).join('')}">${run}</>` : run; run = ''; };
+        for (let c = 0; c < cols; c++) {
+          const o = (r * cols + c) * 3, px = [fr[o], fr[o + 1], fr[o + 2]];
+          const lum = (0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2]) / 255;
+          // colour carries the picture: dense glyphs, near-black cells blank
+          const ch = lum < 0.05 ? ' ' : RAMP[Math.min(RAMP.length - 1, 5 + Math.floor(lum * 5))];
+          if (ch === ' ') { run += ch; continue; }
+          if (!rc || Math.max(...px.map((v, i) => Math.abs(v - rc[i]))) > tol) { flush(); rc = px; }
+          run += ch;
+        }
+        flush();
+        lines.push(line.replace(/ +$/, ''));
+      }
+      const s = lines.join('\n');
+      if (s.length <= max) return s;
+    }
+    const lines = [];
+    for (let r = 0; r < rows; r++) {
+      let line = '';
+      for (let c = 0; c < cols; c++) {
+        const o = (r * cols + c) * 3;
+        line += RAMP[Math.min(RAMP.length - 1, Math.floor(((0.2126 * fr[o] + 0.7152 * fr[o + 1] + 0.0722 * fr[o + 2]) / 255) * RAMP.length))];
+      }
+      lines.push(line);
+    }
+    return lines.join('\n');
+  });
+}
+
+/** Layout of a text screen: cols x rows characters at LineHeight lh; charW = glyph width per unit of line height (monospace guess). */
+export function textLayout(cols, rows, { lh = 6, charW = 0.55 } = {}) {
+  const TW = Math.ceil((cols * lh * charW) / 2) * 2 + 20, TH = Math.ceil((rows * lh) / 2) * 2 + 20;
+  const legH = 40, z0 = legH + 30; // board bottom (info strip below the picture)
+  return { cols, rows, lh, charW, TW, TH, legH, z0, top: z0 + TH, depth: 40 + 40 * 8 };
+}
+
+const TEXTFONTS = [{ type: 'BrickFontDescriptor', name: 'IosevkaTerm' }, { type: 'BrickFontDescriptor', name: 'Bungee' }];
+
+/** One chunk's whole text set (board, stand, picture text, info line, chip). Origin = floor under the board's centre, facing -y. */
+export function buildTextScreen(lib, T, strs, { fps, tOff = 0, total = 0, title = '', owner = OWNER } = {}) {
+  const { World, brdb } = lib;
+  const C = brdb.COMPONENTS;
+  const w = new World();
+  const O = w.addOwner(owner);
+  const box = (x0, x1, y0, y1, z0, z1, color, extra = {}) =>
+    w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2], position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], color, owner_index: O, ...extra });
+  const hx = T.TW / 2, FR = [30, 30, 34];
+  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, Font: 0, LineHeight: T.lh, Color: { R: 160, G: 255, B: 170, A: 255 }, Outline: 0, OutlineWidth: 0, Text: strs[0] } };
+  const screen = { h: box(-hx, hx, -2, 2, T.z0, T.top, [4, 4, 6], { components: [face] }), c: C.TextDisplay };
+  box(-hx - 8, hx + 8, -4, 4, T.top, T.top + 8, FR); box(-hx - 8, hx + 8, -4, 4, T.z0 - 30, T.z0, FR);
+  box(-hx - 8, -hx, -2, 4, T.z0, T.top, FR); box(hx, hx + 8, -2, 4, T.z0, T.top, FR);
+  box(-hx - 8, hx + 8, 4, 10, T.z0 - 30, T.top + 8, [14, 14, 16]); // back
+  for (const x of [-hx + 20, hx - 20]) { box(x - 6, x + 6, -20, 20, 0, 4, FR); box(x - 4, x + 4, -4, 4, 4, T.z0 - 30, FR); }
+  // info strip on the bottom frame: title + clock
+  const info = { h: box(-hx, hx, -6, -4, T.z0 - 26, T.z0 - 4, [10, 10, 12], { components: [{ type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: 8, Color: { R: 255, G: 210, B: 120, A: 255 }, Text: title } }] }), c: C.TextDisplay };
+
+  // gates behind the board, hidden
+  let slot = 0;
+  const gate = (c, data = {}) => {
+    const i = slot++;
+    const h = w.addBrick({ asset: c.BRICK, position: [-140 + (i % 8) * 40, 40 + Math.floor(i / 8) * 40, 20], color: [200, 200, 200], owner_index: O,
+      visibility: false, collision: false, components: [{ type: c.NAME, data }] });
+    return { h, c };
+  };
+  const wire = (a, ap, b, bp) => {
+    if (!a.c.PORTS[ap] || !b.c.PORTS[bp]) throw Error(`bad port ${a.c.NAME}.${ap} -> ${b.c.NAME}.${bp}`);
+    w.addWire({ brick: a.h, component_type: a.c.NAME, port: a.c.PORTS[ap] }, { brick: b.h, component_type: b.c.NAME, port: b.c.PORTS[bp] });
+  };
+  const num = v => ({ $variant: 'f64', value: v }), str = v => ({ $variant: 'Str', value: v });
+  const outPort = c => (c.PORTS.bOutput ? 'bOutput' : 'Output');
+  const K = n => [gate(C.Var, { Value: num(n) }), 'Value'];
+  const S = s => [gate(C.Var, { Value: str(s) }), 'Value'];
+  const op = (c, a, b) => { const x = gate(c); if (a) wire(...a, x, c.PORTS.InputA ? 'InputA' : 'Input'); if (b) wire(...b, x, 'InputB'); return [x, outPort(c)]; };
+  const V = v => gate(C.Var, { Value: v });
+  const val = v => [v, 'Value'];
+  const set = (v, src) => { const s = gate(C.Exec_Var_Set); wire(v, 'VarRef', s, 'VarRef'); wire(...src, s, 'Value'); return s; };
+  const chain = (...gs) => { for (let i = 1; i < gs.length; i++) wire(gs[i - 1], 'ExecOut', gs[i], 'Exec'); return gs; };
+  const select = (a, b, cond) => { const x = gate(C.Expr_Select); wire(...a, x, 'InputA'); wire(...b, x, 'InputB'); wire(...cond, x, 'bSelectB'); return [x, 'Output']; };
+
+  const NF = strs.length;
+  const frames = gate(C.ArrayVar, { Value: { $elementType: 'WireValue', $array: strs.map(str) } });
+  const pic = V(str(strs[0])), t0 = V(num(0)), playing = V(num(0));
+  wire(pic, 'Value', screen, 'Text');
+  const upP = [gate(C.Expr_ServerUptime), 'Uptime'];
+  const sw = gate(C.Stopwatch, { Limit: 0.1, Time: 0, bRunning: true });
+  const swE = gate(C.Expr_EdgeDetectorExec); wire(sw, 'Expired', swE, 'Input');
+  const st = chain(set(t0, upP), set(playing, K(1)));
+  wire(swE, 'OnRisingEdge', st[0], 'Exec');
+  const el = op(C.Expr_MathSubtract, upP, val(t0));
+  const target = op(C.Expr_MathMin, op(C.Expr_Floor, op(C.Expr_MathMultiply, el, K(fps))), K(NF - 1));
+  const clock = gate(C.Clock, { bEnabled: true, bPulseOn: false, OnTimeSeconds: 0.025, OffTimeSeconds: 0.025, IntervalSeconds: 0.05 });
+  const tick = gate(C.Expr_EdgeDetectorExec); wire(clock, 'Pulse', tick, 'Input');
+  const go = gate(C.Exec_Branch); wire(...op(C.Expr_CompareGreater, val(playing), K(0.5)), go, 'bCond'); wire(tick, 'OnRisingEdge', go, 'Exec');
+  const get = gate(C.Exec_ArrayVar_Get); wire(frames, 'ArrayVarRef', get, 'ArrayVarRef'); wire(...target, get, 'Index');
+  wire(go, 'ExecOutA', get, 'Exec');
+  const put = set(pic, [get, 'Value']); wire(get, 'ExecOut', put, 'Exec');
+  // info line: title + m:ss / total
+  const Tm = op(C.Expr_MathAdd, K(tOff), op(C.Expr_MathMultiply, val(playing), op(C.Expr_MathMin, el, K(NF / fps))));
+  const mins = op(C.Expr_Floor, op(C.Expr_MathDivide, Tm, K(60)));
+  const secs = op(C.Expr_Floor, op(C.Expr_MathModulo, Tm, K(60)));
+  const pad = select(S('0'), S(''), op(C.Expr_CompareGreaterOrEqual, secs, K(10)));
+  const tt = `${Math.floor(total / 60)}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
+  const fmt = gate(C.Expr_String_FormatText, { FormatString: `${title.slice(0, 50).replace(/[{}]/g, '')}    {A}:{B}{C} / ${tt}` });
+  wire(...mins, fmt, 'InputA'); wire(...pad, fmt, 'InputB'); wire(...secs, fmt, 'InputC');
+  wire(fmt, 'Output', info, 'Text');
+  if (40 + Math.ceil(slot / 8) * 40 > T.depth) throw Error('textvideo: too many gates');
+  w.makePrefab({});
+  return w.toBrz({ bundle: { description: 'Text video' }, externalAssets: TEXTFONTS });
+}
+
+/** Clear box (file coords [centre, half]) of a whole text set: board + stand + gates. */
+export function textBoxes(T) {
+  const hx = T.TW / 2 + 10;
+  return [[[0, 0, (T.top + 10) / 2], [hx, 22, (T.top + 10) / 2]], [[0, (40 + T.depth) / 2, 20], [hx > 180 ? hx : 180, (T.depth - 20) / 2, 16]]];
+}
