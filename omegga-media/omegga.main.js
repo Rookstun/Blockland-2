@@ -1277,6 +1277,8 @@ module.exports = class Media {
   async oGridCommand(name, args) {
     const key = `ogrid:${name}`;
     if (!this.og || !this.brs4) return this.whisper(name, '<color="f55">/ogrid is not installed (lib/brs4.mjs missing).</>');
+    // 2026-10-16: two server crashes (array index assert) while /ogrid lines streamed into a receiver being cleared/replaced: off until fixed
+    if (!this.config['ogrid-enabled']) return this.whisper(name, '<color="f55">/ogrid is switched off for now (it crashed the server twice).</>');
     if (!args.length) return this.whisper(name, 'Usage: /ogrid <link or search words> [size 32] [fps=N] [-x|+x|-y|+y] [mute] [letters] [start=S] [len=S]   /ogrid stop');
     if (args[0] === 'stop' || args[0] === 'off') {
       const hadOne = this.stopSession(name, key);
