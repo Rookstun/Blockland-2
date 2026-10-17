@@ -1270,13 +1270,15 @@ module.exports = class Media {
   async oGridCommand(name, args) {
     const key = `ogrid:${name}`;
     if (!this.og || !this.brs4) return this.whisper(name, '<color="f55">/ogrid is not installed (lib/brs4.mjs missing).</>');
-    if (!args.length) return this.whisper(name, 'Usage: /ogrid <link or search words> [size 32] [fps=N] [-x|+x|-y|+y] [mute] [start=S] [len=S]   /ogrid stop');
+    if (!args.length) return this.whisper(name, 'Usage: /ogrid <link or search words> [size 32] [fps=N] [-x|+x|-y|+y] [mute] [letters] [start=S] [len=S]   /ogrid stop');
     if (args[0] === 'stop' || args[0] === 'off') return this.stopSession(name, key) || this.whisper(name, 'Nothing is showing.');
     const opts = [], words = [];
-    for (const a of args) (/^([+-][xy]|mute|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
+    for (const a of args) (/^([+-][xy]|mute|letters|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
     if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
     const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
     const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
+    // cell glyph: a full block (default) or, with `letters`, the letter O
+    const glyph = opts.includes('letters') ? 'O' : this.config['ogrid-glyph'] || this.og.GLYPH;
     const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 64, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 32)));
     const fps = Math.max(1, Math.min(15, opt('fps') || this.config['ogrid-fps'] || 8));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
@@ -1353,11 +1355,11 @@ module.exports = class Media {
       this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
       for (const [c, h] of this.og.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
       const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.og.buildReceiver(this.brs4, L, { cmd, owner }));
+      fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.og.buildReceiver(this.brs4, L, { cmd, owner, glyph }));
       this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
       setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
       await sleep(1500);
-      this.whisper(name, `<color="9cf">Showing ${n}x${n} O's at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). /ogrid stop ends it.</>`);
+      this.whisper(name, `<color="9cf">Showing ${n}x${n} ${glyph === 'O' ? "O's" : 'blocks'} at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). /ogrid stop ends it.</>`);
       let sent = 0, lines = 0, skipped = 0, prevAudio = null, set = first;
       for (let k = 0; k < chunks && !session.stopped; k++) {
         if (k > 0) set = await next.catch(e => (console.error(`[media] ogrid chunk ${k}`, e), null));

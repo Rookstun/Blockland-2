@@ -18,6 +18,8 @@ export const OWNER = { id: '7e1e0715-0000-4b0b-9a11-00000000a0a0', name: 'O Grid
 /** One owner per viewer (own 10 ms wire budget, exact clears). */
 export const ownerFor = hex12 => ({ id: `7e1e0715-0000-4b0b-9a11-${hex12}`, name: 'O Grid', display_name: 'O Grid' });
 
+/** The cell glyph: a full block (owner 2026-10-16 sent '█' after the O version); 'O' still works. */
+export const GLYPH = '█';
 export const MAX_CHARS = 8000; // one wire string 34k chars failed to load; 4.8k and 12k loaded
 const LEVELS = [16, 12, 9, 7, 6, 5, 4, 3, 2];
 
@@ -27,7 +29,7 @@ const LEVELS = [16, 12, 9, 7, 6, 5, 4, 3, 2];
  * than `dark` are plain O's in the display's own (near black) colour. The
  * quantisation gets coarser until the frame fits `max` characters.
  */
-export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06 } = {}) {
+export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06, glyph = GLYPH } = {}) {
   const h2 = v => v.toString(16).padStart(2, '0');
   return frames.map(fr => {
     let s = '';
@@ -36,7 +38,7 @@ export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06 } = {}) {
       const lines = [];
       for (let r = 0; r < n; r++) {
         let line = '', run = 0, key = null;
-        const flush = () => { if (run) line += key ? `<color="${key}">${'O'.repeat(run)}</>` : 'O'.repeat(run); run = 0; };
+        const flush = () => { if (run) line += key ? `<color="${key}">${glyph.repeat(run)}</>` : glyph.repeat(run); run = 0; };
         for (let c = 0; c < n; c++) {
           const o = (r * n + c) * 3, R = fr[o], G = fr[o + 1], B = fr[o + 2];
           const k = (0.2126 * R + 0.7152 * G + 0.0722 * B) / 255 < dark ? null
@@ -50,7 +52,7 @@ export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06 } = {}) {
       s = lines.join('\n');
       if (s.length <= max) return s;
     }
-    return Array.from({ length: n }, () => 'O'.repeat(n)).join('\n'); // never fits: plain grid
+    return Array.from({ length: n }, () => glyph.repeat(n)).join('\n'); // never fits: plain grid
   });
 }
 
@@ -133,7 +135,6 @@ const LV = { r: [0, 85, 170, 255], g: [0, 64, 128, 191, 255], b: [0, 85, 170, 25
 export const PALETTE = LV.r.flatMap(r => LV.g.flatMap(g => LV.b.map(b => [r, g, b])));
 export const NL = PALETTE.length;
 const PAL_HEX = PALETTE.map(c => c.map(v => v.toString(16).padStart(2, '0')).join('')).join('') + '000000';
-const OS = 'O'.repeat(ALPHA.length);
 export const LINE_MAX = 500; // Omegga refuses 512+, the game silently drops lines of ~506-511 (505 got through)
 
 const nearest = (R, G, B) => {
@@ -167,7 +168,8 @@ export function encodeFrame(fr, n, { maxRuns = 400 } = {}) {
 }
 
 /** What the chip makes of tokens (JS mirror of the loop, for checks). */
-export function decodeTokens(t) {
+export function decodeTokens(t, glyph = GLYPH) {
+  const OS = glyph.repeat(ALPHA.length);
   let out = '';
   for (let i = 0; i + 1 < t.length; i += 2) {
     const ci = ALPHA.indexOf(t[i]), cc = ALPHA.indexOf(t[i + 1]);
@@ -186,13 +188,14 @@ export function frameParts(tokens, prefix) {
 }
 
 /** The receiver: screen + command gate + decoder loop chip. cmd = chat command name (letters/digits). */
-export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false } = {}) {
+export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph = GLYPH } = {}) {
+  const OS = glyph.repeat(ALPHA.length);
   const { World, brdb } = lib;
   const C = brdb.COMPONENTS;
   const w = new World();
   const O = w.addOwner(owner);
   const hx = L.side / 2;
-  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.lh, WidthScale: +(1 / L.charW).toFixed(4), Text: 'O' } };
+  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.lh, WidthScale: +(1 / L.charW).toFixed(4), Text: glyph } };
   const screen = { h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, 2, hx], position: [0, 0, L.z0 + hx], color: [6, 6, 8], owner_index: O, components: [face] }), c: C.TextDisplay };
   const slots = new Map();
   const gate = (c, data = {}, grid) => {
@@ -226,7 +229,7 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false } = {}
   const payload = sub(null, args, K(null, 1), 100000);
   const isFlag = s => { const x = gate(C.Expr_String_Contains, { Input: s, Search: '', bCaseSensitive: true }); wire(...flag, x, 'Search'); return [x, 'Output']; };
   const reset = isFlag('ad'), final = isFlag('cd');
-  const buf = gate(C.Var, { Value: str('') }), pending = gate(C.Var, { Value: num(0) }), pic = gate(C.Var, { Value: str('O') });
+  const buf = gate(C.Var, { Value: str('') }), pending = gate(C.Var, { Value: num(0) }), pic = gate(C.Var, { Value: str(glyph) });
   const bufGet = gate(C.Exec_Var_Get); wire(buf, 'VarRef', bufGet, 'VarRef');
   const cat = gate(C.Expr_String_Concatenate, { Separator: '' });
   wire(...select(null, [bufGet, 'Value'], K(null, ''), reset), cat, 'InputA'); wire(...payload, cat, 'InputB');
