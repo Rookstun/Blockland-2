@@ -99,6 +99,13 @@ const LAYERS = [
 ];
 // retuned 2026-10-11 (loopback, mel band-envelope + spectral-shape score vs a speech clip):
 // explicit --leveling 0 + release 60 / attack 5 lifted 1.27 -> 1.52; gain 3 keeps the old loudness
+// Loading words (owner 2026-10-16: "make all loading... text say felching... scromiting... munting... gooning... and other ones")
+const LOADING = ['Felching', 'Scromiting', 'Munting', 'Gooning', 'Schlorping', 'Flonking', 'Gronking', 'Boofing', 'Scrungling', 'Blorbing',
+  'Squonking', 'Crunkling', 'Jorking', 'Yeeting', 'Smooshing', 'Honking', 'Slurping', 'Bonking', 'Noodling', 'Goblining',
+  'Discombobulating', 'Frobnicating', 'Bamboozling', 'Hornswoggling', 'Lollygagging', 'Skedaddling', 'Kerfuffling', 'Gallumphing',
+  'Flibbertigibbeting', 'Shenaniganing', 'Spelunking', 'Schmoozing', 'Dilly-dallying', 'Wrangling', 'Brapping', 'Snorkeling'];
+const loading = () => LOADING[Math.floor(Math.random() * LOADING.length)];
+
 const SPEECH_FLAGS = ['--max-voices', '32', '--voice-release', '15', '--attack', '5', '--release', '60', '--leveling', '0', '--gain', '3'];
 // auto-tuning: cleanup chains + voice-mode flag sets live in audiofix.js
 // (voice only: the simulator ranked voice configs like the in-game
@@ -607,13 +614,13 @@ module.exports = class Media {
     let file, frames;
     try {
       const pos = await this.playerSpot(name);
-      this.whisper(name, '<color="999">Downloading video...</>');
+      this.whisper(name, `<color="999">${loading()}...</>`);
       // long videos: frames stream from ffmpeg while they play and the
       // soundtrack is built in chunks, so length only costs download time
       const maxMin = this.config['video-max-minutes'] ?? 240;
       file = await this.download(args[0], 'video', withSound, maxMin);
       if (session.stopped) return;
-      this.whisper(name, '<color="999">Converting frames...</>');
+      this.whisper(name, `<color="999">${loading()}...</>`);
       const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height:format=duration', '-of', 'json', file])));
       const vs = probe.streams?.[0];
       if (!vs?.width) throw new Error('that link has no video');
@@ -902,7 +909,7 @@ module.exports = class Media {
     if (!term) return this.whisper(name, 'Usage: /search <words>   /stop');
     const key = `video:${name}`;
     this.stopSession(name, key);
-    this.whisper(name, `<color="999">Searching YouTube for "${sanitize(term)}"...</>`);
+    this.whisper(name, `<color="999">${loading()} "${sanitize(term)}"...</>`);
     return this.chipVideo(name, key, [`ytsearch10:${term}`]);
   }
 
@@ -927,7 +934,7 @@ module.exports = class Media {
     let file;
     try {
       const pos = await this.playerSpot(name);
-      this.whisper(name, '<color="999">Downloading video...</>');
+      this.whisper(name, `<color="999">${loading()}...</>`);
       const maxMin = this.config['video-max-minutes'] ?? 240;
       file = await this.download(args[0], 'video', withSound, maxMin);
       if (session.stopped) return;
@@ -975,7 +982,7 @@ module.exports = class Media {
       };
       const tryBuild = k => build(k).catch(e => (console.error(`[media] video chunk ${k}`, e), null));
 
-      this.whisper(name, '<color="999">Building the video chip...</>');
+      this.whisper(name, `<color="999">${loading()}...</>`);
       const first = await build(0);
       if (session.stopped) return;
       // seamless piece swaps (owner 2026-10-11: the screen popped in and out every
@@ -1147,7 +1154,7 @@ module.exports = class Media {
     let file;
     try {
       const pos = await this.playerSpot(name);
-      this.whisper(name, link.startsWith('ytsearch') ? `<color="999">Tuning in to "${sanitize(words.join(' '))}"...</>` : '<color="999">Tuning in...</>');
+      this.whisper(name, link.startsWith('ytsearch') ? `<color="999">${loading()} "${sanitize(words.join(' '))}"...</>` : `<color="999">${loading()}...</>`);
       const maxMin = this.config['video-max-minutes'] ?? 240;
       file = await this.download(link, 'video', withSound, maxMin);
       if (session.stopped) return;
@@ -1223,7 +1230,7 @@ module.exports = class Media {
         return clr;
       };
 
-      this.whisper(name, '<color="999">Warming up the tubes...</>');
+      this.whisper(name, `<color="999">${loading()}...</>`);
       const first = await build(0);
       if (session.stopped) return;
       this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
@@ -1310,7 +1317,7 @@ module.exports = class Media {
     let file;
     try {
       const pos = await this.playerSpot(name);
-      this.whisper(name, '<color="999">Fetching...</>');
+      this.whisper(name, `<color="999">${loading()}...</>`);
       const maxMin = this.config['video-max-minutes'] ?? 240;
       file = await this.download(link, 'video', withSound, maxMin);
       if (session.stopped) return;
@@ -1423,12 +1430,12 @@ module.exports = class Media {
     if (looksLikeLink(args[0])) {
       let file;
       try {
-        this.whisper(name, '<color="999">Downloading audio...</>');
+        this.whisper(name, `<color="999">${loading()}...</>`);
         file = await this.download(args[0], 'audio');
         if (session.stopped) return;
         const preset = PRESETS[args.find(a => PRESETS[a]) ?? (args.some(a => ['voice', 'bank', 'midi'].includes(a)) ? null : 'speech')];
         const opts = { synth: args.find(a => SYNTHS[a]), mode: args.find(a => ['voice', 'bank', 'midi'].includes(a)) ?? preset?.mode, flags: preset?.flags ?? [], layered: preset?.layered, layers: preset?.layers, auto: preset?.auto && !args.some(a => SYNTHS[a] || ['voice', 'bank', 'midi'].includes(a)), tuneKey: args[0] };
-        this.whisper(name, `<color="999">Building the speaker device${opts.mode === 'midi' ? ' (converting to MIDI first)' : ''}...</>`);
+        this.whisper(name, `<color="999">${loading()}...</>`);
         const devices = await this.buildAudioSet(file, opts);
         const device = devices[0];
         if (session.stopped) return;

@@ -504,6 +504,13 @@ function ratingText(t) {
   return v.length ? `${(v.reduce((a, b) => a + b, 0) / v.length).toFixed(1)}/5 (${v.length} vote${v.length === 1 ? '' : 's'})` : 'not rated yet';
 }
 
+// Loading words (owner 2026-10-16: "make all loading... text say felching... scromiting... munting... gooning... and other ones")
+const LOADING = ['Felching', 'Scromiting', 'Munting', 'Gooning', 'Schlorping', 'Flonking', 'Gronking', 'Boofing', 'Scrungling', 'Blorbing',
+  'Squonking', 'Crunkling', 'Jorking', 'Yeeting', 'Smooshing', 'Honking', 'Slurping', 'Bonking', 'Noodling', 'Goblining',
+  'Discombobulating', 'Frobnicating', 'Bamboozling', 'Hornswoggling', 'Lollygagging', 'Skedaddling', 'Kerfuffling', 'Gallumphing',
+  'Flibbertigibbeting', 'Shenaniganing', 'Spelunking', 'Schmoozing', 'Dilly-dallying', 'Wrangling', 'Brapping', 'Snorkeling'];
+const loading = () => LOADING[Math.floor(Math.random() * LOADING.length)];
+
 module.exports = class Plugin {
   constructor(omegga, config, store) {
     this.omegga = omegga;
@@ -851,7 +858,7 @@ module.exports = class Plugin {
     const started = Date.now();
     const secs = () => `${((Date.now() - started) / 1000).toFixed(1)}s`;
     this.log('ask', `${name}: ${text}`);
-    this.stage(name, `thinking about ${name}'s request...`);
+    this.stage(name, `${loading()} ${name}'s request...`);
 
     const message = { role: 'user', content: `[${name}] ${text}${await this.nearbyBuilds(name)}` };
     let reply;
@@ -886,7 +893,7 @@ module.exports = class Plugin {
           if (reply && !nudged && round < MAX_TOOL_ROUNDS && PROMISE.test(reply) && !done.some(r => /^Built /.test(String(r)))) {
             nudged = true;
             this.log('retry', `promise without a build for ${name}, nudging`);
-            this.stage(name, 'making it actually build...');
+            this.stage(name, `${loading()}...`);
             messages.push({ role: 'assistant', content: reply });
             messages.push({ role: 'user', content: 'You said you would build it but called no tool, so nothing was built. Call the build tool now with the full corrected build.' });
             continue;
@@ -937,7 +944,7 @@ module.exports = class Plugin {
         if (warned || undoOnly) {
           fixes++;
           if (undoOnly) messages[messages.length - 1].content.push({ type: 'text', text: 'Removed. Now call build with the corrected version.' });
-          this.stage(name, warned ? 'checking the warnings and fixing it...' : 'rebuilding it fixed...');
+          this.stage(name, `${loading()}...`);
           continue;
         }
         if (!results.some(r => r.content.startsWith('Error:'))) {
@@ -946,7 +953,7 @@ module.exports = class Plugin {
           reply = said || (built.length ? `Done! Built: ${built.join(', ')}.` : results.map(r => r.content).join(' '));
           break;
         }
-        this.stage(name, 'fixing it...');
+        this.stage(name, `${loading()}...`);
       }
       reply = stripSpeaker(reply || '') || (done.length ? 'Done.' : '...');
       this.remember([...messages.slice(past.length), { role: 'assistant', content: reply }]);
@@ -974,7 +981,7 @@ module.exports = class Plugin {
     // Big models behind FCC can take a minute or more
     const waitStart = Date.now();
     const ticker = setInterval(
-      () => this.stage(name, `still ${doing}... ${Math.round((Date.now() - waitStart) / 1000)}s`),
+      () => this.stage(name, `still ${loading().toLowerCase()}... ${Math.round((Date.now() - waitStart) / 1000)}s`),
       (this.config['progress-seconds'] ?? 15) * 1000
     );
     try {
@@ -1163,7 +1170,7 @@ module.exports = class Plugin {
         if (steps >= maxSteps) { summary = `Stopped after ${maxSteps} steps without finishing.`; break; }
         if (Date.now() > deadline) { summary = 'Ran out of time before finishing.'; break; }
         steps++;
-        this.stage(name, `step ${steps}/${maxSteps}: thinking...`);
+        this.stage(name, `step ${steps}/${maxSteps}: ${loading().toLowerCase()}...`);
         const response = await this.callModel(name, agentSystem(maxSteps), AGENT_TOOLS, messages, `on step ${steps}`);
         const u = response.usage ?? {};
         this.log('model', `agent step ${steps} for ${name} at ${secs()}: stop=${response.stop_reason}, tokens in=${u.input_tokens ?? '?'} out=${u.output_tokens ?? '?'}, blocks [${response.content.map(b => b.type).join(', ')}]`);
