@@ -13,6 +13,7 @@ import { FIXED } from './builder.mjs';
 
 const [src, cx, cy, half, out, az = -90, el = 35, upp = 4, zMin = -Infinity] = process.argv.slice(2);
 const CX = +cx, CY = +cy, HF = +half, U = +upp;
+const ZMAX = +(process.env.ZMAX ?? Infinity), YMAX = +(process.env.YMAX ?? Infinity); // env ZMAX: drop bricks whose bottom is above it (cut a roof away)
 const A = (+az * Math.PI) / 180, E = (+el * Math.PI) / 180;
 // camera direction (towards the camera); x mirrored (left-handed world)
 const cam = [Math.cos(E) * Math.cos(A), Math.cos(E) * Math.sin(A), Math.sin(E)];
@@ -33,10 +34,11 @@ const SOLID = {
 };
 const take = b => {
   const [lo, hi] = worldBox(b, FIXED);
-  if (hi[0] < CX - HF || lo[0] > CX + HF || hi[1] < CY - HF || lo[1] > CY + HF || hi[2] < +zMin) return;
+  if (hi[0] < CX - HF || lo[0] > CX + HF || hi[1] < CY - HF || lo[1] > CY + HF || hi[2] < +zMin || lo[2] >= ZMAX) return;
   if (b.visibility === false) return;
   const solid = SOLID[b.asset];
-  if (!solid) { bricks.push([lo, hi, b.color ?? [128, 128, 128], b.material]); return; }
+  const add = (l, h, ...rest) => { if (l[2] >= ZMAX || l[1] >= YMAX) return; h = [h[0], Math.min(h[1], YMAX), Math.min(h[2], ZMAX)]; bricks.push([l, h, ...rest]); }; // env ZMAX / YMAX clip (cut-aways)
+  if (!solid) { add(lo, hi, b.color ?? [128, 128, 128], b.material); return; }
   // wedge pieces: the solid subcells of an n^3 split, so slopes read as slopes
   const n = 4, s = b.size, o = ORIENT[(b.direction ?? 4) * 4 + (b.rotation ?? 0)];
   const hw = [0, 1, 2].map(a => (hi[a] - lo[a]) / (2 * n));
@@ -45,7 +47,7 @@ const take = b => {
     if (!solid(...l)) continue;
     const w = o([l[0] * s[0], l[1] * s[1], l[2] * s[2]]);
     const ctr = w.map((v, i) => b.position[i] + v);
-    bricks.push([ctr.map((v, i) => v - hw[i]), ctr.map((v, i) => v + hw[i]), b.color ?? [128, 128, 128], b.material, true]);
+    add(ctr.map((v, i) => v - hw[i]), ctr.map((v, i) => v + hw[i]), b.color ?? [128, 128, 128], b.material, true);
   }
 };
 if (src.endsWith('.json') && fs.statSync(src).isFile()) {

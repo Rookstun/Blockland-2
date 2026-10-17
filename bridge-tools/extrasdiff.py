@@ -72,7 +72,8 @@ print(f"spawners: placed {placed} of {len(new)} new")
 # (2026-10-16) the bush is the owner's build (pots/bushown.mjs): its bush sits 8 below the prefab origin,
 # so it loads 8 up (LDZ) and clears with a box from the bush foot to the chip on top
 LDZ = {"bushes": 8}
-for name, prefab, box, dz in (("pots", "pot", (10, 10, 21), 0), ("bushes", "bush", (16, 16, 24), 4), ("shops", None, (13, 13, 13), 0)):
+# (2026-10-16) cave gems (pots/gemgen.mjs): 20 x 20 footprint on the floor, chip on top at +58: box z .. z+62
+for name, prefab, box, dz in (("pots", "pot", (10, 10, 21), 0), ("bushes", "bush", (16, 16, 24), 4), ("shops", None, (13, 13, 13), 0), ("gems", None, (12, 12, 31), 31)):
     gone, new = diff(name)
     if name == "shops":
         for e in new:

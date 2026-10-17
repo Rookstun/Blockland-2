@@ -68,3 +68,25 @@ on GlobalCustomEvent("pot.smashed") -> (at: vector) {
     }
   }
 }
+
+// (2026-10-16, owner: "gems that you can mine that give you money") every cave gem (pots/gemgen.mjs)
+// sends "gem.mined" (location, kind) when hit: amethyst 2 silver (20), emerald gold + silver (35),
+// ruby 2 gold (50), diamond 4 gold (100)
+on GlobalCustomEvent("gem.mined") -> (at: vector, kind: int) {
+  let off = at - GetOwnTransform().Location + Vec(0.0, 0.0, 30.0)
+  if kind == 1 {
+    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(50.0, 0.0, 220.0), lifetime = 30.0, limit = 60)
+    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(-50.0, 30.0, 240.0), lifetime = 30.0, limit = 60)
+  } else if kind == 2 {
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0, 0.0, 220.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(-50.0, 30.0, 240.0), lifetime = 30.0, limit = 60)
+  } else if kind == 3 {
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0, 0.0, 220.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(-50.0, 30.0, 240.0), lifetime = 30.0, limit = 40)
+  } else {
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0, 0.0, 220.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(-50.0, 30.0, 240.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(0.0, -50.0, 260.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(30.0, 50.0, 200.0), lifetime = 30.0, limit = 40)
+  }
+}

@@ -39,7 +39,8 @@ print("  not placed:", todo)
 
 # bushes.json (2026-10-10): smashable bushes, prefab "bush" (potgen5.mjs KIND=bush)
 import os
-for name in ("shops", "pots", "bushes", "casino"):  # casino.json: the games (pots/casinogen.mjs prefabs)
+# gems.json (2026-10-16): mineable cave gems, prefab per entry (gem_<kind>, pots/gemgen.mjs), z = the floor
+for name in ("shops", "pots", "bushes", "casino", "gems"):  # casino.json: the games (pots/casinogen.mjs prefabs)
     if not os.path.exists(M + name + ".json"):
         continue
     items = json.load(open(M + name + ".json"))

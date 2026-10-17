@@ -27,6 +27,7 @@ import { buildRocks, RV } from './rocks.mjs';
 import { shrine, CHECKPOINT_AT, FOOT as SHRINE_FOOT } from './checkpoint.mjs';
 import { signpost } from './signpost.mjs';
 import { coveDressing, CV as COVE_V } from './cove.mjs';
+import { planCave, caveField, caveBricks } from './cavern.mjs';
 import { STAGES } from './pipeline.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -207,6 +208,8 @@ const GRAVEL = mat([90, 84, 78]);
 // show-cave limestone (2026-10-16, owner: caves "need to look like these" + a photo of a lit show cave):
 // cream, tan, ochre and buff bands for the rock round cave air and the formations
 const LIME = [[226, 206, 166], [208, 178, 132], [190, 150, 104], [234, 220, 190], [172, 128, 84], [218, 192, 150]].map(c => mat(c));
+const CAVE_BAND = 36; // limestone strata height (units)
+const LIME_OF = k => LIME[Math.floor(hash(k, 77, 9) * LIME.length)];
 const MOSSBED = [mat([58, 92, 62]), mat([66, 100, 58])]; // cove floors (2026-10-14)
 const SHALLOWS = mat([232, 222, 184], { asset: 'PB_DefaultTile' }); // pale sand under shallow cove water: reads turquoise
 const CLIFF = [mat([204, 184, 146]), mat([186, 164, 126]), mat([216, 200, 166]), mat([168, 148, 114]), mat([196, 172, 132])]; // striped sandstone cove cliffs
@@ -2513,7 +2516,7 @@ const CAVE = { door: 8, cover: 3, R: 4, depth: 3, max: Math.round(tune('caves.ma
 // and the old man / chest at the end of the main tunnel. 0 = the Zelda room.
 const MC = tune('caves.minecraft', 1, '1 = Minecraft-style tunnel systems, 0 = Zelda rooms');
 const MCW = { len: Math.round(tune('caves.mcLength', 90, 'main tunnel length, cells')), branch: tune('caves.mcBranch', 0.05, 'branch chance per cell'),
-  cavern: tune('caves.mcCavern', 0.015, 'cavern chance per cell') };
+  cavern: tune('caves.mcCavern', 0.04, 'cavern chance per tunnel step (domed caverns, 2026-10-16)') };
 const caves = [];
 let carved = 0;
 {
@@ -2575,67 +2578,36 @@ let carved = 0;
     H0[cx * N + cy] >= h + 2 &&
     townDist(cx, cy) > TOWN.blend && !DUNGEONS.some(d => footDist(d, cx, cy) <= PLAZA_RING));
   const fits = MC ? fitsMC : fitsZelda;
-  // a worm-tunnel cave from door s: carves V, records s.mc = { cols, torches, end }
+  // (2026-10-16, owner: "the limestone caves look like crap. more wedges, natural geometry, gems ...,
+  // high ceilings, cavern") a cave = tunnel beads + lobed domed caverns (cavern.mjs planCave) whose
+  // floor / ceiling fields (caveField, 2 x 2-stud tiles) are carved here into the coarse voxels with a
+  // margin; caveProps builds the wedge surfaces, formations and gems. s.mc = { cols (cell -> carved
+  // voxel range), field, caverns }
+  const okCell = (cx, cy) => {
+    if (cx < 2 || cy < 2 || cx >= N - 2 || cy >= N - 2) return false;
+    if (townDist(cx, cy) <= TOWN.blend || villageDist(cx, cy) <= VILLAGE.r + 2 || hengeDist(cx, cy) <= 4) return false;
+    if (DUNGEONS.some(d => footDist(d, cx, cy) <= 4)) return false;
+    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (tunnelZ[(cx + a) * N + cy + b] >= 0) return false;
+    return !swampCell[cx * N + cy];
+  };
+  // highest ceiling (world z) a cell allows: its rock roof under CAVE.cover bricks; a facade (built rock
+  // face round a door) 2 bricks under its top; -Infinity = no carving
+  const facades = new Set();
+  const roofCell = (cx, cy) => {
+    if (!inMap(cx, cy) || !okCell(cx, cy)) return -Infinity;
+    const c = cx * N + cy;
+    return facades.has(c) ? (H[c] - 2 + 1) * VZ : (Math.min(H[c], H0[c]) - CAVE.cover + 1) * VZ;
+  };
+  const roofAt = (wx, wy) => roofCell(Math.floor((wx - X0) / CELL), Math.floor((wy - Y0) / CELL));
+  const floorMin = (SEA + 3) * VZ; // never under the sea plane (it floods)
+  // each cave's nodes; all caves are carved as ONE field after the site loop (two caves may meet)
   const carveMC = s => {
+    for (const c of s.facade) facades.add(c);
     const R0 = rng(Math.floor(hash(s.x, s.y, 501) * 4294967296));
-    const cols = new Map(); // cell -> [floor voxel, ceiling voxel]
-    const torches = [];
-    const okCell = (cx, cy) => {
-      if (cx < 2 || cy < 2 || cx >= N - 2 || cy >= N - 2) return false;
-      if (townDist(cx, cy) <= TOWN.blend || villageDist(cx, cy) <= VILLAGE.r + 2 || hengeDist(cx, cy) <= 4) return false;
-      if (DUNGEONS.some(d => footDist(d, cx, cy) <= 4)) return false;
-      for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (tunnelZ[(cx + a) * N + cy + b] >= 0) return false;
-      return !swampCell[cx * N + cy];
-    };
-    // carve one blob: radius rw cells, floor zf, height rh voxels
-    const blob = (px, py, zf, rw, rh, door) => {
-      let any = false;
-      for (let cx = Math.floor(px - rw); cx <= Math.ceil(px + rw); cx++)
-        for (let cy = Math.floor(py - rw); cy <= Math.ceil(py + rw); cy++) {
-          const d = Math.hypot(cx + 0.5 - px, cy + 0.5 - py) / rw;
-          if (d > 1 || !okCell(cx, cy)) continue;
-          const c = cx * N + cy;
-          const f = Math.round(zf + (door ? 0 : d * d * 2.2)); // the floor curls up at the walls (blocky steps)
-          let t = Math.round(zf + rh * Math.sqrt(1 - d * d));
-          t = Math.min(t, door ? H[c] : Math.min(H[c], H0[c]) - CAVE.cover); // keep a rock roof
-          if (t - f < 3) continue;
-          for (let z = f + 1; z <= t; z++) if (V[vi(cx, cy, z)]) { V[vi(cx, cy, z)] = 0; carved++; }
-          const o = cols.get(c);
-          cols.set(c, o ? [Math.min(o[0], f), Math.max(o[1], t)] : [f, t]);
-          any = true;
-        }
-      return any;
-    };
-    const worm = (px, py, zf, ang, len, depth, main) => {
-      let slope = -0.15, turn = 0;
-      for (let i = 0; i < len; i++) {
-        const door = main && i < 4;
-        turn = turn * 0.85 + (R0() - 0.5) * 0.35;
-        if (!door) ang += turn;
-        slope = Math.max(-0.6, Math.min(0.35, slope + (R0() - 0.55) * 0.25));
-        const nx = px + Math.cos(ang) * 0.8, ny = py + Math.sin(ang) * 0.8;
-        const cx = Math.floor(nx), cy = Math.floor(ny);
-        if (!inMap(cx, cy)) break;
-        const rh = door ? CAVE.door : 7 + Math.round(R0() * 3);
-        let nz = door ? zf : zf + slope;
-        const roof = Math.min(H[cx * N + cy], H0[cx * N + cy]) - CAVE.cover;
-        if (!door && nz + rh > roof) nz = roof - rh; // too shallow: dive
-        nz = Math.max(nz, SEA + 2); // never under the sea plane (it floods)
-        if (!door && nz + 6 > roof) break; // no room left: the tunnel ends
-        if (Math.abs(nz - zf) > 1) nz = zf + Math.sign(nz - zf); // at most a 1-brick step per cell
-        px = nx; py = ny; zf = nz;
-        const rw = door ? 1.3 : 1.4 + R0() * 1.1;
-        if (!blob(px, py, Math.round(zf), rw, rh, door)) { if (door) continue; break; }
-        if (i % (main ? 9 : 11) === 5) torches.push([cx, cy]);
-        if (!door && R0() < MCW.cavern) blob(px, py, Math.round(zf), 3.5 + R0() * 2.5, 12 + Math.round(R0() * 6), false);
-        if (!door && depth < 2 && R0() < MCW.branch)
-          worm(px, py, zf, ang + (R0() < 0.5 ? -1 : 1) * (0.7 + R0() * 0.8), Math.round(len * (0.25 + R0() * 0.3)), depth + 1, false);
-      }
-      return [Math.floor(px), Math.floor(py)];
-    };
-    const end = worm(s.x + 0.5 - s.dx, s.y + 0.5 - s.dy, s.h, Math.atan2(s.dy, s.dx), Math.round(MCW.len * (0.7 + R0() * 0.6) * Math.sqrt(K)), 0, true);
-    if (process.env.CAVE_DEBUG) { const fl = [...cols.values()].map(v => v[0]); console.error(`cave ${s.x},${s.y}: ${cols.size} cells, floor ${Math.min(...fl)}..${Math.max(...fl)} (door ${s.h}), ${torches.length} torches, end ${end}`); }
-    s.mc = { cols, torches: torches.filter(([x, y]) => cols.has(x * N + y)), end: cols.has(end[0] * N + end[1]) ? end : null };
+    s.plan = planCave(s, { CELL, VZ, X0, Y0, rnd: R0, roofAt, floorMin, doorH: (s.h + 1) * VZ, doorHu: CAVE.door * VZ,
+      len: Math.round(MCW.len * (0.7 + R0() * 0.6) * Math.sqrt(K) * 1.25), branch: MCW.branch, cavern: MCW.cavern });
+    if (process.env.CAVE_DEBUG) console.error(`cave ${s.x},${s.y}: ${s.plan.nodes.length} nodes, ${s.plan.caverns.length} caverns (${s.plan.caverns.map(c => `R${Math.round(c.R)} h${Math.round(c.hu)} @${Math.round(c.x)},${Math.round(c.y)},${c.zf}`).join(' ')})`);
+    s.mc = { cols: new Map(), field: null, caverns: s.plan.caverns };
     s.cells = [];
   };
   sites.sort((p, q) => p.r - q.r);
@@ -2645,9 +2617,11 @@ let carved = 0;
     if (!fits(s)) continue;
     caves.push(s);
     // facade: the passage cells and their neighbours rise into a rock face
+    s.facade = new Set();
     for (let k = 1; k < CAVE.depth; k++)
       for (let l = -2; l <= 2; l++) {
         const cx = s.x + s.dx * k - s.dy * l, cy = s.y + s.dy * k + s.dx * l;
+        s.facade.add(cx * N + cy);
         const top = s.h + CAVE.door + 3 - (Math.abs(l) === 2 ? 2 : 0);
         for (let z = H[cx * N + cy] + 1; z <= top; z++) V[vi(cx, cy, z)] = ROCK[(k + l) & 1];
         if (H[cx * N + cy] < top) { H[cx * N + cy] = top; surfaceMat[cx * N + cy] = ROCK[(k + l) & 1]; }
@@ -2659,14 +2633,23 @@ let carved = 0;
       V[vi(cx, cy, s.h + raise)] = GRAVEL;
     }
   }
+  if (MC && caves.length) {
+    const field = caveField(caves.flatMap(c => c.plan.nodes), { CELL, VZ, X0, Y0, N, roofCell, floorMin, noise: noise3, seed: caves[0].x * 7 + caves[0].y });
+    for (const [c, [f, t]] of field.cells) {
+      const cx = (c / N) | 0, cy = c % N;
+      for (let z = f + 1; z <= t; z++) if (V[vi(cx, cy, z)]) { V[vi(cx, cy, z)] = 0; carved++; }
+    }
+    caves[0].mc.cols = field.cells; caves[0].mc.field = field; // (the lime pass and caveProps take it from the first cave)
+    if (process.env.CAVE_DEBUG) { const g = [...field.tiles.values()].map(t => Math.min(...t.C) - Math.max(...t.F)).sort((a, b) => a - b); console.error(`caves field: ${field.tiles.size} air tiles, ${field.cells.size} cells, clear height p50/p90/max ${[0.5, 0.9, 1].map(q => g[Math.min(g.length - 1, Math.floor(q * g.length))]).join('/')}`); }
+  }
   console.error(`caves: ${caves.length} of ${sites.length} candidate sites`);
-  // limestone: every solid voxel next to a tunnel cave's air takes a limestone band (by height,
-  // wobbled by noise so the bands meander like strata)
+  // limestone: every solid voxel next to a tunnel cave's air takes its stratum's limestone (flat
+  // bands CAVE_BAND high, the same as the fine surfaces)
   let limed = 0;
   for (const c of caves) {
     if (!c.mc) continue;
     const air = (x, y, z) => { const o = c.mc.cols.get(x * N + y); return o && z > o[0] && z <= o[1]; };
-    const band = (x, y, z) => LIME[(((Math.floor(z * 0.55 + fbm2(x / 6, y / 6, 3) * 3) % LIME.length) + LIME.length) % LIME.length)];
+    const band = (x, y, z) => LIME_OF(Math.floor(((z + 0.5) * VZ) / CAVE_BAND)); // the strata of the fine surfaces (cavern.mjs)
     for (const [cc, [f, t]] of c.mc.cols) {
       const cx = (cc / N) | 0, cy = cc % N;
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
@@ -4043,147 +4026,20 @@ for (const s of spawnRing) {
   spawners.push({ at: [wx, wy, (H[s.x * N + s.y] + 1) * VZ + 2], tier: s.tier, dungeon: 'Spawn ring', level: 0 }); // H read late: roads may have regraded the cell
 }
 
-// show-cave formations (2026-10-16): per tunnel-cave cell, inside its own air column (so nothing
-// crosses into a wall) and clear of its ramps, torch/uplight and end cells:
-//  - stalactites: tapered drips from the ceiling, 1-3 per cell, the odd long one
-//  - stalagmites: fat rounded cones on the floor; where a cell is low, a column (both meet, waist)
-//  - draperies: along a cell side that is wall (no air next door at the ceiling), a ribbed curtain of
-//    4-unit fins hanging from the ceiling, lengths swinging in waves, 2 units off the wall
-//  - warm glow uplights at the foot of some stalagmites
-// Cross-sections are plus shapes of micro bricks (a bar and two caps, all even half sizes) so they
-// read round; equal layers merge. Pieces carry soft: 1 and give way to anything else at output.
-function caveFormations(c, cols, busy, rampUp, rampDown, limeAt) {
-  const R = (cx, cy, k) => hash(cx * 7 + k * 131, cy * 13 + k * 17, 9100 + (c.x * 31 + c.y) % 977);
-  const ev = v => Math.min(10, Math.max(2, Math.round(v / 2) * 2)); // half widths 2..10: everything stays 4+ units inside the cell's side strips
-  const layer = (x0, y0, z0, z1, a, color) => {
-    // a plus-shaped slab z0..z1 of half width a (even) round (x0, y0) (both even)
-    const hz = (z1 - z0) / 2, zc = (z0 + z1) / 2;
-    if (a <= 4) { bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x0, y0, zc], size: [a, a, hz], color, soft: 1 }); return; }
-    const b = a - 4;
-    bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x0, y0, zc], size: [a, b, hz], color, soft: 1 });
-    for (const s of [-1, 1]) bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x0, y0 + s * (b + 2), zc], size: [b, 2, hz], color, soft: 1 });
-  };
-  // a cone of plus layers from zBase (wide end) toward zTip, radius r(frac) given; merges equal layers
-  const cone = (x0, y0, zBase, zTip, rOf, colorOf) => {
-    const dir = Math.sign(zTip - zBase), n = Math.max(1, Math.round(Math.abs(zTip - zBase) / 4));
-    let run = null;
-    const flush = () => { if (run) layer(x0, y0, Math.min(run.z0, run.z1), Math.max(run.z0, run.z1), run.a, run.color); run = null; };
-    for (let k = 0; k < n; k++) {
-      const a = ev(rOf((k + 0.5) / n)), color = colorOf(k / n), z0 = zBase + dir * k * 4, z1 = z0 + dir * 4;
-      if (run && run.a === a && run.color === color) run.z1 = z1; else { flush(); run = { z0, z1, a, color }; }
-    }
-    flush();
-  };
-  const tint = (base, k) => base.map(v => Math.max(0, Math.min(255, Math.round(v * k))));
-  let n = 0;
-  for (const [cc, [f, t]] of cols) {
-    if (busy.has(cc)) continue;
-    const cx = (cc / N) | 0, cy = cc % N, [wx, wy] = at(cx, cy, 0);
-    const floorZ = (f + 1) * VZ, ceilZ = (t + 1) * VZ, hgt = ceilZ - floorZ;
-    if (hgt < 48) continue;
-    const top = rampDown.has(cc) ? ceilZ - VZ : ceilZ, bot = rampUp.has(cc) ? floorZ + VZ : floorZ, avail = top - bot;
-    let hangs = 0; // the longest stalactite here: a stalagmite stops 8 short of it
-    const stone = limeAt(cx, cy, t), pale = tint(stone, 1.08), deep = tint(stone, 0.86);
-    const spot = (k, inset) => [ // inset 16: centre +-4, so a half width <= 10 keeps 14+ off the cell sides (the drapery strip)
-      Math.round((wx - 20 + inset + R(cx, cy, k) * (40 - 2 * inset)) / 2) * 2, Math.round((wy - 20 + inset + R(cx, cy, k + 1) * (40 - 2 * inset)) / 2) * 2];
-    // draperies on wall sides (cells whose ceiling is not ramped)
-    if (!rampDown.has(cc))
-      for (const [dx, dy, k] of [[1, 0, 1], [-1, 0, 2], [0, 1, 3], [0, -1, 4]]) {
-        const o = cols.get((cx + dx) * N + cy + dy);
-        if (o && o[1] >= t) continue; // air next door at this height: not a wall
-        if (R(cx, cy, 40 + k) > 0.3) continue;
-        const ph = R(cx, cy, 50 + k) * 6.28, maxL = Math.min(hgt * 0.55, 64);
-        for (let u = -12; u <= 12; u += 4) { // (corners left open: two walls' fins would meet there)
-          const L = Math.max(8, Math.round((maxL * (0.45 + 0.4 * Math.sin(u / 7 + ph) + 0.15 * R(cx, cy, 60 + k + u))) / 4) * 4);
-          const px = dx ? wx + dx * 16 : wx + u, py = dy ? wy + dy * 16 : wy + u;
-          bricks.push({ asset: 'PB_DefaultMicroBrick', position: [px, py, ceilZ - L / 2], size: [dx ? 2 : 2, dy ? 2 : 2, L / 2], color: (u / 4) & 1 ? pale : stone, soft: 1 });
-        }
-        n++;
-      }
-    // centre region (inset 8): stalactites / stalagmite / column, sized to the height
-    const roll = R(cx, cy, 70);
-    if (roll < 0.12 && hgt <= 96 && !rampUp.has(cc) && !rampDown.has(cc)) {
-      // column: a stalactite and a stalagmite meeting at a narrow waist
-      const [x0, y0] = spot(80, 16), mid = Math.round((floorZ + hgt * (0.4 + 0.2 * R(cx, cy, 81))) / 4) * 4, r0 = 8 + 4 * R(cx, cy, 82);
-      cone(x0, y0, ceilZ, mid, q => r0 * (1 - 0.65 * q), q => q < 0.5 ? stone : pale);
-      cone(x0, y0, floorZ, mid, q => (r0 + 2) * (1 - 0.6 * q), q => q < 0.3 ? deep : stone);
-      n++;
-      continue;
-    }
-    const nT = roll < 0.55 ? 1 + Math.floor(R(cx, cy, 71) * 3) : 0;
-    const used = [];
-    for (let i = 0; i < nT; i++) {
-      const [x0, y0] = spot(90 + i * 3, 16);
-      if (used.some(([a, b]) => Math.abs(a - x0) < 12 && Math.abs(b - y0) < 12)) continue;
-      const long = R(cx, cy, 99 + i) < 0.15;
-      const L = Math.floor(Math.min(avail * (long ? 0.55 : 0.28), (long ? 72 : 36) * (0.5 + R(cx, cy, 100 + i))) / 4) * 4;
-      if (L < 8) continue;
-      const r0 = (long ? 7 : 4) + 3 * R(cx, cy, 110 + i);
-      cone(x0, y0, top, top - L, q => r0 * Math.pow(1 - q, 0.8) + 1, q => q > 0.7 ? pale : stone);
-      used.push([x0, y0]);
-      hangs = Math.max(hangs, L);
-      n++;
-    }
-    if (roll > 0.35 && roll < 0.65) {
-      const [x0, y0] = spot(120, 16);
-      if (!used.some(([a, b]) => Math.abs(a - x0) < 14 && Math.abs(b - y0) < 14) || true) {
-        const L = Math.floor(Math.min(avail * 0.35, avail - hangs - 8, 44 * (0.5 + R(cx, cy, 121))) / 4) * 4;
-        if (L >= 8) {
-          const r0 = 6 + 5 * R(cx, cy, 122);
-          cone(x0, y0, bot, bot + L, q => r0 * Math.sqrt(1 - q * q * 0.85), q => q < 0.25 ? deep : stone);
-          if (R(cx, cy, 123) < 0.4) bricks.push({ asset: 'PB_DefaultMicroBrick', position: [x0 + (x0 < wx ? 12 : -12), y0, bot + 2], size: [2, 2, 2], color: [255, 176, 92], material: 'BMC_Glow', material_intensity: 8, soft: 1 });
-          n++;
-        }
-      }
-    }
-  }
-  return n;
-}
+const CAVE_DUMP = process.env.CAVE_DUMP ? [] : null; // env CAVE_DUMP=file: the caves' own bricks (map frame) for mapgen/isoview.mjs
+const gems = []; // mineable gems in the caves (pots/gemgen.mjs prefabs; gems.json, loadextras)
 stage('caveProps');
 // cave interiors: two fires, then an old man with a sword or a chest, on the
 // ledge at the back; stalactites under the high ceiling, stalagmites and
 // glowing crystal clusters round the walls
 for (const [n, c] of caves.entries()) {
   if (c.mc) {
-    // torches by the tunnel, and the old man or a chest at the end
-    const { cols, torches, end } = c.mc;
-    // (2026-10-16) show-cave lighting instead of torches: a warm glow stone low on the floor
-    for (const [tx, ty] of torches) {
-      const [f] = cols.get(tx * N + ty), [wx, wy] = at(tx, ty, 0), fz = (f + 1) * VZ;
-      bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx - 10, wy - 10, fz + 2], size: [4, 4, 2], color: [255, 176, 92], material: 'BMC_Glow', material_intensity: 8, soft: 1 });
-    }
-    // LEGO-style ramps (owner 2026-10-07): a PB_DefaultRamp on every cell whose
-    // neighbour's floor is one brick higher (rising toward it), and an inverted
-    // one under every ceiling cell next to a ceiling one brick lower. Rotation
-    // (direction 4): 0 rises toward -x, 1 -y, 2 +x, 3 +y. Torch/end cells keep flat floors.
-    const RISE = [[-1, 0, 0], [0, -1, 1], [1, 0, 2], [0, 1, 3]];
-    const busy = new Set(torches.map(([tx, ty]) => tx * N + ty));
-    if (end) busy.add(end[0] * N + end[1]);
-    const limeAt = (cx, cy, z) => MATS[LIME[(((Math.floor(z * 0.55 + fbm2(cx / 6, cy / 6, 3) * 3) % LIME.length) + LIME.length) % LIME.length)]].color;
-    const rampUp = new Set(), rampDown = new Set();
-    for (const [cc, [f, t]] of cols) {
-      const cx = (cc / N) | 0, cy = cc % N, [wx, wy] = at(cx, cy, 0);
-      let up = null, down = null;
-      for (const [a, b, rot] of RISE) {
-        const o = cols.get((cx + a) * N + cy + b);
-        if (!o) continue;
-        if (!up && o[0] === f + 1 && !busy.has(cc) && t - f >= 4) up = rot;
-        if (!down && o[1] === t - 1 && t - f >= 4) down = rot;
-      }
-      if (up !== null) { bricks.push({ asset: 'PB_DefaultRamp', position: [wx, wy, (f + 1) * VZ + VZ / 2], size: [CELL / 2, CELL / 2, VZ / 2], color: limeAt(cx, cy, f), direction: 4, rotation: up }); rampUp.add(cc); }
-      if (down !== null && (up === null || t - f >= 5)) { bricks.push({ asset: 'PB_DefaultRampInverted', position: [wx, wy, t * VZ + VZ / 2], size: [CELL / 2, CELL / 2, VZ / 2], color: limeAt(cx, cy, t + 1), direction: 4, rotation: down }); rampDown.add(cc); }
-    }
-    caveFormations(c, cols, busy, rampUp, rampDown, limeAt);
-    if (end) {
-      const [f] = cols.get(end[0] * N + end[1]), [mx, my] = at(end[0], end[1], 0), fz = (f + 1) * VZ;
-      if (n % 2 === 0) {
-        bricks.push({ position: [mx, my, fz + 30], size: [10, 10, 30], color: [150, 40, 30] });
-        bricks.push({ position: [mx, my, fz + 66], size: [10, 10, 6], color: [230, 190, 150] });
-      } else {
-        bricks.push({ position: [mx, my, fz + 12], size: [15, 10, 12], color: [110, 70, 30] });
-        bricks.push({ position: [mx, my, fz + 26], size: [15, 10, 2], color: [232, 186, 40], material: 'BMC_Metallic' });
-      }
-    }
+    if (!c.mc.field) continue; // (all caves are one field, on the first cave)
+    // (2026-10-16) wedge surfaces, spikes, uplights and gems (cavern.mjs)
+    const r = caveBricks(c.mc.field, { VZ, X0, Y0, N, BAND: CAVE_BAND, band: k => MATS[LIME_OF(k)].color, hash, surfaceAt: (x, y) => (hAt(Math.floor((x - X0) / CELL), Math.floor((y - Y0) / CELL)) + 1) * VZ,
+      gemKinds: ['amethyst', 'emerald', 'ruby', 'diamond'], out: b => { bricks.push(b); if (CAVE_DUMP) CAVE_DUMP.push(b); } });
+    gems.push(...r.gems);
+    if (process.env.CAVE_DEBUG) console.error(`caves: ${r.n} bricks, ${r.gems.length} gems (${r.gems.map(g => g.prefab.slice(4)).join(' ')})`);
     continue;
   }
   const { x, y, dx, dy, h } = c;
@@ -4856,6 +4712,8 @@ if (!DRY) {
   for (const sh of shops) sh.at = mv(sh.at);
   for (const p of pots) p.at = mv(p.at);
   for (const p of bushes) p.at = mv(p.at);
+  for (const p of gems) p.at = mv(p.at);
+  if (CAVE_DUMP) fs.writeFileSync(process.env.CAVE_DUMP, JSON.stringify(CAVE_DUMP)); // (shifted with the rest: same objects)
   for (const p of casinoGames) p.at = mv(p.at);
   console.error(`shifted by ${SHIFT.join(',')}: town centre now at 0,0`);
   // live editor edits (liveedit/: owner 2026-10-13, "no world-only fixes"): every deployed,
@@ -4885,6 +4743,7 @@ if (!DRY) {
   fs.writeFileSync(path.join(OUT, 'pots.json'), JSON.stringify(pots));
   fs.writeFileSync(path.join(OUT, 'casino.json'), JSON.stringify(casinoGames)); // br.Prefab.Load "<prefab>" x y z 0 <orient>
   fs.writeFileSync(path.join(OUT, 'gods.json'), JSON.stringify(holy.filter(v => v.god).map(v => ({ kind: v.kind, at: [X0 + v.x * CELL + SHIFT[0], Y0 + v.y * CELL + SHIFT[1], (v.h + 1) * VZ], ...v.god })), null, 1));
+  fs.writeFileSync(path.join(OUT, 'gems.json'), JSON.stringify(gems)); // br.Prefab.Load "gem_<kind>" x y z 0 16 (z = the floor)
   fs.writeFileSync(path.join(OUT, 'bushes.json'), JSON.stringify(bushes)); // br.Prefab.Load "bush" x y z 0 16 // br.Prefab.Load "pot" x y z 0 16
   // overview image source for a quick look: height + water + dungeons
   const px = [];
