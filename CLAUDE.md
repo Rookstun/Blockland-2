@@ -5,6 +5,9 @@ Owner = renderman (in-game soapstain22). Terse, token-limited: act, don't ask, s
 ## Git
 - Workspace is a LOCAL git repo (2026-10-11, no remote = private; core.autocrlf false). Commit after each change; prefer git over new `.pre_*` backups. .gitignore drops mapgen/out*, editor cache, vendored tools, corpus data.
 
+## MCP
+- `.mcp.json` server `brickadia` = tools/mcp/brickadia-mcp.mjs (no deps, stdio): players, cmd, job (raw bridge ops), log (tail/grep of the game log), screenshot (gamecap). Restart Claude Code / approve the project server to load it.
+
 ## Eyes
 - `powershell -NoProfile -ExecutionPolicy Bypass -File eyes/gamecap.ps1 [out.png] [-Front]` captures the owner's Brickadia client window (PrintWindow, works while it is behind other windows; -Front focuses it first), then Read the PNG. To look at a spot: `br.Chat.Command /TP "soapstain22" x y z 0` then capture (moves the owner: ask if they're playing). No desktop computer-use tools in the VS Code session.
 
