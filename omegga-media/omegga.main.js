@@ -1271,7 +1271,13 @@ module.exports = class Media {
     const key = `ogrid:${name}`;
     if (!this.og || !this.brs4) return this.whisper(name, '<color="f55">/ogrid is not installed (lib/brs4.mjs missing).</>');
     if (!args.length) return this.whisper(name, 'Usage: /ogrid <link or search words> [size 32] [fps=N] [-x|+x|-y|+y] [mute] [letters] [start=S] [len=S]   /ogrid stop');
-    if (args[0] === 'stop' || args[0] === 'off') return this.stopSession(name, key) || this.whisper(name, 'Nothing is showing.');
+    if (args[0] === 'stop' || args[0] === 'off') {
+      const hadOne = this.stopSession(name, key);
+      // also the screen left standing after a finished video
+      const id = require('crypto').createHash('sha1').update('ogrid:' + name).digest('hex').slice(0, 12);
+      this.omegga.writeln(`br.Bricks.Clear ${this.og.ownerFor(id).id} 1`);
+      return hadOne || this.whisper(name, 'Screen removed.');
+    }
     const opts = [], words = [];
     for (const a of args) (/^([+-][xy]|mute|letters|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
     if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
@@ -1386,7 +1392,8 @@ module.exports = class Media {
       }
       console.log(`[media] ogrid ${name}: ${n}x${n} ${fps} fps, ${sent} frames sent (${lines} lines, ${skipped} skipped), at ${at.join(',')} orient ${orient}`);
       await sleep(1500);
-      if (!session.stopped && !this.config['keep-last-frame']) session.clear();
+      // the screen stays up after the video (players tune its text settings); the next /ogrid or /ogrid stop clears it
+      if (!session.stopped) audioClears.splice(0).forEach(c => c());
     } finally {
       session.stopped = true;
       if (file) setTimeout(() => this.release(file), 60_000);
