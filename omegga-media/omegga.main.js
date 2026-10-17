@@ -1284,14 +1284,16 @@ module.exports = class Media {
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(5, this.config['ogrid-chunk-seconds'] ?? 20);
-    const maxRuns = this.config['ogrid-max-runs'] ?? 400;
+    const maxRuns = this.config['ogrid-max-runs'] ?? 354; // tokens incl. row ends: 3 lines a frame
+    // several chat commands in one game tick clobber each other (only some parts land): space them
+    const gapMs = this.config['ogrid-line-gap-ms'] ?? 30;
     const lead = (this.config['ogrid-lead-ms'] ?? 80) / 1000; // the chip shows a frame ~50-130 ms after its last part
     const crypto = require('crypto');
     const hash = crypto.createHash('sha1').update('ogrid:' + name).digest('hex');
     const owner = this.og.ownerFor(hash.slice(0, 12));
     const cmd = 'og' + hash.slice(0, 6);
     const prefix = `br.Chat.Command /${cmd} `;
-    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 4, charW: this.config['ogrid-char-width'] ?? 0.55 });
+    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 4, charW: this.config['ogrid-char-width'] ?? 0.55, textScale: this.config['ogrid-text-scale'] ?? 1.68 });
 
     this.stopSession(name, key);
     const session = { stopped: false, kind: 'O grid' };
@@ -1373,7 +1375,10 @@ module.exports = class Media {
           const due = t0 + f / fps - lead, now = Date.now() / 1000;
           if (now > due + 1 / fps && f + 1 < set.frames.length) { skipped++; continue; } // behind: drop it
           if (due > now) await sleep((due - now) * 1000);
-          for (const part of set.frames[f]) this.omegga.writeln(prefix + part);
+          for (let i = 0; i < set.frames[f].length; i++) {
+            if (i) await sleep(gapMs);
+            this.omegga.writeln(prefix + set.frames[f][i]);
+          }
           sent++; lines += set.frames[f].length;
         }
         const end = t0 + set.dur;

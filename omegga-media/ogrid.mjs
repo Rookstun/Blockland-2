@@ -21,7 +21,7 @@ export const ownerFor = hex12 => ({ id: `7e1e0715-0000-4b0b-9a11-${hex12}`, name
 /** The cell glyph: a full block (owner 2026-10-16 sent '█' after the O version); 'O' still works. */
 export const GLYPH = '█';
 export const MAX_CHARS = 8000; // one wire string 34k chars failed to load; 4.8k and 12k loaded
-const LEVELS = [16, 12, 9, 7, 6, 5, 4, 3, 2];
+const QUANT = [16, 12, 9, 7, 6, 5, 4, 3, 2];
 
 /**
  * rgb24 frames (n x n) -> one string per frame: n lines of n "O"s.
@@ -33,7 +33,7 @@ export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06, glyph = GLYPH
   const h2 = v => v.toString(16).padStart(2, '0');
   return frames.map(fr => {
     let s = '';
-    for (const q of LEVELS) {
+    for (const q of QUANT) {
       const step = 255 / (q - 1);
       const lines = [];
       for (let r = 0; r < n; r++) {
@@ -60,9 +60,11 @@ export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06, glyph = GLYPH
  * Geometry. lh = line height (units); a glyph is charW x lh, so WidthScale
  * 1 / charW makes every cell lh x lh: n x n cells = a square picture.
  */
-export function oLayout(n, { lh = 4, charW = 0.55, lift = 20 } = {}) {
-  const side = Math.ceil((n * lh) / 4) * 4 + 8; // screen brick side (2 units of border each way, even halves)
-  return { n, lh, charW, side, z0: lift, top: lift + side };
+export function oLayout(n, { lh = 4, charW = 0.55, lift = 20, textScale = 1.68 } = {}) {
+  const side = Math.ceil((n * lh) / 4) * 4 + 8; // screen brick side (4 units of border each way, even halves)
+  // textScale: a block drew at ~0.6 of its LineHeight in game (owner screenshot 2026-10-16:
+  // a 32-cell picture filled 76 of 136 units), so LineHeight = cell size x 1.68 fills the board
+  return { n, lh, charW, side, z0: lift, top: lift + side, textLH: +(lh * textScale).toFixed(3) };
 }
 
 const FONTS = [{ type: 'BrickFontDescriptor', name: 'IosevkaTerm' }];
@@ -81,7 +83,7 @@ export function buildOGrid(lib, L, strs, { fps, dur, owner = OWNER } = {}) {
   const w = new World();
   const O = w.addOwner(owner);
   const hx = L.side / 2;
-  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.lh, WidthScale: +(1 / L.charW).toFixed(4), Text: strs[0] } };
+  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: +(1 / L.charW).toFixed(4), Text: strs[0] } };
   const screen = {
     h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, 2, hx], position: [0, 0, L.z0 + hx], color: [6, 6, 8], owner_index: O, components: [face] }),
     c: C.TextDisplay,
@@ -122,47 +124,46 @@ export function oBoxes(L) {
 // (/og<id>; the server's br.Chat.Command is the only console door into
 // wires: there is no command that fires a Custom Global Event) + a For Loop
 // decoder. Omegga refuses console lines of 512+ chars, so a frame travels as
-// RUN TOKENS, 2 chars each: colour index + run length, both letters of ALPHA;
-// colour index NL ends a row. Long frames go in several commands: the first
-// char of each says a = first part (reset), b = middle, c = last, d = whole.
-// The last part arms `pending`; a 20 Hz clock then runs the loop (by then the
-// buffer Var is settled), which rebuilds <color="rrggbb">OOO</>... runs in a
-// string Var and copies it into the screen when the loop completes.
+// RUN TOKENS, 4 chars each, letters of ALPHA: red, green, blue (LEVELS steps
+// 0..83 each, near true colour) + run length; red = NL ends a row. Long frames
+// go in several commands, at least a game tick apart (two in one tick clobber
+// each other: only some parts land): the first char of each says a = first part (reset),
+// b = middle, c = last, d = whole. The last part arms `pending`; a 20 Hz clock
+// then runs the loop (by then the buffer Var is settled), which rebuilds
+// <color="rrggbb">███</>... runs in a string Var and copies it into the
+// screen when the loop completes.
 
 export const ALPHA = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$&()*+,-./:;=?@[]^_|~';
-const LV = { r: [0, 85, 170, 255], g: [0, 64, 128, 191, 255], b: [0, 85, 170, 255] };
-/** Fixed palette, 4 x 5 x 4 = 80 colours; index 80 = newline. */
-export const PALETTE = LV.r.flatMap(r => LV.g.flatMap(g => LV.b.map(b => [r, g, b])));
-export const NL = PALETTE.length;
-const PAL_HEX = PALETTE.map(c => c.map(v => v.toString(16).padStart(2, '0')).join('')).join('') + '000000';
+export const LEVELS = ALPHA.length - 1; // 84 steps a channel; index 84 (red) = newline
+export const NL = LEVELS;
+const lv = i => Math.round((i * 255) / (LEVELS - 1));
+const LV_HEX = Array.from({ length: LEVELS }, (_, i) => lv(i).toString(16).padStart(2, '0')).join('');
+export const TOKEN = 4;
 export const LINE_MAX = 500; // Omegga refuses 512+, the game silently drops lines of ~506-511 (505 got through)
-
-const nearest = (R, G, B) => {
-  const q = (v, lv) => lv.reduce((bi, x, i) => (Math.abs(x - v) < Math.abs(lv[bi] - v) ? i : bi), 0);
-  return (q(R, LV.r) * LV.g.length + q(G, LV.g)) * LV.b.length + q(B, LV.b);
-};
+const q = v => Math.max(0, Math.min(LEVELS - 1, Math.round((v * (LEVELS - 1)) / 255)));
 
 /**
- * rgb24 n x n frame -> run tokens (2 chars a run). A cell joins the current
+ * rgb24 n x n frame -> run tokens (4 chars a run). A cell joins the current
  * run while it stays within `tol` of the run's mean colour; tol grows until
- * the frame has at most maxRuns runs (decode time + text length).
+ * the frame has at most maxRuns runs (decode time + lines per frame).
  */
-export function encodeFrame(fr, n, { maxRuns = 400 } = {}) {
+export function encodeFrame(fr, n, { maxRuns = 354 } = {}) {
   let s = '';
-  for (const tol of [0, 12, 20, 28, 40, 56, 80, 112, 160, 255]) {
+  for (const tol of [4, 8, 12, 16, 22, 30, 40, 56, 80, 112, 160, 255]) {
     s = '';
+    let runs = 0;
     for (let r = 0; r < n; r++) {
       let run = 0, sum = [0, 0, 0];
-      const flush = () => { if (run) s += ALPHA[nearest(...sum.map(v => v / run))] + ALPHA[run - 1]; run = 0; sum = [0, 0, 0]; };
+      const flush = () => { if (run) { s += sum.map(v => ALPHA[q(v / run)]).join('') + ALPHA[run - 1]; runs++; } run = 0; sum = [0, 0, 0]; };
       for (let c = 0; c < n; c++) {
         const o = (r * n + c) * 3, px = [fr[o], fr[o + 1], fr[o + 2]];
-        if (run && (run === ALPHA.length || (tol === 0 ? nearest(...px) !== nearest(...sum.map(v => v / run)) : Math.max(...px.map((v, i) => Math.abs(v - sum[i] / run))) > tol))) flush();
+        if (run && (run === ALPHA.length || Math.max(...px.map((v, i) => Math.abs(v - sum[i] / run))) > tol)) flush();
         run++; sum = sum.map((v, i) => v + px[i]);
       }
       flush();
-      if (r < n - 1) s += ALPHA[NL] + ALPHA[0];
+      if (r < n - 1) s += ALPHA[NL] + '000';
     }
-    if (s.length / 2 <= maxRuns) break;
+    if (runs + n - 1 <= maxRuns) break; // row ends count too: 354 tokens = 3 lines
   }
   return s;
 }
@@ -171,16 +172,16 @@ export function encodeFrame(fr, n, { maxRuns = 400 } = {}) {
 export function decodeTokens(t, glyph = GLYPH) {
   const OS = glyph.repeat(ALPHA.length);
   let out = '';
-  for (let i = 0; i + 1 < t.length; i += 2) {
-    const ci = ALPHA.indexOf(t[i]), cc = ALPHA.indexOf(t[i + 1]);
-    out += ci === NL ? '\n' : `<color="${PAL_HEX.substr(ci * 6, 6)}">${OS.substr(0, cc + 1)}</>`;
+  for (let i = 0; i + TOKEN - 1 < t.length; i += TOKEN) {
+    const [r, g, b, c] = [0, 1, 2, 3].map(k => ALPHA.indexOf(t[i + k]));
+    out += r === NL ? '\n' : `<color="${LV_HEX.substr(r * 2, 2)}${LV_HEX.substr(g * 2, 2)}${LV_HEX.substr(b * 2, 2)}">${OS.substr(0, c + 1)}</>`;
   }
   return out;
 }
 
 /** Tokens -> command argument strings that fit a console line after `prefix` (e.g. 'br.Chat.Command /og1a2b3c '). */
 export function frameParts(tokens, prefix) {
-  const room = (LINE_MAX - prefix.length - 1) & ~1; // whole tokens
+  const room = Math.floor((LINE_MAX - prefix.length - 1) / TOKEN) * TOKEN; // whole tokens
   const parts = [];
   for (let i = 0; i < tokens.length; i += room) parts.push(tokens.slice(i, i + room));
   if (!parts.length) parts.push('');
@@ -195,7 +196,7 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
   const w = new World();
   const O = w.addOwner(owner);
   const hx = L.side / 2;
-  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.lh, WidthScale: +(1 / L.charW).toFixed(4), Text: glyph } };
+  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: +(1 / L.charW).toFixed(4), Text: glyph } };
   const screen = { h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, 2, hx], position: [0, 0, L.z0 + hx], color: [6, 6, 8], owner_index: O, components: [face] }), c: C.TextDisplay };
   const slots = new Map();
   const gate = (c, data = {}, grid) => {
@@ -246,7 +247,7 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
   // pending 2 (last part in) -> next tick: snapshot buf into dbuf, pending 1 -> a later tick, when the
   // loop is idle: pending 0 + run on dbuf. The next frame's parts can then overwrite buf mid-decode.
   const dbuf = gate(C.Var, { Value: str('') });
-  wire(...op(null, C.Expr_Floor, op(null, C.Expr_MathDivide, op(null, C.Expr_String_Length, [dbuf, 'Value']), K(null, 2))), shell, 'Count');
+  wire(...op(null, C.Expr_Floor, op(null, C.Expr_MathDivide, op(null, C.Expr_String_Length, [dbuf, 'Value']), K(null, TOKEN))), shell, 'Count');
   const clock = gate(C.Clock, { bEnabled: true, bPulseOn: false, OnTimeSeconds: 0.025, OffTimeSeconds: 0.025, IntervalSeconds: 0.05 });
   const tick = gate(C.Expr_EdgeDetectorExec); wire(clock, 'Pulse', tick, 'Input');
   const pGet = gate(C.Exec_Var_Get); wire(pending, 'VarRef', pGet, 'VarRef'); wire(tick, 'OnRisingEdge', pGet, 'Exec');
@@ -270,14 +271,15 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
   const acc = gate(C.Var, { Value: str('') }, grid);
   // read the accumulator once at the top (outputs are memoized inside an iteration), write it last
   const accGet = gate(C.Exec_Var_Get, {}, grid); wire(acc, 'VarRef', accGet, 'VarRef');
-  const at = op(grid, C.Expr_MathMultiply, idx, K(grid, 2));
+  const at = op(grid, C.Expr_MathMultiply, idx, K(grid, TOKEN));
   const find = ch => { const x = gate(C.Expr_String_Find, { Input: ALPHA, Search: '', Start: 0, bCaseSensitive: true }, grid); wire(...ch, x, 'Search'); return [x, 'Output']; };
-  const ci = find(sub(grid, data, at, 1));
-  const cc = find(sub(grid, data, op(grid, C.Expr_MathAdd, at, K(grid, 1)), 1));
-  const hex = sub(grid, PAL_HEX, op(grid, C.Expr_MathMultiply, ci, K(grid, 6)), 6);
+  const ch = k => find(sub(grid, data, k ? op(grid, C.Expr_MathAdd, at, K(grid, k)) : at, 1));
+  const [cr, cg, cb, cc] = [0, 1, 2, 3].map(ch);
+  const hex2 = c => sub(grid, LV_HEX, op(grid, C.Expr_MathMultiply, c, K(grid, 2)), 2);
   const os = sub(grid, OS, K(grid, 0), op(grid, C.Expr_MathAdd, cc, K(grid, 1)));
-  const fmt = gate(C.Expr_String_FormatText, { FormatString: '<color="{A}">{B}</>' }, grid); wire(...hex, fmt, 'InputA'); wire(...os, fmt, 'InputB');
-  const piece = select(grid, [fmt, 'Output'], K(grid, '\n'), op(grid, C.Expr_CompareEqual, ci, K(grid, NL)));
+  const fmt = gate(C.Expr_String_FormatText, { FormatString: '<color="{A}{B}{C}">{D}</>' }, grid);
+  wire(...hex2(cr), fmt, 'InputA'); wire(...hex2(cg), fmt, 'InputB'); wire(...hex2(cb), fmt, 'InputC'); wire(...os, fmt, 'InputD');
+  const piece = select(grid, [fmt, 'Output'], K(grid, '\n'), op(grid, C.Expr_CompareEqual, cr, K(grid, NL)));
   const accCat = gate(C.Expr_String_Concatenate, { Separator: '' }, grid);
   wire(...select(grid, [accGet, 'Value'], K(grid, ''), op(grid, C.Expr_CompareEqual, idx, K(grid, 0))), accCat, 'InputA'); wire(...piece, accCat, 'InputB');
   wire(entry, 'Body', accGet, 'Exec');

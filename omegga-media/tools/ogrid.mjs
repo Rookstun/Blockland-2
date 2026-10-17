@@ -7,7 +7,8 @@
 // screen after `dur` seconds (DIR/ogrid.json lists them).
 // STREAMED form (what /ogrid plays): DIR/receiver.brz (screen + /<cmd> gate +
 // For Loop decoder, load once) and DIR/stream_<k>.json = per frame the console
-// lines to send at k*chunk + f/fps: `br.Chat.Command /<cmd> <part>` (--cmd og0000aa).
+// lines to send at k*chunk + f/fps: `br.Chat.Command /<cmd> <part>` (--cmd og0000aa),
+// a frame's lines >= 30 ms apart (several in one game tick clobber each other).
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
