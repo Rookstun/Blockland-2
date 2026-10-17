@@ -142,34 +142,46 @@ export const TOKEN = 4;
 export const LINE_MAX = 500; // Omegga refuses 512+, the game silently drops lines of ~506-511 (505 got through)
 const q = v => Math.max(0, Math.min(LEVELS - 1, Math.round((v * (LEVELS - 1)) / 255)));
 
+export const STRIP_SEP = '%'; // not in ALPHA
+/** Runs one strip's text display can hold (32768-char wire string cap, ~20 chars a run + its glyphs). */
+export const stripRunCap = (n, strips) => Math.floor((32768 - (n * n) / strips - n) / 21);
+
 /**
- * rgb24 n x n frame -> run tokens (4 chars a run). A cell joins the current
- * run while it stays within `tol` of the run's mean colour; tol grows until
- * the frame has at most maxRuns runs (decode time + lines per frame).
+ * rgb24 n x n frame -> run tokens (4 chars a run), one section per text
+ * display strip (n / strips rows each), sections joined by STRIP_SEP. A cell
+ * joins the current run while it stays within `tol` of the run's mean colour;
+ * tol grows until the frame fits maxRuns and every strip fits its display.
  */
-export function encodeFrame(fr, n, { maxRuns = 472 } = {}) {
-  let s = '';
+export function encodeFrame(fr, n, { maxRuns = 472, strips = 1 } = {}) {
+  const rows = n / strips, cap = stripRunCap(n, strips);
+  let out = '';
   for (const tol of [4, 8, 12, 16, 22, 30, 40, 56, 80, 112, 160, 255]) {
-    s = '';
-    let runs = 0;
-    for (let r = 0; r < n; r++) {
-      let run = 0, sum = [0, 0, 0];
-      const flush = () => { if (run) { s += sum.map(v => ALPHA[q(v / run)]).join('') + ALPHA[run - 1]; runs++; } run = 0; sum = [0, 0, 0]; };
-      for (let c = 0; c < n; c++) {
-        const o = (r * n + c) * 3, px = [fr[o], fr[o + 1], fr[o + 2]];
-        if (run && (run === ALPHA.length || Math.max(...px.map((v, i) => Math.abs(v - sum[i] / run))) > tol)) flush();
-        run++; sum = sum.map((v, i) => v + px[i]);
+    const secs = [];
+    let total = 0, worst = 0;
+    for (let k = 0; k < strips; k++) {
+      let s = '', runs = 0;
+      for (let r = k * rows; r < (k + 1) * rows; r++) {
+        let run = 0, sum = [0, 0, 0];
+        const flush = () => { if (run) { s += sum.map(v => ALPHA[q(v / run)]).join('') + ALPHA[run - 1]; runs++; } run = 0; sum = [0, 0, 0]; };
+        for (let c = 0; c < n; c++) {
+          const o = (r * n + c) * 3, px = [fr[o], fr[o + 1], fr[o + 2]];
+          if (run && (run === ALPHA.length || Math.max(...px.map((v, i) => Math.abs(v - sum[i] / run))) > tol)) flush();
+          run++; sum = sum.map((v, i) => v + px[i]);
+        }
+        flush();
+        if (r < (k + 1) * rows - 1) { s += ALPHA[NL] + '000'; runs++; }
       }
-      flush();
-      if (r < n - 1) s += ALPHA[NL] + '000';
+      secs.push(s); total += runs; worst = Math.max(worst, runs);
     }
-    if (runs + n - 1 <= maxRuns) break; // row ends count too: 354 tokens = 3 lines
+    out = secs.join(STRIP_SEP);
+    if (total <= maxRuns && worst <= cap) break;
   }
-  return s;
+  return out;
 }
 
 /** What the chip makes of tokens (JS mirror of the loop, for checks). */
 export function decodeTokens(t, glyph = GLYPH) {
+  if (t.includes(STRIP_SEP)) return t.split(STRIP_SEP).map(x => decodeTokens(x, glyph));
   const OS = glyph.repeat(ALPHA.length);
   let out = '';
   for (let i = 0; i + TOKEN - 1 < t.length; i += TOKEN) {
@@ -188,16 +200,27 @@ export function frameParts(tokens, prefix) {
   return parts.map((p, i) => (parts.length === 1 ? 'd' : i === 0 ? 'a' : i === parts.length - 1 ? 'c' : 'b') + p);
 }
 
-/** The receiver: screen + command gate + decoder loop chip. cmd = chat command name (letters/digits). */
-export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph = GLYPH } = {}) {
+/**
+ * The receiver: a screen of `strips` stacked text displays (n / strips rows each:
+ * one display's string caps at 32768 chars) + the command gate + one For Loop
+ * decoder per strip, all run at once on their own section of the frame.
+ * cmd = chat command name (letters/digits).
+ */
+export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph = GLYPH, strips = 1 } = {}) {
   const OS = glyph.repeat(ALPHA.length);
   const { World, brdb } = lib;
   const C = brdb.COMPONENTS;
   const w = new World();
   const O = w.addOwner(owner);
-  const hx = L.side / 2;
+  const hx = L.side / 2, rowsH = (L.side - 8) / strips; // picture height = side - 2 x 4 border
   const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: +(1 / L.charW).toFixed(4), Text: glyph } };
-  const screen = { h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, 2, hx], position: [0, 0, L.z0 + hx], color: [6, 6, 8], owner_index: O, components: [face] }), c: C.TextDisplay };
+  // strip 0 = top rows; a 4-unit frame bar above and below
+  const screens = [];
+  for (let k = 0; k < strips; k++) {
+    const zc = L.z0 + 4 + (strips - 1 - k) * rowsH + rowsH / 2;
+    screens.push({ h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, 2, rowsH / 2], position: [0, 0, zc], color: [6, 6, 8], owner_index: O, components: [face] }), c: C.TextDisplay });
+  }
+  for (const zc of [L.z0 + 2, L.z0 + L.side - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, 2, 2], position: [0, 0, zc], color: [6, 6, 8], owner_index: O });
   const slots = new Map();
   const gate = (c, data = {}, grid) => {
     const k = grid ?? 'main', i = slots.get(k) ?? 0; slots.set(k, i + 1);
@@ -230,7 +253,7 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
   const payload = sub(null, args, K(null, 1), 100000);
   const isFlag = s => { const x = gate(C.Expr_String_Contains, { Input: s, Search: '', bCaseSensitive: true }); wire(...flag, x, 'Search'); return [x, 'Output']; };
   const reset = isFlag('ad'), final = isFlag('cd');
-  const buf = gate(C.Var, { Value: str('') }), pending = gate(C.Var, { Value: num(0) }), pic = gate(C.Var, { Value: str(glyph) });
+  const buf = gate(C.Var, { Value: str('') }), pending = gate(C.Var, { Value: num(0) });
   const bufGet = gate(C.Exec_Var_Get); wire(buf, 'VarRef', bufGet, 'VarRef');
   const cat = gate(C.Expr_String_Concatenate, { Separator: '' });
   wire(...select(null, [bufGet, 'Value'], K(null, ''), reset), cat, 'InputA'); wire(...payload, cat, 'InputB');
@@ -238,61 +261,75 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
   chain(bufGet, set(null, buf, [cat, 'Output']), isLast);
   wire(ev, 'ExecOut', bufGet, 'Exec');
   wire(isLast, 'ExecOutA', set(null, pending, K(null, 2)), 'Exec');
-  wire(pic, 'Value', screen, 'Text');
 
-  // ---- decoder loop: one iteration per run token (runs across ticks: never trips the 10 ms budget)
-  const shell = gate(C.Microchip_CountFor, { Count: 0, FirstIndex: 0, Step: 1, bRunAcrossTicks: true });
-  const grid = w.addBrickGrid({ type: 'Entity_MicrochipDynamicBrickGrid', location: { X: 0, Y: 0, Z: 40 }, data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 14, Y: 14, Z: 2 } } });
-  w.registerMicrochipLink(shell.h, grid);
-  // pending 2 (last part in) -> next tick: snapshot buf into dbuf, pending 1 -> a later tick, when the
-  // loop is idle: pending 0 + run on dbuf. The next frame's parts can then overwrite buf mid-decode.
+  // ---- scheduler: pending 2 (last part in) -> next tick: snapshot buf into dbuf, pending 1 -> a later
+  // tick when every decoder is idle: pending 0 + all decoders start. busy flags are Vars (a wire from a
+  // shell's own outputs back into its Exec is rejected as a cycle).
   const dbuf = gate(C.Var, { Value: str('') });
-  wire(...op(null, C.Expr_Floor, op(null, C.Expr_MathDivide, op(null, C.Expr_String_Length, [dbuf, 'Value']), K(null, TOKEN))), shell, 'Count');
   const clock = gate(C.Clock, { bEnabled: true, bPulseOn: false, OnTimeSeconds: 0.025, OffTimeSeconds: 0.025, IntervalSeconds: 0.05 });
   const tick = gate(C.Expr_EdgeDetectorExec); wire(clock, 'Pulse', tick, 'Input');
   const pGet = gate(C.Exec_Var_Get); wire(pending, 'VarRef', pGet, 'VarRef'); wire(tick, 'OnRisingEdge', pGet, 'Exec');
   const snap = gate(C.Exec_Branch); wire(...op(null, C.Expr_CompareGreater, [pGet, 'Value'], K(null, 1.5)), snap, 'bCond'); wire(pGet, 'ExecOut', snap, 'Exec');
   const take = chain(set(null, dbuf, [buf, 'Value']), set(null, pending, K(null, 1)));
   wire(snap, 'ExecOutA', take[0], 'Exec');
-  // busy is a Var: any wire from the shell's own outputs back into its Exec is rejected as a cycle
-  const busy = gate(C.Var, { Value: num(0) });
-  const ready = gate(C.Expr_LogicalAND);
-  wire(...op(null, C.Expr_CompareGreater, [pGet, 'Value'], K(null, 0.5)), ready, 'bInputA');
-  wire(...op(null, C.Expr_CompareLess, [busy, 'Value'], K(null, 0.5)), ready, 'bInputB');
-  const go = gate(C.Exec_Branch); wire(ready, 'bOutput', go, 'bCond'); wire(snap, 'ExecOutB', go, 'Exec');
-  const start = chain(set(null, pending, K(null, 0)), set(null, busy, K(null, 1)));
-  wire(go, 'ExecOutA', start[0], 'Exec'); wire(start[1], 'ExecOut', shell, 'Exec');
+  if (debug) { const f = gate(C.Expr_String_FormatText, { FormatString: 'ogsnap|{A}' }); wire(...op(null, C.Expr_String_Length, [buf, 'Value']), f, 'InputA'); const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(take[1], 'ExecOut', p, 'Exec'); }
+  const busy = Array.from({ length: strips }, () => gate(C.Var, { Value: num(0) }));
+  let ready = op(null, C.Expr_CompareGreater, [pGet, 'Value'], K(null, 0.5));
+  for (const b of busy) { const x = gate(C.Expr_LogicalAND); wire(...ready, x, 'bInputA'); wire(...op(null, C.Expr_CompareLess, [b, 'Value'], K(null, 0.5)), x, 'bInputB'); ready = [x, 'bOutput']; }
+  const go = gate(C.Exec_Branch); wire(...ready, go, 'bCond'); wire(snap, 'ExecOutB', go, 'Exec');
+  const start = chain(set(null, pending, K(null, 0)), ...busy.map(b => set(null, b, K(null, 1))));
+  wire(go, 'ExecOutA', start[0], 'Exec');
+  if (debug) { const p = gate(C.Exec_PrintToConsole, { Text: 'ogstart' }); wire(start[start.length - 1], 'ExecOut', p, 'Exec'); }
 
-  // inner grids are sealed: the buffer goes in through a MicrochipInput, the text out through a MicrochipOutput
-  const din = gate(C.MicrochipInput, { PortLabel: 'data', PortOrder: 0 }, grid); wire(dbuf, 'Value', din, 'RER_Input');
-  const data = [din, 'RER_Output'];
-  const entry = gate(C.CallableEntry_CountFor, {}, grid);
-  const idx = [entry, 'Index'];
-  const acc = gate(C.Var, { Value: str('') }, grid);
-  // read the accumulator once at the top (outputs are memoized inside an iteration), write it last
-  const accGet = gate(C.Exec_Var_Get, {}, grid); wire(acc, 'VarRef', accGet, 'VarRef');
-  const at = op(grid, C.Expr_MathMultiply, idx, K(grid, TOKEN));
-  const find = ch => { const x = gate(C.Expr_String_Find, { Input: ALPHA, Search: '', Start: 0, bCaseSensitive: true }, grid); wire(...ch, x, 'Search'); return [x, 'Output']; };
-  const ch = k => find(sub(grid, data, k ? op(grid, C.Expr_MathAdd, at, K(grid, k)) : at, 1));
-  const [cr, cg, cb, cc] = [0, 1, 2, 3].map(ch);
-  const hex2 = c => sub(grid, LV_HEX, op(grid, C.Expr_MathMultiply, c, K(grid, 2)), 2);
-  const os = sub(grid, OS, K(grid, 0), op(grid, C.Expr_MathAdd, cc, K(grid, 1)));
-  const fmt = gate(C.Expr_String_FormatText, { FormatString: '<color="{A}{B}{C}">{D}</>' }, grid);
-  wire(...hex2(cr), fmt, 'InputA'); wire(...hex2(cg), fmt, 'InputB'); wire(...hex2(cb), fmt, 'InputC'); wire(...os, fmt, 'InputD');
-  const piece = select(grid, [fmt, 'Output'], K(grid, '\n'), op(grid, C.Expr_CompareEqual, cr, K(grid, NL)));
-  const accCat = gate(C.Expr_String_Concatenate, { Separator: '' }, grid);
-  wire(...select(grid, [accGet, 'Value'], K(grid, ''), op(grid, C.Expr_CompareEqual, idx, K(grid, 0))), accCat, 'InputA'); wire(...piece, accCat, 'InputB');
-  wire(entry, 'Body', accGet, 'Exec');
-  chain(accGet, set(grid, acc, [accCat, 'Output']));
-  const dout = gate(C.MicrochipOutput, { PortLabel: 'text', PortOrder: 0 }, grid); wire(acc, 'Value', dout, 'RER_Input');
-  const show = set(null, pic, [dout, 'RER_Output']); wire(shell, 'Completed', show, 'Exec');
-  const free = set(null, busy, K(null, 0)); wire(show, 'ExecOut', free, 'Exec');
-  if (debug) {
-    // log line per decoded frame: iterations | text length | head
-    const f = gate(C.Expr_String_FormatText, { FormatString: 'ogrid|{A}|{B}|{C}' });
-    wire(shell, 'IterationsExecuted', f, 'InputA'); wire(...op(null, C.Expr_String_Length, [dout, 'RER_Output']), f, 'InputB');
-    wire(...sub(null, [dout, 'RER_Output'], K(null, 0), 80), f, 'InputC');
-    const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(free, 'ExecOut', p, 'Exec');
+  // ---- sections: split dbuf at STRIP_SEP
+  const sections = [];
+  let rest = [dbuf, 'Value'];
+  for (let k = 0; k < strips; k++) {
+    if (k === strips - 1) { sections.push(rest); break; }
+    const sp = gate(C.Expr_String_Split, { Delimiter: STRIP_SEP, Occurrence: 1, bCaseSensitive: true });
+    wire(...rest, sp, 'Input');
+    sections.push([sp, 'Left']); rest = [sp, 'Right'];
+  }
+
+  // ---- one decoder per strip (inner grids are sealed: data in through a MicrochipInput, text out through a MicrochipOutput)
+  for (let k = 0; k < strips; k++) {
+    const shell = gate(C.Microchip_CountFor, { Count: 0, FirstIndex: 0, Step: 1, bRunAcrossTicks: true });
+    const grid = w.addBrickGrid({ type: 'Entity_MicrochipDynamicBrickGrid', location: { X: 0, Y: 0, Z: 40 }, data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 14, Y: 14, Z: 2 } } });
+    w.registerMicrochipLink(shell.h, grid);
+    wire(...op(null, C.Expr_Floor, op(null, C.Expr_MathDivide, op(null, C.Expr_String_Length, sections[k]), K(null, TOKEN))), shell, 'Count');
+    wire(start[start.length - 1], 'ExecOut', shell, 'Exec');
+    const din = gate(C.MicrochipInput, { PortLabel: 'data', PortOrder: 0 }, grid); wire(...sections[k], din, 'RER_Input');
+    const data = [din, 'RER_Output'];
+    const entry = gate(C.CallableEntry_CountFor, {}, grid);
+    const idx = [entry, 'Index'];
+    const acc = gate(C.Var, { Value: str('') }, grid);
+    // read the accumulator once at the top (outputs are memoized inside an iteration), write it last
+    const accGet = gate(C.Exec_Var_Get, {}, grid); wire(acc, 'VarRef', accGet, 'VarRef');
+    const at = op(grid, C.Expr_MathMultiply, idx, K(grid, TOKEN));
+    const find = ch => { const x = gate(C.Expr_String_Find, { Input: ALPHA, Search: '', Start: 0, bCaseSensitive: true }, grid); wire(...ch, x, 'Search'); return [x, 'Output']; };
+    const ch = j => find(sub(grid, data, j ? op(grid, C.Expr_MathAdd, at, K(grid, j)) : at, 1));
+    const [cr, cg, cb, cc] = [0, 1, 2, 3].map(ch);
+    const hex2 = c => sub(grid, LV_HEX, op(grid, C.Expr_MathMultiply, c, K(grid, 2)), 2);
+    const os = sub(grid, OS, K(grid, 0), op(grid, C.Expr_MathAdd, cc, K(grid, 1)));
+    const fmt = gate(C.Expr_String_FormatText, { FormatString: '<color="{A}{B}{C}">{D}</>' }, grid);
+    wire(...hex2(cr), fmt, 'InputA'); wire(...hex2(cg), fmt, 'InputB'); wire(...hex2(cb), fmt, 'InputC'); wire(...os, fmt, 'InputD');
+    const piece = select(grid, [fmt, 'Output'], K(grid, '\n'), op(grid, C.Expr_CompareEqual, cr, K(grid, NL)));
+    const accCat = gate(C.Expr_String_Concatenate, { Separator: '' }, grid);
+    wire(...select(grid, [accGet, 'Value'], K(grid, ''), op(grid, C.Expr_CompareEqual, idx, K(grid, 0))), accCat, 'InputA'); wire(...piece, accCat, 'InputB');
+    wire(entry, 'Body', accGet, 'Exec');
+    chain(accGet, set(grid, acc, [accCat, 'Output']));
+    const dout = gate(C.MicrochipOutput, { PortLabel: 'text', PortOrder: 0 }, grid); wire(acc, 'Value', dout, 'RER_Input');
+    const pic = gate(C.Var, { Value: str(glyph) });
+    wire(pic, 'Value', screens[k], 'Text');
+    const show = set(null, pic, [dout, 'RER_Output']); wire(shell, 'Completed', show, 'Exec');
+    const free = set(null, busy[k], K(null, 0)); wire(show, 'ExecOut', free, 'Exec');
+    if (debug) {
+      // log line per decoded strip: strip | iterations | text length | head
+      const f = gate(C.Expr_String_FormatText, { FormatString: `ogrid|${k}|{A}|{B}|{C}` });
+      wire(shell, 'IterationsExecuted', f, 'InputA'); wire(...op(null, C.Expr_String_Length, [dout, 'RER_Output']), f, 'InputB');
+      wire(...sub(null, [dout, 'RER_Output'], K(null, 0), 60), f, 'InputC');
+      const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(free, 'ExecOut', p, 'Exec');
+    }
   }
   w.makePrefab({});
   return w.toBrz({ bundle: { description: 'O grid receiver' }, externalAssets: FONTS });
@@ -301,6 +338,6 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
 /** Clear boxes of a receiver (file coords [centre, half]): screen + gate field. */
 export function receiverBoxes(L) {
   const hx = L.side / 2;
-  // gates: 8 a row, 40 apart from y 40 (about 50 gates = 7 rows)
-  return [[[0, 0, L.z0 + hx], [hx, 2, hx]], [[0, 200, L.z0 + 10], [180, 180, 20]]];
+  // gates: 8 a row, 40 apart from y 40 (4 strips = about 110 gates = 14 rows)
+  return [[[0, 0, L.z0 + hx], [hx, 2, hx]], [[0, 330, L.z0 + 10], [180, 310, 20]]];
 }

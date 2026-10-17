@@ -1295,13 +1295,16 @@ module.exports = class Media {
     // cell glyph: a full block (default) or, with `letters`, the letter O
     const glyph = opts.includes('letters') ? 'O' : this.config['ogrid-glyph'] || this.og.GLYPH;
     const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 96, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 64)));
-    const fps = Math.max(1, Math.min(15, opt('fps') || this.config['ogrid-fps'] || 3));
+    const fps = Math.max(1, Math.min(15, opt('fps') || this.config['ogrid-fps'] || 2));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(5, this.config['ogrid-chunk-seconds'] ?? 20);
-    const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(Math.floor(((1000 / fps) * 0.95) / (this.config['ogrid-line-gap-ms'] ?? 25)) * 118, Math.floor((32768 - n * n - n) / 20)) /* time per frame vs the 32768-char text cap (~20 chars a run) */; // tokens incl. row ends: 3 lines a frame
+    // the game reads console input at about 24 x 500-char lines a second (more backs up for many seconds)
+    const strips = n % 4 === 0 && n >= 32 ? 4 : 1; // stacked text displays: one string caps at 32768 chars
+    const linesPerFrame = Math.max(1, Math.floor((this.config['ogrid-lines-per-sec'] ?? 24) / fps));
+    const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(linesPerFrame * 118, this.og.stripRunCap(n, strips) * strips); // tokens incl. row ends: 3 lines a frame
     // several chat commands in one game tick clobber each other (only some parts land): space them
-    const gapMs = this.config['ogrid-line-gap-ms'] ?? 25;
+    const gapMs = this.config['ogrid-line-gap-ms'] ?? Math.max(25, Math.floor((900 / fps) / linesPerFrame));
     const lead = (this.config['ogrid-lead-ms'] ?? 80) / 1000; // the chip shows a frame ~50-130 ms after its last part
     const crypto = require('crypto');
     const hash = crypto.createHash('sha1').update('ogrid:' + name).digest('hex');
@@ -1342,7 +1345,7 @@ module.exports = class Media {
         const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
           '-vf', `fps=${fps},crop='min(iw,ih)':'min(iw,ih)',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
         const fb = n * n * 3, frames = [];
-        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(this.og.frameParts(this.og.encodeFrame(raw.subarray(o, o + fb), n, { maxRuns }), prefix));
+        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(this.og.frameParts(this.og.encodeFrame(raw.subarray(o, o + fb), n, { maxRuns, strips }), prefix));
         if (!frames.length) throw new Error('no frames decoded');
         let audio = null;
         if (withSound) {
@@ -1372,7 +1375,7 @@ module.exports = class Media {
       this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
       for (const [c, h] of this.og.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
       const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.og.buildReceiver(this.brs4, L, { cmd, owner, glyph }));
+      fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.og.buildReceiver(this.brs4, L, { cmd, owner, glyph, strips }));
       this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
       setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
       await sleep(1500);
