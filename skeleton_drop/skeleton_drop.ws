@@ -19,8 +19,8 @@
 // Coins are flung out a little so they scatter. The chip also pulses Died
 // and puts the spot on Location (world) / Offset (relative to this chip).
 
-const FLING = 120.0   // sideways speed of a dropped coin
-const POP = 250.0     // upward speed
+const FLING = 25.0    // sideways speed of a dropped coin (owner 2026-10-17: was 120, coins flew all over)
+const POP = 120.0     // upward speed (was 250)
 
 var location: vector = Vec(0.0, 0.0, 0.0)
 var offset: vector = Vec(0.0, 0.0, 0.0)
@@ -356,17 +356,17 @@ mod buyName(uid: string, it: entity) -> string {
 // put an item in a slot: a shop name gives that shop's advanced item, else the plain item
 mod giveNamed(ch: character, slot: int, name: string, it: entity) {
   if name == "Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.500, speed = 0.800, itemName = "Bow", overrideColors = true, meshColors = [ColorSRGB(75, 31, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.500, speed = 1.000, itemName = "Bow", overrideColors = true, meshColors = [ColorSRGB(75, 31, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Magic Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.500, speed = 1.500, itemName = "Magic Bow", overrideColors = true, meshColors = [ColorSRGB(4, 210, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.500, speed = 1.875, itemName = "Magic Bow", overrideColors = true, meshColors = [ColorSRGB(4, 210, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Maple Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.100, speed = 1.100, itemName = "Maple Bow", overrideColors = true, meshColors = [ColorSRGB(186, 140, 157, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.100, speed = 1.375, itemName = "Maple Bow", overrideColors = true, meshColors = [ColorSRGB(186, 140, 157, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Oak Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.800, speed = 0.900, itemName = "Oak Bow", overrideColors = true, meshColors = [ColorSRGB(186, 137, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.800, speed = 1.125, itemName = "Oak Bow", overrideColors = true, meshColors = [ColorSRGB(186, 137, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Willow Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, itemName = "Willow Bow", overrideColors = true, meshColors = [ColorSRGB(183, 186, 130, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, speed = 1.250, itemName = "Willow Bow", overrideColors = true, meshColors = [ColorSRGB(183, 186, 130, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Yew Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.300, speed = 1.300, itemName = "Yew Bow", overrideColors = true, meshColors = [ColorSRGB(185, 157, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.300, speed = 1.625, itemName = "Yew Bow", overrideColors = true, meshColors = [ColorSRGB(185, 157, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Bolt-Action Rifle" {
     ch.SetInventoryItemAdv($BRItemBase/Weapon_BoltActionRifle, slot = slot, itemName = "Bolt-Action Rifle")
   } else if name == "Derringer" {
@@ -999,12 +999,12 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
       if roll1 < brownPct {
         let n1 = Random(2, 4)
         SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang1 + 0.0) * FLING, sin(ang1 + 0.0) * FLING, POP + 0.0), lifetime = 180.0, limit = 400)
-        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang1 + 1.3) * FLING, sin(ang1 + 1.3) * FLING, POP + 30.0), lifetime = 180.0, limit = 400)
+        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang1 + 1.3) * FLING, sin(ang1 + 1.3) * FLING, POP + 8.0), lifetime = 180.0, limit = 400)
         if n1 >= 3 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang1 + 2.6) * FLING, sin(ang1 + 2.6) * FLING, POP + 60.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang1 + 2.6) * FLING, sin(ang1 + 2.6) * FLING, POP + 16.0), lifetime = 180.0, limit = 400)
         }
         if n1 >= 4 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang1 + 3.9) * FLING, sin(ang1 + 3.9) * FLING, POP + 90.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang1 + 3.9) * FLING, sin(ang1 + 3.9) * FLING, POP + 24.0), lifetime = 180.0, limit = 400)
         }
       } else if roll1 < brownPct + silverPct {
         SpawnPrefab(prefab = $./coin10.brz, offset = at, velocity = vel1, lifetime = 180.0, limit = 200)
@@ -1019,12 +1019,12 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
       if roll2 < brownPct {
         let n2 = Random(2, 4)
         SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang2 + 0.0) * FLING, sin(ang2 + 0.0) * FLING, POP + 0.0), lifetime = 180.0, limit = 400)
-        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang2 + 1.3) * FLING, sin(ang2 + 1.3) * FLING, POP + 30.0), lifetime = 180.0, limit = 400)
+        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang2 + 1.3) * FLING, sin(ang2 + 1.3) * FLING, POP + 8.0), lifetime = 180.0, limit = 400)
         if n2 >= 3 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang2 + 2.6) * FLING, sin(ang2 + 2.6) * FLING, POP + 60.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang2 + 2.6) * FLING, sin(ang2 + 2.6) * FLING, POP + 16.0), lifetime = 180.0, limit = 400)
         }
         if n2 >= 4 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang2 + 3.9) * FLING, sin(ang2 + 3.9) * FLING, POP + 90.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang2 + 3.9) * FLING, sin(ang2 + 3.9) * FLING, POP + 24.0), lifetime = 180.0, limit = 400)
         }
       } else if roll2 < brownPct + silverPct {
         SpawnPrefab(prefab = $./coin10.brz, offset = at, velocity = vel2, lifetime = 180.0, limit = 200)
@@ -1039,12 +1039,12 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
       if roll3 < brownPct {
         let n3 = Random(2, 4)
         SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang3 + 0.0) * FLING, sin(ang3 + 0.0) * FLING, POP + 0.0), lifetime = 180.0, limit = 400)
-        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang3 + 1.3) * FLING, sin(ang3 + 1.3) * FLING, POP + 30.0), lifetime = 180.0, limit = 400)
+        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang3 + 1.3) * FLING, sin(ang3 + 1.3) * FLING, POP + 8.0), lifetime = 180.0, limit = 400)
         if n3 >= 3 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang3 + 2.6) * FLING, sin(ang3 + 2.6) * FLING, POP + 60.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang3 + 2.6) * FLING, sin(ang3 + 2.6) * FLING, POP + 16.0), lifetime = 180.0, limit = 400)
         }
         if n3 >= 4 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang3 + 3.9) * FLING, sin(ang3 + 3.9) * FLING, POP + 90.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang3 + 3.9) * FLING, sin(ang3 + 3.9) * FLING, POP + 24.0), lifetime = 180.0, limit = 400)
         }
       } else if roll3 < brownPct + silverPct {
         SpawnPrefab(prefab = $./coin10.brz, offset = at, velocity = vel3, lifetime = 180.0, limit = 200)
@@ -1059,12 +1059,12 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
       if roll4 < brownPct {
         let n4 = Random(2, 4)
         SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang4 + 0.0) * FLING, sin(ang4 + 0.0) * FLING, POP + 0.0), lifetime = 180.0, limit = 400)
-        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang4 + 1.3) * FLING, sin(ang4 + 1.3) * FLING, POP + 30.0), lifetime = 180.0, limit = 400)
+        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang4 + 1.3) * FLING, sin(ang4 + 1.3) * FLING, POP + 8.0), lifetime = 180.0, limit = 400)
         if n4 >= 3 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang4 + 2.6) * FLING, sin(ang4 + 2.6) * FLING, POP + 60.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang4 + 2.6) * FLING, sin(ang4 + 2.6) * FLING, POP + 16.0), lifetime = 180.0, limit = 400)
         }
         if n4 >= 4 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang4 + 3.9) * FLING, sin(ang4 + 3.9) * FLING, POP + 90.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang4 + 3.9) * FLING, sin(ang4 + 3.9) * FLING, POP + 24.0), lifetime = 180.0, limit = 400)
         }
       } else if roll4 < brownPct + silverPct {
         SpawnPrefab(prefab = $./coin10.brz, offset = at, velocity = vel4, lifetime = 180.0, limit = 200)
@@ -1079,12 +1079,12 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
       if roll5 < brownPct {
         let n5 = Random(2, 4)
         SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang5 + 0.0) * FLING, sin(ang5 + 0.0) * FLING, POP + 0.0), lifetime = 180.0, limit = 400)
-        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang5 + 1.3) * FLING, sin(ang5 + 1.3) * FLING, POP + 30.0), lifetime = 180.0, limit = 400)
+        SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang5 + 1.3) * FLING, sin(ang5 + 1.3) * FLING, POP + 8.0), lifetime = 180.0, limit = 400)
         if n5 >= 3 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang5 + 2.6) * FLING, sin(ang5 + 2.6) * FLING, POP + 60.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang5 + 2.6) * FLING, sin(ang5 + 2.6) * FLING, POP + 16.0), lifetime = 180.0, limit = 400)
         }
         if n5 >= 4 {
-          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang5 + 3.9) * FLING, sin(ang5 + 3.9) * FLING, POP + 90.0), lifetime = 180.0, limit = 400)
+          SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang5 + 3.9) * FLING, sin(ang5 + 3.9) * FLING, POP + 24.0), lifetime = 180.0, limit = 400)
         }
       } else if roll5 < brownPct + silverPct {
         SpawnPrefab(prefab = $./coin10.brz, offset = at, velocity = vel5, lifetime = 180.0, limit = 200)

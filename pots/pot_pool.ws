@@ -17,7 +17,7 @@
 on GlobalCustomEvent("pot.smashed") -> (at: vector) {
   let roll = Random(1, 100)
   let off = at - GetOwnTransform().Location + Vec(0.0, 0.0, 24.0)
-  let up = Vec(0.0, 0.0, 200.0)
+  let up = Vec(0.0, 0.0, 110.0)
   if roll <= 5 {
     SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = up, lifetime = 30.0, limit = 40)
   } else if roll <= 20 {
@@ -59,12 +59,12 @@ on GlobalCustomEvent("pot.smashed") -> (at: vector) {
     }
   } else if roll <= 92 {
     let n = Random(1, 3)
-    SpawnPrefab(prefab = $./coin1.brz, offset = off, velocity = Vec(60.0, 0.0, 200.0), lifetime = 30.0, limit = 150)
+    SpawnPrefab(prefab = $./coin1.brz, offset = off, velocity = Vec(60.0 / 5.0, 0.0 / 5.0, 110.0), lifetime = 30.0, limit = 150)
     if n >= 2 {
-      SpawnPrefab(prefab = $./coin1.brz, offset = off, velocity = Vec(-60.0, 40.0, 220.0), lifetime = 30.0, limit = 150)
+      SpawnPrefab(prefab = $./coin1.brz, offset = off, velocity = Vec(-60.0 / 5.0, 40.0 / 5.0, 110.0), lifetime = 30.0, limit = 150)
     }
     if n >= 3 {
-      SpawnPrefab(prefab = $./coin1.brz, offset = off, velocity = Vec(0.0, -60.0, 240.0), lifetime = 30.0, limit = 150)
+      SpawnPrefab(prefab = $./coin1.brz, offset = off, velocity = Vec(0.0 / 5.0, -60.0 / 5.0, 110.0), lifetime = 30.0, limit = 150)
     }
   }
 }
@@ -75,18 +75,18 @@ on GlobalCustomEvent("pot.smashed") -> (at: vector) {
 on GlobalCustomEvent("gem.mined") -> (at: vector, kind: int) {
   let off = at - GetOwnTransform().Location + Vec(0.0, 0.0, 30.0)
   if kind == 1 {
-    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(50.0, 0.0, 220.0), lifetime = 30.0, limit = 60)
-    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(-50.0, 30.0, 240.0), lifetime = 30.0, limit = 60)
+    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(50.0 / 5.0, 0.0 / 5.0, 110.0), lifetime = 30.0, limit = 60)
+    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(-50.0 / 5.0, 30.0 / 5.0, 110.0), lifetime = 30.0, limit = 60)
   } else if kind == 2 {
-    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0, 0.0, 220.0), lifetime = 30.0, limit = 40)
-    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(-50.0, 30.0, 240.0), lifetime = 30.0, limit = 60)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0 / 5.0, 0.0 / 5.0, 110.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin10.brz, offset = off, velocity = Vec(-50.0 / 5.0, 30.0 / 5.0, 110.0), lifetime = 30.0, limit = 60)
   } else if kind == 3 {
-    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0, 0.0, 220.0), lifetime = 30.0, limit = 40)
-    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(-50.0, 30.0, 240.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0 / 5.0, 0.0 / 5.0, 110.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(-50.0 / 5.0, 30.0 / 5.0, 110.0), lifetime = 30.0, limit = 40)
   } else {
-    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0, 0.0, 220.0), lifetime = 30.0, limit = 40)
-    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(-50.0, 30.0, 240.0), lifetime = 30.0, limit = 40)
-    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(0.0, -50.0, 260.0), lifetime = 30.0, limit = 40)
-    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(30.0, 50.0, 200.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(50.0 / 5.0, 0.0 / 5.0, 110.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(-50.0 / 5.0, 30.0 / 5.0, 110.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(0.0 / 5.0, -50.0 / 5.0, 110.0), lifetime = 30.0, limit = 40)
+    SpawnPrefab(prefab = $./coin25.brz, offset = off, velocity = Vec(30.0 / 5.0, 50.0 / 5.0, 110.0), lifetime = 30.0, limit = 40)
   }
 }

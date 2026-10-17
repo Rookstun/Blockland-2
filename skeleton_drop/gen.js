@@ -65,7 +65,7 @@ const pick = T.map(([n, ...r], i) => `${i ? ' else ' : '  if isBot && lim >= 500
 // (owner 2026-10-10: "make bots drop lots more coins in volume like multiple
 // copper coins") a copper roll drops COPPER[0]..COPPER[1] coins, fanned out
 const copper = k => Array.from({ length: COPPER[1] }, (_, j) => {
-  const sp = `SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang${k} + ${(j * 1.3).toFixed(1)}) * FLING, sin(ang${k} + ${(j * 1.3).toFixed(1)}) * FLING, POP + ${j * 30}.0), lifetime = ${COIN_LIFE}.0, limit = 400)`;
+  const sp = `SpawnPrefab(prefab = $./coin1.brz, offset = at, velocity = Vec(cos(ang${k} + ${(j * 1.3).toFixed(1)}) * FLING, sin(ang${k} + ${(j * 1.3).toFixed(1)}) * FLING, POP + ${j * 8}.0), lifetime = ${COIN_LIFE}.0, limit = 400)`;
   return j < COPPER[0] ? `        ${sp}
 ` : `        if n${k} >= ${j + 1} {
           ${sp}
@@ -418,8 +418,8 @@ ${table}
 // Coins are flung out a little so they scatter. The chip also pulses Died
 // and puts the spot on Location (world) / Offset (relative to this chip).
 
-const FLING = 120.0   // sideways speed of a dropped coin
-const POP = 250.0     // upward speed
+const FLING = 25.0    // sideways speed of a dropped coin (owner 2026-10-17: was 120, coins flew all over)
+const POP = 120.0     // upward speed (was 250)
 
 var location: vector = Vec(0.0, 0.0, 0.0)
 var offset: vector = Vec(0.0, 0.0, 0.0)
