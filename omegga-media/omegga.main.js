@@ -1260,9 +1260,12 @@ module.exports = class Media {
 
   /**
    * /ogrid: the video as a SQUARE n x n grid of coloured O's on one text
-   * display (ogrid.mjs; 7 bricks a chunk: screen + 6 hidden gates). The
-   * soundtrack is a speech device cut from the same seconds and loaded on the
-   * same tick, its timer starting on load like the picture's stopwatch.
+   * display, STREAMED: one receiver prefab per viewer (ogrid.mjs
+   * buildReceiver: screen + chat-command gate + For Loop decoder) stays put;
+   * every frame goes out as run tokens in `br.Chat.Command /og<id>` lines
+   * (the only console door into wires) and the chip rebuilds the coloured
+   * text. Sound = a speech device per chunk, cut from the same seconds and
+   * loaded when that chunk's first frame is sent.
    */
   async oGridCommand(name, args) {
     const key = `ogrid:${name}`;
@@ -1275,12 +1278,17 @@ module.exports = class Media {
     const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
     const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
     const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 64, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 32)));
-    const fps = Math.max(1, Math.min(20, opt('fps') || this.config['ogrid-fps'] || 8));
+    const fps = Math.max(1, Math.min(15, opt('fps') || this.config['ogrid-fps'] || 8));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(5, this.config['ogrid-chunk-seconds'] ?? 20);
+    const maxRuns = this.config['ogrid-max-runs'] ?? 400;
+    const lead = (this.config['ogrid-lead-ms'] ?? 80) / 1000; // the chip shows a frame ~50-130 ms after its last part
     const crypto = require('crypto');
-    const owner = this.og.ownerFor(crypto.createHash('sha1').update('ogrid:' + name).digest('hex').slice(0, 12));
+    const hash = crypto.createHash('sha1').update('ogrid:' + name).digest('hex');
+    const owner = this.og.ownerFor(hash.slice(0, 12));
+    const cmd = 'og' + hash.slice(0, 6);
+    const prefix = `br.Chat.Command /${cmd} `;
     const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 4, charW: this.config['ogrid-char-width'] ?? 0.55 });
 
     this.stopSession(name, key);
@@ -1310,23 +1318,13 @@ module.exports = class Media {
       const snap = v => Math.round(v / STUD) * STUD;
       const at = [snap(pos[0] - nv[0] * dist), snap(pos[1] - nv[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
       const world = p => T(p).map((v, i) => v + at[i]);
-      const clearScreen = () => { for (const [c, h] of this.og.oBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs)); };
-      const loadBuf = buf => {
-        const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-        const f = path.join(this.prefabDir, ref + '.brz');
-        fs.writeFileSync(f, buf);
-        this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
-        setTimeout(() => fs.rmSync(f, { force: true }), 15_000);
-      };
       const build = async k => {
         const t0 = startAt + k * chunkSec, dur = Math.min(chunkSec, seconds - k * chunkSec);
         const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
           '-vf', `fps=${fps},crop='min(iw,ih)':'min(iw,ih)',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
         const fb = n * n * 3, frames = [];
-        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(raw.subarray(o, o + fb));
+        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(this.og.frameParts(this.og.encodeFrame(raw.subarray(o, o + fb), n, { maxRuns }), prefix));
         if (!frames.length) throw new Error('no frames decoded');
-        const strs = this.og.oFrames(frames, n, { max: this.config['ogrid-max-chars'] ?? this.og.MAX_CHARS });
-        const screen = this.og.buildOGrid(this.brs4, L, strs, { fps, dur, owner });
         let audio = null;
         if (withSound) {
           const wav = file.replace(/\.[^.]+$/, '') + `.og${k}.wav`;
@@ -1336,42 +1334,51 @@ module.exports = class Media {
           } catch (e) { console.error(`[media] ogrid soundtrack ${k}`, e); }
           finally { fs.rmSync(wav, { force: true }); }
         }
-        return { screen, audio, dur, chars: Math.max(...strs.map(s => s.length)) };
+        return { frames, audio, dur };
       };
-      // the soundtrack chip sits behind the screen, chunks alternate sides so a swap never clears the playing one
+      // the soundtrack chip stands beside the screen (in speaker range of whoever watches it), chunks alternate sides so a swap never clears the playing one
       const loadAudio = (d, k) => {
         if (!d) return null;
-        const c = world([(k % 2 ? 1 : -1) * 60, 100, 28]);
+        const c = world([(k % 2 ? 1 : -1) * (L.side / 2 + 60), 0, 28]);
         const spot = [0, 1, 2].map(i => Math.round((c[i] - (d.lo[i] + d.hi[i]) / 2) / 2) * 2);
         const clr = this.loadDevice(d, {}, spot);
         audioClears.push(clr);
         return clr;
       };
-      // picture + sound go out back to back: one tick, one zero
-      const show = (set, k) => { loadBuf(set.screen); return loadAudio(set.audio, k); };
 
-      const first = await build(0);
+      let next = build(0);
+      const first = await next;
       if (session.stopped) return;
+      // the receiver: loaded once, then only data goes out
       this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
-      let prevAudio = show(first, 0);
+      for (const [c, h] of this.og.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
+      const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+      fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.og.buildReceiver(this.brs4, L, { cmd, owner }));
+      this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
+      setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
+      await sleep(1500);
       this.whisper(name, `<color="9cf">Showing ${n}x${n} O's at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). /ogrid stop ends it.</>`);
-      console.log(`[media] ogrid ${name}: ${n}x${n} ${fps} fps, ${chunks} chunk(s), longest frame ${first.chars} chars, at ${at.join(',')} orient ${orient}`);
-      let start = Date.now(), durPrev = first.dur;
-      for (let k = 1; k < chunks && !session.stopped; k++) {
-        const set = await build(k).catch(e => (console.error(`[media] ogrid chunk ${k}`, e), null));
-        const due = start + durPrev * 1000;
-        while (!session.stopped && Date.now() < due) await sleep(Math.min(100, due - Date.now()));
-        if (session.stopped) break;
-        start = Date.now();
-        if (!set) { durPrev = chunkSec; continue; }
-        durPrev = set.dur;
-        clearScreen();
+      let sent = 0, lines = 0, skipped = 0, prevAudio = null, set = first;
+      for (let k = 0; k < chunks && !session.stopped; k++) {
+        if (k > 0) set = await next.catch(e => (console.error(`[media] ogrid chunk ${k}`, e), null));
+        if (k + 1 < chunks) next = build(k + 1); // decode the next chunk while this one plays
+        if (!set) { await sleep(chunkSec * 1000); continue; }
         const old = prevAudio;
-        prevAudio = show(set, k);
+        prevAudio = loadAudio(set.audio, k);
         if (old) setTimeout(old, 1500);
+        const t0 = Date.now() / 1000;
+        for (let f = 0; f < set.frames.length && !session.stopped; f++) {
+          const due = t0 + f / fps - lead, now = Date.now() / 1000;
+          if (now > due + 1 / fps && f + 1 < set.frames.length) { skipped++; continue; } // behind: drop it
+          if (due > now) await sleep((due - now) * 1000);
+          for (const part of set.frames[f]) this.omegga.writeln(prefix + part);
+          sent++; lines += set.frames[f].length;
+        }
+        const end = t0 + set.dur;
+        while (!session.stopped && Date.now() / 1000 < end) await sleep(50);
       }
-      const end = start + durPrev * 1000 + 1500;
-      while (!session.stopped && Date.now() < end) await sleep(200);
+      console.log(`[media] ogrid ${name}: ${n}x${n} ${fps} fps, ${sent} frames sent (${lines} lines, ${skipped} skipped), at ${at.join(',')} orient ${orient}`);
+      await sleep(1500);
       if (!session.stopped && !this.config['keep-last-frame']) session.clear();
     } finally {
       session.stopped = true;
