@@ -60,14 +60,14 @@ export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06, glyph = GLYPH
  * Geometry. lh = line height (units); a glyph is charW x lh, so WidthScale
  * 1 / charW makes every cell lh x lh: n x n cells = a square picture.
  */
-export function oLayout(n, { lh = 4, charW = 0.55, lift = 20, textScale = 1.68 } = {}) {
+export function oLayout(n, { lh = 1.6, charW = 0.5, lift = 20, textScale = 1.6875 } = {}) {
   const side = Math.ceil((n * lh) / 4) * 4 + 8; // screen brick side (4 units of border each way, even halves)
   // textScale: a block drew at ~0.6 of its LineHeight in game (owner screenshot 2026-10-16:
   // a 32-cell picture filled 76 of 136 units), so LineHeight = cell size x 1.68 fills the board
   return { n, lh, charW, side, z0: lift, top: lift + side, textLH: +(lh * textScale).toFixed(3) };
 }
 
-const FONTS = [{ type: 'BrickFontDescriptor', name: 'IosevkaTerm' }];
+const FONTS = [{ type: 'BrickFontDescriptor', name: 'MonaspaceKrypton' }]; // owner's pick 2026-10-16
 
 const TEXT = {
   Font: 0, Rotation: 0, Skew: 0, Kerning: 0, LineHeight: 4, WidthScale: 1, LineOffset: 0, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },
@@ -147,7 +147,7 @@ const q = v => Math.max(0, Math.min(LEVELS - 1, Math.round((v * (LEVELS - 1)) / 
  * run while it stays within `tol` of the run's mean colour; tol grows until
  * the frame has at most maxRuns runs (decode time + lines per frame).
  */
-export function encodeFrame(fr, n, { maxRuns = 354 } = {}) {
+export function encodeFrame(fr, n, { maxRuns = 472 } = {}) {
   let s = '';
   for (const tol of [4, 8, 12, 16, 22, 30, 40, 56, 80, 112, 160, 255]) {
     s = '';
