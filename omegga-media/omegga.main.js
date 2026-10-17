@@ -1295,11 +1295,11 @@ module.exports = class Media {
     // cell glyph: a full block (default) or, with `letters`, the letter O
     const glyph = opts.includes('letters') ? 'O' : this.config['ogrid-glyph'] || this.og.GLYPH;
     const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 96, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 64)));
-    const fps = Math.max(1, Math.min(15, opt('fps') || this.config['ogrid-fps'] || 4));
+    const fps = Math.max(1, Math.min(15, opt('fps') || this.config['ogrid-fps'] || 3));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(5, this.config['ogrid-chunk-seconds'] ?? 20);
-    const maxRuns = this.config['ogrid-max-runs'] ?? Math.floor(((1000 / fps) * 0.95) / (this.config['ogrid-line-gap-ms'] ?? 25)) * 118; // tokens incl. row ends: 3 lines a frame
+    const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(Math.floor(((1000 / fps) * 0.95) / (this.config['ogrid-line-gap-ms'] ?? 25)) * 118, Math.floor((32768 - n * n - n) / 20)) /* time per frame vs the 32768-char text cap (~20 chars a run) */; // tokens incl. row ends: 3 lines a frame
     // several chat commands in one game tick clobber each other (only some parts land): space them
     const gapMs = this.config['ogrid-line-gap-ms'] ?? 25;
     const lead = (this.config['ogrid-lead-ms'] ?? 80) / 1000; // the chip shows a frame ~50-130 ms after its last part
