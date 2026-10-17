@@ -16,6 +16,7 @@ const SPEED = (RECEPTOR_Z - STRIP_Z0) / LOOK;
 const NBSP = ' ';
 export const LEAD_SEC = 4;      // countdown before the first row
 const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
+const PREVIEW = 12;            // song select: seconds of music previewed (looped), from the busiest stretch
 const RAINBOW_COMBO = 10;      // combo that turns the arrow outlines rainbow
 const DEBUG = false;            // [ddr] lines in chat (owner: use chat for logs)
 const W = { perfect: 0.05, great: 0.1, good: 0.16 };
@@ -54,12 +55,41 @@ export function generate(songs, voiceDefs) {
     D(`VP${v}`, 'float', ns.flat().map(n => n.pitch)); D(`VV${v}`, 'float', ns.flat().map(n => n.vol));
     D(`VO${v}`, 'int', offs(ns));
   }
+  // preview start per song: the PREVIEW-second window (1 s steps) with the most chart steps + notes
+  const pvs = songs.map(s => {
+    const ts = [...s.lanes.flatMap(l => l.map(n => n.t)), ...s.voices.flatMap(v => v.notes.map(n => n.t))].sort((a, b) => a - b);
+    let best = 0, bestN = -1;
+    for (let st = 0; st + PREVIEW <= s.length; st += 1) {
+      let n = 0; for (const t of ts) if (t >= st && t < st + PREVIEW) n++;
+      if (n > bestN) { bestN = n; best = st; }
+    }
+    return best;
+  });
+  D('PVS', 'float', pvs);
+  for (let v = 0; v < V; v++) {
+    let o = 0;
+    D(`PVI${v}`, 'int', songs.map((s, i) => { const ns = s.voices[v]?.notes ?? []; let k = ns.findIndex(n => n.t >= pvs[i]); if (k < 0) k = ns.length; const r = o + k; o += ns.length; return r; }));
+  }
+  // one Clock tick of voice v at song time t, volume scaled by fade
+  const voiceStep = (v, fade) => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
+        vp${v} = VP${v}[vi${v}]
+        vo${v} = VE${v}[vi${v}]
+        va${v} = VV${v}[vi${v}] * ${f(GAIN)}
+        vs${v} = t
+        vv${v} = va${v}${fade}
+        vi${v} = vi${v} + 1
+      } else if t >= vo${v} {
+        vv${v} = 0.0
+      } else {
+        vv${v} = va${v}${fade} * ${CLICK[v] ? `max(0.3, 1.0 - (t - vs${v}) * 5.0)    // clicky: fast decay` : `max(0.7, 1.0 - (t - vs${v}) * 1.0)    // pluck: decay to a 70% sustain`}
+      }`;
   const dbg = msg => DEBUG ? `  BroadcastChatMessage("<color=\\"8080ff\\">[ddr] ${msg}</>")` : '';
   out.push(`
 var none: character
 var state: int = 0          // 0 seat empty, 1 song select, 2 dancing, 3 results
 var song: int = 0
 var t0: float = 0.0
+var pt0: float = 0.0        // song select preview: uptime at song time 0
 var lead: int = 0
 var rowD: float = 0.1
 var sync: float = 0.0       // /ddrsync: chart delay vs the music, seconds
@@ -129,11 +159,21 @@ ${eachL(k => [...Array(K).keys()].map(j => `  st${k}${j} = ""`).join(NL))}
   comboTxt = ""
 }
 
+// song select: play PREVIEW seconds of the song from PVS (looped by the Clock)
+mod preview() {
+${eachV(v => `  vi${v} = PVI${v}[song]
+  ve${v} = VO${v}[song + 1]
+  vv${v} = 0.0
+  va${v} = 0.0
+  vo${v} = -9999.0`)}
+  pt0 = ServerUptime() - PVS[song]
+}
+
 mod menu() {
 ${dbg('menu')}
   state = 1
-  silence()
   clearScreen()
+  preview()
   let key = "\${song}:\${player.ControllerOf().GetUserId()}"
   let b = best.get(key)
   let bestTxt = if b.Found then "BEST \${b.Value}" else "NO SCORE YET"
@@ -313,18 +353,7 @@ ${eachL(k => `      if ni${k} < ne${k} && tc > NT${k}[ni${k}] + ${f(W.good)} {
         ni${k} = ni${k} + 1
       }
       rcol${k} = if tc - flash${k} < 0.12 then ${col(LANE_ON[k])} else ${DIM_REC}`)}
-${eachV(v => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
-        vp${v} = VP${v}[vi${v}]
-        vo${v} = VE${v}[vi${v}]
-        va${v} = VV${v}[vi${v}] * ${f(GAIN)}
-        vs${v} = t
-        vv${v} = va${v}
-        vi${v} = vi${v} + 1
-      } else if t >= vo${v} {
-        vv${v} = 0.0
-      } else {
-        vv${v} = va${v} * ${CLICK[v] ? `max(0.3, 1.0 - (t - vs${v}) * 5.0)    // clicky: fast decay` : `max(0.7, 1.0 - (t - vs${v}) * 1.0)    // pluck: decay to a 70% sustain`}
-      }`)}
+${eachV(v => voiceStep(v, ''))}
       // the BPM light: a flash at each beat that fades over a quarter beat
       let beats = tc * BPM[song] / 60.0
       let ph = beats - floor(beats)
@@ -352,6 +381,14 @@ ${eachV(v => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
       } else if title != NAMES[song] {
         title = NAMES[song]
       }
+    }
+  } else if state == 1 {
+    let t = ServerUptime() - pt0
+    if t > PVS[song] + ${f(PREVIEW)} {
+      preview()
+    } else {
+      let fade = min(1.0, min(t - PVS[song], (PVS[song] + ${f(PREVIEW)} - t) / 1.5))
+${eachV(v => voiceStep(v, ' * fade'))}
     }
   }
 }
