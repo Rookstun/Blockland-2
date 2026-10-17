@@ -402,7 +402,7 @@ mod clearScreen() {
 }
 
 mod menu() {
-  BroadcastChatMessage("<color=\"8080ff\">[ddr] menu</>")
+
   state = 1
   silence()
   clearScreen()
@@ -492,7 +492,7 @@ mod start() {
   t0 = ServerUptime() + 4.0
   title = NAMES[song]
   state = 2
-  BroadcastChatMessage("<color=\"8080ff\">[ddr] start ${NAMES[song]} t0=${t0}</>")
+
 }
 
 mod points() {
@@ -640,7 +640,7 @@ mod press3() {
 }
 
 on player {
-  BroadcastChatMessage("<color=\"8080ff\">[ddr] seat state=${state} sat=${player != none}</>")
+
   if player == none {
     state = 0
     silence()
@@ -692,7 +692,7 @@ on ChatCommand("ddrsync", "DDR: shift the arrows vs the music, in ms (+ = arrows
 // Q or E: stop the song, back to song select
 on inp.PressedQ || inp.PressedE {
   if (inp.PressedQ || inp.PressedE) && state == 2 {
-  BroadcastChatMessage("<color=\"8080ff\">[ddr] stopped</>")
+
     menu()
   }
 }

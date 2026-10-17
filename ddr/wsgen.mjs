@@ -17,7 +17,7 @@ const NBSP = ' ';
 export const LEAD_SEC = 4;      // countdown before the first row
 const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
 const RAINBOW_COMBO = 10;      // combo that turns the arrow outlines rainbow
-const DEBUG = true;             // [ddr] lines in chat (owner: use chat for logs)
+const DEBUG = false;            // [ddr] lines in chat (owner: use chat for logs)
 const W = { perfect: 0.05, great: 0.1, good: 0.16 };
 export const LANE_ON = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]];
 const DIM_REC = 'ColorSRGB(70, 70, 80, 255)', DIM_PAD = 'ColorSRGB(40, 40, 50, 255)';
