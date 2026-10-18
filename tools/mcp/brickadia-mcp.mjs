@@ -43,6 +43,11 @@ const TOOLS = {
     schema: { type: "object", properties: { ops: { type: "array", items: { type: "object" } } }, required: ["ops"] },
     run: async a => job(a.ops),
   },
+  frog: {
+    description: "Order Claude's frog (frog/frog.ws): 'go X Y', 'look YAW PITCH', 'turn DEG', 'pitch DEG', 'hop', 'stop', 'home', 'tp X Y', 'watch SECONDS' (eyes on). The view server's autopilot also steers it.",
+    schema: { type: "object", properties: { order: { type: "string" } }, required: ["order"] },
+    run: async a => job([{ op: "cmd", line: `br.Chat.Command /frog ${a.order.replace(/[^\w .\-]/g, "")}` }]),
+  },
   log: {
     description: "Tail today's game log on the server (data/logs/omegga-<date>.log), optional grep filter (extended regex).",
     schema: { type: "object", properties: { lines: { type: "number" }, filter: { type: "string" } } },

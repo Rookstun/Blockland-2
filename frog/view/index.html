@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frog Drone</title>
+<style>
+  :root { --bg: #0b1410; --panel: rgba(10, 22, 14, 0.82); --ink: #d8f5c8; --dim: #7fa77a; --acc: #5cff7a; --line: rgba(120, 255, 140, 0.25); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+  #scene { position: fixed; inset: 0; }
+  #scene canvas { display: block; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; backdrop-filter: blur(6px); }
+  #eyePanel { top: 12px; right: 12px; width: min(440px, calc(100vw - 24px)); }
+  #eye { width: 100%; image-rendering: pixelated; border-radius: 6px; background: #000; display: block; }
+  #hud { top: 12px; left: 12px; max-width: min(360px, calc(100vw - 24px)); }
+  #hud h1 { margin: 0 0 4px; font-size: 15px; color: var(--acc); letter-spacing: 0.04em; }
+  #mood { color: #fff6a8; }
+  #thought { margin-top: 6px; font-style: italic; color: #bfe7ff; min-height: 1.4em; }
+  #controls { bottom: 12px; left: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button { background: #143220; color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--acc); }
+  button.on { background: #2d7a3c; color: #fff; }
+  .small { color: var(--dim); font-size: 11px; }
+  body.stoned #scene canvas { animation: trip 9s linear infinite; }
+  body.stoned #eye { animation: trip 5s linear infinite reverse; }
+  @keyframes trip { from { filter: hue-rotate(0deg) saturate(1.8) contrast(1.1); } to { filter: hue-rotate(360deg) saturate(1.8) contrast(1.1); } }
+  @media (max-width: 640px) { #eyePanel { top: auto; bottom: 110px; } #hud { font-size: 12px; } }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="hud" class="panel">
+  <h1>FROG DRONE <span class="small" id="link">connecting…</span></h1>
+  <div id="mood">waking up</div>
+  <div class="small" id="pose">no pose yet</div>
+  <div class="small" id="stats"></div>
+  <div id="thought"></div>
+</div>
+<div id="eyePanel" class="panel">
+  <div class="small" style="margin-bottom:6px">WHAT THE FROG SEES <span id="eyeinfo"></span></div>
+  <canvas id="eye" width="40" height="24"></canvas>
+</div>
+<div id="controls" class="panel">
+  <button id="bAuto" class="on">autopilot</button>
+  <button data-cam="chase" class="on">drone</button>
+  <button data-cam="orbit">orbit</button>
+  <button data-cam="frog">frog eyes 3D</button>
+  <button id="bStoned">stoned</button>
+  <button data-cmd="hop">hop</button>
+  <button data-cmd="turn 45">⟲</button>
+  <button data-cmd="turn -45">⟳</button>
+  <button data-cmd="home">home</button>
+  <button id="bClear">forget</button>
+  <span class="small">click the ground to send the frog there · WASD hop · Q/E turn</span>
+</div>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// Brickadia (x, y, z up, left-handed) -> three (x, z, y): one swap = right-handed, y up
+const B = (x, y, z) => new THREE.Vector3(x, z, y);
+const $ = id => document.getElementById(id);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+$('scene').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1410);
+scene.fog = new THREE.FogExp2(0x0b1410, 0.0011);
+const camera = new THREE.PerspectiveCamera(60, 1, 1, 20000);
+camera.position.set(0, 400, 400);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(300, 800, 200); scene.add(sun);
+const grid = new THREE.GridHelper(4000, 80, 0x1d4a2a, 0x123020); scene.add(grid);
+
+// ---- point cloud of everything the frog has seen ----
+const N = 250000;
+const pPos = new Float32Array(N * 3), pCol = new Float32Array(N * 3);
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+pGeo.setDrawRange(0, 0);
+const pMat = new THREE.PointsMaterial({ size: 4, vertexColors: true, sizeAttenuation: true });
+const cloud = new THREE.Points(pGeo, pMat); cloud.frustumCulled = false; scene.add(cloud);
+let pHead = 0, pCount = 0;
+const tmpC = new THREE.Color();
+function addPoint(v, hex) {
+  pPos.set([v.x, v.y, v.z], pHead * 3);
+  tmpC.setHex(hex); pCol.set([tmpC.r, tmpC.g, tmpC.b], pHead * 3);
+  pHead = (pHead + 1) % N; pCount = Math.min(N, pCount + 1);
+}
+
+// ---- the frog ----
+const frog = new THREE.Group(); scene.add(frog);
+const box = (sx, sy, sz, x, y, z, color, emissive) => {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sz, sy), new THREE.MeshStandardMaterial({ color, emissive: emissive ?? 0x000000, emissiveIntensity: emissive ? 1.5 : 0 }));
+  m.position.copy(B(x, y, z)); frog.add(m); return m;
+};
+box(34, 28, 14, -1, 0, 9, 0x3a8c34); box(6, 28, 10, 19, 0, 13, 0x3a8c34); box(34, 28, 4, -1, 0, 4, 0xc4ce78);
+for (const s of [-1, 1]) { box(8, 8, 8, 16, s * 10, 22, 0xece060); box(2, 4, 4, 21, s * 10, 22, 0x111111); box(14, 6, 10, -15, s * 17, 5, 0x225c24); }
+const soul = box(10, 10, 12, -1, 0, 22, 0x00ff44, 0x00ff44);
+const soulLight = new THREE.PointLight(0x33ff66, 3, 300, 1.5); soulLight.position.copy(B(-1, 0, 30)); frog.add(soulLight);
+const frogTarget = new THREE.Vector3(); let frogYaw = 0, havePose = false;
+
+// ---- players ----
+const playerObjs = new Map();
+function nameSprite(text) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 48;
+  const g = c.getContext('2d'); g.font = 'bold 26px monospace'; g.fillStyle = '#fff6a8'; g.textAlign = 'center'; g.fillText(text, 128, 34);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+  s.scale.set(120, 22, 1); return s;
+}
+function setPlayers(list) {
+  const seen = new Set();
+  for (const p of list) {
+    seen.add(p.name);
+    let o = playerObjs.get(p.name);
+    if (!o) {
+      o = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(10, 36, 4, 8), new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x331a00 }));
+      o.add(body); const s = nameSprite(p.name); s.position.y = 50; o.add(s);
+      scene.add(o); playerObjs.set(p.name, o); o.userData.target = new THREE.Vector3();
+    }
+    o.userData.target.copy(B(p.pos[0], p.pos[1], p.pos[2]));
+    if (!o.userData.placed) { o.position.copy(o.userData.target); o.userData.placed = true; }
+  }
+  for (const [n, o] of playerObjs) if (!seen.has(n)) { scene.remove(o); playerObjs.delete(n); }
+  $('stats').textContent = `${list.length} player${list.length === 1 ? '' : 's'} near · ${pCount.toLocaleString()} points remembered`;
+}
+
+// ---- the eye ----
+let EYE = { W: 40, H: 24, tanH: 1.19, tanV: 0.71, range: 297 };
+const eyeCv = $('eye'), eg = eyeCv.getContext('2d');
+let img = null, lastFrame = -1, rows = 0, rowTimes = [];
+const SKY = [12, 30, 22];
+function setEye(e) { EYE = e; eyeCv.width = e.W; eyeCv.height = e.H; img = eg.createImageData(e.W, e.H); $('eyeinfo').textContent = `${e.W}×${e.H} · sees ${(e.range / 10).toFixed(0)} studs`; }
+setEye(EYE);
+function onRow(r) {
+  const { W, H, tanH, tanV, range } = EYE;
+  const ya = r.yaw * Math.PI / 180, pa = r.pitch * Math.PI / 180;
+  const F = [Math.cos(pa) * Math.cos(ya), Math.cos(pa) * Math.sin(ya), Math.sin(pa)];
+  const R = [-Math.sin(ya), Math.cos(ya), 0];
+  const U = [-Math.sin(pa) * Math.cos(ya), -Math.sin(pa) * Math.sin(ya), Math.cos(pa)];
+  const v = tanV - (r.row + 0.5) * (2 * tanV / H);
+  for (let c = 0; c < W; c++) {
+    const cell = r.cells[c], i = (r.row * W + c) * 4;
+    if (!cell) { const k = 1 - r.row / H; img.data.set([SKY[0] + 30 * k, SKY[1] + 60 * k, SKY[2] + 40 * k, 255], i); continue; }
+    const [hex, d] = cell, fog = Math.min(1, d / range) ** 1.6;
+    const col = [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+    img.data.set([col[0] * (1 - fog) + SKY[0] * fog, col[1] * (1 - fog) + SKY[1] * fog, col[2] * (1 - fog) + SKY[2] * fog, 255], i);
+    const u = (((c + 0.5) / W) * 2 - 1) * tanH;
+    const dx = F[0] + R[0] * u + U[0] * v, dy = F[1] + R[1] * u + U[1] * v, dz = F[2] + R[2] * u + U[2] * v;
+    const n = Math.hypot(dx, dy, dz);
+    addPoint(B(r.eye[0] + dx / n * d, r.eye[1] + dy / n * d, r.eye[2] + dz / n * d), hex);
+  }
+  eg.putImageData(img, 0, 0);
+  pGeo.setDrawRange(0, pCount);
+  pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
+  rows++; rowTimes.push(performance.now()); while (rowTimes.length > 60) rowTimes.shift();
+  if (rowTimes.length > 2) $('eyeinfo').textContent = `${W}×${H} · ${(1000 * (rowTimes.length - 1) / (rowTimes.at(-1) - rowTimes[0]) / H).toFixed(1)} fps · sees ${(range / 10).toFixed(0)} studs`;
+}
+
+// ---- thoughts (KoL-flavoured, never about the game) ----
+const THOUGHTS = ['ribbit, in a philosophical sense', 'the tiles are warm and so is my soul', 'I have one (1) glowing heart and I am not sharing it',
+  'a bench. legendary. I could sit on it if I had the knees', 'every fly is a prophecy', 'my eyes go ten studs. beyond that: vibes',
+  'I am mostly legs and opinions', 'someone said "frog" and I took it personally', 'green is not a colour, it is a lifestyle',
+  'hop count today: too many, not enough', 'the hum in my chest knows things', 'if I stare long enough the world stares back in hex'];
+let thoughtT = 0;
+
+// ---- events ----
+const es = new EventSource('/events');
+es.onopen = () => $('link').textContent = 'live';
+es.onerror = () => $('link').textContent = 'reconnecting…';
+es.addEventListener('eye', e => setEye(JSON.parse(e.data)));
+es.addEventListener('row', e => onRow(JSON.parse(e.data)));
+es.addEventListener('pose', e => {
+  const p = JSON.parse(e.data); frogTarget.copy(B(p.x, p.y, p.z)); frogYaw = p.yaw;
+  if (!havePose) { frog.position.copy(frogTarget); controls.target.copy(frogTarget); havePose = true; }
+  $('pose').textContent = `x ${p.x.toFixed(0)}  y ${p.y.toFixed(0)}  z ${p.z.toFixed(0)}  yaw ${p.yaw.toFixed(0)}°  look ${p.pitch.toFixed(0)}°${p.hop ? '  · mid-hop' : ''}`;
+});
+es.addEventListener('players', e => setPlayers(JSON.parse(e.data)));
+es.addEventListener('mood', e => { const m = JSON.parse(e.data); $('mood').textContent = m.mood; $('bAuto').classList.toggle('on', m.auto); });
+
+const cmd = c => fetch('/cmd', { method: 'POST', body: JSON.stringify({ cmd: c }) });
+document.querySelectorAll('[data-cmd]').forEach(b => b.onclick = () => cmd(b.dataset.cmd));
+$('bAuto').onclick = () => cmd($('bAuto').classList.contains('on') ? 'auto off' : 'auto on');
+$('bStoned').onclick = () => { document.body.classList.toggle('stoned'); $('bStoned').classList.toggle('on'); };
+$('bClear').onclick = () => { pCount = 0; pHead = 0; pGeo.setDrawRange(0, 0); };
+let camMode = 'chase';
+document.querySelectorAll('[data-cam]').forEach(b => b.onclick = () => {
+  camMode = b.dataset.cam; document.querySelectorAll('[data-cam]').forEach(x => x.classList.toggle('on', x === b));
+  controls.enabled = camMode !== 'frog';
+});
+addEventListener('keydown', e => {
+  if (!havePose) return;
+  const ya = frogYaw * Math.PI / 180, f = frog.position;
+  const step = (a, d) => cmd(`go ${(f.x + Math.cos(ya + a) * d).toFixed(0)} ${(f.z + Math.sin(ya + a) * d).toFixed(0)}`);
+  if (e.key === 'w') step(0, 80); if (e.key === 's') step(Math.PI, 80); if (e.key === 'a') step(-Math.PI / 2, 60); if (e.key === 'd') step(Math.PI / 2, 60);
+  if (e.key === 'q') cmd('turn 30'); if (e.key === 'e') cmd('turn -30');
+});
+// click the ground (a plane at the frog's feet) -> go there
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(); let down = null;
+renderer.domElement.addEventListener('pointerdown', e => down = [e.clientX, e.clientY]);
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5 || !havePose) return;
+  mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); ray.setFromCamera(mouse, camera);
+  const hit = new THREE.Vector3();
+  if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -frog.position.y), hit)) cmd(`go ${hit.x.toFixed(0)} ${hit.z.toFixed(0)}`);
+});
+
+function resize() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.1), t = clock.elapsedTime;
+  const stoned = document.body.classList.contains('stoned');
+  frog.position.lerp(frogTarget, 1 - Math.exp(-dt * 10));
+  frog.rotation.y = THREE.MathUtils.lerp(frog.rotation.y, -frogYaw * Math.PI / 180, 1 - Math.exp(-dt * 8));
+  soul.material.emissiveIntensity = 1.2 + Math.sin(t * 2.2) * 0.5;
+  for (const o of playerObjs.values()) o.position.lerp(o.userData.target, 1 - Math.exp(-dt * 5));
+  pMat.size = stoned ? 4 + Math.sin(t * 1.7) * 2.5 : 4;
+  grid.position.y = frog.position.y - 1;
+  const ya = frogYaw * Math.PI / 180;
+  if (camMode === 'chase') {
+    const back = new THREE.Vector3(-Math.cos(ya) * 320, 190 + (stoned ? Math.sin(t * 0.7) * 40 : 0), -Math.sin(ya) * 320);
+    camera.position.lerp(frog.position.clone().add(back), 1 - Math.exp(-dt * 2));
+    controls.target.lerp(frog.position, 1 - Math.exp(-dt * 4));
+    camera.lookAt(controls.target);
+  } else if (camMode === 'orbit') {
+    controls.target.lerp(frog.position, 1 - Math.exp(-dt * 4)); controls.update();
+  } else {
+    camera.position.copy(frog.position.clone().add(new THREE.Vector3(Math.cos(ya) * 18, 20, Math.sin(ya) * 18)));
+    camera.lookAt(camera.position.clone().add(new THREE.Vector3(Math.cos(ya), 0, Math.sin(ya))));
+  }
+  camera.fov = camMode === 'frog' ? 2 * Math.atan(EYE.tanV) * 180 / Math.PI : (stoned ? 60 + Math.sin(t * 0.9) * 8 : 60);
+  camera.updateProjectionMatrix();
+  if (t - thoughtT > 9) { thoughtT = t; $('thought').textContent = '“' + THOUGHTS[Math.floor(Math.random() * THOUGHTS.length)] + '”'; }
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
