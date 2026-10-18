@@ -87,7 +87,20 @@ export function shapedHouse({ shape = 'L', W = 40, D = 24, E = 16, storeys = 2, 
   const V = (line, start, end, openings = []) => ({ orient: 'V', line, start, end, openings });
   const door = p => ({ pos0: p - 2, pos1: p + 2, type: 'door' });
   const win = p => ({ pos0: p - 1, pos1: p + 1, type: 'window' });
+  // tall houses (3+ storeys, 2026-10-17: the owner's screenshot of a blank tower house):
+  // every gap between doors / partitions / corners gets its own evenly spaced windows
+  const winsDense = (a, b, avoid) => {
+    const cuts = [...new Set([a, b, ...avoid.filter(q => q >= a && q <= b)])].sort((p, q) => p - q), out = [];
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      const g0 = cuts[i] + 4, g1 = cuts[i + 1] - 4; // a window keeps 4 studs off each cut
+      if (g1 < g0) continue;
+      const n = Math.max(1, Math.floor((g1 - g0) / 6) + 1);
+      for (let k = 0; k < n; k++) { const p = even(n === 1 ? (g0 + g1) / 2 : g0 + ((g1 - g0) * k) / (n - 1)); if (!out.some(o => Math.abs(o.pos0 + 1 - p) < 4)) out.push(win(p)); }
+    }
+    return out;
+  };
   const wins = (a, b, avoid) => {
+    if (storeys >= 3) return winsDense(a, b, avoid);
     const out = [], n = Math.max(1, Math.floor((b - a) / 8));
     for (let i = 1; i <= n; i++) {
       const p = even(a + ((b - a) * i) / (n + 1));
