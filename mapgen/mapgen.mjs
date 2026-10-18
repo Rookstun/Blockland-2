@@ -2353,6 +2353,52 @@ if (tune('river.weirs', 1, 'boulder weirs where the river level steps down (0 = 
 }
 riverDiag('after cap');
 
+stage('simplify');
+// --------------------------------------------------------- simplify --
+// (owner 2026-10-18: "simplify non feature terrain, keep retaining walls") plain land clear of
+// every feature (roads, rivers + their banks (keepOut; the wider valley is plain land), town, hamlets, terraces, lots, dungeons, henge, coves,
+// the delta, swamp, volcano, the coast) gets terrain.simplify passes of a 3x3 mean, rounded;
+// features and terrain.simplifyMargin cells round them keep their heights, so nothing placed so
+// far moves (everything after this reads H). Fewer bumps = broad flats for the micro surface.
+const SIMPLIFY = tune('terrain.simplify', 4, 'passes of a 3x3 mean over plain land (0 = off)');
+const SIMPLIFY_MARGIN = tune('terrain.simplifyMargin', 1, 'cells round every feature that keep their height');
+if (SIMPLIFY > 0) {
+  const feat = new Uint8Array(N * N), fixed = new Uint8Array(N * N);
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+    const c = x * N + y;
+    if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || H[c] <= SEA + 1 || pathCell[c] || townKind[c] || townNear[c] || terraceCell[c] || riverCell[c]
+      || keepOut[c] || noSmooth[c] || reserved[c] || swampCell[c] || volcanoCell[c] || trenchCell[c] || deck[c] || weirCell[c] || coveCell[c] || deltaCell[c]
+      || villagePaved[c] || tunnelZ[c] >= 0 || townDist(x, y) <= TOWN.blend || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend || hengeDist(x, y) <= HENGE.blend + 2
+      || DUNGEONS.some(d => footDist(d, x, y) <= 3)) feat[c] = 1;
+  }
+  if (process.env.MAPGEN_SIMPDIAG) {
+    const why = {}, tests = { edge: (x, y, c) => x < 2 || y < 2 || x >= N - 2 || y >= N - 2, sea: (x, y, c) => H[c] <= SEA + 1, path: (x, y, c) => pathCell[c], town: (x, y, c) => townKind[c] || townNear[c] || townDist(x, y) <= TOWN.blend,
+      river: (x, y, c) => riverCell[c] || riverBankL[c] > -999, keepOut: (x, y, c) => keepOut[c] || noSmooth[c], reserved: (x, y, c) => reserved[c], village: (x, y, c) => villageDist(x, y) <= VILLAGE.r + VILLAGE.blend || villagePaved[c],
+      dungeon: (x, y, c) => trenchCell[c] || DUNGEONS.some(d => footDist(d, x, y) <= 3), other: () => true };
+    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) { const c = x * N + y; if (!feat[c] || H[c] <= SEA + 1) continue; for (const k in tests) if (tests[k](x, y, c)) { why[k] = (why[k] ?? 0) + 1; break; } }
+    let land = 0; for (let c = 0; c < N * N; c++) if (H[c] > SEA + 1) land++;
+    console.error('simplify diag: land', land, 'feature cells by reason', JSON.stringify(why));
+  }
+  const M = SIMPLIFY_MARGIN;
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+    if (!feat[x * N + y]) continue;
+    for (let a = Math.max(0, x - M); a <= Math.min(N - 1, x + M); a++) for (let b = Math.max(0, y - M); b <= Math.min(N - 1, y + M); b++) fixed[a * N + b] = 1;
+  }
+  const free = [];
+  for (let c = 0; c < N * N; c++) if (!fixed[c]) free.push(c);
+  const H0 = H.slice();
+  for (let pass = 0; pass < SIMPLIFY; pass++) {
+    const P = H.slice();
+    for (const c of free) {
+      let s = 0;
+      for (let a = -N; a <= N; a += N) s += P[c + a - 1] + P[c + a] + P[c + a + 1];
+      H[c] = Math.max(SEA + 2, Math.round(s / 9));
+    }
+  }
+  let moved = 0; for (const c of free) if (H[c] !== H0[c]) moved++;
+  console.error(`simplify: ${free.length} plain cells, ${moved} changed height`);
+}
+
 if (process.env.MAPGEN_HDUMP) fs.writeFileSync(process.env.MAPGEN_HDUMP, Buffer.from(H.buffer, H.byteOffset, H.byteLength));
 stage('voxels');
 // ----------------------------------------------------------------- voxels --
@@ -2740,6 +2786,52 @@ function previewOut(full) {
 }
 if (PREVIEW && !PREVIEW_FULL) { previewOut(false); process.exit(0); }
 
+const MAX_RISE = tune('smooth.maxRise', 6, 'tallest step that gets a wedge, bricks');
+// ride surface (owner 2026-10-13: "make the paths use micro bricks and ramps and wedges for the
+// absolute best riding experience"): road cells (not town or hamlet paving; hamlet lanes too since 2026-10-16,
+// bridges and their ends, tunnels, rivers, weirs) get their own stud-fine surface below,
+// so the cell smoothing leaves them alone
+const roadSurf = new Uint8Array(N * N);
+for (let x = 1; x < N - 1; x++)
+  for (let y = 1; y < N - 1; y++) {
+    const c = x * N + y;
+    if ((!pathCell[c] && tunnelZ[c] < 0) || townKind[c] || villagePaved[c] || deck[c] || riverCell[c] || weirCell[c] || (H[c] <= SEA && tunnelZ[c] < 0)) continue;
+    let nearDeck = false;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const n = (x + a) * N + y + b; if (deck[n] || terraceCell[n]) nearDeck = true; } // terrace walls stand on the low cell (tunnels ride since 2026-10-16)
+    if (!nearDeck) roadSurf[c] = 1;
+  }
+// MAPGEN_ROADDIAG=1: why road cells miss the ride surface (first reason per cell) + a few world spots each
+if (process.env.MAPGEN_ROADDIAG) {
+  const why = {}, at = {}, SH = [-(X0 + (town.fx + TOWN.cells / 2) * CELL), -(Y0 + (town.fy + TOWN.cells / 2) * CELL)];
+  for (let x = 1; x < N - 1; x++) for (let y = 1; y < N - 1; y++) {
+    const c = x * N + y;
+    if (!pathCell[c] || roadSurf[c]) continue;
+    const r = townKind[c] ? 'town' : villagePaved[c] ? 'villagePaved' : villageDist(x, y) <= VILLAGE.r + 2 ? 'village' : deck[c] ? 'deck' : tunnelZ[c] >= 0 ? 'tunnel'
+      : riverCell[c] ? 'river' : weirCell[c] ? 'weir' : H[c] <= SEA ? 'sea' : 'nearDeckOrTerrace';
+    why[r] = (why[r] ?? 0) + 1; (at[r] ??= []).length < 4 && at[r].push([Math.round(X0 + x * CELL + SH[0]), Math.round(Y0 + y * CELL + SH[1])]);
+  }
+  let on = 0; for (let c = 0; c < N * N; c++) on += roadSurf[c];
+  console.error('road diag: ride surface', on, 'cells; missing', JSON.stringify(why), JSON.stringify(at));
+}
+// micro terrain (owner 2026-10-18: "wedges to be 8x8x4 microbricks and the floors to be microbricks ...
+// make the 4x 8x and 16x snap"): plain land cells (what the cell smoothing would handle, minus
+// features: roads, rivers + banks, town, hamlets, terraces + their feet, lots, swamp, volcano, decks,
+// tunnels, the sea) lose their top voxel to a micro brick surface built in 'smoothing' below
+const MICRO = tune('terrain.micro', 1, 'plain land surface = micro bricks on an 8-unit grid + 0.5-slope micro wedges (0 = old cell wedges)');
+const microCell = new Uint8Array(N * N);
+if (MICRO && !args.includes('--no-smooth'))
+  for (let x = 1; x < N - 1; x++)
+    for (let y = 1; y < N - 1; y++) {
+      const c = x * N + y, h = H[c];
+      if (h < SEA || h + MAX_RISE >= NZ || townKind[c] || villageDist(x, y) <= VILLAGE.r || weirCell[c] || roadSurf[c] || noSmooth[c] || keepOut[c] || reserved[c] || swampCell[c]
+        || volcanoCell[c] || pathCell[c] || deck[c] || tunnelZ[c] >= 0 || trenchCell[c] || terraceCell[c] || villagePaved[c]) continue;
+      const t = V[vi(x, y, h)];
+      if (!t || t === WATER || t === COBBLE) continue;
+      let ok = true;
+      for (let z = h + 1; ok && z <= h + MAX_RISE; z++) if (V[vi(x, y, z)]) ok = false;
+      for (let a = -1; ok && a <= 1; a++) for (let b = -1; b <= 1; b++) { const n = (x + a) * N + y + b; if (terraceCell[n] && H[n] - h >= 2) { ok = false; break; } }
+      if (ok) microCell[c] = 1;
+    }
 stage('meshing');
 // --------------------------------------------------------- greedy meshing --
 const bricks = [];
@@ -2766,6 +2858,7 @@ const PAVE_BED = mat([128, 122, 112]);
       for (let z = 0; z < NZ; z++, c++) { const m = V[c]; if (m) { T[z * NN + o] = m; if (z > top) top = z; } }
     return top;
   })();
+  for (let o = 0; o < NN; o++) if (microCell[o]) T[H[o] * NN + o] = 0; // the micro surface replaces the top voxel
   // greedy merge in a function (optimisable); T doubles as 'not yet used'
   const greedy = (T) => {
     const out = [];
@@ -2911,7 +3004,6 @@ stage('smoothing');
 // --no-smooth turns it off.
 //
 // Orientation: see orient.mjs (ORIENT, orientFor).
-const MAX_RISE = tune('smooth.maxRise', 6, 'tallest step that gets a wedge, bricks');
 const SEABED_SMOOTH = tune('smooth.seabed', 10, 'seabed smoothed this many bricks under the sea plane');
 riverDiag('before smoothing');
 if (process.env.MAPGEN_RIVERBED) { const sx = -(X0 + (town.fx + TOWN.cells / 2) * CELL), sy = -(Y0 + (town.fy + TOWN.cells / 2) * CELL); const out = []; for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) { const c = x * N + y; if (riverCell[c] || riverBankL[c] > -999) out.push([x, y, H[c], riverCell[c], riverLevel[c], riverBankL[c], Math.round(X0 + x * CELL + sx), Math.round(Y0 + y * CELL + sy)]); } fs.writeFileSync(process.env.MAPGEN_RIVERBED, JSON.stringify({ SEA, out })); }
@@ -2919,32 +3011,6 @@ if (process.env.MAPGEN_RIVERDIAG) {
   const sx = -(X0 + (town.fx + TOWN.cells / 2) * CELL), sy = -(Y0 + (town.fy + TOWN.cells / 2) * CELL), cl = new Map();
   for (const [x, y, m] of globalThis.__riverHits) { const k = Math.round(x / 20) + ',' + Math.round(y / 20); const v = cl.get(k) ?? { n: 0, m: 0, at: null }; v.n++; if (m > v.m) { v.m = m; v.at = [X0 + x * CELL + 20 + sx, Y0 + y * CELL + 20 + sy, H[x * N + y] * VZ]; } cl.set(k, v); }
   console.error([...cl.values()].sort((a, b) => b.n - a.n).slice(0, 12).map(v => `  ${v.n} cells, tallest ${v.m} at ${v.at}`).join(' | '));
-}
-// ride surface (owner 2026-10-13: "make the paths use micro bricks and ramps and wedges for the
-// absolute best riding experience"): road cells (not town or hamlet paving; hamlet lanes too since 2026-10-16,
-// bridges and their ends, tunnels, rivers, weirs) get their own stud-fine surface below,
-// so the cell smoothing leaves them alone
-const roadSurf = new Uint8Array(N * N);
-for (let x = 1; x < N - 1; x++)
-  for (let y = 1; y < N - 1; y++) {
-    const c = x * N + y;
-    if ((!pathCell[c] && tunnelZ[c] < 0) || townKind[c] || villagePaved[c] || deck[c] || riverCell[c] || weirCell[c] || (H[c] <= SEA && tunnelZ[c] < 0)) continue;
-    let nearDeck = false;
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const n = (x + a) * N + y + b; if (deck[n] || terraceCell[n]) nearDeck = true; } // terrace walls stand on the low cell (tunnels ride since 2026-10-16)
-    if (!nearDeck) roadSurf[c] = 1;
-  }
-// MAPGEN_ROADDIAG=1: why road cells miss the ride surface (first reason per cell) + a few world spots each
-if (process.env.MAPGEN_ROADDIAG) {
-  const why = {}, at = {}, SH = [-(X0 + (town.fx + TOWN.cells / 2) * CELL), -(Y0 + (town.fy + TOWN.cells / 2) * CELL)];
-  for (let x = 1; x < N - 1; x++) for (let y = 1; y < N - 1; y++) {
-    const c = x * N + y;
-    if (!pathCell[c] || roadSurf[c]) continue;
-    const r = townKind[c] ? 'town' : villagePaved[c] ? 'villagePaved' : villageDist(x, y) <= VILLAGE.r + 2 ? 'village' : deck[c] ? 'deck' : tunnelZ[c] >= 0 ? 'tunnel'
-      : riverCell[c] ? 'river' : weirCell[c] ? 'weir' : H[c] <= SEA ? 'sea' : 'nearDeckOrTerrace';
-    why[r] = (why[r] ?? 0) + 1; (at[r] ??= []).length < 4 && at[r].push([Math.round(X0 + x * CELL + SH[0]), Math.round(Y0 + y * CELL + SH[1])]);
-  }
-  let on = 0; for (let c = 0; c < N * N; c++) on += roadSurf[c];
-  console.error('road diag: ride surface', on, 'cells; missing', JSON.stringify(why), JSON.stringify(at));
 }
 const SMOOTH = opt('--smooth', 'wedge'); // 'ramp' (micro ramps on straight slopes) or 'wedge' (tipped micro wedges)
 let ramps = 0, triCaps = 0;
@@ -2954,6 +3020,159 @@ const capCol = new Uint8Array(N * N); // cells with a diagonal triangle cap (no 
 // per smoothed cell: its rise k and which way it slopes up (plants sit at the high edge)
 const rampK = new Uint8Array(N * N), rampUp = new Int8Array(N * N); // rampUp: 0 none, 1 flat fill, else 2 + dir index
 const DIR8 = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+// micro terrain surface (microCell above), on the global 16-unit tile grid (8x micro). A tile's
+// ground g = the highest top of the cells under it; tiles over plain land are raised toward any
+// tile within reach, 12 (one brick) per tile, at most MAX_RISE bricks over g (taller cliffs stay
+// cliffs). Every tile is then flat, or, where a neighbour sharing a corner stands one brick
+// higher, a 4-unit lip + one 8x8x4 micro wedge rising to it (2 corners up = wedge, 1 = wedge
+// corner, 3 = outer corner: the ride surface's pieces; saddles flat): each brick contour reads
+// as one row of wedges. Wedges merge along their run (terrain.microRun tiles); 2 x 2 tiles on one
+// 0.5 plane would become one 16x16x8 (16x) wedge. Under them micro brick fills on the 8-unit grid
+// (4x: cells are 40, so every other cell edge splits a tile) from the bottom of the old top voxel,
+// greedy rectangles of equal (bottom, top, material). Flat ground stays exactly at the old top, so
+// the decor stands where it did; rampCol / rampK mark the raised cells.
+const MT_RUN = tune('terrain.microRun', 16, 'micro terrain: most wedge tiles merged along a run');
+const MT_FILL = tune('terrain.microFill', 80, 'micro terrain: longest fill side, 8-unit micro cells');
+let microBricks = 0, microCaps = 0;
+if (MICRO) {
+  const MC = 8, MP = CELL / MC, MW = N * MP, TS = 16, TP = TS / MC, TW = MW / TP, RISE = 8, STEP = VZ, CAP = MAX_RISE * VZ;
+  const cellOfM = (i, j) => ((i / MP) | 0) * N + ((j / MP) | 0);
+  // ground, lowest ground, level, micro (all its cells plain and at most a brick apart)
+  const tg = new Int32Array(TW * TW), tg0 = new Int32Array(TW * TW), tl = new Int32Array(TW * TW), tm = new Uint8Array(TW * TW);
+  for (let ti = 0; ti < TW; ti++) for (let tj = 0; tj < TW; tj++) {
+    let g = -1e6, g0 = 1e6, all = 1;
+    for (let a = 0; a < TP; a++) for (let b = 0; b < TP; b++) { const c = cellOfM(ti * TP + a, tj * TP + b), z = (H[c] + 1) * VZ; g = Math.max(g, z); g0 = Math.min(g0, z); if (!microCell[c]) all = 0; }
+    const t = ti * TW + tj;
+    tg[t] = tl[t] = g; tg0[t] = g0; tm[t] = all && g - g0 <= STEP ? 1 : 0;
+  }
+  // raise (two-pass chamfer, repeated until stable): l(t) = min(g0 + CAP - STEP, max(l, l(n) - STEP)),
+  // so nothing (cap tops included) rises more than CAP over the lowest cell under it: those are clear of voxels
+  for (let sweep = 0, changed = 1; changed && sweep < 40; sweep++) {
+    changed = 0;
+    const fwd = sweep % 2 === 0;
+    for (let q = 0; q < TW * TW; q++) {
+      const t = fwd ? q : TW * TW - 1 - q;
+      if (!tm[t]) continue;
+      const ti = (t / TW) | 0, tj = t - ti * TW;
+      let v = tl[t];
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        if ((!a && !b) || ti + a < 0 || tj + b < 0 || ti + a >= TW || tj + b >= TW) continue;
+        const n = tl[t + a * TW + b] - STEP;
+        if (n > v) v = n;
+      }
+      v = Math.min(v, tg0[t] + CAP - STEP);
+      if (v > tl[t]) { tl[t] = v; changed = 1; }
+    }
+  }
+  const base = new Int16Array(MW * MW).fill(-1); // fill top per 8-unit micro cell; -1 = not micro terrain
+  const tcap = new Uint8Array(TW * TW), tbase = new Int32Array(TW * TW); // cap: 0 none, 1-4 wedge up +x -x +y -y, 5-8 corner up at 00 10 01 11, 9-12 outer corner low at 00 10 01 11
+  const CORNER = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+  const WDIR = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (let ti = 1; ti < TW - 1; ti++) for (let tj = 1; tj < TW - 1; tj++) {
+    const t = ti * TW + tj;
+    if (!tm[t]) continue;
+    const l = tl[t];
+    // each corner: the highest tile sharing it, at most one step up (higher = a cliff, ignored)
+    const k = CORNER.map(([sx, sy]) => {
+      let v = l;
+      for (const [a, b] of [[sx, 0], [0, sy], [sx, sy]]) { const n = tl[t + a * TW + b]; if (n > v && n - l <= STEP) v = n; }
+      return v;
+    });
+    const mx = Math.max(...k);
+    let cp = 0;
+    if (mx > l) {
+      const up = k.map(v => v === mx), n = up.filter(Boolean).length;
+      if (n === 1) cp = 5 + up.indexOf(true);
+      else if (n === 3) cp = 9 + up.indexOf(false);
+      else {
+        const [p, q] = up.map((u, i) => (u ? i : -1)).filter(i => i >= 0), [ax, ay] = CORNER[p], [bx, by] = CORNER[q];
+        if (ax === bx) cp = ax > 0 ? 1 : 2; else if (ay === by) cp = ay > 0 ? 3 : 4; // else a saddle: flat at its own level
+      }
+    }
+    tcap[t] = cp; tbase[t] = cp ? mx - RISE : l;
+  }
+  // micro cells: in micro tiles the tile's base, elsewhere (a tile reaching into a feature cell) flat at their own top
+  for (let i = 0; i < MW; i++) for (let j = 0; j < MW; j++) {
+    const c = cellOfM(i, j);
+    if (!microCell[c]) continue;
+    const t = ((i / TP) | 0) * TW + ((j / TP) | 0);
+    base[i * MW + j] = tm[t] ? tbase[t] : (H[c] + 1) * VZ;
+  }
+  const matOfC = c => V[vi((c / N) | 0, c % N, H[c])];
+  const matOfT = t => matOfC(cellOfM(((t / TW) | 0) * TP, (t % TW) * TP)); // a tile's colour: its first micro cell's cell
+  const put = (asset, extra, pos, m) => {
+    const M = MATS[m];
+    bricks.push({ asset, ...extra, position: pos, color: M.color, ...(M.material ? { material: M.material } : {}), ...(M.intensity ? { material_intensity: M.intensity } : {}), mt: asset === 'PB_DefaultMicroBrick' ? 1 : 2 });
+    microBricks++;
+  };
+  // s x s tiles at (ti, tj) all one wedge plane (cap cp, material m0): the low base, else null
+  const usedT = new Uint8Array(TW * TW);
+  const plane = (ti, tj, s, cp, m0) => {
+    if (ti < 0 || tj < 0 || ti + s > TW || tj + s > TW) return null;
+    const [ux, uy] = WDIR[cp - 1];
+    let b0 = null;
+    for (let a = 0; a < s; a++) for (let b = 0; b < s; b++) {
+      const t = (ti + a) * TW + tj + b;
+      if (!tm[t] || usedT[t] || tcap[t] !== cp || matOfT(t) !== m0) return null;
+      const st = ux > 0 ? a : ux < 0 ? s - 1 - a : uy > 0 ? b : s - 1 - b; // tiles up from the low side
+      const v = tbase[t] - st * RISE;
+      if (b0 === null) b0 = v; else if (v !== b0) return null;
+    }
+    return b0;
+  };
+  const sizes = {};
+  for (const s of [2, 1])
+    for (let ti = 0; ti + s <= TW; ti += s) for (let tj = 0; tj + s <= TW; tj += s) {
+      const t = ti * TW + tj, cp = tcap[t];
+      if (!tm[t] || usedT[t] || cp < 1 || cp > 4) continue;
+      const m0 = matOfT(t), b0 = plane(ti, tj, s, cp, m0);
+      if (b0 === null) continue;
+      const [ux, uy] = WDIR[cp - 1], rx = uy ? 1 : 0, ry = ux ? 1 : 0; // the run axis
+      let len = 1;
+      while (len < MT_RUN && plane(ti + rx * s * len, tj + ry * s * len, s, cp, m0) === b0) len++;
+      const w = rx ? len * s : s, l = ry ? len * s : s;
+      for (let a = 0; a < w; a++) for (let b = 0; b < l; b++) {
+        const q = (ti + a) * TW + tj + b; usedT[q] = 1;
+        for (let p = 0; p < TP; p++) for (let r = 0; r < TP; r++) { const m = ((ti + a) * TP + p) * MW + (tj + b) * TP + r; if (base[m] >= 0) base[m] = b0; }
+      }
+      const ext = [(w * TS) / 2, (l * TS) / 2, (s * RISE) / 2];
+      put('PB_DefaultMicroWedge', orientFor('PB_DefaultMicroWedge', [[ux, uy]], ext), [X0 + ti * TS + ext[0], Y0 + tj * TS + ext[1], b0 + ext[2]], m0);
+      sizes[s * 8 + 'x'] = (sizes[s * 8 + 'x'] ?? 0) + 1;
+    }
+  for (let t = 0; t < TW * TW; t++) {
+    const cp = tcap[t];
+    if (cp < 5 || usedT[t] || !tm[t]) continue;
+    const ti = (t / TW) | 0, tj = t - ti * TW, [sx, sy] = CORNER[(cp - 5) & 3];
+    const [asset, dirs] = cp < 9 ? ['PB_DefaultMicroWedgeCorner', [[sx, 0], [0, sy]]] : ['PB_DefaultMicroWedgeOuterCorner', [[-sx, 0], [0, -sy]]];
+    put(asset, orientFor(asset, dirs, [TS / 2, TS / 2, RISE / 2]), [X0 + ti * TS + TS / 2, Y0 + tj * TS + TS / 2, tbase[t] + RISE / 2], matOfT(t));
+    sizes.corner = (sizes.corner ?? 0) + 1;
+  }
+  microCaps = microBricks;
+  // fills: from the bottom of the old top voxel up to each micro cell's base
+  const used = new Uint8Array(MW * MW);
+  const bot = c => H[c] * VZ;
+  let lift = new Int32Array(N * N);
+  for (let i = 0; i < MW; i++) for (let j = 0; j < MW; j++) {
+    const m = i * MW + j;
+    if (base[m] < 0) continue;
+    const c = cellOfM(i, j), t = ((i / TP) | 0) * TW + ((j / TP) | 0), top = base[m] + (tm[t] && tcap[t] ? RISE : 0) - (H[c] + 1) * VZ;
+    if (top > lift[c]) lift[c] = top;
+    if (used[m]) continue;
+    const z0 = bot(c), z1 = base[m], m0 = matOfC(c);
+    const same = (a, b) => { if (i + a >= MW || j + b >= MW) return false; const q = (i + a) * MW + j + b; if (used[q] || base[q] !== z1) return false; const c2 = cellOfM(i + a, j + b); return bot(c2) === z0 && matOfC(c2) === m0; };
+    let l = 1; while (l < MT_FILL && same(0, l)) l++;
+    let w = 1; grow: while (w < MT_FILL) { for (let b = 0; b < l; b++) if (!same(w, b)) break grow; w++; }
+    for (let a = 0; a < w; a++) used.fill(1, (i + a) * MW + j, (i + a) * MW + j + l);
+    put('PB_DefaultMicroBrick', { size: [(w * MC) / 2, (l * MC) / 2, (z1 - z0) / 2] }, [X0 + i * MC + (w * MC) / 2, Y0 + j * MC + (l * MC) / 2, (z0 + z1) / 2], m0);
+  }
+  let cells = 0, raisedCells = 0;
+  for (let c = 0; c < N * N; c++) {
+    if (!microCell[c]) continue;
+    cells++;
+    if (lift[c] > 0) { rampCol[c] = 1; rampK[c] = Math.ceil(lift[c] / VZ); raisedCells++; ramps++; }
+  }
+  console.error(`micro terrain: ${cells} cells (${raisedCells} raised), ${microBricks} bricks (${microCaps} caps ${JSON.stringify(sizes)}, ${microBricks - microCaps} fills)`);
+}
 if (!args.includes('--no-smooth'))
 for (let x = 0; x < N; x++)
   for (let y = 0; y < N; y++) {
@@ -2961,7 +3180,7 @@ for (let x = 0; x < N; x++)
     // under the sea too, down to SEABED_SMOOTH (owner 2026-10-13: the shallows showed raw
     // voxel steps through the water), and the river's mouth where it has no water plates
     if (h + 1 <= SEA - SEABED_SMOOTH || V[vi(x, y, h)] === 0) continue;
-    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || weirCell[x * N + y] || roadSurf[x * N + y] || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA && !deck[x * N + y] && !pathCell[x * N + y]))) continue;
+    if (microCell[x * N + y] || townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || weirCell[x * N + y] || roadSurf[x * N + y] || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA && !deck[x * N + y] && !pathCell[x * N + y]))) continue;
     // the foot of a terrace retaining wall: its brick veneer stands here (terraceDressing)
     if ([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && terraceCell[(x + dx) * N + y + dy] && H[(x + dx) * N + y + dy] - h >= 2)) continue;
     const hN = (dx, dy) => (inMap(x + dx, y + dy) ? H[(x + dx) * N + y + dy] : h);
@@ -4639,25 +4858,25 @@ if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid,
 // tunnel trim, walkway flags): the game would reject one of each overlapping pair anyway
 {
   const G = 200, idx = new Map(), rideBox = [];
-  bricks.forEach((b, i) => { if (b.ride || b.soft) rideBox.push([i, ...worldBox(b, BUILDER_FIXED)]); });
+  bricks.forEach((b, i) => { if (b.ride || b.soft || b.mt) rideBox.push([i, ...worldBox(b, BUILDER_FIXED)]); });
   const cells = new Set(); for (const [, lo, hi] of rideBox) for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G); x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G); y++) cells.add(x + ',' + y);
   for (const b of bricks) {
-    if (b.ride || b.soft) continue;
+    if (b.ride || b.soft || b.mt) continue;
     const [lo, hi] = worldBox(b, BUILDER_FIXED);
     for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G); x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G); y++) { const k = x + ',' + y; if (cells.has(k)) (idx.get(k) ?? idx.set(k, []).get(k)).push([lo, hi]); }
   }
-  const drop = new Set();
+  const drop = new Set(), mtFillHits = []; // micro terrain fills are ground: kept, counted
   for (const [i, lo, hi] of rideBox) {
     let hit = false;
     for (let x = Math.floor(lo[0] / G); x <= Math.floor((hi[0] - 1) / G) && !hit; x++) for (let y = Math.floor(lo[1] / G); y <= Math.floor((hi[1] - 1) / G) && !hit; y++)
       for (const [a0, a1] of idx.get(x + ',' + y) ?? []) if (lo[0] < a1[0] && a0[0] < hi[0] && lo[1] < a1[1] && a0[1] < hi[1] && lo[2] < a1[2] && a0[2] < hi[2]) { hit = true; break; }
-    if (hit) drop.add(i);
+    if (hit) { if (bricks[i].mt === 1) mtFillHits.push(bricks[i].position); else drop.add(i); }
   }
   if (drop.size) { let k = 0; for (let i = 0; i < bricks.length; i++) if (!drop.has(i)) bricks[k++] = bricks[i]; bricks.length = k; }
-  console.error(`ride surface pieces dropped for objects on the road: ${drop.size}`);
+  console.error(`ride surface + micro terrain caps dropped for objects on them: ${drop.size}; micro terrain fills under objects: ${mtFillHits.length}${mtFillHits.length ? ' e.g. ' + JSON.stringify(mtFillHits.slice(0, 4)) : ''}`);
 }
 { let k = 0; for (const b of bricks) if (!b.ghost) bricks[k++] = b; bricks.length = k; } // ghosts (town.mjs vending): boxes held for prefabs loaded later
-for (const b of bricks) { delete b.gameSize; delete b.group; delete b.ride; delete b.soft; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups; ride surface marks)
+for (const b of bricks) { delete b.gameSize; delete b.group; delete b.ride; delete b.soft; delete b.mt; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups; ride surface marks)
 
 stage('output');
 // ----------------------------------------------------------------- output --
