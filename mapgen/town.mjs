@@ -17,6 +17,7 @@
 import { planHouse, COURSES as WH_COURSES, even } from './wallhouse.mjs';
 import { planShop, SHOP_KINDS, WEAPON_KINDS } from './wallshop.mjs';
 import { shapedHouse } from './shapedhouse.mjs';
+import { splitLevel } from './splitlevel.mjs';
 import { turnBrick } from './orient.mjs';
 import { castleStone, VX as CVX, VZ as CVZ } from './castle.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
@@ -367,6 +368,7 @@ export const HOUSE_TYPES = {
     { name: 'hall house',     w: 1, shape: ['T'],         W: [44, 50], D: [22, 26], E: [10, 14], storeys: 1, style: 'runescape' },
     { name: 'dutch cottage',  w: 1, shape: ['rect'],      W: [34, 40], D: [24, 26],             storeys: 1, style: 'runescape', roofs: ['gambrel'] },
     { name: 'brick bungalow', w: 1, shape: ['rect', 'L'], W: [42, 46], D: [26, 28], E: [10, 12], storeys: 1, style: 'classic' },
+    { name: 'split-level',    w: 2, builder: 'splitlevel' }, // owner photo 2026-10-17 (splitlevel.mjs)
     { name: 'gate lodge',     w: 1, shape: ['rect'],      W: [30, 34], D: [24, 26],             storeys: 1, style: 'classic', roofs: ['barrel', 'gable'] },
   ],
   townhouse: [
@@ -379,15 +381,24 @@ export const HOUSE_TYPES = {
     { name: 'terrace row',    w: 2, shape: ['rect'],      W: [52, 58], D: [24, 26],             storeys: 2, attic: true, style: 'runescape', roofs: ['dormer'] },
     { name: 'barn house',     w: 1, shape: ['rect', 'L'], W: [40, 44], D: [28, 30], E: [10, 12], storeys: 2, attic: false, style: 'runescape', roofs: ['gambrel'] },
     { name: 'guild house',    w: 1, shape: ['rect'],      W: [44, 48], D: [28, 30],             storeys: 3, attic: false, style: 'classic', roofs: ['gable', 'dormer'] },
+    { name: 'split-level',    w: 3, builder: 'splitlevel' },
     { name: 'vaulted house',  w: 1, shape: ['rect', 'L'], W: [38, 42], D: [26, 28], E: [10, 12], storeys: 2, attic: false, style: 'runescape', roofs: ['barrel'] },
   ],
 };
+const splitCache = new Map();
+const splitLevelOf = (s, mirror) => { const k = s + ',' + mirror; if (!splitCache.has(k)) splitCache.set(k, splitLevel({ seed: s, mirror })); return splitCache.get(k); };
 const SMALL_MAX = { cottage: [32, 20, 8], townhouse: [36, 24, 12] }; // W, D, E of the old small lots
 function shapedSpec0(type, rnd, s, small = false) {
   const pool = HOUSE_TYPES[type] ?? HOUSE_TYPES.townhouse;
   const tot = pool.reduce((a, h) => a + h.w, 0);
   let u = rnd(s, 93) * tot, ht = pool[pool.length - 1];
   for (const h of pool) if ((u -= h.w) < 0) { ht = h; break; }
+  // whole-house builders (split-level): their own footprint; small lots take the pool's first type
+  if (ht.builder && small) ht = pool[0];
+  if (ht.builder) {
+    const mirror = rnd(s, 97) < 0.5, h = splitLevelOf(s, mirror);
+    return { builder: ht.builder, mirror, shape: 'rect', W: h.W - GROW, D: h.D - GROW, E: 0, storeys: 2, kind: ht.name };
+  }
   const pickS = (list, salt) => list[Math.floor(rnd(s, salt) * list.length)];
   const span = ([a, b], salt) => a + 2 * Math.floor(rnd(s, salt) * ((b - a) / 2 + 1));
   const shape = pickS(ht.shape, 90);
@@ -1368,7 +1379,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
 
   /** a shapedhouse.mjs house centred (cx, cy), its front door facing (fx, fy) */
   function shapedTown(cx, cy, fx, fy, sp, s) {
-    const h = shapedHouse({ ...sp, seed: s });
+    const h = sp.builder === 'splitlevel' ? splitLevelOf(s, sp.mirror) : shapedHouse({ ...sp, seed: s });
     const lx = ((sp.W + 1) * 10) / 2, ly = shapedDepth(sp) / 2;
     // local front faces -y; quarter turns that bring it round to (fx, fy)
     const r = fy < 0 ? 0 : fx > 0 ? 1 : fy > 0 ? 2 : 3;
