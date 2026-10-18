@@ -134,7 +134,8 @@ function kit(lib, owner) {
 
 const REF0 = { GridPersistentIndex: 0, ChunkIndex: { X: 0, Y: 0, Z: 0 }, BrickIndexInChunk: 4294967295 };
 
-function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false }) {
+// paint false = no brick colour write per tile (/stream: halves what goes to clients; owner saw tearing)
+function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, paint: doPaint = true }) {
   const { w, C, O, wire, num, str } = kit(lib, owner);
   const T = L.tw * L.th;
   const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: L.ws } };
@@ -191,10 +192,12 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false })
   wire(getC, 'Component', setT, 'Component'); wire(tf, 'Output', setT, 'Value');
   wire(entry, 'Body', getR, 'Exec'); wire(getR, 'ExecOut', getC, 'Exec'); wire(getC, 'ExecOut', setT, 'Exec');
   // the tile brick takes an inner cell's colour: the hairline round the text (fit < 1) then matches the picture
-  const mid = Math.floor(L.k / 2) * (L.k + 1);
-  const mc = ig(C.Expr_MakeColorHex, { Hex: '' }); wire(...sub(at(2 + mid * 6), 6), mc, 'Hex');
-  const paint = ig(C.Exec_SetBrickProperty, { Value: { $variant: 'f64', value: 0 }, Brick: REF0, Property: 1 });
-  wire(getR, 'Value', paint, 'Brick'); wire(mc, 'Output', paint, 'Value'); wire(setT, 'ExecOut', paint, 'Exec');
+  if (doPaint) {
+    const mid = Math.floor(L.k / 2) * (L.k + 1);
+    const mc = ig(C.Expr_MakeColorHex, { Hex: '' }); wire(...sub(at(2 + mid * 6), 6), mc, 'Hex');
+    const paint = ig(C.Exec_SetBrickProperty, { Value: { $variant: 'f64', value: 0 }, Brick: REF0, Property: 1 });
+    wire(getR, 'Value', paint, 'Brick'); wire(mc, 'Output', paint, 'Value'); wire(setT, 'ExecOut', paint, 'Exec');
+  }
   if (debug) {
     // per packet: entries done | packet length
     const f = gate(C.Expr_String_FormatText, { FormatString: 'tgrid|{A}|{B}' }); wire(shell, 'IterationsExecuted', f, 'InputA'); wire(len, 'Output', f, 'InputB');

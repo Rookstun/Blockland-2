@@ -1533,7 +1533,7 @@ module.exports = class Media {
         for (let o = 0; o + fb <= raw.length; o += fb) rawFrames.push(raw.subarray(o, o + fb));
         if (!rawFrames.length) throw new Error('no frames decoded');
         // tiles: packets of tile updates (16 of the 20 packet slots a second, the rest lets a backlog catch up)
-        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (panel ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (panel ? 16 : 28), refresh: panel ? (this.config['stream-refresh'] ?? 48) : 0, per: panel ? (this.config['stream-per'] ?? 288) : 120 })
+        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (panel ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (panel ? this.config['stream-thresh'] ?? 32 : 28), refresh: panel ? (this.config['stream-refresh'] ?? 0) : 0, per: panel ? (this.config['stream-per'] ?? 288) : 120 })
           : rawFrames.map(fr => this.og.encodeFrame(fr, n, { maxRuns, strips }));
         const nFrames = rawFrames.length;
         let audio = null;
@@ -1570,7 +1570,7 @@ module.exports = class Media {
         this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
         setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
       };
-      loadAt(tiles ? this.tg.buildReceiver(this.brs4, L, { event, owner, debug: opts.includes('debug') }) : this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
+      loadAt(tiles ? this.tg.buildReceiver(this.brs4, L, { event, owner, debug: opts.includes('debug'), paint: !panel }) : this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
       await sleep(1500);
       this.whisper(name, `<color="9cf">Showing ${fw}x${fh} ${glyph === 'O' ? "O's" : 'blocks'} at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). ${panel ? "/stream" : "/ogrid"} stop ends it.</>`);
       let sent = 0, prevAudio = null, set = first;
