@@ -81,9 +81,9 @@ const MAIN = [
       ] },
     ], coins: 150, xp: 150 },
 
-  // ---- the Indiana Jones segment. PLACEHOLDER: the swamp temple itself (darts, pressure plates,
-  // the rolling boulder) is not built yet; Green Gary just naps by a pedestal in the swamp. The
-  // text says so in-world (TRAPS COMING SOON). Build the set at greengary in npcs.json and drop it.
+  // ---- the Indiana Jones segment. The set = npctalk/temple.mjs (Temple of the Stash: stepped mossy
+  // tiers, dart holes, pressure plates, pedestal with THE STASH, boulder on the roof, plaque,
+  // Gary's hammock). The boulder does not roll (yet): the text owns that.
   { id: 'm5', main: 5, giver: 'greengary', after: 'm4', auto: true, title: 'Raiders of the Lost Stash',
     intro: [
       'Word arrives through the swamp grapevine, which is mostly frogs named Gerald: the fifth grip is wrapped up in the legendary stash of GREEN GARY, hermit of the swamp, north of the big rocks.',
@@ -91,13 +91,13 @@ const MAIN = [
     ],
     steps: [
       { do: 'talk', to: 'greengary', lines: [
-        'Green Gary snores in a hammock strung between two very tired trees. Beside him, on a mossy pedestal, sits THE STASH. It glows a gentle, suspicious green. It smells like a guy named Wet Toby.',
-        'A hand-painted sign leans on the pedestal: TEMPLE UNDER CONSTRUCTION. DARTS, PRESSURE PLATES AND BOULDER COMING SOON. PLEASE IMAGINE THEM. SIGNED, FRESNIF CONSTRUCTION LLC.',
-        'You imagine them. They are terrifying. You pat your pocket: one bag of oregano, roughly the same weight. Probably. You are not a scientist. You are Frogo.',
+        'Green Gary snores in a hammock strung between two very tired posts. Somewhere nearby THE STASH glows a gentle, suspicious green. It smells like a guy named Wet Toby.',
+        'Behind him rises the TEMPLE OF THE STASH, built by Fresnif Construction LLC in the Before Times, mostly out of moss. Dart holes line the walls. The floor is all pressure plates. A boulder sits on the roof, looking smug.',
+        'Inside, on a pedestal, THE STASH glows. A plaque says NO STEALING. SIGNED, GARY. P.S. THE BOULDER IS DECORATIVE. You pat your pocket: one bag of oregano, roughly the same weight. Probably. You are not a scientist. You are Frogo.',
       ] },
       { do: 'ask', to: 'greengary', msg: 'Swap THE STASH for your bag of oregano in one smooth motion?',
         no: 'You stare at the stash. The stash stares back. Green Gary mumbles about vibes and a guy named Plinko in his sleep.',
-        yes: ['You swap them in one smooth motion. The pedestal goes click. Somewhere an imaginary boulder starts rolling. Green Gary opens one eye. It is red. RUN, FROGO. Get far away from the swamp, fast.'] },
+        yes: ['You swap them in one smooth motion. The pedestal goes click. Every dart hole goes pfft. The decorative boulder on the roof starts rocking. Green Gary opens one eye. It is red. RUN, FROGO. Get far away from the swamp, fast.'] },
       { do: 'escape', from: 'greengary', dist: 2200, secs: 25, retry: 1, grip: 5,
         fail: ['Green Gary catches you by the backpack. He is shockingly fast for a man in sandals. His sandals are named Lorbo and Flim.', 'He takes THE STASH back, pockets the oregano for later and makes you listen to his whole mixtape. It is all one song. The song is called Gary. Try again.'],
         ok: ['You burst out of the swamp, lungs on fire, stash in hand, past a Fire Homeless and a Water Homeless hitting each other with soup. Far behind you Green Gary yells something about bad karma and good snacks.',
