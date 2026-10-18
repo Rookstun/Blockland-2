@@ -74,6 +74,16 @@ mod enemyName(lim: int) -> string {
     return "Fizzwick"
   } else if lim == 104 {
     return "Gary"
+  } else if lim == 105 {
+    return "Racist Randal"
+  } else if lim == 106 {
+    return "Clarn Fiddilohougan"
+  } else if lim == 107 {
+    return "Green Gary"
+  } else if lim == 90 {
+    return "Fire Homeless"
+  } else if lim == 95 {
+    return "Water Homeless"
   }
   return "Enemy"
 }
@@ -913,7 +923,7 @@ on CharacterDied() -> (who, killer, killerWeapon, killerWeaponName) {
   let dbgUser = who.ControllerOf().GetUserName()
   let dbgTag = who.GetTag()
   PrintToConsole("[xp debug] died: user=${dbgUser} tag=${dbgTag}")
-  if isBot && (lim >= 5000 || lim == 101 || lim == 102 || lim == 80 || lim == 103 || lim == 104) {
+  if isBot && (lim >= 5000 || lim == 101 || lim == 102 || lim == 80 || lim == 103 || lim == 104 || lim == 105 || lim == 106 || lim == 107) {
     rolls = 0
   } else if name.Contains("handaxe") || (isBot && lim == 50) {
     xp = 5

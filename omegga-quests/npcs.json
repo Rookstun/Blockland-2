@@ -70,5 +70,47 @@
   "bot": {
    "HealthMultiplier": 1.04
   }
+ },
+ {
+  "id": 5,
+  "key": "randal",
+  "role": "townsfolk",
+  "name": "Racist Randal",
+  "at": [
+   250,
+   250,
+   624
+  ],
+  "bot": {
+   "HealthMultiplier": 1.05
+  }
+ },
+ {
+  "id": 6,
+  "key": "clarn",
+  "role": "crier",
+  "name": "Clarn Fiddilohougan",
+  "at": [
+   3250,
+   3900,
+   412
+  ],
+  "bot": {
+   "HealthMultiplier": 1.06
+  }
+ },
+ {
+  "id": 7,
+  "key": "greengary",
+  "role": "farmer",
+  "name": "Green Gary",
+  "at": [
+   2200,
+   6150,
+   292
+  ],
+  "bot": {
+   "HealthMultiplier": 1.07
+  }
  }
 ]

@@ -35,6 +35,9 @@ const ENEMY = {
   'wizard': [65, 'Evil Wizard'], 'casino staff': [10000, 'Casino Staff'], 'bloated': [130, 'Bloated Zombie'], 'zombie': [60, 'Swamp Zombie'],
   // quest NPCs (omegga-quests/npcs.json bot.HealthMultiplier x100): named, no loot/XP
   'q kevin': [101, 'Kevin'], 'q dustin': [102, 'Dustin'], 'q daniel': [80, 'Daniel'], 'q fizzwick': [103, 'Fizzwick'], 'q gary': [104, 'Gary'],
+  'q randal': [105, 'Racist Randal'], 'q clarn': [106, 'Clarn Fiddilohougan'], 'q green gary': [107, 'Green Gary'],
+  // the homeless war (npctalk/war.json hp x100): normal loot
+  'fire homeless': [90, 'Fire Homeless'], 'water homeless': [95, 'Water Homeless'],
 };
 const QUEST_HP = Object.entries(ENEMY).filter(([k]) => k.startsWith('q ')).map(([, [hp]]) => hp);
 {
