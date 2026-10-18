@@ -91,10 +91,10 @@ const MAIN = [
     ],
     steps: [
       { do: 'talk', to: 'greengary', lines: [
-        'Green Gary snores in a hammock strung between two very tired posts. South of the swamp rises the TEMPLE OF THE STASH: five tiers of red and ochre clay brick, built by Fresnif Construction LLC in the Before Times, and never once repointed.',
-        'Ferns grow out of the mortar. Carved stones show a sun, an eye, a frog and, weirdly, a pair of vice grips. A grand staircase climbs to a shrine at the top. Somewhere deep inside, something glows a gentle, suspicious green. It smells like a guy named Wet Toby.',
-        'Green Gary (asleep): the big stairs are just for show, Plinko... the real way in is the little stairs on the left, then the door on the first ledge... the tiles shoot arrows... the pit has spikes... jump the pillars... zzz',
-        'Green Gary (still asleep): the stash is in the back room... and the back door is out the east side... do not touch my stash, Plinko... zzz. You pat your pocket: one bag of oregano, roughly the same weight. Probably. You are not a scientist. You are Frogo.',
+        'Green Gary snores in a hammock strung between two very tired posts. South of the swamp rises the TEMPLE OF THE STASH: a stepped mountain of red and ochre clay brick, built by Fresnif Construction LLC in the Before Times, and never once repointed.',
+        'Three stairways climb its face and meet in the middle, then march up through a gatehouse to a little crenellated shrine on the very top. Ferns sprout from every ledge. Somewhere deep inside, something glows a gentle, suspicious green. It smells like a guy named Wet Toby.',
+        'Green Gary (asleep): go in at the top, Plinko... the shrine has stairs down... the big room is all tiles over spikes... jump tile to tile... some tiles shoot arrows... the spikes do not hurt, they just end you... zzz',
+        'Green Gary (still asleep): the stash is in the room past the tiles... and the back door goes down and out the south side... do not touch my stash, Plinko... zzz. You pat your pocket: one bag of oregano, roughly the same weight. Probably. You are not a scientist. You are Frogo.',
       ] },
       { do: 'ask', to: 'stash', msg: 'THE STASH sits on its pedestal, glowing. The plaque at the door said NO STEALING. SIGNED, GARY. Swap it for your bag of oregano in one smooth motion?',
         no: 'You stare at the stash. The stash stares back. Somewhere below, Green Gary mumbles about vibes and a guy named Plinko in his sleep.',
