@@ -357,31 +357,46 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   light(Math.round(SW / 20) * 10, 90, L.lowCeil);
 
   // ---------------------------------------------------------------- wing --
+  // two layouts (owner 2026-10-18: "make this kitchen and the old kitchen a variant"):
+  //   split: the rear addition holds the kitchen (WX0..WK) beside the second bedroom (WK..WX1)
+  //   full:  the kitchen spans the whole rear addition; the second bedroom takes the wing's end
+  //          (WL..WX1) behind a partition, the living room narrower (WX0..WL)
+  const FULL = r() < 0.5;
   const WX0 = SW, WX1 = SW + WW, WY0 = WF, WY1 = DD;
+  const WK = WX1 - 120, WL = WX1 - 120;                               // split: kitchen / bedroom; full: living / bedroom
+  const LX1 = FULL ? WL - 10 : WX1 - 10;                              // the living room's far face
   const fd = op(WX0 + 30, WX0 + 60, L.main, L.main + DOOR);
-  const pic = op(WX0 + 100, Math.min(WX1 - 40, WX0 + 220), L.main + 24, L.main + HEAD);
+  const pic = FULL ? op(WX0 + 80, LX1 - 20, L.main + 24, L.main + HEAD) : op(WX0 + 100, Math.min(WX1 - 40, WX0 + 220), L.main + 24, L.main + HEAD);
+  const bedFront = FULL ? [op(WL + 30, WL + 80, L.main + SILL, L.main + HEAD)] : [];
   const wingSkin = wingSiding ? 'siding' : 'brick';
-  wall('x', WY0, WX0, WX1, 0, L.wingTop, stoneFront ? 'stone' : wingSkin, [{ ...fd, z1: fd.z1 + 4 }, pic], 'wing front');
-  WALLS.at(-1).openings = [fd, pic]; // the finishes see the real door (the head brick fills the top 4)
-  windowIn('x', WY0, -1, pic);
+  wall('x', WY0, WX0, WX1, 0, L.wingTop, stoneFront ? 'stone' : wingSkin, [{ ...fd, z1: fd.z1 + 4 }, pic, ...bedFront], 'wing front');
+  WALLS.at(-1).openings = [fd, pic, ...bedFront]; // the finishes see the real door (the head brick fills the top 4)
+  [pic, ...bedFront].forEach(w => windowIn('x', WY0, -1, w));
   box(fd.a0, WY0, fd.z1, fd.a1, WY0 + 10, fd.z1 + 4, { color: WHITE }, 'door head');
   box(fd.a0 - 4, WY0 - 4, fd.z0, fd.a0, WY0, fd.z1 + 4, { color: WHITE }, 'door case');
   box(fd.a1, WY0 - 4, fd.z0, fd.a1 + 4, WY0, fd.z1 + 4, { color: WHITE }, 'door case');
   box(fd.a0, WY0 + 10, fd.z0, fd.a0 + 4, WY0 + 40, fd.z1, { color: fdoorC }, 'door (open)'); // swung in against the jamb
-  // the rear addition behind the wing: kitchen (WX0..WK) beside a second bedroom (WK..WX1)
-  // (owner 2026-10-17: "needs another bedroom"); the living room opens into the kitchen through
-  // a wide arch and into the bedroom through a door
-  const WK = WX1 - 120;
-  const arch = op(WX0 + 40, WK - 50, L.main, L.main + DOOR + 8), bed2Door = op(WK + 30, WK + 60, L.main, L.main + DOOR);
-  wall('x', WY1 - 10, WX0, WX1, 0, L.wingTop, wingSkin, [arch, bed2Door], 'wing back');
+  // the living room opens into the kitchen through a wide arch; the second bedroom's door is off the living room
+  const arch = op(WX0 + 40, (FULL ? LX1 : WK) - 50 + (FULL ? 10 : 0), L.main, L.main + DOOR + 8);
+  const bed2Door = FULL ? op(WY1 - 80, WY1 - 50, L.main, L.main + DOOR) : op(WK + 30, WK + 60, L.main, L.main + DOOR);
+  wall('x', WY1 - 10, WX0, WX1, 0, L.wingTop, wingSkin, FULL ? [arch] : [arch, bed2Door], 'wing back');
+  if (FULL) wall('y', WL - 10, WY0 + 10, WY1 - 10, L.main, L.mainCeil, 'paint', [bed2Door], 'bedroom 2 partition');
   const ws = [op(WY0 + 40, WY0 + 80, L.main + SILL, L.main + HEAD), op(WY1 - 80, WY1 - 40, L.main + SILL, L.main + HEAD)];
   wall('y', WX1 - 10, WY0 + 10, WY1 - 10, 0, L.wingTop, wingSkin, ws, 'wing end');
   ws.forEach(w => windowIn('y', WX1 - 10, 1, w));
   box(WX0, WY0 + 10, L.main - 8, WX1 - 10, WY1 - 10, L.main - 4, { color: [140, 136, 130] }, 'wing joists');
-  floor('living', [WX0, WY0 + 10, WX1 - 10, WY1 - 10], L.main);
+  floor('living', [WX0, WY0 + 10, LX1, WY1 - 10], L.main);
+  if (FULL) {
+    box(WL - 10, WY0 + 10, L.main - 4, WL, WY1 - 10, L.main, { color: [150, 112, 78] }, 'partition sill');
+    tileFloor(fadd, [WL, WY0 + 10, WX1 - 10, WY1 - 10], L.main, pickRoomStyle('bedroom', r), r);
+  }
   box(WX0, WY0 + 10, L.mainCeil, WX1 - 10, WY1 - 10, L.wingTop, { asset: TILE, color: [236, 234, 228], direction: 5 }, 'wing ceiling');
-  finishRoom({ x0: WX0, y0: WY0 + 10, x1: WX1 - 10, y1: WY1 - 10, z0: L.main, z1: L.mainCeil }, { paper: paperOf(), wains: pick(WAINS) });
-  light(Math.round((WX0 + WX1) / 20) * 10, 140, L.mainCeil);
+  finishRoom({ x0: WX0, y0: WY0 + 10, x1: LX1, y1: WY1 - 10, z0: L.main, z1: L.mainCeil }, { paper: paperOf(), wains: pick(WAINS) });
+  light(Math.round((WX0 + LX1) / 20) * 10, 140, L.mainCeil);
+  if (FULL) {
+    finishRoom({ x0: WL, y0: WY0 + 10, x1: WX1 - 10, y1: WY1 - 10, z0: L.main, z1: L.mainCeil }, { paper: paperOf(), wains: pick(WAINS) });
+    light(Math.round((WL + WX1) / 20) * 10, 140, L.mainCeil);
+  }
   // stoop + steps (6-unit risers) down to the ground in front of the door
   const sx0 = fd.a0 - 10, sx1 = fd.a1 + 10;
   box(sx0, WY0 - 30, 0, sx1, WY0, L.main - 4, { color: [176, 172, 166] }, 'stoop');
@@ -389,27 +404,32 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   for (let i = 1; i <= STEPS; i++) box(sx0, WY0 - 30 - i * 10, 0, sx1, WY0 - 30 - (i - 1) * 10, L.main - 6 * i, { color: [176, 172, 166] }, 'step');
   // the addition: one storey, flat roof under the wing's eave
   const KY0 = WY1, KY1 = WY1 + EXT, KF = L.main, KB = KY1 - 10;
-  const kWin = [op(WX0 + 60, WX0 + 100, KF + 32, KF + HEAD)];
-  const bWin = [op(WK + 30, WK + 80, KF + SILL, KF + HEAD)], bEnd = [op(KY0 + 30, KY0 + 70, KF + SILL, KF + HEAD)];
+  const KX1 = FULL ? WX1 - 10 : WK - 10;                              // the kitchen's far face
+  const kWin = [op(WX0 + 60, WX0 + 100, KF + 32, KF + HEAD), ...(FULL ? [op(WX1 - 130, WX1 - 90, KF + 32, KF + HEAD)] : [])];
+  const bWin = FULL ? [] : [op(WK + 30, WK + 80, KF + SILL, KF + HEAD)], bEnd = [op(KY0 + 30, KY0 + 70, KF + SILL, KF + HEAD)];
   wall('y', WX0, KY0, KY1, 0, L.kTop, wingSkin, [], 'kitchen side');
   wall('x', KB, WX0 + 10, WX1, 0, L.kTop, wingSkin, [...kWin, ...bWin], 'addition back');
   wall('y', WX1 - 10, KY0, KB, 0, L.kTop, wingSkin, bEnd, 'addition end');
-  wall('y', WK - 10, KY0, KB, KF, L.kCeil, 'paint', [], 'kitchen / bedroom partition');
+  if (!FULL) wall('y', WK - 10, KY0, KB, KF, L.kCeil, 'paint', [], 'kitchen / bedroom partition');
   [...kWin, ...bWin].forEach(w => windowIn('x', KB, 1, w));
   bEnd.forEach(w => windowIn('y', WX1 - 10, 1, w));
   box(WX0 + 10, KY0, L.main - 8, WX1 - 10, KB, L.main - 4, { color: [140, 136, 130] }, 'addition joists');
-  floor('kitchen', [WX0 + 10, KY0, WK - 10, KB], L.main);
-  box(WK - 10, KY0, L.main - 4, WK, KB, L.main, { color: [150, 112, 78] }, 'partition sill');
-  tileFloor(fadd, [WK, KY0, WX1 - 10, KB], L.main, pickRoomStyle('bedroom', r), r);
+  floor('kitchen', [WX0 + 10, KY0, KX1, KB], L.main);
+  if (!FULL) {
+    box(WK - 10, KY0, L.main - 4, WK, KB, L.main, { color: [150, 112, 78] }, 'partition sill');
+    tileFloor(fadd, [WK, KY0, WX1 - 10, KB], L.main, pickRoomStyle('bedroom', r), r);
+  }
   box(WX0 + 10, KY0, L.kCeil, WX1 - 10, KB, L.kTop, { asset: TILE, color: [236, 234, 228], direction: 5 }, 'addition ceiling');
   box(WX0, KY0, L.kTop, WX1, KY1, L.wingTop, { color: shade(roofC, 0.8) }, 'addition roof');
   box(WX0, KY1, L.kTop, WX1 + 10, KY1 + 10, L.wingTop, { color: WHITE }, 'addition fascia');
   box(WX1, KY0, L.kTop, WX1 + 10, KY1, L.wingTop, { color: WHITE }, 'addition fascia');
-  finishRoom({ x0: WK, y0: KY0, x1: WX1 - 10, y1: KB, z0: KF, z1: L.kCeil }, { paper: paperOf(), wains: pick(WAINS) });
-  light(Math.round((WK + WX1) / 20) * 10, KY0 + 50, L.kCeil);
+  if (!FULL) {
+    finishRoom({ x0: WK, y0: KY0, x1: WX1 - 10, y1: KB, z0: KF, z1: L.kCeil }, { paper: paperOf(), wains: pick(WAINS) });
+    light(Math.round((WK + WX1) / 20) * 10, KY0 + 50, L.kCeil);
+  }
   // the counter run along the kitchen's back wall (its own finish: cabinets, worktop, tiled splashback, wall cabinets)
-  const run0 = WX0 + 40, run1 = WK - 16; // clear of the partition's crown (6 deep)
-  finishRoom({ x0: WX0 + 10, y0: KY0, x1: WK - 10, y1: KB, z0: KF, z1: L.kCeil }, { paper: paperOf(), wains: pick(WAINS), skip: { y1: [[run0, run1]] } });
+  const run0 = WX0 + 40, run1 = KX1 - 6; // clear of the far wall's crown (6 deep)
+  finishRoom({ x0: WX0 + 10, y0: KY0, x1: KX1, y1: KB, z0: KF, z1: L.kCeil }, { paper: paperOf(), wains: pick(WAINS), skip: { y1: [[run0, run1]] } });
   const CAB = pick([[230, 226, 214], [120, 150, 130], [150, 110, 76], [70, 86, 110]]), TOP = pick([[60, 60, 64], [226, 222, 214], [150, 130, 110]]);
   const splash = pick(TILEWAINS);
   const winSpan = kWin.map(o => [o.a0 - 4, o.a1 + 4]);
@@ -434,7 +454,7 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   for (const [dx, dy] of [[-6, 6], [6, 6], [-6, 12], [6, 12]]) box(stX + dx - 2, KB - 18 + dy - 2, KF + 30, stX + dx + 2, KB - 18 + dy + 2, KF + 32, { color: [160, 40, 20], material: 'BMC_Glow', material_intensity: 1 }, 'burner');
   box(WX0 + 14, KB - 26, KF, WX0 + 36, KB - 4, KF + 56, { color: [236, 236, 236] }, 'fridge');
   box(WX0 + 32, KB - 28, KF + 30, WX0 + 34, KB - 26, KF + 48, METAL, 'fridge handle');
-  light(Math.round((WX0 + WK) / 20) * 10, KY0 + 50, L.kCeil, [255, 244, 220]);
+  light(Math.round((WX0 + KX1) / 20) * 10, KY0 + 50, L.kCeil, [255, 244, 220]);
   // chimney on the wing's outer end, standing clear of the eave
   const cy0 = Math.round((WY0 + WY1) / 2 / 10) * 10 - 20;
   for (let z = 0, k = 0; z < 200; z += 12, k++) box(WX1, cy0, z, WX1 + 40, cy0 + 40, Math.min(200, z + 12), { color: shade(brickC, F[k % F.length] * 0.95) }, 'chimney');
