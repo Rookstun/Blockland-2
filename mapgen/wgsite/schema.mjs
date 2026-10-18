@@ -10,6 +10,7 @@ const LOOP_KEYS = [
   ...['armory', 'gunsmith'].map(k => [`wshop.${k}`, 3, `${k}s (weapon shops) by the roads`]),
   ...[['cottage', 14], ['townhouse', 10]].map(([k, n]) => [`roadside.${k}`, n, `lone ${k}s (HOUSE_TYPES) by the roads`]),
   ['roadside.splitlevel', 8, 'split-level ranch houses by the roads'],
+  ['roadside.dutchcolonial', 6, 'Dutch Colonial houses (gambrel, porch, garage) by the roads'],
 ];
 
 // split at the first top-level comma

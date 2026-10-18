@@ -1990,6 +1990,9 @@ const holy = [];
     // one at a time, alternating, so both kinds get lots before the flat ground runs out
     for (let round = 0; round < 20; round++) for (const kind of ['townhouse', 'cottage']) if (round < want[kind]) pick1(kind, 1, 6, 4, 12 * K, [2, 24], 24);
   }
+  // (2026-10-18, owner photos) Dutch Colonials (town.mjs TYPES.dutchcolonial, ~59 x 48 studs with the porch and the
+  // detached garage) on lots sized like the split-levels'; picked last so no older site moves
+  pick1('dutchcolonial', Math.round(tune('roadside.dutchcolonial', 6, 'Dutch Colonial houses (gambrel, porch, garage) by the roads')), 8, 5, 12 * K, [2, 32], 40);
   holy.forEach((v, k) => {
     v.seed = 17000 + k;
     // the door faces the nearest road cell

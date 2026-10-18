@@ -18,6 +18,7 @@ import { planHouse, COURSES as WH_COURSES, even } from './wallhouse.mjs';
 import { planShop, SHOP_KINDS, WEAPON_KINDS } from './wallshop.mjs';
 import { shapedHouse } from './shapedhouse.mjs';
 import { splitLevel } from './splitlevel.mjs';
+import { dutchColonial } from './dutchcolonial.mjs';
 import { turnBrick } from './orient.mjs';
 import { castleStone, VX as CVX, VZ as CVZ } from './castle.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
@@ -385,6 +386,8 @@ export const HOUSE_TYPES = {
 };
 const splitCache = new Map();
 const splitLevelOf = (s, mirror) => { const k = s + ',' + mirror; if (!splitCache.has(k)) splitCache.set(k, splitLevel({ seed: s, mirror })); return splitCache.get(k); };
+const dutchCache = new Map();
+const dutchOf = (s, mirror) => { const k = s + ',' + mirror; if (!dutchCache.has(k)) dutchCache.set(k, dutchColonial({ seed: s, mirror })); return dutchCache.get(k); };
 const SMALL_MAX = { cottage: [32, 20, 8], townhouse: [36, 24, 12] }; // W, D, E of the old small lots
 function shapedSpec0(type, rnd, s, small = false) {
   // split-level ranch (owner photo 2026-10-17, splitlevel.mjs): too wide for town lots, so it
@@ -392,6 +395,12 @@ function shapedSpec0(type, rnd, s, small = false) {
   if (type === 'splitlevel') {
     const mirror = rnd(s, 97) < 0.5, h = splitLevelOf(s, mirror);
     return { builder: 'splitlevel', mirror, shape: 'rect', W: h.W - GROW, D: h.D - GROW, E: 0, storeys: 2, kind: 'split-level' };
+  }
+  // Dutch Colonial (owner photos 2026-10-18, dutchcolonial.mjs): gambrel + shed dormer, porch, detached garage;
+  // as wide as the split-level, so also only on its own roadside sites (mapgen roadside.dutchcolonial)
+  if (type === 'dutchcolonial') {
+    const mirror = rnd(s, 97) < 0.5, h = dutchOf(s, mirror);
+    return { builder: 'dutchcolonial', mirror, shape: 'rect', W: h.W - GROW, D: h.D - GROW, E: 0, storeys: 2, kind: 'dutch colonial' };
   }
   const pool = HOUSE_TYPES[type] ?? HOUSE_TYPES.townhouse;
   const tot = pool.reduce((a, h) => a + h.w, 0);
@@ -1377,7 +1386,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
 
   /** a shapedhouse.mjs house centred (cx, cy), its front door facing (fx, fy) */
   function shapedTown(cx, cy, fx, fy, sp, s) {
-    const h = sp.builder === 'splitlevel' ? splitLevelOf(s, sp.mirror) : shapedHouse({ ...sp, seed: s });
+    const h = sp.builder === 'splitlevel' ? splitLevelOf(s, sp.mirror) : sp.builder === 'dutchcolonial' ? dutchOf(s, sp.mirror) : shapedHouse({ ...sp, seed: s });
     const lx = ((sp.W + 1) * 10) / 2, ly = shapedDepth(sp) / 2;
     // local front faces -y; quarter turns that bring it round to (fx, fy)
     const r = fy < 0 ? 0 : fx > 0 ? 1 : fy > 0 ? 2 : 3;
@@ -1624,6 +1633,11 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       const sp = shapedSpec('splitlevel', rnd, s);
       shapedTown(cx, cy, fx, fy, sp, s);
       count('split-level');
+    },
+    dutchcolonial(cx, cy, fx, fy, s) {
+      const sp = shapedSpec('dutchcolonial', rnd, s);
+      shapedTown(cx, cy, fx, fy, sp, s);
+      count('dutch colonial');
     },
     shop(cx, cy, fx, fy, s) {
       const kind = pick(SHOP_KINDS, s, 20);
@@ -2310,7 +2324,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * the machine 12 behind / 12 ahead of it and 21 to each side, front +x at orient 16.
    * A ghost brick (dropped at output) holds its box so nothing later is built into it.
    */
-  const VEND_P = { shop: 0.7, armory: 0.5, gunsmith: 0.5, sodashack: 0.8, tavern: 0.7, bank: 0.5, casino: 0.8, warehouse: 0.4, dininghall: 0.6, gunstore: 0.6, western: 0.5, library: 0.4, meadhall: 0.3, townhouse: 0.2, cottage: 0.12, splitlevel: 0.25 };
+  const VEND_P = { shop: 0.7, armory: 0.5, gunsmith: 0.5, sodashack: 0.8, tavern: 0.7, bank: 0.5, casino: 0.8, warehouse: 0.4, dininghall: 0.6, gunstore: 0.6, western: 0.5, library: 0.4, meadhall: 0.3, townhouse: 0.2, cottage: 0.12, splitlevel: 0.25, dutchcolonial: 0.25 };
   function vending(own, type, fx, fy, door, s) {
     if (!door || !(rnd(s, 931) < (VEND_P[type] ?? 0))) return;
     const lat = fx ? [0, 1] : [1, 0];
