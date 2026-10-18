@@ -1285,8 +1285,8 @@ module.exports = class Media {
     if (args[0] === 'stop' || args[0] === 'off') {
       const hadOne = this.stopSession(name, key);
       // also the screen left standing after a finished video
-      for (const id of this.ogOwners?.get(name) ?? []) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
-      this.ogOwners?.delete(name);
+      for (const id of global.__ogOwners?.get(name) ?? []) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
+      global.__ogOwners?.delete(name);
       return hadOne || this.whisper(name, 'Screen removed.');
     }
     const opts = [], words = [];
@@ -1312,7 +1312,8 @@ module.exports = class Media {
     const hash = crypto.createHash('sha1').update('ogrid:' + name).digest('hex');
     // a NEW owner every run: a late Bricks.Clear from a stopped run (restart within a few s) cut 90 bricks out of the next screen
     const owner = this.og.ownerFor(hash.slice(0, 6) + crypto.randomBytes(3).toString('hex'));
-    this.ogOwners ??= new Map();
+    // kept on global: a plugin reload must not forget a screen that is still standing
+    this.ogOwners = global.__ogOwners ??= new Map();
     const olds = this.ogOwners.get(name) ?? [];
     this.ogOwners.set(name, [owner.id]);
     const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
@@ -1414,8 +1415,12 @@ module.exports = class Media {
       }
       console.log(`[media] ogrid ${name}: ${fw}x${fh}${tiles ? ' tiles' : ''} ${fps} fps, ${sent} frames in ${chunks} cartridge(s), at ${at.join(',')} orient ${orient}`);
       await sleep(1500);
-      // the screen stays up after the video (players tune its text settings); the next /ogrid or /ogrid stop clears it
-      if (!session.stopped) audioClears.splice(0).forEach(c => c());
+      // the screen goes when the video ends (owner 2026-10-18: "ogrid doesnt dissapear after")
+      if (!session.stopped) {
+        session.clear();
+        const mine = this.ogOwners.get(name);
+        if (mine?.[0] === owner.id) this.ogOwners.delete(name);
+      }
     } finally {
       session.stopped = true;
       if (file) setTimeout(() => this.release(file), 60_000);

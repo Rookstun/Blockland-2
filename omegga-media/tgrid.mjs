@@ -34,7 +34,7 @@ const TEXT = {
  * row pitch = 1.55 x LineHeight, blocks square at WidthScale 2. fit < 1 leaves a hairline instead of
  * an overlap (overlapping text of two tiles z-fights).
  */
-export function tLayout({ tw = 64, th = 36, k = 4, cell = 2, lift = 20, pitch = 1.55, ws = 2, fit = 0.98 } = {}) {
+export function tLayout({ tw = 64, th = 36, k = 4, cell = 2, lift = 20, pitch = 1.55, ws = 2, fit = 1 } = {}) {
   const tile = k * cell;
   if (tile % 4) throw Error('tile side must be a multiple of 4 units');
   const width = tw * tile, height = th * tile;
