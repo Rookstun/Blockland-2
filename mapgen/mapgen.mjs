@@ -2842,7 +2842,7 @@ const pushBox = (m, x0, y0, z0, x1, y1, z1) => {
     position: [X0 + ((x0 + x1) / 2) * CELL, Y0 + ((y0 + y1) / 2) * CELL, ((z0 + z1) / 2) * VZ],
     size: [((x1 - x0) * CELL) / 2, ((y1 - y0) * CELL) / 2, ((z1 - z0) * VZ) / 2],
     color: M.color,
-    ...(M.asset ? { asset: M.asset } : {}),
+    asset: M.asset ?? 'PB_DefaultMicroBrick', // (owner 2026-10-18: "floors to be microbricks") same boxes, smooth tops
     ...(M.material ? { material: M.material } : {}),
     ...(M.intensity ? { material_intensity: M.intensity } : {}),
   });
@@ -2858,7 +2858,6 @@ const PAVE_BED = mat([128, 122, 112]);
       for (let z = 0; z < NZ; z++, c++) { const m = V[c]; if (m) { T[z * NN + o] = m; if (z > top) top = z; } }
     return top;
   })();
-  for (let o = 0; o < NN; o++) if (microCell[o]) T[H[o] * NN + o] = 0; // the micro surface replaces the top voxel
   // greedy merge in a function (optimisable); T doubles as 'not yet used'
   const greedy = (T) => {
     const out = [];
@@ -3089,7 +3088,7 @@ if (MICRO) {
         if (ax === bx) cp = ax > 0 ? 1 : 2; else if (ay === by) cp = ay > 0 ? 3 : 4; // else a saddle: flat at its own level
       }
     }
-    tcap[t] = cp; tbase[t] = cp ? mx - RISE : l;
+    tcap[t] = cp; tbase[t] = l; // the wedge sits on the tile's own level (no lip under it; a 4-unit riser above it)
   }
   // micro cells: in micro tiles the tile's base, elsewhere (a tile reaching into a feature cell) flat at their own top
   for (let i = 0; i < MW; i++) for (let j = 0; j < MW; j++) {
@@ -3148,16 +3147,16 @@ if (MICRO) {
     sizes.corner = (sizes.corner ?? 0) + 1;
   }
   microCaps = microBricks;
-  // fills: from the bottom of the old top voxel up to each micro cell's base
+  // fills: only where a micro cell stands over its cell's top voxel (raised toward a higher neighbour)
   const used = new Uint8Array(MW * MW);
-  const bot = c => H[c] * VZ;
+  const bot = c => (H[c] + 1) * VZ;
   let lift = new Int32Array(N * N);
   for (let i = 0; i < MW; i++) for (let j = 0; j < MW; j++) {
     const m = i * MW + j;
     if (base[m] < 0) continue;
     const c = cellOfM(i, j), t = ((i / TP) | 0) * TW + ((j / TP) | 0), top = base[m] + (tm[t] && tcap[t] ? RISE : 0) - (H[c] + 1) * VZ;
     if (top > lift[c]) lift[c] = top;
-    if (used[m]) continue;
+    if (used[m] || base[m] <= bot(c)) continue;
     const z0 = bot(c), z1 = base[m], m0 = matOfC(c);
     const same = (a, b) => { if (i + a >= MW || j + b >= MW) return false; const q = (i + a) * MW + j + b; if (used[q] || base[q] !== z1) return false; const c2 = cellOfM(i + a, j + b); return bot(c2) === z0 && matOfC(c2) === m0; };
     let l = 1; while (l < MT_FILL && same(0, l)) l++;
