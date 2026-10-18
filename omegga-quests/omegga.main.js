@@ -19,6 +19,9 @@
 const NPCS = require('./npcs.json');
 const { MAIN, IDLE: STORY_IDLE, GRIPS } = require('./story.js');
 const BY = Object.fromEntries(NPCS.map(n => [n.key, n]));
+// things you press E on that are not people (ConsoleTag event:quest:<key>): the pedestal in the Temple of the Stash
+const THINGS = { stash: { key: 'stash', name: 'THE STASH' } };
+Object.assign(BY, THINGS);
 const clean = (s, n = 300) => String(s ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[|<>"'`\\]/g, '').replace(/[^\x20-\x7e]/g, '').trim().slice(0, n);
 const C = (hex, s) => `<color="${hex}">${s}</>`;
 const SKELETON = new Set([50, 75, 125, 200, 250, 350, 500]); // skeleton_drop ENEMY max healths
@@ -138,7 +141,7 @@ module.exports = class Quests {
   }
 
   async interact(who, id) {
-    const npc = NPCS[Number(id)], p = who && this.omegga.getPlayer(who.id ?? who.name);
+    const npc = THINGS[id] ?? NPCS[Number(id)], p = who && this.omegga.getPlayer(who.id ?? who.name);
     if (!npc || !p) return;
     const s = await this.get(p.id);
     // 1. an active step that happens at this NPC (main quest first)

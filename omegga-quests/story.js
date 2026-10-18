@@ -91,13 +91,13 @@ const MAIN = [
     ],
     steps: [
       { do: 'talk', to: 'greengary', lines: [
-        'Green Gary snores in a hammock strung between two very tired posts. Somewhere nearby THE STASH glows a gentle, suspicious green. It smells like a guy named Wet Toby.',
-        'Behind him rises the TEMPLE OF THE STASH, built by Fresnif Construction LLC in the Before Times, mostly out of moss. Dart holes line the walls. The floor is all pressure plates. A boulder sits on the roof, looking smug.',
-        'Inside, on a pedestal, THE STASH glows. A plaque says NO STEALING. SIGNED, GARY. P.S. THE BOULDER IS DECORATIVE. You pat your pocket: one bag of oregano, roughly the same weight. Probably. You are not a scientist. You are Frogo.',
+        'Green Gary snores in a hammock strung between two very tired posts. Behind him rises the TEMPLE OF THE STASH: four tiers of red and ochre clay brick, built by Fresnif Construction LLC in the Before Times, and never once repointed.',
+        'Ferns grow out of the mortar. Carved stones show a sun, an eye, a frog and, weirdly, a pair of vice grips. A grand staircase climbs to a shrine at the top. Up there, something glows a gentle, suspicious green. It smells like a guy named Wet Toby.',
+        'Green Gary (asleep): the tiles shoot arrows... the pit has spikes... jump the pillars... do not touch my stash, Plinko... zzz. You pat your pocket: one bag of oregano, roughly the same weight. Probably. You are not a scientist. You are Frogo.',
       ] },
-      { do: 'ask', to: 'greengary', msg: 'Swap THE STASH for your bag of oregano in one smooth motion?',
-        no: 'You stare at the stash. The stash stares back. Green Gary mumbles about vibes and a guy named Plinko in his sleep.',
-        yes: ['You swap them in one smooth motion. The pedestal goes click. Every dart hole goes pfft. The decorative boulder on the roof starts rocking. Green Gary opens one eye. It is red. RUN, FROGO. Get far away from the swamp, fast.'] },
+      { do: 'ask', to: 'stash', msg: 'THE STASH sits on its pedestal, glowing. A plaque by the door said NO STEALING. SIGNED, GARY. Swap it for your bag of oregano in one smooth motion?',
+        no: 'You stare at the stash. The stash stares back. Somewhere below, Green Gary mumbles about vibes and a guy named Plinko in his sleep.',
+        yes: ['You swap them in one smooth motion. The pedestal goes click. Every dart hole goes pfft. The decorative boulder on the roof starts rocking. Far below, Green Gary opens one eye. It is red. RUN, FROGO. Get far away from the swamp, fast.'] },
       { do: 'escape', from: 'greengary', dist: 2200, secs: 25, retry: 1, grip: 5,
         fail: ['Green Gary catches you by the backpack. He is shockingly fast for a man in sandals. His sandals are named Lorbo and Flim.', 'He takes THE STASH back, pockets the oregano for later and makes you listen to his whole mixtape. It is all one song. The song is called Gary. Try again.'],
         ok: ['You burst out of the swamp, lungs on fire, stash in hand, past a Fire Homeless and a Water Homeless hitting each other with soup. Far behind you Green Gary yells something about bad karma and good snacks.',
@@ -153,6 +153,7 @@ const IDLE = {
   randal: RANDAL_INTERRUPTS,
   randalReformed: ['Randal: hey friend. book club is reading a book about a guy named Plorbus who learns something. i relate', 'Randal: i met some of those people over there. they are great. one of them taught me to whittle a little Gildo'],
   clarn: ['Clarn Fiddilohougan: Seven down across, a wizard who is not grey and not white. Five letters. Hmm. Clarn. No. That is four. Hmm.', 'Clarn Fiddilohougan: Never trust a pigeon that knows your name. Unless it is Hondo Plunkett. Hondo is a professional.'],
+  stash: ['THE STASH glows on its pedestal. It does not need you right now. It has Gary.', 'THE STASH hums faintly. It smells like oregano now. Somebody swapped it. Somebody named Frogo.'],
   greengary: ['Green Gary: whoa. hey. you look like someone who owes me oregano', 'Green Gary: the swamp provides, man. mostly mosquitoes. and war. there is a war. i do not pick sides. i pick snacks'],
 };
 
