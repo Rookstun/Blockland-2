@@ -33,7 +33,10 @@ const ENEMY = {
   'longsword': [200, 'Longsword Skeleton'], 'bow': [250, 'Bow Skeleton'], 'zweihander': [350, 'Zweihander Skeleton'],
   'battleaxe': [500, 'Battleaxe Skeleton'], 'wood goblin': [55, 'Wood Goblin'], 'goblin': [35, 'Goblin'],
   'wizard': [65, 'Evil Wizard'], 'casino staff': [10000, 'Casino Staff'], 'bloated': [130, 'Bloated Zombie'], 'zombie': [60, 'Swamp Zombie'],
+  // quest NPCs (omegga-quests/npcs.json bot.HealthMultiplier x100): named, no loot/XP
+  'q kevin': [101, 'Kevin'], 'q dustin': [102, 'Dustin'], 'q daniel': [80, 'Daniel'], 'q fizzwick': [103, 'Fizzwick'], 'q gary': [104, 'Gary'],
 };
+const QUEST_HP = Object.entries(ENEMY).filter(([k]) => k.startsWith('q ')).map(([, [hp]]) => hp);
 {
   const seen = {};
   for (const [k, [hp]] of Object.entries(ENEMY)) { if (seen[hp]) throw new Error(`max health ${hp} used by ${seen[hp]} and ${k}`); seen[hp] = k; }
@@ -58,7 +61,7 @@ const set = ([c, d, b, s, x]) => `
     silverPct = ${s}
   }`;
 // casino staff (npcgen.mjs, HealthMultiplier 100 = max health 10000) drop nothing and give no XP
-const pick = T.map(([n, ...r], i) => `${i ? ' else ' : '  if isBot && lim >= 5000 {\n    rolls = 0\n  } else '}if name.Contains("${n}") || (isBot && lim == ${ENEMY[n][0]}) {${set(r)}`).join('') +
+const pick = T.map(([n, ...r], i) => `${i ? ' else ' : `  if isBot && (lim >= 5000${QUEST_HP.map(h => ` || lim == ${h}`).join('')}) {\n    rolls = 0\n  } else `}if name.Contains("${n}") || (isBot && lim == ${ENEMY[n][0]}) {${set(r)}`).join('') +
   ` else if name.Contains("skeleton") || name.Length() == 0 {${set(DEFAULT)} else {
     rolls = 0
   }`;
