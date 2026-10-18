@@ -351,15 +351,56 @@ function shapedSpec(type, rnd, s, small = false) {
   const sp = shapedSpec0(type, rnd, s, small);
   return { ...sp, W: sp.W + GROW, D: sp.D + GROW };
 }
+// HOUSE TYPES (2026-10-17, owner: "expansive lists of House type"): every cottage /
+// townhouse lot draws a named archetype from these pools (weights). Fields: shape list,
+// W / D (studs, [min, max] stepped by 2), E (wing depth for L / T), storeys, attic,
+// style (runescape / classic / western), roofs (shapedhouse roof styles). `small`
+// lots (hamlets, market rings) clamp to the old small footprints.
+export const HOUSE_TYPES = {
+  cottage: [
+    // name           weight  shape              W         D         E         storeys attic  style        roofs
+    { name: 'cottage',        w: 3, shape: ['rect', 'L'], W: [38, 42], D: [22, 26], E: [8, 12], storeys: 1, style: 'runescape' },
+    { name: 'croft',          w: 2, shape: ['rect'],      W: [32, 36], D: [20, 22],             storeys: 1, style: 'runescape', roofs: ['gable'] },
+    { name: 'bothy',          w: 1, shape: ['rect'],      W: [28, 32], D: [20, 22],             storeys: 1, style: 'runescape', roofs: ['barrel'] },
+    { name: 'longhouse',      w: 1, shape: ['rect'],      W: [50, 56], D: [20, 24],             storeys: 1, style: 'runescape', roofs: ['gable'] },
+    { name: 'farmhouse',      w: 2, shape: ['L'],         W: [42, 48], D: [24, 28], E: [12, 16], storeys: 1, style: 'runescape', roofs: ['gambrel', 'gable'] },
+    { name: 'hall house',     w: 1, shape: ['T'],         W: [44, 50], D: [22, 26], E: [10, 14], storeys: 1, style: 'runescape' },
+    { name: 'dutch cottage',  w: 1, shape: ['rect'],      W: [34, 40], D: [24, 26],             storeys: 1, style: 'runescape', roofs: ['gambrel'] },
+    { name: 'brick bungalow', w: 1, shape: ['rect', 'L'], W: [42, 46], D: [26, 28], E: [10, 12], storeys: 1, style: 'classic' },
+    { name: 'gate lodge',     w: 1, shape: ['rect'],      W: [30, 34], D: [24, 26],             storeys: 1, style: 'classic', roofs: ['barrel', 'gable'] },
+  ],
+  townhouse: [
+    { name: 'townhouse',      w: 4, shape: ['rect', 'L', 'T'], W: [42, 46], D: [26, 30], E: [10, 14], storeys: 2, attic: true, style: 'runescape' },
+    { name: 'narrow house',   w: 2, shape: ['rect'],      W: [28, 32], D: [28, 32],             storeys: 3, attic: false, style: 'runescape', roofs: ['gable'] },
+    { name: 'merchant house', w: 2, shape: ['T'],         W: [48, 52], D: [28, 30], E: [12, 14], storeys: 2, attic: true, style: 'runescape', roofs: ['dormer'] },
+    { name: 'manor',          w: 1, shape: ['T', 'L'],    W: [54, 60], D: [30, 32], E: [14, 18], storeys: 2, attic: true, style: 'classic', roofs: ['dormer', 'gable'] },
+    { name: 'rectory',        w: 1, shape: ['L'],         W: [44, 48], D: [26, 28], E: [12, 14], storeys: 2, attic: true, style: 'classic' },
+    { name: 'tower house',    w: 1, shape: ['rect'],      W: [26, 30], D: [26, 30],             storeys: 3, attic: true, style: 'runescape', roofs: ['gable'] },
+    { name: 'terrace row',    w: 2, shape: ['rect'],      W: [52, 58], D: [24, 26],             storeys: 2, attic: true, style: 'runescape', roofs: ['dormer'] },
+    { name: 'barn house',     w: 1, shape: ['rect', 'L'], W: [40, 44], D: [28, 30], E: [10, 12], storeys: 2, attic: false, style: 'runescape', roofs: ['gambrel'] },
+    { name: 'guild house',    w: 1, shape: ['rect'],      W: [44, 48], D: [28, 30],             storeys: 3, attic: false, style: 'classic', roofs: ['gable', 'dormer'] },
+    { name: 'vaulted house',  w: 1, shape: ['rect', 'L'], W: [38, 42], D: [26, 28], E: [10, 12], storeys: 2, attic: false, style: 'runescape', roofs: ['barrel'] },
+  ],
+};
+const SMALL_MAX = { cottage: [32, 20, 8], townhouse: [36, 24, 12] }; // W, D, E of the old small lots
 function shapedSpec0(type, rnd, s, small = false) {
-  // small: villages and the market-ring lots keep the old sizes (their lots are tighter)
-  const pickS = list => list[Math.floor(rnd(s, 90) * list.length)];
-  // style runescape (2026-10-05, owner): plaster / grey stone, timber trim, thatch roofs, plank floors
-  // roof style from the pool in roofs.mjs (dormers 2026-10-06)
-  const roof = pickRoof(rnd(s, 91));
-  if (type === 'cottage') { const shape = pickS(['rect', 'L']); return small ? { shape, W: 32, D: 20, E: shape === 'rect' ? 0 : 8, storeys: 1, attic: false, style: 'runescape', roof } : { shape, W: 40, D: 24, E: shape === 'rect' ? 0 : 10, storeys: 1, attic: false, style: 'runescape', roof }; } // bigger 2026-10-05 (owner: houses too small) // no attic: the coursed roof is too low over a cottage's stair
-  const shape = pickS(['rect', 'L', 'T']);
-  return small ? { shape, W: 36, D: 24, E: shape === 'rect' ? 0 : 12, storeys: 2, style: 'runescape', roof } : { shape, W: 44, D: 28, E: shape === 'rect' ? 0 : 12, storeys: 2, style: 'runescape', roof };
+  const pool = HOUSE_TYPES[type] ?? HOUSE_TYPES.townhouse;
+  const tot = pool.reduce((a, h) => a + h.w, 0);
+  let u = rnd(s, 93) * tot, ht = pool[pool.length - 1];
+  for (const h of pool) if ((u -= h.w) < 0) { ht = h; break; }
+  const pickS = (list, salt) => list[Math.floor(rnd(s, salt) * list.length)];
+  const span = ([a, b], salt) => a + 2 * Math.floor(rnd(s, salt) * ((b - a) / 2 + 1));
+  const shape = pickS(ht.shape, 90);
+  let W = span(ht.W, 94), D = span(ht.D, 95), E = shape === 'rect' ? 0 : span(ht.E ?? [10, 12], 96);
+  if (small) {
+    const [mw, md, me] = SMALL_MAX[type] ?? SMALL_MAX.townhouse;
+    W = Math.min(W, mw); D = Math.min(D, md); if (E) E = Math.min(E, me);
+  }
+  if (shape === 'T' && (W - D) % 4) W -= 2; // shapedhouse: a T needs W - D a multiple of 4
+  // roof style from the archetype, else the pool in roofs.mjs (dormers 2026-10-06)
+  const roof = ht.roofs ? pickS(ht.roofs, 91) : pickRoof(rnd(s, 91));
+  // cottages: no attic (the coursed roof is too low over a cottage's stair)
+  return { shape, W, D, E, storeys: ht.storeys, attic: ht.storeys === 1 ? false : ht.attic ?? true, style: ht.style, roof, kind: ht.name };
 }
 const shapedDepth = sp => (sp.D + sp.E + 1) * 10;
 // floor / ceiling looks live in floors.mjs; the stair treads borrow the plank tones
@@ -1543,7 +1584,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 32 + GROW, 24 + GROW, 1, s, {
         wallColor: pick(PALETTE.brick, s, 3), roofColor: pick(PALETTE.roof, s, 4), rise: 72 + Math.floor(rnd(s, 5) * 3) * 12,
       });
-      else shapedTown(cx, cy, fx, fy, shapedSpec('cottage', rnd, s, small), s);
+      else { const sp = shapedSpec('cottage', rnd, s, small); shapedTown(cx, cy, fx, fy, sp, s); count(sp.kind); }
       count('cottage');
     },
     // the desert gun store (owner, 2026-10-03): a wide false-front western
@@ -1567,7 +1608,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 36 + GROW, 28 + GROW, 2 + (rnd(s, 1) < 0.35 ? 1 : 0), s, {
         wallColor: pick(PALETTE.brick, s, 3), upperColor: pick(PALETTE.plaster, s, 6), roofColor: pick(PALETTE.roof, s, 4), rise: 96 + Math.floor(rnd(s, 5) * 2) * 24,
       });
-      else shapedTown(cx, cy, fx, fy, shapedSpec('townhouse', rnd, s, small), s);
+      else { const sp = shapedSpec('townhouse', rnd, s, small); shapedTown(cx, cy, fx, fy, sp, s); count(sp.kind); }
       count('townhouse');
     },
     shop(cx, cy, fx, fy, s) {
