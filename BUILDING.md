@@ -85,6 +85,11 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
   or flat plateaus. **(owner)**
 
 ## 5. Players, bikes and bots
+- PLAYER SCALE (2026-10-17, measured + owner): the players op's position (capsule centre) stands 25-28
+  above the floor, so a player is about 54 units tall (shoulder ~42, eye ~48); 38-high counters read as
+  shoulder height (owner). Furnish at real size x 0.31 units/cm: ceiling 76, door 64 x 30, sill 26, window
+  head 62, counter 28, table 23, toilet seat 12, tub 16, fridge 56, stair riser 6 on a 1-stud tread.
+  (The older 72 figure below is the clearance we kept, not the body.) **(measured / owner)**
 - A player is about 6 bricks (72 units) tall and jumps about 6 more: keep 72
   of headroom on stairs and landings, 72 + 72 where they'd jump. **(measured)**
 - BMX: paths must have no lips (sudden steps); slopes are wedge ramps.
