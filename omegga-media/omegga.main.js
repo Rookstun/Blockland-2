@@ -310,7 +310,8 @@ module.exports = class Media {
     on(['cmd:tv', 'chatcmd:tv'], this.tvCommand);
     on(['cmd:textvideo', 'chatcmd:textvideo'], (name, args) => this.tvCommand(name, args, 'text'));
     on(['cmd:ogrid', 'chatcmd:ogrid'], this.oGridCommand);
-    return { registeredCommands: ['playvideo', 'search', 'playaudio', 'stop', 'stopmedia', 'tv', 'textvideo', 'ogrid'] };
+    on(['cmd:stream', 'chatcmd:stream'], this.streamCommand);
+    return { registeredCommands: ['playvideo', 'search', 'playaudio', 'stop', 'stopmedia', 'tv', 'textvideo', 'ogrid', 'stream'] };
   }
 
   async stop() {
@@ -1101,6 +1102,148 @@ module.exports = class Media {
       }
       await waitFor(() => gameTime(chunks - 1) >= durOf(chunks - 1) + 1);
       if (!session.stopped && !this.config['keep-last-frame']) session.clear?.();
+    } finally {
+      session.stopped = true;
+      if (file) setTimeout(() => this.release(file), 60_000);
+      if (this.sessions.get(key) === session) this.sessions.delete(key);
+    }
+  }
+
+  // ---------- /stream ----------
+
+  /**
+   * /stream <link | search words> [fps=N] [mute] [glow] [start=S] [len=S]   /stream stop
+   * Plays on the owner's wall panel (config stream-panel {x, y, z, w, h, p}:
+   * centre x/y of the pixel plane, z under the bottom pixel row, W x H pixels
+   * of P units, facing -y; default = the 32x18 micro-brick screen built
+   * 2026-10-18 at x 3925..3987, z 983..1017, y 374). Same player as !tv
+   * (tv.mjs bare mode): our pixels replace the panel's, the For Loop chip hides
+   * in the sky over it, the soundtrack sits over the roof; when it ends the
+   * black idle panel comes back (owned by the map owner, like the original).
+   */
+  async streamCommand(name, args) {
+    const key = 'stream';
+    if (!this.tv || !this.brs4) return this.whisper(name, '<color="f55">/stream is not installed (lib/brs4.mjs missing).</>');
+    if (!args.length) return this.whisper(name, 'Usage: /stream <link or search words> [fps=N] [mute] [glow] [start=S] [len=S]   /stream stop');
+    if (args[0] === 'stop' || args[0] === 'off') return this.stopSession(name, key) || this.whisper(name, 'Nothing is streaming.');
+    const opts = [], words = [];
+    for (const a of args) (/^(mute|glow|(fps|start|len)[=:]\d+(\.\d+)?|\d+fps)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
+    if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
+    const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
+    const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
+    const fpsM = opts.map(a => /^(\d+)fps$/i.exec(a)).find(Boolean);
+    const fps = Math.max(1, Math.min(20, Number(opt('fps') || fpsM?.[1] || this.config['stream-fps'] || 10)));
+    const withSound = !opts.includes('mute');
+    const glow = opts.includes('glow') ? 1 : (this.config['stream-glow'] ?? 0);
+    const panel = { x: 3956, y: 374, z: 982, w: 32, h: 18, p: 2, ...(this.config['stream-panel'] ?? {}) };
+    const width = panel.w, height = panel.h, PW = panel.w * panel.p, PH = panel.h * panel.p;
+    const chunkSec = Math.max(10, this.config['tv-chunk-seconds'] ?? 30);
+    const perTick = Math.max(50, this.config['tv-changes-per-tick'] ?? 400);
+    const L = { ...this.tv.layout(width, height, panel.p), z0: 0 };
+    const at = [panel.x, panel.y, panel.z];
+    const owner = this.tv.ownerFor('57e2ea000001');
+    const mapOwner = { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'abysmal garbage', display_name: 'abysmal garbage' };
+    const gateOff = [-180, -100, 6000]; // file coords: hidden gates in the sky over the panel
+    const audioZ = PH + 260; // soundtrack over the roof, in earshot of the room
+
+    this.stopSession(name, key);
+    const session = { stopped: false, kind: 'the stream' };
+    session.stop = () => (session.stopped = true);
+    const load = buf => {
+      const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+      const f = path.join(this.prefabDir, ref + '.brz');
+      fs.writeFileSync(f, buf);
+      this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 16`);
+      setTimeout(() => fs.rmSync(f, { force: true }), 15_000);
+    };
+    // the pixel plane (the panel's own bricks or ours) lies entirely inside this box, its frame does not
+    const clearPanel = () => this.clearBox([panel.x, panel.y, panel.z + PH / 2], [PW / 2, 2, PH / 2]);
+    const audioClears = [];
+    let idleTimer = null;
+    session.clear = () => {
+      this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
+      audioClears.splice(0).forEach(c => c());
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { clearPanel(); load(this.tv.idlePanel(this.brs4, L, { owner: mapOwner })); }, 2500);
+    };
+    this.sessions.set(key, session);
+    let file;
+    try {
+      this.whisper(name, link.startsWith('ytsearch') ? `<color="999">${loading()} "${sanitize(words.join(' '))}"...</>` : `<color="999">${loading()}...</>`);
+      const maxMin = this.config['video-max-minutes'] ?? 240;
+      file = await this.download(link, 'video', withSound, maxMin);
+      if (session.stopped) return;
+      const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height:format=duration:format_tags=title', '-of', 'json', file])));
+      if (!probe.streams?.[0]?.width) throw new Error('that link has no picture');
+      const total = Number(probe.format?.duration) || maxMin * 60;
+      const startAt = Math.max(0, Math.min(total - 1, opt('start') || 0));
+      const seconds = Math.min(total - startAt, maxMin * 60, opt('len') || Infinity);
+      const title = String(probe.format?.tags?.title || words.join(' ')).replace(/[<>\\]/g, '');
+      const chunks = Math.max(1, Math.ceil(seconds / chunkSec));
+
+      const build = async k => {
+        const t0 = startAt + k * chunkSec, dur = Math.min(chunkSec, seconds - k * chunkSec);
+        // fill the panel (crop to its aspect, no bars)
+        const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
+          '-vf', `fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=increase:flags=area,crop=${width}:${height}`,
+          '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
+        const fb = width * height * 3, frames = [];
+        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(raw.subarray(o, o + fb));
+        if (!frames.length) throw new Error('no frames decoded');
+        const enc = this.tv.encodeFrames(frames, width, height, { cap: Math.floor((perTick * 20 / fps) * 0.8), thresh: this.config['stream-thresh'] ?? 12 });
+        const screen = this.tv.screenPrefab(this.brs4, L, enc, { fps, chunk: perTick, owner, bare: true, pixDepth: 1, glow, gateOff });
+        let audio = null;
+        if (withSound) {
+          const wav = file.replace(/\.[^.]+$/, '') + `.st${k}.wav`;
+          try {
+            await run('ffmpeg', ['-v', 'error', '-y', '-ss', String(t0), '-t', String(dur), '-i', file, '-vn', '-ac', '1', '-ar', '44100', wav], 300_000);
+            audio = (await this.buildAudioSet(wav, { ...PRESETS.speech }))[0];
+          } catch (e) { console.error(`[media] stream soundtrack ${k}`, e); }
+          finally { fs.rmSync(wav, { force: true }); }
+        }
+        return { screen, audio, dur, changes: enc.data.length };
+      };
+      // chunks alternate sides so the next soundtrack can load before the last one goes
+      const loadAudio = (d, k) => {
+        if (!d) return null;
+        const c = [at[0] + (k % 2 ? 1 : -1) * 60, at[1], at[2] + audioZ];
+        const spot = [0, 1, 2].map(i => Math.round((c[i] - (d.lo[i] + d.hi[i]) / 2) / 2) * 2);
+        const clr = this.loadDevice(d, {}, spot);
+        audioClears.push(clr);
+        return clr;
+      };
+
+      const first = await build(0);
+      if (session.stopped) return;
+      clearTimeout(idleTimer);
+      this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
+      clearPanel();
+      load(first.screen);
+      let prevAudio = loadAudio(first.audio, 0);
+      this.whisper(name, `<color="9cf">Streaming ${sanitize(title.slice(0, 60))} (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}, ${fps} fps). /stream stop ends it.</>`);
+      console.log(`[media] stream ${name}: ${width}x${height} ${fps} fps, ${chunks} chunk(s), chunk 0 ${first.changes} changes`);
+      let start = Date.now(), durPrev = first.dur;
+      for (let k = 1; k < chunks && !session.stopped; k++) {
+        const set = await build(k).catch(e => (console.error(`[media] stream chunk ${k}`, e), null));
+        const due = start + durPrev * 1000;
+        while (!session.stopped && Date.now() < due) await sleep(Math.min(200, due - Date.now()));
+        if (session.stopped) break;
+        start = Date.now();
+        if (!set) { durPrev = chunkSec; continue; }
+        durPrev = set.dur;
+        this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
+        load(set.screen);
+        const old = prevAudio;
+        prevAudio = loadAudio(set.audio, k);
+        if (old) setTimeout(old, 1500);
+      }
+      const end = start + durPrev * 1000 + 1500;
+      while (!session.stopped && Date.now() < end) await sleep(200);
+      if (!session.stopped) session.clear();
+    } catch (e) {
+      console.error('[media] stream', e);
+      this.whisper(name, `<color="f55">/stream failed: ${sanitize(String(e.message || e)).slice(0, 120)}</>`);
+      if (!session.stopped) session.clear();
     } finally {
       session.stopped = true;
       if (file) setTimeout(() => this.release(file), 60_000);
@@ -1904,7 +2047,8 @@ module.exports = class Media {
     const a = this.stopSession(name, `video:${name}`);
     const b = this.stopSession(name, `audio:${name}`);
     const c = this.stopSession(name, `tv:${name}`);
-    if (a || b || c) return;
+    const d = this.stopSession(name, 'stream');
+    if (a || b || c || d) return;
     if (!this.sessions.size) {
       // nothing playing anywhere: clear leftovers (frames/speakers from a reload or crash)
       this.omegga.writeln(`br.Bricks.Clear ${OWNER.id} 1`);

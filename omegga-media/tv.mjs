@@ -146,25 +146,29 @@ export function buildBody(lib, L, { brand = 'ZENITHISH', owner = OWNER } = {}) {
  * chunk's start and the whole video's length (seconds, for the clock text);
  * chunk = most changes painted per 0.05 s tick.
  */
-export function buildScreen(lib, L, enc, { fps, tOff = 0, total = 0, title = '', channel = 3, chunk = 400, glow = 2, refs = null, owner = OWNER } = {}) {
+export function buildScreen(lib, L, enc, { fps, tOff = 0, total = 0, title = '', channel = 3, chunk = 400, glow = 2, refs = null, owner = OWNER,
+  bare = false, pixDepth = 2, gateOff = null } = {}) {
+  // bare = /stream on a fixed panel: pixels only (no tube plate, no text), pixDepth = pixel half depth,
+  // gateOff = where the hidden gates go (file coords) instead of inside the cabinet
   const { World, brdb } = lib;
   const C = brdb.COMPONENTS;
   const w = new World();
   const O = w.addOwner(owner);
   const N = L.W * L.H;
   for (let p = 0; p < N; p++) {
-    w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.P / 2, 2, L.P / 2], position: pixPos(L, p), color: enc.init[p],
-      material: 'BMC_Glow', material_intensity: glow, owner_index: O });
+    w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.P / 2, pixDepth, L.P / 2], position: pixPos(L, p), color: enc.init[p],
+      ...(glow ? { material: 'BMC_Glow', material_intensity: glow } : {}), owner_index: O });
   }
   // back plate behind the pixels (the tube)
-  w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.SW / 2, 2, L.SH / 2], position: [0, 4, L.z0 + L.SH / 2], color: [6, 6, 8], owner_index: O });
+  if (!bare) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.SW / 2, 2, L.SH / 2], position: [0, 4, L.z0 + L.SH / 2], color: [6, 6, 8], owner_index: O });
 
   // gates: rows inside the cabinet shell, hidden
   let slot = 0;
   const gate = (c, data = {}, grid) => {
     const i = grid ? 0 : slot++;
-    const pos = grid ? [0, 0, 2] : [-(L.cols - 1) * 20 + (i % L.cols) * 40, 40 + Math.floor(i / L.cols) * 40, L.bottom + 8 + 12];
-    if (!grid && pos[1] > L.depth - 30) throw Error('tv: too many gates for the cabinet');
+    const pos = grid ? [0, 0, 2] : gateOff ? [gateOff[0] + (i % 10) * 40, gateOff[1] + Math.floor(i / 10) * 40, gateOff[2]]
+      : [-(L.cols - 1) * 20 + (i % L.cols) * 40, 40 + Math.floor(i / L.cols) * 40, L.bottom + 8 + 12];
+    if (!grid && !gateOff && pos[1] > L.depth - 30) throw Error('tv: too many gates for the cabinet');
     const h = w.addBrick({ asset: c.BRICK, position: pos, color: [200, 200, 200], owner_index: O, visibility: false, collision: false,
       components: [{ type: c.NAME, data }] }, grid);
     return { h, c };
@@ -243,6 +247,10 @@ export function buildScreen(lib, L, enc, { fps, tOff = 0, total = 0, title = '',
   const adv = set(cur, op(C.Expr_MathAdd, val(cur), [shell, 'IterationsExecuted']));
   wire(shell, 'Completed', adv, 'Exec');
 
+  if (bare) {
+    w.makePrefab({});
+    return w.toBrz({ bundle: { description: 'Stream panel' }, externalAssets: FONTS });
+  }
   // ---- text on the control panel: channel, title, clock
   const pb = L.legH + 8, pz = (pb + 8 + L.z0 - L.bez) / 2;
   const sx = L.SW / 2;
@@ -291,6 +299,15 @@ export function screenPrefab(lib, L, enc, opts) {
   const missing = Array.from({ length: L.W * L.H }, (_, p) => refs.get(pixPos(L, p).join(','))).filter(r => !r).length;
   if (missing) throw Error(`tv: ${missing} pixel refs not found`);
   return buildScreen(lib, L, enc, { ...opts, refs });
+}
+
+/** The idle panel: every pixel black plastic, as the owner built it (/stream when nothing plays). */
+export function idlePanel(lib, L, { owner = OWNER, pixDepth = 1, color = [0, 0, 0] } = {}) {
+  const w = new lib.World();
+  const O = w.addOwner(owner);
+  for (let p = 0; p < L.W * L.H; p++) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.P / 2, pixDepth, L.P / 2], position: pixPos(L, p), color, owner_index: O });
+  w.makePrefab({});
+  return w.toBrz({ bundle: { description: 'Stream panel (idle)' } });
 }
 
 /** Clear boxes (file coords [centre, half]) for a screen prefab: pixels in bands (ClearRegion fails on ~1800+ bricks), texts, gates. */
