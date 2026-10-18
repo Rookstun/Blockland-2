@@ -257,7 +257,7 @@ export function buildCartridge(lib, L, enc, { event, fps, dur, slot = 0, owner, 
   const send = gate(C.Exec_SendCustomEventGlobal, { EventName: event, DataIn1: str(''), DataIn2: num(0), ...SEND_REST }, { size: EVENT_SIZE });
   wire(getP, 'Value', send, 'DataIn1'); wire(getP, 'ExecOut', send, 'ExecIn');
   if (debug) {
-    const f = gate(C.Expr_String_FormatText, { FormatString: 'tgsend|{A}|{B}' }); wire(cur, 'Value', f, 'InputA'); wire(now, 'Output', f, 'InputB');
+    const f = gate(C.Expr_String_FormatText, { FormatString: 'tgsend|{A}|{B}|{C}' }); wire(cur, 'Value', f, 'InputA'); wire(now, 'Output', f, 'InputB'); wire(getD, 'Value', f, 'InputC'); // packet, frame now, frame due
     const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(send, 'ExecOut', p, 'Exec');
   }
   const nxt = gate(C.Expr_MathAdd, { InputB: num(1) }); wire(cur, 'Value', nxt, 'InputA');

@@ -1458,7 +1458,7 @@ module.exports = class Media {
     // rewritten (tgrid.mjs). `strips` = the older square screen of stacked text strips (ogrid.mjs).
     const tiles = (panel || !opts.includes('strips')) && !!this.tg;
     if (panel && !tiles) return this.whisper(name, '<color="f55">/stream needs tgrid.mjs.</>');
-    const fps = Math.max(1, Math.min(15, opt('fps') || (tiles ? this.config['ogrid-tile-fps'] ?? 4 : this.config['ogrid-fps'] || 2)));
+    const fps = Math.max(1, Math.min(15, opt('fps') || (panel ? this.config['stream-fps'] ?? 8 : null) || (tiles ? this.config['ogrid-tile-fps'] ?? 4 : this.config['ogrid-fps'] || 2)));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(5, tiles ? this.config['ogrid-tile-chunk-seconds'] ?? 10 : this.config['ogrid-chunk-seconds'] ?? 20);
@@ -1533,7 +1533,7 @@ module.exports = class Media {
         for (let o = 0; o + fb <= raw.length; o += fb) rawFrames.push(raw.subarray(o, o + fb));
         if (!rawFrames.length) throw new Error('no frames decoded');
         // tiles: packets of tile updates (16 of the 20 packet slots a second, the rest lets a backlog catch up)
-        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? 16, thresh: this.config['ogrid-tile-thresh'] ?? (panel ? 16 : 28), refresh: panel ? (this.config['stream-refresh'] ?? 48) : 0, per: panel ? (this.config['stream-per'] ?? 288) : 120 })
+        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (panel ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (panel ? 16 : 28), refresh: panel ? (this.config['stream-refresh'] ?? 48) : 0, per: panel ? (this.config['stream-per'] ?? 288) : 120 })
           : rawFrames.map(fr => this.og.encodeFrame(fr, n, { maxRuns, strips }));
         const nFrames = rawFrames.length;
         let audio = null;
@@ -1581,7 +1581,7 @@ module.exports = class Media {
         // cartridges alternate between two slots: this slot held chunk k-2 (long done)
         const slot = k % 2, [c, h] = M.cartridgeBox(L, slot);
         this.clearBox(world(c), T(h).map(Math.abs));
-        loadAt(M.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner }));
+        loadAt(M.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner, debug: opts.includes('debug') }));
         const old = prevAudio;
         prevAudio = loadAudio(set.audio, k);
         if (old) setTimeout(old, 1500);
