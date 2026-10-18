@@ -1295,12 +1295,12 @@ module.exports = class Media {
     const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
     // cell glyph: a full block (default) or, with `letters`, the letter O
     const glyph = opts.includes('letters') ? 'O' : this.config['ogrid-glyph'] || this.og.GLYPH;
-    const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 96, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 64)));
+    const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 256, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 256)));
     const fps = Math.max(1, Math.min(15, opt('fps') || this.config['ogrid-fps'] || 2));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(5, this.config['ogrid-chunk-seconds'] ?? 20);
-    const strips = n % 4 === 0 && n >= 32 ? 4 : 1; // stacked text displays: one string caps at 32768 chars
+    const strips = this.og.stripsFor(n); // stacked text displays: one string caps at 32768 chars
     // runs a frame: what the strips can hold, and what the decoders get through in a frame's time
     // (4 loops share the owner's 10 ms wire budget a tick; 1416 runs at 2 fps ran live)
     const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(this.og.stripRunCap(n, strips) * strips, Math.floor((this.config['ogrid-runs-per-sec'] ?? 6000) / fps));
@@ -1312,7 +1312,7 @@ module.exports = class Media {
     const olds = this.ogOwners.get(name) ?? [];
     this.ogOwners.set(name, [owner.id]);
     const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
-    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.95, textScale: this.config['ogrid-text-scale'] ?? 1.6875 });
+    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.95, ws: this.config['ogrid-width-scale'] ?? 2, strips, textScale: this.config['ogrid-text-scale'] ?? 1.6875 });
 
     this.stopSession(name, key);
     const session = { stopped: false, kind: 'O grid' };
@@ -1337,14 +1337,14 @@ module.exports = class Media {
       // the screen stands in front of the player, facing them
       const nv = NORMAL[facing];
       const orient = 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing], T = ORIENT[orient];
-      const dist = Math.max(10, Math.round((L.side * 0.9) / STUD)) * STUD;
+      const dist = Math.max(10, Math.round((Math.max(L.side, L.width * 0.8) * 0.9) / STUD)) * STUD;
       const snap = v => Math.round(v / STUD) * STUD;
       const at = [snap(pos[0] - nv[0] * dist), snap(pos[1] - nv[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
       const world = p => T(p).map((v, i) => v + at[i]);
       const build = async k => {
         const t0 = startAt + k * chunkSec, dur = Math.min(chunkSec, seconds - k * chunkSec);
         const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
-          '-vf', `fps=${fps},crop='min(iw,ih)':'min(iw,ih)',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
+          '-vf', `fps=${fps},crop='min(iw,ih*${L.aspect})':'min(ih,iw/${L.aspect})',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
         const fb = n * n * 3, frames = [];
         for (let o = 0; o + fb <= raw.length; o += fb) frames.push(this.og.encodeFrame(raw.subarray(o, o + fb), n, { maxRuns, strips }));
         if (!frames.length) throw new Error('no frames decoded');
@@ -1362,7 +1362,7 @@ module.exports = class Media {
       // the soundtrack chip stands beside the screen (in speaker range of whoever watches it), chunks alternate sides so a swap never clears the playing one
       const loadAudio = (d, k) => {
         if (!d) return null;
-        const c = world([(k % 2 ? 1 : -1) * (L.side / 2 + 60), 0, 28]);
+        const c = world([(k % 2 ? 1 : -1) * (L.hw + 60), 0, 28]);
         const spot = [0, 1, 2].map(i => Math.round((c[i] - (d.lo[i] + d.hi[i]) / 2) / 2) * 2);
         const clr = this.loadDevice(d, {}, spot);
         audioClears.push(clr);

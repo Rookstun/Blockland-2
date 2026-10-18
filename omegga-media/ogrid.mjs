@@ -57,14 +57,23 @@ export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06, glyph = GLYPH
 }
 
 /**
- * Geometry. lh = line height (units); a glyph is charW x lh, so WidthScale
- * 1 / charW makes every cell lh x lh: n x n cells = a square picture.
+ * Geometry. lh = line height (units). A glyph at WidthScale 1 is charW x lh
+ * (measured: 0.95), so a cell is (charW x ws) x lh: ws 2 (owner 2026-10-18)
+ * = cells ~1.9x wider than tall, picture aspect n x 1.9 : n (the video is
+ * cropped to that). Rows per strip get a line height that fills a whole
+ * number of 4-unit plates, so stacked strips meet without seams.
  */
-export function oLayout(n, { lh = 1.6, charW = 0.95, lift = 20, textScale = 1.6875 } = {}) {
-  const side = Math.ceil((n * lh) / 4) * 4 + 8; // screen brick side (4 units of border each way, even halves)
-  // textScale: a block drew at ~0.6 of its LineHeight in game (owner screenshot 2026-10-16:
-  // a 32-cell picture filled 76 of 136 units), so LineHeight = cell size x 1.68 fills the board
-  return { n, lh, charW, side, z0: lift, top: lift + side, textLH: +(lh * textScale).toFixed(3) };
+export function oLayout(n, { lh = 1.6, charW = 0.95, ws = 2, lift = 20, textScale = 1.6875, strips = stripsFor(n) } = {}) {
+  const rows = n / strips, rowsH = Math.ceil((rows * lh) / 4) * 4, lhE = rowsH / rows;
+  const aspect = charW * ws, side = rowsH * strips + 8; // + 4 units of bar top and bottom
+  const width = Math.ceil((n * lhE * aspect) / 4) * 4 + 8;
+  return { n, lh: lhE, charW, ws, aspect, strips, rowsH, side, width, hw: width / 2, z0: lift, top: lift + side, textLH: +(lhE * textScale).toFixed(3) };
+}
+
+/** Stacked text displays: one string caps at 32768 chars, so ~16 rows of up to 256 blocks a strip. */
+export function stripsFor(n) {
+  if (n >= 64 && n % 16 === 0) return n / 16;
+  return n % 4 === 0 && n >= 32 ? 4 : 1;
 }
 
 const FONTS = [{ type: 'BrickFontDescriptor', name: 'MonaspaceKrypton' }]; // owner's pick 2026-10-16
@@ -83,7 +92,7 @@ export function buildOGrid(lib, L, strs, { fps, dur, owner = OWNER } = {}) {
   const w = new World();
   const O = w.addOwner(owner);
   const hx = L.side / 2;
-  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: +(1 / L.charW).toFixed(4), Text: strs[0] } };
+  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: L.ws, Text: strs[0] } };
   const screen = {
     h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, 2, hx], position: [0, 0, L.z0 + hx], color: [6, 6, 8], owner_index: O, components: [face] }),
     c: C.TextDisplay,
@@ -204,8 +213,9 @@ export function buildReceiver(lib, L, { event, owner = OWNER, debug = false, gly
   const C = brdb.COMPONENTS;
   const w = new World();
   const O = w.addOwner(owner);
-  const hx = L.side / 2, rowsH = (L.side - 8) / strips; // picture height = side - 2 x 4 border
-  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: +(1 / L.charW).toFixed(4), Text: glyph } };
+  const hx = L.hw, rowsH = L.rowsH; // picture height = side - 2 x 4 border
+  if (strips !== L.strips) throw Error(`strips ${strips} != layout ${L.strips}`);
+  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: L.ws, Text: glyph } };
   // strip 0 = top rows; a 4-unit frame bar above and below
   const screens = [];
   for (let k = 0; k < strips; k++) {
@@ -312,6 +322,7 @@ export function buildReceiver(lib, L, { event, owner = OWNER, debug = false, gly
       const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(free, 'ExecOut', p, 'Exec');
     }
   }
+  if ((slots.get('main') ?? 0) > gateRows(L) * 8) throw Error(`receiver gate field overflows: ${slots.get('main')} gates > ${gateRows(L) * 8}`);
   w.makePrefab({});
   return w.toBrz({ bundle: { description: 'O grid receiver' }, externalAssets: FONTS });
 }
@@ -319,8 +330,10 @@ export function buildReceiver(lib, L, { event, owner = OWNER, debug = false, gly
 const EVENT_SIZE = [10, 5, 2]; // PB_Gate_Event_CustomGlobal / SendCustomEventGlobal as the game saves them (pot_pool, the owner's bush)
 const EVENT_REST = Object.fromEntries([2, 3, 4, 5, 6, 7, 8].map(i => [`DataOut${i}`, { $variant: 'f64', value: 0 }]));
 
+/** Receiver gate rows (8 a row, 40 apart from y 40): ~16 main gates a strip + the scheduler. */
+const gateRows = L => Math.ceil((40 + 16 * L.strips) / 8);
 /** Where cartridge `slot` (0/1, chunks alternate) sits: a gate row behind the receiver's gate field. */
-const cartY = slot => 700 + slot * 40;
+const cartY = (L, slot) => 80 + gateRows(L) * 40 + slot * 40;
 
 /**
  * One chunk's CARTRIDGE: frames (token strings) in a Str ArrayVar; a Stopwatch
@@ -335,7 +348,7 @@ export function buildCartridge(lib, L, tokens, { event, fps, dur, slot = 0, owne
   const O = w.addOwner(owner);
   let i = 0;
   const gate = (c, data = {}, extra = {}) => {
-    const h = w.addBrick({ asset: c.BRICK, position: [-160 + 40 * i++, cartY(slot), L.z0 + 10], color: [200, 200, 200], owner_index: O,
+    const h = w.addBrick({ asset: c.BRICK, position: [-160 + 40 * i++, cartY(L, slot), L.z0 + 10], color: [200, 200, 200], owner_index: O,
       visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra });
     return { h, c };
   };
@@ -362,11 +375,11 @@ export function buildCartridge(lib, L, tokens, { event, fps, dur, slot = 0, owne
 }
 
 /** Clear box of cartridge slot `slot` (file coords [centre, half]). */
-export const cartridgeBox = (L, slot) => [[0, cartY(slot), L.z0 + 10], [200, 12, 12]];
+export const cartridgeBox = (L, slot) => [[0, cartY(L, slot), L.z0 + 10], [200, 12, 12]];
 
 /** Clear boxes of a receiver (file coords [centre, half]): screen + gate field. */
 export function receiverBoxes(L) {
-  const hx = L.side / 2;
-  // gates: 8 a row, 40 apart from y 40 (4 strips = about 110 gates = 14 rows)
-  return [[[0, 0, L.z0 + hx], [hx, 2, hx]], [[0, 330, L.z0 + 10], [180, 310, 20]], cartridgeBox(L, 0), cartridgeBox(L, 1)];
+  const hz = L.side / 2, d = gateRows(L) * 20 + 10;
+  // gates: 8 a row, 40 apart from y 40
+  return [[[0, 0, L.z0 + hz], [L.hw, 2, hz]], [[0, 20 + d, L.z0 + 10], [180, d, 20]], cartridgeBox(L, 0), cartridgeBox(L, 1)];
 }

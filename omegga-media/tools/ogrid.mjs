@@ -31,7 +31,8 @@ fs.mkdirSync(out, { recursive: true });
 
 const total = Number(String(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', src])).trim());
 const start = Number(flag('start', 0)), seconds = Math.min(total - start, Number(flag('len', Infinity)));
-const L = og.oLayout(n, { lh: Number(flag('lh', 4)), charW: Number(flag('charw', 0.55)) });
+const strips = og.stripsFor(n);
+const L = og.oLayout(n, { lh: Number(flag('lh', 1.6)), charW: Number(flag('charw', 0.95)), ws: Number(flag('ws', 2)), strips });
 const HM = path.join(PLUGIN, 'bin/heightmap');
 const audio = !args.includes('--mute') && fs.existsSync(HM);
 const brs3 = audio ? await import(pathToFileURL(path.join(PLUGIN, 'lib/brs.mjs')).href) : null;
@@ -40,14 +41,14 @@ const { autoStart } = await import(pathToFileURL(path.join(PLUGIN, 'autostart.mj
 const SPEECH = ['--audio-mode', 'voice', '--max-voices', '32', '--voice-release', '15', '--attack', '5', '--release', '60', '--leveling', '0', '--gain', '3',
   '--audio-fps', '60', '--synth', 'sine', '--no-loop', '--speakers-in-chip', '--no-control-buttons', '--inner-radius', '100', '--max-distance', '400'];
 
-const event = flag('event', 'og.test'), strips = n % 4 === 0 && n >= 32 ? 4 : 1;
+const event = flag('event', 'og.test');
 fs.writeFileSync(path.join(out, 'receiver.brz'), og.buildReceiver(lib, L, { event, strips }));
 const list = [];
 for (let k = 0; k * chunk < seconds; k++) {
   const t0 = start + k * chunk, dur = Math.min(chunk, seconds - k * chunk);
-  // centre square crop, then n x n
+  // centre crop to the screen's aspect, then n x n
   const raw = execFileSync('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', src,
-    '-vf', `fps=${fps},crop='min(iw,ih)':'min(iw,ih)',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 30 });
+    '-vf', `fps=${fps},crop='min(iw,ih*${L.aspect})':'min(ih,iw/${L.aspect})',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 1 << 30 });
   const fb = n * n * 3, frames = [];
   for (let o = 0; o + fb <= raw.length; o += fb) frames.push(raw.subarray(o, o + fb));
   const strs = og.oFrames(frames, n, { max: Number(flag('max', og.MAX_CHARS)) });
