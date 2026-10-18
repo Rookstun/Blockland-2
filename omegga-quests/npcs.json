@@ -1,0 +1,8 @@
+[
+  { "id": 0, "key": "kevin", "role": "townsfolk", "name": "Kevin", "at": [-250, 250, 624] },
+  { "id": 1, "key": "dustin", "role": "traveler", "name": "Dustin", "at": [-260, -200, 624] },
+  { "id": 2, "key": "daniel", "role": "townsfolk", "name": "Daniel", "at": [250, -250, 624],
+    "bot": { "HealthMultiplier": 0.8, "RespawnTime": 120, "CorpseTimeout": 5 } },
+  { "id": 3, "key": "fizz", "role": "soda", "name": "Fizzwick", "at": [-1690, 200, 628] },
+  { "id": 4, "key": "gary", "role": "farmer", "name": "Gary", "at": [18500, 18000, 288] }
+]

@@ -1,0 +1,9 @@
+{
+  "name": "quests",
+  "description": "Quest NPCs (npcs.json): press E on one for Yes/No and OK/Cancel dialog boxes. Kevin's message chain to Gary at the end of the map, Dustin's Kill Daniel, Fizzwick's Calcium Fizz (+1 Regen).",
+  "author": "pooper",
+  "config": {},
+  "commands": [
+    { "name": "!quest", "description": "Your quests. drop <n> gives one up", "example": "!quest drop 1", "args": [{ "name": "action", "description": "drop <n>", "required": false }] }
+  ]
+}

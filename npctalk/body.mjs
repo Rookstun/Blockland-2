@@ -14,10 +14,15 @@
 // - all gates hidden, no collision, floating 2.5 m above the spot 40 apart (at floor
 //   level they overlapped the floor and each other and were rejected)
 //   node npctalk/body.mjs <brs-js 4 dist.mjs> <outDir> [id...]   -> <outDir>/npcbody_<id>.brz
+// env NPCS = another NPC list (quest NPCs: omegga-quests/npcs.json), TAG = Interact
+// ConsoleTag event name (default npctalk), PREFIX = prefab name prefix. An NPC's `bot`
+// object overrides spawner settings (Daniel: killable, 2 min respawn). Every death of
+// the NPC's bot logs "[Wire Graph] quest.died|<id>|<killer user id>".
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { mk } from '../ea32test/lib.mjs';
 const [dist, outDir, ...only] = process.argv.slice(2);
-const NPCS = JSON.parse(readFileSync(new URL('../omegga-npctalk/npcs.json', import.meta.url)));
+const NPCS = JSON.parse(readFileSync(process.env.NPCS ?? new URL('../omegga-npctalk/npcs.json', import.meta.url)));
+const TAG = process.env.TAG ?? 'npctalk', PREFIX = process.env.PREFIX ?? 'npcbody_';
 const lib = await import(new URL(`file:///${dist.replace(/\\/g, '/')}`).href);
 mkdirSync(outDir, { recursive: true });
 
@@ -72,7 +77,7 @@ function tubePrefab(npc) {
   const w = new lib.World();
   const o = w.addOwner(OWNER);
   w.addBrick({ asset: ROD.asset, size: ROD.size, position: [0, 0, 0], color: [90, 220, 255], material: 'BMC_Hologram', collision: TUBE_COLL, owner_index: o,
-    components: [{ type: 'Component_Interact', data: { InteractSound: null, Message: '', ConsoleTag: `event:npctalk:${npc.id}`, bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: `Talk to ${npc.name}` } }] });
+    components: [{ type: 'Component_Interact', data: { InteractSound: null, Message: '', ConsoleTag: `event:${TAG}:${npc.id}`, bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: `Talk to ${npc.name}` } }] });
   w.makePrefab({});
   return w.toBrz({ bundle: { description: `talk rod ${npc.name}` } });
 }
@@ -91,7 +96,7 @@ for (const npc of NPCS) {
   const sp = { h: w.addBrick({ asset: 'B_Bot_Spawn_Point', position: [0, 0, 2], rotation: role.brick.rotation, direction: 4, color: [255, 255, 255],
     visibility: false, collision: role.brick.collision, owner_index: k.ownerIdx,
     components: [{ type: 'Component_BotSpawn', data: { ...role.data, BotName: npc.name, Skin: costume(npc, ext),
-      MovementAmount: WANDER.MovementAmount, MovementRandomness: WANDER.MovementRandomness, MoveTarget: { X: sx, Y: sy, Z: sz } } }] }), c: C.BotSpawn };
+      MovementAmount: WANDER.MovementAmount, MovementRandomness: WANDER.MovementRandomness, MoveTarget: { X: sx, Y: sy, Z: sz }, ...npc.bot } }] }), c: C.BotSpawn };
 
   // spawn the talk cylinder once, invisible + frozen, keep its entity
   const sw = gate(C.Stopwatch, { Limit: 2, Time: 0, bRunning: true });
@@ -110,6 +115,11 @@ for (const npc of NPCS) {
   const isMine = gate(C.Expr_CompareEqual); wire(died, 'Character', isMine, 'InputA'); wire(sp, 'SpawnedCharacter', isMine, 'InputB');
   const mineB = gate(C.Exec_Branch); wire(isMine, 'bOutput', mineB, 'bCond'); wire(died, 'ExecOut', mineB, 'Exec');
   const markDead = gate(C.Exec_Var_Set, { bChangeType: true }); wire(dead, 'VarRef', markDead, 'VarRef'); wire(died, 'Character', markDead, 'Value'); wire(mineB, 'ExecOutA', markDead, 'Exec');
+  // who killed it -> log (quests plugin)
+  const kps = gate(C.Exec_PlayerState_GetFromEntity); wire(markDead, 'ExecOut', kps, 'Exec'); wire(died, 'Killer', kps, 'Entity');
+  const kid = gate(C.Exec_PlayerState_GetUserId); wire(kps, 'ExecOut', kid, 'Exec'); wire(kps, 'PlayerState', kid, 'PlayerState');
+  const kf = gate(C.Expr_String_FormatText, { FormatString: `quest.died|${npc.id}|{A}` }); wire(kid, 'UserId', kf, 'InputA');
+  const kp = gate(C.Exec_PrintToConsole, { Text: '' }); wire(kf, 'Output', kp, 'Text'); wire(kid, 'ExecOut', kp, 'Exec');
 
   // every 0.1 s: on the bot (upright) while it stands at its spot alive, else parked out of reach
   const clock = gate(C.Clock, { bEnabled: true, bPulseOn: false, OnTimeSeconds: 0.05, OffTimeSeconds: 0.05, IntervalSeconds: 0.1 });
@@ -129,6 +139,6 @@ for (const npc of NPCS) {
   const park = gate(C.Exec_Entity_SetLocationRotation); wire(br, 'ExecOutB', park, 'Exec'); wire(tube, 'Value', park, 'Entity'); wire(...vec(sx, sy, sz + PARK_UP), park, 'Vector');
 
   w.makePrefab({});
-  writeFileSync(`${outDir}/npcbody_${npc.id}.brz`, w.toBrz({ bundle: { description: `NPC ${npc.name}` }, externalAssets: ext }));
+  writeFileSync(`${outDir}/${PREFIX}${npc.id}.brz`, w.toBrz({ bundle: { description: `NPC ${npc.name}` }, externalAssets: ext }));
 }
 console.log(`${only.length || NPCS.length} NPC bodies -> ${outDir}`);
