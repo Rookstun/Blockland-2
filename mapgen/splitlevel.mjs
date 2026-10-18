@@ -19,6 +19,7 @@ import fs from 'fs';
 import { makeBuilder, rng } from './builder.mjs';
 import { orientFor } from './orient.mjs';
 import { townCourses } from './roofs.mjs';
+import { tileFloor, pickRoomStyle } from './tilefloors.mjs';
 
 const GLASS = { color: [170, 210, 230], material: 'BMC_Glass' };
 const GLOW = (color, i = 4) => ({ color, material: 'BMC_Glow', material_intensity: i });
@@ -42,6 +43,7 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   const DD = 280;                                   // depth 28 studs
   const WF = 20;                                    // the wing stands 2 studs back from the split block's front
   const OV = 20;                                    // eaves
+  const EXT = 120 + Math.floor(r() * 3) * 20;       // kitchen addition depth behind the wing (12-16 studs)
   const X0 = OV, Y0 = 50;                           // local origin: room for the eave (left) and the steps / eave (front)
   const L = { slab: 4, main: 56, upper: 116, upTop: 224, wingTop: 164 };
   const brickC = pick(BRICKS), sidingC = pick(SIDING), stone = pick(STONE), roofC = pick(ROOFS);
@@ -53,6 +55,13 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
     if (x1 <= x0 || y1 <= y0 || z1 <= z0) return;
     if (!B.box(X0 + x0, Y0 + y0, z0, X0 + x1, Y0 + y1, z1, { asset: MB, ...m }, label)) throw new Error(`splitlevel: ${label} dropped: ${B.dropped.at(-1)}`);
   };
+  // floors (tilefloors.mjs): add() in local units, flat diagonal wedges carry _tri for the mirror
+  const fadd = (x0, y0, z0, x1, y1, z1, m, label) => box(x0, y0, z0, x1, y1, z1, m, label);
+  fadd.wedge = (x0, y0, z0, x1, y1, z1, rot, color) => {
+    if (!B.add({ asset: 'PB_DefaultMicroWedge', direction: 4, rotation: rot, _tri: rot, size: [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2], color, position: [X0 + (x0 + x1) / 2, Y0 + (y0 + y1) / 2, (z0 + z1) / 2] }, 'floor triangle')) throw new Error('splitlevel: floor triangle dropped ' + B.dropped.at(-1));
+  };
+  const style = {}; // one floor style per room kind
+  const floor = (room, rect, top) => tileFloor(fadd, rect, top, style[room] ??= pickRoomStyle(room, r), r);
   // ------------------------------------------------------------ walls --
   // wall(axis 'x' | 'y', line (the wall's low face), a0, a1, z0, z1, skin, openings [{a0, a1, z0, z1}])
   // skins: brick (running bond, 12 courses), siding (6-high laps, two shades), stone (random blocks)
@@ -105,7 +114,10 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   const GD = { a0: 30, a1: SW - 30, z0: L.slab, z1: 100 };            // garage door opening
   const upWin = [{ a0: 30, a1: 90 }, { a0: SW - 90, a1: SW - 30 }].map(w => ({ ...w, z0: 150, z1: 200 }));
   // floor slab of the lower level (garage + family room)
-  box(10, 10, 0, SW - 10, DD - 10, L.slab, { color: [168, 166, 160] }, 'lower slab');
+  // the garage / family room partition stands on y 150..160
+  floor('garage', [10, 10, SW - 10, 150], L.slab);
+  box(10, 150, 0, SW - 10, 160, L.slab, { color: [150, 148, 144] }, 'partition footing');
+  floor('family', [10, 160, SW - 10, DD - 10], L.slab);
   // front: brick to the upper floor, siding above
   wall('x', 0, 0, SW, 0, L.upper - 4, 'brick', [GD], 'split front');
   wall('x', 0, 0, SW, L.upper - 4, L.upTop, 'siding', upWin, 'split front');
@@ -146,7 +158,35 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   // upper floor (over the garage and family room), open over the flights and L0
   const hole = [topX1, ly0 - 10, SW - 10, ly1 + 30];                    // x0 y0 x1 y1 (10 in front of L0: rail room)
   const floorRects = [[10, 10, SW - 10, hole[1]], [10, hole[1], hole[0], DD - 10], [hole[0], hole[3], SW - 10, DD - 10]];
-  for (const [a, b, c, d] of floorRects) { box(a, b, L.upper - 4 - 4, c, d, L.upper - 4, { color: [226, 222, 214] }, 'garage ceiling'); box(a, b, L.upper - 4, c, d, L.upper, { asset: TILE, color: [150, 112, 78] }, 'upper floor'); }
+  for (const [a, b, c, d] of floorRects) box(a, b, L.upper - 4 - 4, c, d, L.upper - 4, { color: [226, 222, 214] }, 'garage ceiling');
+  // upstairs (owner 2026-10-17: "find a spot to make a bathroom"): bedroom across the front,
+  // bathroom in the back corner away from the stairs, a hall round the stairwell
+  const BP = 140, BX = 90;                                             // bedroom partition y BP..BP+10, bathroom partition x BX..BX+10
+  floor('bedroom', [10, 10, SW - 10, BP], L.upper);
+  box(10, BP, L.upper - 4, SW - 10, BP + 10, L.upper, { color: [150, 112, 78] }, 'partition sill');
+  floor('bathroom', [10, BP + 10, BX, DD - 10], L.upper);
+  box(BX, BP + 10, L.upper - 4, BX + 10, DD - 10, L.upper, { color: [150, 112, 78] }, 'partition sill');
+  for (const rc of [[BX + 10, BP + 10, SW - 10, hole[1]], [BX + 10, hole[1], hole[0], DD - 10], [hole[0], hole[3], SW - 10, DD - 10]]) floor('hall', rc, L.upper);
+  const bedDoor = door(SW - 150, SW - 110, L.upper, L.upper + 76), bathDoor = door(BP + 20, BP + 60, L.upper, L.upper + 76);
+  wall('x', BP, 10, SW - 10, L.upper, L.upTop - 4, 'siding', [bedDoor], 'bedroom wall');
+  wall('y', BX, BP + 10, DD - 10, L.upper, L.upTop - 4, 'siding', [bathDoor], 'bathroom wall');
+  // bathroom: tub along the back wall, toilet, vanity under the side window
+  const TUB = [244, 244, 240], BL = L.upper + (style.bathroom === 'bevel' ? 2 : 0); // bevel tiles stand 2 proud
+  box(10, DD - 44, BL, BX, DD - 40, BL + 22, { color: TUB }, 'tub side');
+  box(10, DD - 40, BL, BX, DD - 10, BL + 4, { color: TUB }, 'tub bottom');
+  box(BX - 4, DD - 40, BL + 4, BX, DD - 10, BL + 22, { color: TUB }, 'tub end');
+  box(10, DD - 40, BL + 4, 14, DD - 10, BL + 22, { color: TUB }, 'tub end');
+  box(14, DD - 40, BL + 4, BX - 4, DD - 14, BL + 6, { color: [150, 200, 220], material: 'BMC_Glass' }, 'bath water');
+  box(16, DD - 14, BL + 22, 22, DD - 10, BL + 34, { color: [190, 190, 196], material: 'BMC_Metallic' }, 'tap');
+  box(12, BP + 22, BL, 24, BP + 34, BL + 12, { color: TUB }, 'toilet base');
+  box(10, BP + 18, BL + 12, 30, BP + 38, BL + 16, { color: TUB }, 'toilet seat');
+  box(10, BP + 20, BL + 16, 16, BP + 36, BL + 34, { color: TUB }, 'toilet tank');
+  box(10, BP + 56, BL, 26, BP + 96, BL + 30, { color: [120, 86, 60] }, 'vanity');
+  box(10, BP + 54, BL + 30, 28, BP + 98, BL + 34, { color: [232, 230, 226] }, 'vanity top');
+  box(12, BP + 66, BL + 34, 22, BP + 86, BL + 36, { color: [190, 190, 196], material: 'BMC_Metallic' }, 'basin');
+  box(40, BP + 60, L.upTop - 6, 60, BP + 80, L.upTop - 4, GLOW([255, 244, 220]), 'bath light');
+  box(SW - 60, BP + 20, L.upTop - 6, SW - 40, BP + 40, L.upTop - 4, GLOW([255, 240, 210]), 'hall light');
+  box(40, 220, L.upper - 10, 60, 240, L.upper - 8, GLOW([255, 240, 210]), 'family light');
   // rails round the hole (not across the top landing)
   box(hole[0], hole[1] - 2, L.upper, hole[2], hole[1], L.upper + 36, { color: WHITE }, 'rail');
   box(hole[0], hole[3], L.upper, hole[2], hole[3] + 2, L.upper + 36, { color: WHITE }, 'rail');
@@ -166,14 +206,15 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   box(fd.a0 - 4, WY0 - 4, fd.z0, fd.a0, WY0, fd.z1 + 4, { color: WHITE }, 'door case');
   box(fd.a1, WY0 - 4, fd.z0, fd.a1 + 4, WY0, fd.z1 + 4, { color: WHITE }, 'door case');
   box(fd.a0 + 2, WY0 + 8, fd.z0, fd.a0 + 6, WY0 + 10, fd.z1, { color: fdoorC }, 'door (open)'); // swung in against the jamb
-  const wb = [{ a0: WX0 + 50, a1: WX0 + 100, z0: L.main + 30, z1: L.main + 82 }, { a0: WX1 - 100, a1: WX1 - 50, z0: L.main + 30, z1: L.main + 82 }];
-  wall('x', WY1 - 10, WX0, WX1, 0, L.wingTop, wingSkin, wb, 'wing back');
-  wb.forEach(w => windowIn('x', WY1 - 10, 1, w));
+  // the back wall opens wide into the kitchen addition (owner 2026-10-17: "add or extend another room")
+  const arch = { a0: WX0 + 40, a1: WX1 - 50, z0: L.main, z1: L.main + 84 };
+  wall('x', WY1 - 10, WX0, WX1, 0, L.wingTop, wingSkin, [arch], 'wing back');
+  box(arch.a0, WY1 - 10, arch.z1 - 4, arch.a1, WY1, arch.z1, { color: WHITE }, 'arch head');
   const ws = [{ a0: WY0 + 50, a1: WY0 + 100, z0: L.main + 30, z1: L.main + 82 }, { a0: WY1 - 100, a1: WY1 - 50, z0: L.main + 30, z1: L.main + 82 }];
   wall('y', WX1 - 10, WY0 + 10, WY1 - 10, 0, L.wingTop, wingSkin, ws, 'wing end');
   ws.forEach(w => windowIn('y', WX1 - 10, 1, w));
   box(WX0, WY0 + 10, L.main - 8, WX1 - 10, WY1 - 10, L.main - 4, { color: [140, 136, 130] }, 'wing joists');
-  box(WX0, WY0 + 10, L.main - 4, WX1 - 10, WY1 - 10, L.main, { asset: TILE, color: [168, 128, 88] }, 'wing floor');
+  floor('living', [WX0, WY0 + 10, WX1 - 10, WY1 - 10], L.main);
   box(WX0, WY0 + 10, L.wingTop - 4, WX1 - 10, WY1 - 10, L.wingTop, { asset: TILE, color: [232, 230, 224], direction: 5 }, 'wing ceiling');
   box((WX0 + WX1) / 2 - 10, 130, L.wingTop - 6, (WX0 + WX1) / 2 + 10, 150, L.wingTop - 4, GLOW([255, 240, 210]), 'wing light');
   // stoop + steps down to the ground in front of the door
@@ -181,6 +222,35 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   box(sx0, WY0 - 30, 0, sx1, WY0, L.main - 4, { color: [176, 172, 166] }, 'stoop');
   box(sx0, WY0 - 30, L.main - 4, sx1, WY0, L.main, { asset: TILE, color: [190, 186, 180] }, 'stoop top');
   for (let i = 1; i <= 3; i++) box(sx0, WY0 - 30 - i * 10, 0, sx1, WY0 - 30 - (i - 1) * 10, L.main - [0, 14, 28, 42][i], { color: [176, 172, 166] }, 'step'); // 42 28 14
+  // kitchen addition behind the wing: one storey, flat roof under the wing's eave, counters along
+  // the back wall (sink, stove), a fridge in the corner, windows over the counter and in the end
+  const KY0 = WY1, KY1 = WY1 + EXT, KZ = L.main + 96;               // KZ: wall top (the wing eave is at 164)
+  const kWin = [{ a0: WX0 + 70, a1: WX0 + 130, z0: L.main + 50, z1: L.main + 86 }, ...(WW >= 280 ? [{ a0: WX1 - 110, a1: WX1 - 50, z0: L.main + 50, z1: L.main + 86 }] : [])];
+  const kEnd = [{ a0: KY0 + 30, a1: KY1 - 40, z0: L.main + 30, z1: L.main + 82 }];
+  wall('y', WX0, KY0, KY1, 0, KZ, wingSkin, [], 'kitchen side');
+  wall('x', KY1 - 10, WX0 + 10, WX1, 0, KZ, wingSkin, kWin, 'kitchen back');
+  wall('y', WX1 - 10, KY0, KY1 - 10, 0, KZ, wingSkin, kEnd, 'kitchen end');
+  kWin.forEach(w => windowIn('x', KY1 - 10, 1, w));
+  kEnd.forEach(w => windowIn('y', WX1 - 10, 1, w));
+  box(WX0 + 10, KY0, L.main - 8, WX1 - 10, KY1 - 10, L.main - 4, { color: [140, 136, 130] }, 'kitchen joists');
+  floor('kitchen', [WX0 + 10, KY0, WX1 - 10, KY1 - 10], L.main);
+  box(WX0 + 10, KY0, KZ - 4, WX1 - 10, KY1 - 10, KZ, { asset: TILE, color: [236, 234, 228], direction: 5 }, 'kitchen ceiling');
+  // flat roof: a white fascia slab, a membrane on top (stays under the wing's back eave)
+  box(WX0, KY0, KZ, WX1 + 10, KY1 + 10, KZ + 4, { color: WHITE }, 'kitchen fascia');
+  box(WX0 + 10, KY0, KZ + 4, WX1, KY1, KZ + 6, { color: shade(roofC, 0.8) }, 'kitchen roof');
+  const CAB = [[230, 226, 214], [120, 150, 130], [150, 110, 76], [70, 86, 110]][Math.floor(r() * 4)], TOP = [[60, 60, 64], [226, 222, 214], [150, 130, 110]][Math.floor(r() * 3)];
+  const ck0 = WX0 + 50, ck1 = WX1 - 10, cy1 = KY1 - 10, cyf = cy1 - 24, KF = L.main + (style.kitchen === 'bevel' ? 2 : 0);
+  box(ck0, cyf, KF, ck1, cy1, KF + 34, { color: CAB }, 'cabinets');
+  for (let x = ck0 + 4; x + 16 <= ck1 - 4; x += 20) box(x, cyf - 2, KF + 6, x + 16, cyf, KF + 30, { color: shade(CAB, 0.9) }, 'cabinet door');
+  box(ck0, cyf - 2, KF + 34, ck1, cy1, KF + 38, { color: TOP }, 'worktop');
+  const sinkX = Math.round((kWin[0].a0 + kWin[0].a1) / 20) * 10;
+  box(sinkX - 14, cyf + 4, KF + 38, sinkX + 14, cy1 - 4, KF + 40, { color: [190, 190, 196], material: 'BMC_Metallic' }, 'sink');
+  const stX = Math.round((ck1 - 30) / 10) * 10;
+  box(stX - 14, cyf + 2, KF + 38, stX + 14, cy1 - 2, KF + 40, { color: [36, 36, 38] }, 'hob');
+  for (const [dx, dy] of [[-8, 6], [8, 6], [-8, 16], [8, 16]]) box(stX + dx - 3, cyf + dy - 3, KF + 40, stX + dx + 3, cyf + dy + 3, KF + 42, { color: [160, 40, 20], material: 'BMC_Glow', material_intensity: 1 }, 'burner');
+  box(WX0 + 12, cy1 - 30, KF, WX0 + 44, cy1, KF + 84, { color: [236, 236, 236] }, 'fridge');
+  box(WX0 + 38, cy1 - 32, KF + 50, WX0 + 40, cy1 - 30, KF + 74, { color: [180, 180, 186], material: 'BMC_Metallic' }, 'fridge handle');
+  box((WX0 + WX1) / 2 - 10, KY0 + 40, KZ - 6, (WX0 + WX1) / 2 + 10, KY0 + 60, KZ - 4, GLOW([255, 244, 220]), 'kitchen light');
   // chimney on the wing's outer end, standing clear of the eave
   const cy0 = Math.round((WY0 + WY1) / 2 / 10) * 10 - 20;
   for (let z = 0, k = 0; z < 250; z += 12, k++) box(WX1, cy0, z, WX1 + 40, cy0 + 40, Math.min(250, z + 12), { color: shade(brickC, F[k % F.length] * 0.95) }, 'chimney');
@@ -223,18 +293,19 @@ export function splitLevel({ seed = 1, mirror = false } = {}) {
   box(sx0, -Y0, 0, sx1, WY0 - 60, 4, { asset: TILE, color: [176, 172, 166] }, 'front walk');
 
   // ------------------------------------------------------------- output --
-  const Wst = Math.ceil((X0 + WX1 + 40) / 10) - 1, Dst = Math.ceil((Y0 + DD + OV) / 10) - 1; // studs: (W+1)*10 covers it
+  const Wst = Math.ceil((X0 + WX1 + 40) / 10) - 1, Dst = Math.ceil((Y0 + DD + EXT + 10) / 10) - 1; // studs: (W+1)*10 covers it
   const total = (Wst + 1) * 10;
   let bricks = B.bricks.map(({ label, _m, ...b }) => (_m ? { ...b, _m } : b));
   let doorX = X0 + (fd.a0 + fd.a1) / 2;
   if (mirror) {
     // x -> total - x: wedge / corner orientations re-derived from their mirrored ups
-    bricks = bricks.map(({ _m, ...b }) => {
+    bricks = bricks.map(({ _m, _tri, ...b }) => {
       const nb = { ...b, position: [total - b.position[0], b.position[1], b.position[2]] };
+      if (_tri != null) return { ...nb, rotation: [1, 0, 3, 2][_tri] }; // a flat triangle's owned corner flips in x
       return _m ? { ...nb, ...orientFor(_m.asset, _m.ups.map(([dx, dy]) => [-dx, dy]), _m.ext) } : nb;
     });
     doorX = total - doorX;
-  } else bricks = bricks.map(({ _m, ...b }) => b);
+  } else bricks = bricks.map(({ _m, _tri, ...b }) => b);
   return { bricks, W: Wst, D: Dst, door: [Math.round(doorX / 10)], count: bricks.length, top: Math.max(...bricks.map(b => b.position[2] + b.size[2])) };
 }
 
