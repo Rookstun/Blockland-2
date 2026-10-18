@@ -32,7 +32,7 @@ fs.mkdirSync(out, { recursive: true });
 const total = Number(String(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', src])).trim());
 const start = Number(flag('start', 0)), seconds = Math.min(total - start, Number(flag('len', Infinity)));
 const strips = og.stripsFor(n);
-const L = og.oLayout(n, { lh: Number(flag('lh', 1.6)), charW: Number(flag('charw', 0.95)), ws: Number(flag('ws', 2)), strips });
+const L = og.oLayout(n, { lh: Number(flag('lh', 1.6)), charW: Number(flag('charw', 0.5)), ws: Number(flag('ws', 2)), strips });
 const HM = path.join(PLUGIN, 'bin/heightmap');
 const audio = !args.includes('--mute') && fs.existsSync(HM);
 const brs3 = audio ? await import(pathToFileURL(path.join(PLUGIN, 'lib/brs.mjs')).href) : null;

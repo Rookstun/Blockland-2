@@ -1312,7 +1312,7 @@ module.exports = class Media {
     const olds = this.ogOwners.get(name) ?? [];
     this.ogOwners.set(name, [owner.id]);
     const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
-    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.95, ws: this.config['ogrid-width-scale'] ?? 2, strips, textScale: this.config['ogrid-text-scale'] ?? 1.6875 });
+    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.5, ws: this.config['ogrid-width-scale'] ?? 2, strips, textOff: this.config['ogrid-text-offset'] ?? 1, textScale: this.config['ogrid-text-scale'] ?? 0.645 });
 
     this.stopSession(name, key);
     const session = { stopped: false, kind: 'O grid' };

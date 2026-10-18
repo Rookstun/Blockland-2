@@ -57,17 +57,18 @@ export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06, glyph = GLYPH
 }
 
 /**
- * Geometry. lh = line height (units). A glyph at WidthScale 1 is charW x lh
- * (measured: 0.95), so a cell is (charW x ws) x lh: ws 2 (owner 2026-10-18)
- * = cells ~1.9x wider than tall, picture aspect n x 1.9 : n (the video is
- * cropped to that). Rows per strip get a line height that fills a whole
- * number of 4-unit plates, so stacked strips meet without seams.
+ * Geometry. lh = row pitch (units). MonaspaceKrypton, measured in game with
+ * checker boards (2026-10-18): row pitch = 1.55 x LineHeight (textScale 0.645)
+ * and at WidthScale 2 a block is as wide as it is tall (charW 0.5 = block
+ * width / pitch at WidthScale 1). The old 1.6875 (IosevkaTerm era) drew each
+ * strip's text ~2.6x its brick: strips overlapped and z-fought. Rows per strip
+ * get a pitch that fills whole 4-unit plates, so stacked strips meet.
  */
-export function oLayout(n, { lh = 1.6, charW = 0.95, ws = 2, lift = 20, textScale = 1.6875, strips = stripsFor(n) } = {}) {
+export function oLayout(n, { lh = 1.6, charW = 0.5, ws = 2, lift = 20, textScale = 0.645, strips = stripsFor(n), textOff = 1 } = {}) {
   const rows = n / strips, rowsH = Math.ceil((rows * lh) / 4) * 4, lhE = rowsH / rows;
   const aspect = charW * ws, side = rowsH * strips + 8; // + 4 units of bar top and bottom
   const width = Math.ceil((n * lhE * aspect) / 4) * 4 + 8;
-  return { n, lh: lhE, charW, ws, aspect, strips, rowsH, side, width, hw: width / 2, z0: lift, top: lift + side, textLH: +(lhE * textScale).toFixed(3) };
+  return { n, lh: lhE, charW, ws, aspect, strips, rowsH, textOff, side, width, hw: width / 2, z0: lift, top: lift + side, textLH: +(lhE * textScale).toFixed(3) };
 }
 
 /** Stacked text displays: one string caps at 32768 chars, so ~16 rows of up to 256 blocks a strip. */
@@ -172,10 +173,18 @@ export function encodeFrame(fr, n, { maxRuns = 472, strips = 1 } = {}) {
       let s = '', runs = 0;
       for (let r = k * rows; r < (k + 1) * rows; r++) {
         let run = 0, sum = [0, 0, 0];
-        const flush = () => { if (run) { s += sum.map(v => ALPHA[q(v / run)]).join('') + ALPHA[run - 1]; runs++; } run = 0; sum = [0, 0, 0]; };
+        // a run longer than ALPHA.length goes out as several tokens of ONE colour (capping the run itself
+        // gave each 85-cell piece its own mean: vertical bands at 1/3 and 2/3 of a 256 screen)
+        const flush = () => {
+          if (run) {
+            const col = sum.map(v => ALPHA[q(v / run)]).join('');
+            for (let left = run; left > 0; left -= ALPHA.length) { s += col + ALPHA[Math.min(left, ALPHA.length) - 1]; runs++; }
+          }
+          run = 0; sum = [0, 0, 0];
+        };
         for (let c = 0; c < n; c++) {
           const o = (r * n + c) * 3, px = [fr[o], fr[o + 1], fr[o + 2]];
-          if (run && (run === ALPHA.length || Math.max(...px.map((v, i) => Math.abs(v - sum[i] / run))) > tol)) flush();
+          if (run && Math.max(...px.map((v, i) => Math.abs(v - sum[i] / run))) > tol) flush();
           run++; sum = sum.map((v, i) => v + px[i]);
         }
         flush();
@@ -215,7 +224,8 @@ export function buildReceiver(lib, L, { event, owner = OWNER, debug = false, gly
   const O = w.addOwner(owner);
   const hx = L.hw, rowsH = L.rowsH; // picture height = side - 2 x 4 border
   if (strips !== L.strips) throw Error(`strips ${strips} != layout ${L.strips}`);
-  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: L.ws, Text: glyph } };
+  // text lifted textOff units off the brick face: flush, the black face z-fought through the picture at range (owner 2026-10-18)
+  const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: L.ws, Offset: { X: 0, Y: 0, Z: L.textOff ?? 0 }, Text: glyph } };
   // strip 0 = top rows; a 4-unit frame bar above and below
   const screens = [];
   for (let k = 0; k < strips; k++) {
@@ -375,7 +385,9 @@ export function buildCartridge(lib, L, tokens, { event, fps, dur, slot = 0, owne
 }
 
 /** Clear box of cartridge slot `slot` (file coords [centre, half]). */
-export const cartridgeBox = (L, slot) => [[0, cartY(L, slot), L.z0 + 10], [200, 12, 12]];
+// gates run x -160..200 and the event sender is 10 wide: the old 200 box left it standing (ClearRegion takes only bricks
+// wholly inside), so reusing a slot (chunk 3, 40 s in) rejected the new sender = frozen picture
+export const cartridgeBox = (L, slot) => [[20, cartY(L, slot), L.z0 + 10], [220, 16, 16]];
 
 /** Clear boxes of a receiver (file coords [centre, half]): screen + gate field. */
 export function receiverBoxes(L) {
