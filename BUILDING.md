@@ -92,6 +92,8 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
   courses: rise = the wall's course height (10 on 10-high coursework), each course a running-bond row over
   every step at least that high, so the sides read as brick and the steps line up with the walls; run the
   stair flush against walls / battered faces (fill out to the face per course). npctalk/temple.mjs coursed().
+  TREADS AT LEAST 12 DEEP: 10-unit treads (rise 10) could not be walked up at all (owner 2026-10-18,
+  "all the stairs now no longer work"); rise 10 / run 12 works. **(owner)**
 - WIRES SHOW: a wire is drawn as a line between its two bricks, through rooms. Keep gates in an invisible
   microchip in a pocket right beside the sensor / actuator and link far apart parts with a global custom
   event (Exec_SendCustomEventGlobal -> Event_CustomGlobal), never with long wires. **(owner)**
