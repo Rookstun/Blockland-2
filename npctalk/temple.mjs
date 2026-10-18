@@ -292,7 +292,7 @@ const corbel = (c, w, z0, zs) => (a, z) => { if (z < z0) return false; const hal
 const R = ROOMS;
 roomFaces(R.WELL, { W: hole(R.C1.v0, R.C1.v1, R.C1.z0 - 1, R.C1.z1) }, 10);
 roomFaces(R.C1, { E: () => true, W: () => true }, 12);
-roomFaces(R.ANT, { E: hole(R.C1.v0, R.C1.v1, R.C1.z0 - 1, R.C1.z1), N: () => false, W: (a, z) => false, S: hole(R.S2.u0, R.S2.u1, 0, 2000) }, 14);
+roomFaces(R.ANT, { E: hole(R.C1.v0, R.C1.v1, R.C1.z0 - 1, R.C1.z1), N: () => false, W: (a, z) => false }, 14); // S2 now leaves through the floor (no hole in the south wall)
 roomFaces({ ...R.HALL, z0: F }, { E: hole(R.C3.v0, R.C3.v1, F - 1, R.C3.z1) }, 16);
 roomFaces(R.PIT, { shadeZ: pitShade }, 18);
 roomFaces(R.C3, { E: () => true, W: () => true }, 22);
@@ -326,11 +326,21 @@ const TILE = 14, PITCH = 80, GU0 = -190, GV0 = -250;
 const tiles = [];
 for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
   const u = GU0 + c * PITCH, v = GV0 + r * PITCH, trap = hash(r, c, 77) < 0.36 && !(r === 2 && c === 0);
-  for (let z = R.PIT.z0; z < F - 16; z += 20) ubox(u - TILE + 2, v - TILE + 2, z, u + TILE - 2, v + TILE - 2, Math.min(F - 16, z + 20), { color: shade(clayC(u, v, z), pitShade(z + 10)) }, 'tilepillar');
-  { const pc = { color: shade(clayC(u, v, F), pitShade(F - 10)) }, a = TILE - 2; // the ring round the chip pocket (12 x 12 x 12)
-    ubox(u - a, v - a, F - 16, u - 6, v + a, F - 4, pc, 'tilepillar'); ubox(u + 6, v - a, F - 16, u + a, v + a, F - 4, pc, 'tilepillar');
-    ubox(u - 6, v - a, F - 16, u + 6, v - 6, F - 4, pc, 'tilepillar'); ubox(u - 6, v + 6, F - 16, u + 6, v + a, F - 4, pc, 'tilepillar'); }
-  ubox(u - TILE, v - TILE, F - 4, u + TILE, v + TILE, F, { color: SAND[(r + c) % 3], ...(trap ? { trap: { r, c } } : {}) }, trap ? 'traptile' : 'tile');
+  // (owner screenshot 2026-10-18: striped pillars) laid in courses like the walls: two 12 x 24 bricks a
+  // course, turned 90 degrees every course, darkening toward the spikes; the top two courses ring the
+  // 12 x 12 pocket of the tile's chip; a 10-high capstone (the trap tile) on top
+  const a = TILE - 2;
+  for (let z = R.PIT.z0, k = 0; z < F - 10; z += 10, k++) {
+    const col = q => ({ color: shade(clayC(u, v, z, q), pitShade(z + 5)) });
+    if (z < F - 30) {
+      if (k % 2) { ubox(u - a, v - a, z, u, v + a, z + 10, col(1), 'tilepillar'); ubox(u, v - a, z, u + a, v + a, z + 10, col(2), 'tilepillar'); }
+      else { ubox(u - a, v - a, z, u + a, v, z + 10, col(1), 'tilepillar'); ubox(u - a, v, z, u + a, v + a, z + 10, col(2), 'tilepillar'); }
+    } else { // pinwheel ring round the pocket (u-6..u+6, v-6..v+6)
+      ubox(u - a, v - a, z, u + 6, v - 6, z + 10, col(1), 'tilepillar'); ubox(u + 6, v - a, z, u + a, v + 6, z + 10, col(2), 'tilepillar');
+      ubox(u - 6, v + 6, z, u + a, v + a, z + 10, col(3), 'tilepillar'); ubox(u - a, v - 6, z, u - 6, v + a, z + 10, col(4), 'tilepillar');
+    }
+  }
+  ubox(u - TILE, v - TILE, F - 10, u + TILE, v + TILE, F, { color: SAND[(r + c) % 3], ...(trap ? { trap: { r, c } } : {}) }, trap ? 'traptile' : 'tile');
   tiles.push({ r, c, u, v, trap });
 }
 const nearTile = (u, v) => tiles.some(t => Math.abs(u - t.u) < TILE + 2 && Math.abs(v - t.v) < TILE + 2);
@@ -430,6 +440,38 @@ for (const s of steps) if (hash(s, 5) < 0.3) fern(CS.w + 6, CS.v0 + 10 * s + 5, 
 for (const [u, v] of [[-290, -50], [-90, -50], [-290, 130], [-95, 128]]) fern(u, v, 760);
 
 // ---------------------------------------------------------------- plaque at the shrine door
+// ---------------------------------------------------------------- ceilings
+// (owner screenshot 2026-10-18: the hall's ceiling was the raw undersides of the core blocks) two corbel
+// courses stepping 8 and 16 out from the walls, then a coffer of 40 x 40 sandstone panels in two shades;
+// holes stay open (corridors, the S2 shaft)
+function ceiling(r, o = {}, open = []) {
+  const z1 = r.z1;
+  for (const [dz, d] of [[20, 8], [10, 16]]) {
+    const z = z1 - dz;
+    const run = (axis, at, a0, a1, dir, skip, key) => { const c = dz / 10;
+      for (let a = a0 - (c % 2) * 10; a < a1; a += 20) { const s = Math.max(a0, a), e = Math.min(a1, a + 20); if (e - s < 2 || skip?.((s + e) / 2, z + 5) || skip?.(s + 1, z + 5) || skip?.(e - 1, z + 5)) continue;
+        const p = axis === 'u' ? [[at, s], [at + dir * d, e]] : [[s, at], [e, at + dir * d]];
+        ubox(p[0][0], p[0][1], z, p[1][0], p[1][1], z + 10, clay(key, at, a, z), 'corbel'); } };
+    run('v', r.v1, r.u0, r.u1, -1, o.N, 71); run('v', r.v0, r.u0, r.u1, +1, o.S, 72);
+    run('u', r.u1, r.v0 + d, r.v1 - d, -1, o.E, 73); run('u', r.u0, r.v0 + d, r.v1 - d, +1, o.W, 74);
+  }
+  for (let u = r.u0 + 16; u < r.u1 - 16; u += 40) for (let v = r.v0 + 16; v < r.v1 - 16; v += 40) {
+    const q = { u0: u, u1: Math.min(r.u1 - 16, u + 40), v0: v, v1: Math.min(r.v1 - 16, v + 40) };
+    // a panel the shaft cuts is split round it (no ring of missing panels)
+    let parts = [q];
+    for (const h of open) parts = parts.flatMap(s => (h.u0 >= s.u1 || h.u1 <= s.u0 || h.v0 >= s.v1 || h.v1 <= s.v0) ? [s] : [
+      { ...s, u1: Math.min(s.u1, h.u0) }, { ...s, u0: Math.max(s.u0, h.u1) },
+      { u0: Math.max(s.u0, h.u0), u1: Math.min(s.u1, h.u1), v0: s.v0, v1: Math.min(s.v1, h.v0) },
+      { u0: Math.max(s.u0, h.u0), u1: Math.min(s.u1, h.u1), v0: Math.max(s.v0, h.v1), v1: s.v1 }].filter(x => x.u1 > x.u0 && x.v1 > x.v0));
+    for (const s of parts) ubox(s.u0, s.v0, z1 - 4, s.u1, s.v1, z1, { color: SAND[((u + v) / 40 % 2 + 2) % 2 ? 0 : 2] }, 'coffer');
+  }
+}
+// the S2 shaft between the hall's ceiling and the antechamber floor gets brick walls
+roomFaces({ ...R.S2, z0: R.HALL.z1, z1: 760 }, {}, 76);
+ceiling(R.HALL, { E: hole(R.C3.v0, R.C3.v1, F - 1, R.C3.z1) }, [{ u0: R.S2.u0 - 8, u1: R.S2.u1 + 8, v0: R.S2.v0 - 8, v1: R.S2.v1 + 8 }]);
+ceiling(R.SAN, { W: hole(R.C3.v0, R.C3.v1, F - 1, R.C3.z1), S: hole(R.E1.u0, R.E1.u1, 0, 2000) });
+ceiling(R.ANT, { E: hole(R.C1.v0, R.C1.v1, R.C1.z0 - 1, R.C1.z1) });
+
 plaque({ put: (b, x, y, z) => B.add({ ...b, position: [x, y, z] }, 'plaque'), text: 'TEMPLE OF THE STASH\nNO STEALING. SIGNED, GARY\nP.S. THE BOULDER IS DECORATIVE',
   facing: [0, 1], x: X(-62), y: Y(SH.v1) + 1, z: SH.zb + 40, w: 22, h: 14, color: [96, 76, 52], style: { LineHeight: 1.6 } });
 
@@ -479,7 +521,7 @@ const chipAt = (x, y, z) => {
 const wire = (a, ap, b, bp) => { if (!a.c.PORTS[ap] || !b.c.PORTS[bp]) throw new Error(`bad port ${a.c.NAME}.${ap} -> ${b.c.NAME}.${bp}`); w.addWire({ brick: a.h, component_type: a.c.NAME, port: a.c.PORTS[ap] }, { brick: b.h, component_type: b.c.NAME, port: b.c.PORTS[bp] }); };
 for (const z of zones) {
   const t = tiles.find(q => q.r === z.trap.r && q.c === z.trap.c);
-  const g = chipAt(X(t.u), Y(t.v), F - 10);
+  const g = chipAt(X(t.u), Y(t.v), F - 20); // the pocket = the two courses under the capstone
   const edge = g(COMP.Expr_EdgeDetectorExec);
   const on = g(COMP.Exec_SendCustomEventGlobal, { EventName: 'temple.trap', ...DATA8('DataIn', { 1: z.trap.r, 2: z.trap.c, 3: 1 }) }, { size: EVENT_SIZE });
   const off = g(COMP.Exec_SendCustomEventGlobal, { EventName: 'temple.trap', ...DATA8('DataIn', { 1: z.trap.r, 2: z.trap.c, 3: 0 }) }, { size: EVENT_SIZE });
