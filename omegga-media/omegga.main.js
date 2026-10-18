@@ -1284,8 +1284,8 @@ module.exports = class Media {
     if (args[0] === 'stop' || args[0] === 'off') {
       const hadOne = this.stopSession(name, key);
       // also the screen left standing after a finished video
-      const id = require('crypto').createHash('sha1').update('ogrid:' + name).digest('hex').slice(0, 12);
-      this.omegga.writeln(`br.Bricks.Clear ${this.og.ownerFor(id).id} 1`);
+      for (const id of this.ogOwners?.get(name) ?? []) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
+      this.ogOwners?.delete(name);
       return hadOne || this.whisper(name, 'Screen removed.');
     }
     const opts = [], words = [];
@@ -1306,7 +1306,11 @@ module.exports = class Media {
     const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(this.og.stripRunCap(n, strips) * strips, Math.floor((this.config['ogrid-runs-per-sec'] ?? 6000) / fps));
     const crypto = require('crypto');
     const hash = crypto.createHash('sha1').update('ogrid:' + name).digest('hex');
-    const owner = this.og.ownerFor(hash.slice(0, 12));
+    // a NEW owner every run: a late Bricks.Clear from a stopped run (restart within a few s) cut 90 bricks out of the next screen
+    const owner = this.og.ownerFor(hash.slice(0, 6) + crypto.randomBytes(3).toString('hex'));
+    this.ogOwners ??= new Map();
+    const olds = this.ogOwners.get(name) ?? [];
+    this.ogOwners.set(name, [owner.id]);
     const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
     const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.95, textScale: this.config['ogrid-text-scale'] ?? 1.6875 });
 
@@ -1368,8 +1372,8 @@ module.exports = class Media {
       let next = build(0);
       const first = await next;
       if (session.stopped) return;
-      // the receiver: loaded once, then only data goes out
-      this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
+      // the receiver: loaded once, then only cartridges; earlier runs' screens go first
+      for (const id of olds) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
       for (const [c, h] of this.og.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
       const loadAt = buf => {
         const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
