@@ -1308,7 +1308,7 @@ module.exports = class Media {
     const hash = crypto.createHash('sha1').update('ogrid:' + name).digest('hex');
     const owner = this.og.ownerFor(hash.slice(0, 12));
     const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
-    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.5, textScale: this.config['ogrid-text-scale'] ?? 1.6875 });
+    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.95, textScale: this.config['ogrid-text-scale'] ?? 1.6875 });
 
     this.stopSession(name, key);
     const session = { stopped: false, kind: 'O grid' };

@@ -60,7 +60,7 @@ export function oFrames(frames, n, { max = MAX_CHARS, dark = 0.06, glyph = GLYPH
  * Geometry. lh = line height (units); a glyph is charW x lh, so WidthScale
  * 1 / charW makes every cell lh x lh: n x n cells = a square picture.
  */
-export function oLayout(n, { lh = 1.6, charW = 0.5, lift = 20, textScale = 1.6875 } = {}) {
+export function oLayout(n, { lh = 1.6, charW = 0.95, lift = 20, textScale = 1.6875 } = {}) {
   const side = Math.ceil((n * lh) / 4) * 4 + 8; // screen brick side (4 units of border each way, even halves)
   // textScale: a block drew at ~0.6 of its LineHeight in game (owner screenshot 2026-10-16:
   // a 32-cell picture filled 76 of 136 units), so LineHeight = cell size x 1.68 fills the board
