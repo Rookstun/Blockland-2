@@ -252,6 +252,7 @@ module.exports = class Media {
       // ?v=mtime: Omegga reloads keep the process, and its ESM cache would keep an old tv.mjs
       this.tv = await import(pathToFileURL(path.join(__dirname, 'tv.mjs')).href + '?v=' + fs.statSync(path.join(__dirname, 'tv.mjs')).mtimeMs);
       this.og = await import(pathToFileURL(path.join(__dirname, 'ogrid.mjs')).href + '?v=' + fs.statSync(path.join(__dirname, 'ogrid.mjs')).mtimeMs);
+      this.tg = await import(pathToFileURL(path.join(__dirname, 'tgrid.mjs')).href + '?v=' + fs.statSync(path.join(__dirname, 'tgrid.mjs')).mtimeMs);
     } catch (e) { console.error('[media] !tv disabled', e); }
     for (const old of global.__mediaSessions?.values() ?? []) {
       try { old.stop?.(); old.clear?.(); } catch {}
@@ -1289,17 +1290,20 @@ module.exports = class Media {
       return hadOne || this.whisper(name, 'Screen removed.');
     }
     const opts = [], words = [];
-    for (const a of args) (/^([+-][xy]|mute|letters|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
+    for (const a of args) (/^([+-][xy]|mute|letters|strips|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
     if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
     const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
     const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
     // cell glyph: a full block (default) or, with `letters`, the letter O
     const glyph = opts.includes('letters') ? 'O' : this.config['ogrid-glyph'] || this.og.GLYPH;
     const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 256, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 256)));
-    const fps = Math.max(1, Math.min(15, opt('fps') || this.config['ogrid-fps'] || 2));
+    // TILES (default, 2026-10-18): a 16:9 wall of micro-brick tiles, k x k blocks each, only changed tiles
+    // rewritten (tgrid.mjs). `strips` = the older square screen of stacked text strips (ogrid.mjs).
+    const tiles = !opts.includes('strips') && !!this.tg;
+    const fps = Math.max(1, Math.min(15, opt('fps') || (tiles ? this.config['ogrid-tile-fps'] ?? 4 : this.config['ogrid-fps'] || 2)));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
-    const chunkSec = Math.max(5, this.config['ogrid-chunk-seconds'] ?? 20);
+    const chunkSec = Math.max(5, tiles ? this.config['ogrid-tile-chunk-seconds'] ?? 10 : this.config['ogrid-chunk-seconds'] ?? 20);
     const strips = this.og.stripsFor(n); // stacked text displays: one string caps at 32768 chars
     // runs a frame: what the strips can hold, and what the decoders get through in a frame's time
     // (4 loops share the owner's 10 ms wire budget a tick; 1416 runs at 2 fps ran live)
@@ -1312,7 +1316,9 @@ module.exports = class Media {
     const olds = this.ogOwners.get(name) ?? [];
     this.ogOwners.set(name, [owner.id]);
     const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
-    const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.5, ws: this.config['ogrid-width-scale'] ?? 2, strips, textOff: this.config['ogrid-text-offset'] ?? 1, textScale: this.config['ogrid-text-scale'] ?? 0.645 });
+    const M = tiles ? this.tg : this.og;
+    const L = tiles ? this.tg.tLayout({ tw: this.config['ogrid-tiles-wide'] ?? 64, th: this.config['ogrid-tiles-high'] ?? 36, k: this.config['ogrid-tile-cells'] ?? 4, cell: this.config['ogrid-tile-cell'] ?? 2 })
+      : this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.5, ws: this.config['ogrid-width-scale'] ?? 2, strips, textOff: this.config['ogrid-text-offset'] ?? 1, textScale: this.config['ogrid-text-scale'] ?? 0.645 });
 
     this.stopSession(name, key);
     const session = { stopped: false, kind: 'O grid' };
@@ -1341,13 +1347,19 @@ module.exports = class Media {
       const snap = v => Math.round(v / STUD) * STUD;
       const at = [snap(pos[0] - nv[0] * dist), snap(pos[1] - nv[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
       const world = p => T(p).map((v, i) => v + at[i]);
+      const [fw, fh] = tiles ? [L.cols, L.rows] : [n, n];
+      const tgState = tiles ? this.tg.newState(L) : null; // what every tile shows (chunks build in order)
       const build = async k => {
         const t0 = startAt + k * chunkSec, dur = Math.min(chunkSec, seconds - k * chunkSec);
         const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
-          '-vf', `fps=${fps},crop='min(iw,ih*${L.aspect})':'min(ih,iw/${L.aspect})',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
-        const fb = n * n * 3, frames = [];
-        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(this.og.encodeFrame(raw.subarray(o, o + fb), n, { maxRuns, strips }));
-        if (!frames.length) throw new Error('no frames decoded');
+          '-vf', `fps=${fps},crop='min(iw,ih*${L.aspect})':'min(ih,iw/${L.aspect})',scale=${fw}:${fh}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
+        const fb = fw * fh * 3, rawFrames = [];
+        for (let o = 0; o + fb <= raw.length; o += fb) rawFrames.push(raw.subarray(o, o + fb));
+        if (!rawFrames.length) throw new Error('no frames decoded');
+        // tiles: packets of tile updates (16 of the 20 packet slots a second, the rest lets a backlog catch up)
+        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? 16, thresh: this.config['ogrid-tile-thresh'] ?? 28 })
+          : rawFrames.map(fr => this.og.encodeFrame(fr, n, { maxRuns, strips }));
+        const nFrames = rawFrames.length;
         let audio = null;
         if (withSound) {
           const wav = file.replace(/\.[^.]+$/, '') + `.og${k}.wav`;
@@ -1357,7 +1369,7 @@ module.exports = class Media {
           } catch (e) { console.error(`[media] ogrid soundtrack ${k}`, e); }
           finally { fs.rmSync(wav, { force: true }); }
         }
-        return { frames, audio, dur };
+        return { frames, audio, dur, nFrames };
       };
       // the soundtrack chip stands beside the screen (in speaker range of whoever watches it), chunks alternate sides so a swap never clears the playing one
       const loadAudio = (d, k) => {
@@ -1374,33 +1386,33 @@ module.exports = class Media {
       if (session.stopped) return;
       // the receiver: loaded once, then only cartridges; earlier runs' screens go first
       for (const id of olds) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
-      for (const [c, h] of this.og.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
+      for (const [c, h] of M.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
       const loadAt = buf => {
         const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
         fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), buf);
         this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
         setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
       };
-      loadAt(this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
+      loadAt(tiles ? this.tg.buildReceiver(this.brs4, L, { event, owner }) : this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
       await sleep(1500);
-      this.whisper(name, `<color="9cf">Showing ${n}x${n} ${glyph === 'O' ? "O's" : 'blocks'} at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). /ogrid stop ends it.</>`);
+      this.whisper(name, `<color="9cf">Showing ${fw}x${fh} ${glyph === 'O' ? "O's" : 'blocks'} at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). /ogrid stop ends it.</>`);
       let sent = 0, prevAudio = null, set = first;
       for (let k = 0; k < chunks && !session.stopped; k++) {
         if (k > 0) set = await next.catch(e => (console.error(`[media] ogrid chunk ${k}`, e), null));
         if (k + 1 < chunks) next = build(k + 1); // decode the next chunk while this one plays
         if (!set) { await sleep(chunkSec * 1000); continue; }
         // cartridges alternate between two slots: this slot held chunk k-2 (long done)
-        const slot = k % 2, [c, h] = this.og.cartridgeBox(L, slot);
+        const slot = k % 2, [c, h] = M.cartridgeBox(L, slot);
         this.clearBox(world(c), T(h).map(Math.abs));
-        loadAt(this.og.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner }));
+        loadAt(M.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner }));
         const old = prevAudio;
         prevAudio = loadAudio(set.audio, k);
         if (old) setTimeout(old, 1500);
-        sent += set.frames.length;
+        sent += set.nFrames;
         const end = Date.now() / 1000 + set.dur;
         while (!session.stopped && Date.now() / 1000 < end) await sleep(50);
       }
-      console.log(`[media] ogrid ${name}: ${n}x${n} ${fps} fps, ${sent} frames in ${chunks} cartridge(s), at ${at.join(',')} orient ${orient}`);
+      console.log(`[media] ogrid ${name}: ${fw}x${fh}${tiles ? ' tiles' : ''} ${fps} fps, ${sent} frames in ${chunks} cartridge(s), at ${at.join(',')} orient ${orient}`);
       await sleep(1500);
       // the screen stays up after the video (players tune its text settings); the next /ogrid or /ogrid stop clears it
       if (!session.stopped) audioClears.splice(0).forEach(c => c());
