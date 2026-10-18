@@ -1122,6 +1122,13 @@ module.exports = class Media {
    * black idle panel comes back (owned by the map owner, like the original).
    */
   async streamCommand(name, args) {
+    // owner 2026-10-18 "use the O grid method": the panel's bricks become /ogrid text tiles (k x k blocks each)
+    if (!args.includes('pixels')) {
+      if (args[0] === 'stop' || args[0] === 'off') return this.oGridCommand(name, ['stop'], this.streamPanel());
+      if (!args.length) return this.whisper(name, 'Usage: /stream <link or search words> [fps=N] [mute] [start=S] [len=S]   /stream stop   (pixels = the plain pixel player)');
+      return this.oGridCommand(name, args, this.streamPanel());
+    }
+    args = args.filter(a => a !== 'pixels');
     const key = 'stream';
     if (!this.tv || !this.brs4) return this.whisper(name, '<color="f55">/stream is not installed (lib/brs4.mjs missing).</>');
     if (!args.length) return this.whisper(name, 'Usage: /stream <link or search words> [fps=N] [mute] [glow] [start=S] [len=S]   /stream stop');
@@ -1249,6 +1256,11 @@ module.exports = class Media {
       if (file) setTimeout(() => this.release(file), 60_000);
       if (this.sessions.get(key) === session) this.sessions.delete(key);
     }
+  }
+
+  /** The owner's wall panel (config stream-panel overrides): pixel plane centre x/y, z under the bottom row, w x h bricks of p units, k x k O-grid cells per brick. */
+  streamPanel() {
+    return { x: 3956, y: 374, z: 982, w: 32, h: 18, p: 2, k: 2, ...(this.config['stream-panel'] ?? {}) };
   }
 
   // ---------- !tv ----------
@@ -1420,20 +1432,22 @@ module.exports = class Media {
    * (2026-10-17: was ~24 x 500-char `br.Chat.Command` lines a second: 3
    * server crashes. Now 2 console lines a chunk.)
    */
-  async oGridCommand(name, args) {
-    const key = `ogrid:${name}`;
+  async oGridCommand(name, args, panel = null) {
+    // panel = /stream: tiles on the owner's fixed wall panel (one shared session), black idle panel back after
+    const key = panel ? 'stream' : `ogrid:${name}`;
+    const ownerKey = panel ? '\u0000stream' : name;
     if (!this.og || !this.brs4) return this.whisper(name, '<color="f55">/ogrid is not installed (lib/brs4.mjs missing).</>');
     if (this.config['ogrid-enabled'] === false) return this.whisper(name, '<color="f55">/ogrid is switched off for now.</>');
     if (!args.length) return this.whisper(name, 'Usage: /ogrid <link or search words> [size 32] [fps=N] [-x|+x|-y|+y] [mute] [letters] [start=S] [len=S]   /ogrid stop');
     if (args[0] === 'stop' || args[0] === 'off') {
       const hadOne = this.stopSession(name, key);
       // also the screen left standing after a finished video
-      for (const id of global.__ogOwners?.get(name) ?? []) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
-      global.__ogOwners?.delete(name);
-      return hadOne || this.whisper(name, 'Screen removed.');
+      for (const id of global.__ogOwners?.get(ownerKey) ?? []) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
+      global.__ogOwners?.delete(ownerKey);
+      return hadOne || this.whisper(name, panel ? 'Nothing is streaming.' : 'Screen removed.');
     }
     const opts = [], words = [];
-    for (const a of args) (/^([+-][xy]|mute|letters|strips|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
+    for (const a of args) (/^([+-][xy]|mute|letters|strips|debug|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
     if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
     const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
     const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
@@ -1442,7 +1456,8 @@ module.exports = class Media {
     const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 256, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 256)));
     // TILES (default, 2026-10-18): a 16:9 wall of micro-brick tiles, k x k blocks each, only changed tiles
     // rewritten (tgrid.mjs). `strips` = the older square screen of stacked text strips (ogrid.mjs).
-    const tiles = !opts.includes('strips') && !!this.tg;
+    const tiles = (panel || !opts.includes('strips')) && !!this.tg;
+    if (panel && !tiles) return this.whisper(name, '<color="f55">/stream needs tgrid.mjs.</>');
     const fps = Math.max(1, Math.min(15, opt('fps') || (tiles ? this.config['ogrid-tile-fps'] ?? 4 : this.config['ogrid-fps'] || 2)));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
@@ -1452,27 +1467,44 @@ module.exports = class Media {
     // (4 loops share the owner's 10 ms wire budget a tick; 1416 runs at 2 fps ran live)
     const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(this.og.stripRunCap(n, strips) * strips, Math.floor((this.config['ogrid-runs-per-sec'] ?? 6000) / fps));
     const crypto = require('crypto');
-    const hash = crypto.createHash('sha1').update('ogrid:' + name).digest('hex');
+    const hash = crypto.createHash('sha1').update(panel ? 'stream' : 'ogrid:' + name).digest('hex');
     // a NEW owner every run: a late Bricks.Clear from a stopped run (restart within a few s) cut 90 bricks out of the next screen
     const owner = this.og.ownerFor(hash.slice(0, 6) + crypto.randomBytes(3).toString('hex'));
     // kept on global: a plugin reload must not forget a screen that is still standing
     this.ogOwners = global.__ogOwners ??= new Map();
-    const olds = this.ogOwners.get(name) ?? [];
-    this.ogOwners.set(name, [owner.id]);
+    const olds = this.ogOwners.get(ownerKey) ?? [];
+    this.ogOwners.set(ownerKey, [owner.id]);
     const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
     const M = tiles ? this.tg : this.og;
-    const L = tiles ? this.tg.tLayout({ tw: this.config['ogrid-tiles-wide'] ?? 64, th: this.config['ogrid-tiles-high'] ?? 36, k: this.config['ogrid-tile-cells'] ?? 4, cell: this.config['ogrid-tile-cell'] ?? 2 })
+    const L = panel ? this.tg.tLayout({ tw: panel.w, th: panel.h, k: panel.k, cell: panel.p / panel.k, lift: -4, depth: panel.p / 2, frame: false, gate: [0, 0, 6000], colour: [0, 0, 0] })
+      : tiles ? this.tg.tLayout({ tw: this.config['ogrid-tiles-wide'] ?? 64, th: this.config['ogrid-tiles-high'] ?? 36, k: this.config['ogrid-tile-cells'] ?? 4, cell: this.config['ogrid-tile-cell'] ?? 2 })
       : this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.5, ws: this.config['ogrid-width-scale'] ?? 2, strips, textOff: this.config['ogrid-text-offset'] ?? 1, textScale: this.config['ogrid-text-scale'] ?? 0.645 });
 
     this.stopSession(name, key);
-    const session = { stopped: false, kind: 'O grid' };
+    const session = { stopped: false, kind: panel ? 'the stream' : 'O grid' };
     session.stop = () => (session.stopped = true);
     const audioClears = [];
-    session.clear = () => { this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`); audioClears.splice(0).forEach(c => c()); };
+    let idleTimer = null;
+    session.clear = () => {
+      this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
+      audioClears.splice(0).forEach(c => c());
+      if (panel) {
+        // the owner's black panel comes back (map owner, plain bricks) once our tiles are gone
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          for (const [c, h] of this.tg.receiverBoxes(L).slice(0, 1)) this.clearBox(c.map((v, i) => v + [panel.x, panel.y, panel.z][i]), h);
+          const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+          fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.tv.idlePanel(this.brs4, { ...this.tv.layout(panel.w, panel.h, panel.p), z0: 0 },
+            { owner: { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'abysmal garbage', display_name: 'abysmal garbage' }, pixDepth: panel.p / 2 }));
+          this.omegga.writeln(`br.Prefab.Load "${ref}" ${panel.x} ${panel.y} ${panel.z} 0 16`);
+          setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
+        }, 2500);
+      }
+    };
     this.sessions.set(key, session);
     let file;
     try {
-      const pos = await this.playerSpot(name);
+      const pos = panel ? null : await this.playerSpot(name);
       this.whisper(name, `<color="999">${loading()}...</>`);
       const maxMin = this.config['video-max-minutes'] ?? 240;
       file = await this.download(link, 'video', withSound, maxMin);
@@ -1486,10 +1518,10 @@ module.exports = class Media {
 
       // the screen stands in front of the player, facing them
       const nv = NORMAL[facing];
-      const orient = 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing], T = ORIENT[orient];
+      const orient = panel ? 16 : 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing], T = ORIENT[orient];
       const dist = Math.max(10, Math.round((Math.max(L.side, L.width * 0.8) * 0.9) / STUD)) * STUD;
       const snap = v => Math.round(v / STUD) * STUD;
-      const at = [snap(pos[0] - nv[0] * dist), snap(pos[1] - nv[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
+      const at = panel ? [panel.x, panel.y, panel.z] : [snap(pos[0] - nv[0] * dist), snap(pos[1] - nv[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
       const world = p => T(p).map((v, i) => v + at[i]);
       const [fw, fh] = tiles ? [L.cols, L.rows] : [n, n];
       const tgState = tiles ? this.tg.newState(L) : null; // what every tile shows (chunks build in order)
@@ -1501,7 +1533,7 @@ module.exports = class Media {
         for (let o = 0; o + fb <= raw.length; o += fb) rawFrames.push(raw.subarray(o, o + fb));
         if (!rawFrames.length) throw new Error('no frames decoded');
         // tiles: packets of tile updates (16 of the 20 packet slots a second, the rest lets a backlog catch up)
-        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? 16, thresh: this.config['ogrid-tile-thresh'] ?? 28 })
+        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? 16, thresh: this.config['ogrid-tile-thresh'] ?? (panel ? 16 : 28), refresh: panel ? (this.config['stream-refresh'] ?? 48) : 0 })
           : rawFrames.map(fr => this.og.encodeFrame(fr, n, { maxRuns, strips }));
         const nFrames = rawFrames.length;
         let audio = null;
@@ -1518,7 +1550,7 @@ module.exports = class Media {
       // the soundtrack chip stands beside the screen (in speaker range of whoever watches it), chunks alternate sides so a swap never clears the playing one
       const loadAudio = (d, k) => {
         if (!d) return null;
-        const c = world([(k % 2 ? 1 : -1) * (L.hw + 60), 0, 28]);
+        const c = panel ? world([(k % 2 ? 1 : -1) * 60, 0, L.height + 260]) : world([(k % 2 ? 1 : -1) * (L.hw + 60), 0, 28]);
         const spot = [0, 1, 2].map(i => Math.round((c[i] - (d.lo[i] + d.hi[i]) / 2) / 2) * 2);
         const clr = this.loadDevice(d, {}, spot);
         audioClears.push(clr);
@@ -1530,6 +1562,7 @@ module.exports = class Media {
       if (session.stopped) return;
       // the receiver: loaded once, then only cartridges; earlier runs' screens go first
       for (const id of olds) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
+      if (panel) this.omegga.writeln(`br.Bricks.Clear ${this.tv.ownerFor('57e2ea000001').id} 1`); // the pixel player's
       for (const [c, h] of M.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
       const loadAt = buf => {
         const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
@@ -1537,7 +1570,7 @@ module.exports = class Media {
         this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
         setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
       };
-      loadAt(tiles ? this.tg.buildReceiver(this.brs4, L, { event, owner }) : this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
+      loadAt(tiles ? this.tg.buildReceiver(this.brs4, L, { event, owner, debug: opts.includes('debug') }) : this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
       await sleep(1500);
       this.whisper(name, `<color="9cf">Showing ${fw}x${fh} ${glyph === 'O' ? "O's" : 'blocks'} at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). /ogrid stop ends it.</>`);
       let sent = 0, prevAudio = null, set = first;
@@ -1561,8 +1594,8 @@ module.exports = class Media {
       // the screen goes when the video ends (owner 2026-10-18: "ogrid doesnt dissapear after")
       if (!session.stopped) {
         session.clear();
-        const mine = this.ogOwners.get(name);
-        if (mine?.[0] === owner.id) this.ogOwners.delete(name);
+        const mine = this.ogOwners.get(ownerKey);
+        if (mine?.[0] === owner.id) this.ogOwners.delete(ownerKey);
       }
     } finally {
       session.stopped = true;

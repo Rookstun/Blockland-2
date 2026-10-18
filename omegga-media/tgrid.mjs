@@ -34,11 +34,14 @@ const TEXT = {
  * row pitch = 1.55 x LineHeight, blocks square at WidthScale 2. fit < 1 leaves a hairline instead of
  * an overlap (overlapping text of two tiles z-fights).
  */
-export function tLayout({ tw = 64, th = 36, k = 4, cell = 2, lift = 20, pitch = 1.55, ws = 2, fit = 1 } = {}) {
+// /stream panel mode (2026-10-18): depth = tile half depth, frame false = no bars (the owner's panel has its
+// own frame; its boxes must not touch it), gate = offset of every hidden gate (the sky over a wall panel),
+// colour = blank tile colour.
+export function tLayout({ tw = 64, th = 36, k = 4, cell = 2, lift = 20, pitch = 1.55, ws = 2, fit = 1, depth = 2, frame = true, gate = [0, 0, 0], colour = [6, 6, 8] } = {}) {
   const tile = k * cell;
-  if (tile % 4) throw Error('tile side must be a multiple of 4 units');
+  if (tile % 2) throw Error('tile side must be a multiple of 2 units');
   const width = tw * tile, height = th * tile;
-  return { tw, th, k, cell, tile, cols: tw * k, rows: th * k, width, height, hw: width / 2 + 4, side: height + 8, z0: lift, ws,
+  return { tw, th, k, cell, tile, cols: tw * k, rows: th * k, width, height, hw: width / 2 + 4, side: height + 8, z0: lift, ws, depth, frame, gate, colour,
     textLH: +((cell * fit) / pitch).toFixed(4), aspect: width / height };
 }
 
@@ -74,7 +77,9 @@ export const newState = L => ({ shown: Array.from({ length: L.tw * L.th }, () =>
  * frame's time allows (`perSec` packets a second, `per` entries a packet); the very first frame of a
  * session draws every tile (it catches up over a few ticks). `step` quantises colours.
  */
-export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, perSec = 20, step = 8 } = {}) {
+// refresh = tiles a frame re-sent although unchanged, longest-unsent first: a lost packet or a slow drift
+// under thresh heals within T / refresh frames (owner 2026-10-18: tiles "left behind").
+export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, perSec = 20, step = 8, refresh = 0 } = {}) {
   const packets = [], due = [];
   const q = v => Math.min(255, Math.round(v / step) * step);
   const T = L.tw * L.th, slots = Math.max(1, Math.floor(perSec / fps));
@@ -94,9 +99,17 @@ export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, per
     }
     cand.sort((a, b) => b[0] - a[0]);
     const take = state.frame === 0 ? cand.length : Math.min(slots * per, cand.length);
+    const send = cand.slice(0, take).map(c => c[1]);
+    if (refresh && state.frame > 0) {
+      state.sent ??= new Array(T).fill(0);
+      const inSend = new Set(send);
+      const room = Math.min(refresh, slots * per - send.length);
+      const old = [...Array(T).keys()].filter(t => !inSend.has(t)).sort((a, b) => state.sent[a] - state.sent[b]).slice(0, Math.max(0, room));
+      send.push(...old);
+    }
     let pk = '', n = 0;
-    for (let i = 0; i < take; i++) {
-      const t = cand[i][1];
+    for (const t of send) {
+      if (state.sent) state.sent[t] = state.frame;
       state.shown[t] = tiles[t];
       pk += ALPHA[Math.floor(t / B)] + ALPHA[t % B] + tiles[t].map(c => c.map(hex).join('')).join('');
       if (++n === per) { packets.push(pk); due.push(fi); pk = ''; n = 0; }
@@ -125,13 +138,13 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false })
   const { w, C, O, wire, num, str } = kit(lib, owner);
   const T = L.tw * L.th;
   const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: L.ws } };
-  for (let t = 0; t < T; t++) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.tile / 2, 2, L.tile / 2], position: tilePos(L, t), color: [6, 6, 8], owner_index: O, components: [face] });
+  for (let t = 0; t < T; t++) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.tile / 2, L.depth, L.tile / 2], position: tilePos(L, t), color: L.colour, owner_index: O, components: [face] });
   // frame bars
-  for (const zc of [L.z0 + 2, L.z0 + L.side - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.hw, 2, 2], position: [0, 0, zc], color: [6, 6, 8], owner_index: O });
-  for (const xc of [L.width / 2 + 2, -L.width / 2 - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [2, 2, L.height / 2], position: [xc, 0, L.z0 + 4 + L.height / 2], color: [6, 6, 8], owner_index: O });
+  if (L.frame) for (const zc of [L.z0 + 2, L.z0 + L.side - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.hw, 2, 2], position: [0, 0, zc], color: [6, 6, 8], owner_index: O });
+  if (L.frame) for (const xc of [L.width / 2 + 2, -L.width / 2 - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [2, 2, L.height / 2], position: [xc, 0, L.z0 + 4 + L.height / 2], color: [6, 6, 8], owner_index: O });
   let i = 0;
   const gate = (c, data = {}, extra = {}) => {
-    const h = w.addBrick({ asset: c.BRICK, position: [-140 + (i % 8) * 40, 40 + Math.floor(i / 8) * 40, L.z0 + 10], color: [200, 200, 200], owner_index: O,
+    const h = w.addBrick({ asset: c.BRICK, position: [L.gate[0] - 140 + (i % 8) * 40, L.gate[1] + 40 + Math.floor(i / 8) * 40, L.gate[2] + L.z0 + 10], color: [200, 200, 200], owner_index: O,
       visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra });
     i++;
     if (i > RECV_ROWS * 8) throw Error('tgrid: receiver gates overflow');
@@ -220,7 +233,7 @@ export function buildCartridge(lib, L, enc, { event, fps, dur, slot = 0, owner, 
   const { w, C, O, wire, num, str } = kit(lib, owner);
   let i = 0;
   const gate = (c, data = {}, extra = {}) => {
-    const h = w.addBrick({ asset: c.BRICK, position: [-200 + (i % 12) * 40, cartY(slot) + Math.floor(i / 12) * 40, L.z0 + 10], color: [200, 200, 200], owner_index: O,
+    const h = w.addBrick({ asset: c.BRICK, position: [L.gate[0] - 200 + (i % 12) * 40, L.gate[1] + cartY(slot) + Math.floor(i / 12) * 40, L.gate[2] + L.z0 + 10], color: [200, 200, 200], owner_index: O,
       visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra });
     i++;
     if (i > 24) throw Error('tgrid: cartridge gates overflow their 2 rows');
@@ -254,19 +267,24 @@ export function buildCartridge(lib, L, enc, { event, fps, dur, slot = 0, owner, 
 }
 
 /** Clear boxes (file coords [centre, half]). */
-export const cartridgeBox = (L, slot) => [[40, cartY(slot) + 20, L.z0 + 10], [260, 36, 16]];
+export const cartridgeBox = (L, slot) => [[L.gate[0] + 40, L.gate[1] + cartY(slot) + 20, L.gate[2] + L.z0 + 10], [260, 36, 16]];
 export function receiverBoxes(L) {
   // tiles in bands (ClearRegion silently fails on ~1800+ bricks), bars, gates
   const out = [];
+  // panel mode: ONE box hugging the tiles (clearBox adds 1): the owner's frame sits 1 unit outside them
+  // (a band box took 7 frame bricks, 2026-10-18)
+  if (!L.frame) out.push([[0, 0, L.z0 + 4 + L.height / 2], [L.width / 2 - 1, L.depth, L.height / 2 - 1]]);
   const band = Math.max(1, Math.floor(600 / L.tw));
-  for (let r0 = 0; r0 < L.th; r0 += band) {
+  for (let r0 = 0; L.frame && r0 < L.th; r0 += band) {
     const r1 = Math.min(L.th, r0 + band);
     const zHi = L.z0 + 4 + L.height - r0 * L.tile, zLo = L.z0 + 4 + L.height - r1 * L.tile;
     out.push([[0, 0, (zHi + zLo) / 2], [L.width / 2 + 1, 3, (zHi - zLo) / 2 + 1]]);
   }
-  out.push([[0, 0, L.z0 + 2], [L.hw + 1, 3, 3]], [[0, 0, L.z0 + L.side - 2], [L.hw + 1, 3, 3]]);
-  out.push([[0, 0, L.z0 + 4 + L.height / 2], [L.hw + 1, 3, L.height / 2 + 1]]); // side bars (whole box: few bricks once the tiles are gone)
-  out.push([[0, 40 + RECV_ROWS * 20 - 20, L.z0 + 10], [180, RECV_ROWS * 20 + 10, 16]]);
+  if (L.frame) {
+    out.push([[0, 0, L.z0 + 2], [L.hw + 1, 3, 3]], [[0, 0, L.z0 + L.side - 2], [L.hw + 1, 3, 3]]);
+    out.push([[0, 0, L.z0 + 4 + L.height / 2], [L.hw + 1, 3, L.height / 2 + 1]]); // side bars (whole box: few bricks once the tiles are gone)
+  }
+  out.push([[L.gate[0], L.gate[1] + 40 + RECV_ROWS * 20 - 20, L.gate[2] + L.z0 + 10], [180, RECV_ROWS * 20 + 10, 16]]);
   out.push(cartridgeBox(L, 0), cartridgeBox(L, 1));
   return out;
 }
