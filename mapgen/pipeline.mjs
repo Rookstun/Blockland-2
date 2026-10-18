@@ -49,7 +49,6 @@ export const STAGES = [
   { id: 'coves', phase: 'coast', title: 'Coves', groups: ['cove'], writes: 'coveCell, carved bays', after: 'late: only quiet coast no site uses' },
   { id: 'delta', phase: 'coast', title: 'River delta', groups: ['delta'], writes: 'deltaCell, arms, creeks', after: 'after coves; protected cells never change' },
   { id: 'weirs', phase: 'coast', title: 'Weir steps', groups: [], writes: 'weirCell', after: 'needs final river levels' },
-  { id: 'simplify', phase: 'coast', title: 'Simplify plain land', groups: ['terrain'], writes: 'H (blurred where no feature is near)', after: 'every site, road and water level is fixed' },
   { id: 'voxels', phase: 'carvers', title: 'Voxels', groups: [], writes: 'V (solid columns from H)', after: 'heights are final' },
   { id: 'desertGround', phase: 'carvers', title: 'Desert ground', groups: [], writes: 'dune/mesa materials', after: 'voxels exist' },
   { id: 'tunnels', phase: 'carvers', title: 'Road tunnels', groups: [], writes: 'carved tunnel voxels', after: 'roads + voxels' },
