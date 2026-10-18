@@ -3268,7 +3268,7 @@ const at = (x, y, z) => [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, z * VZ];
 const details = { count: 0, kinds: {} }, pots = [], casinoGames = [], wildShops = [];
 for (const at of sewerPots) pots.push({ at, where: 'sewer' });
 {
-  const wrap = (ox, oy, oz) => { const b = makeBuilder(); return { b, put: (br, x, y, z) => b.add({ ...br, position: [ox + x, oy + y, oz + z] }, br.asset ?? 'box') }; };
+  const wrap = (ox, oy, oz) => { const b = makeBuilder(); return { b, put: (br, x, y, z) => b.add({ ...br, position: [ox + x, oy + y, oz + z] }, br.asset ?? 'box'), free: (x0, y0, z0, x1, y1, z1) => b.free([ox + x0, oy + y0, oz + z0], [ox + x1, oy + y1, oz + z1]) }; };
   // procedural sizes off the grid would load as "Missing brick type": drop and count them
   let offGridDrops = 0;
   const keep = br => {
@@ -3313,7 +3313,7 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
   for (const v of holy) {
     if (v.kind === 'temple' || v.kind === 'shrine') v.god = makeGod(v.seed, townRnd);
     const o = at(v.x, v.y, v.h + 1), w = wrap(o[0] - CELL / 2, o[1] - CELL / 2, o[2]);
-    const st = buildTown({ put: w.put, orientFor, rnd: townRnd, plan: null, single: { type: v.kind, seed: v.seed, god: v.god, facing: v.facing, wares: v.wares } });
+    const st = buildTown({ put: w.put, free: w.free, orientFor, rnd: townRnd, plan: null, single: { type: v.kind, seed: v.seed, god: v.god, facing: v.facing, wares: v.wares } });
     for (const hs of st.houseShops ?? []) wildShops.push({ at: [o[0] - CELL / 2 + hs.at[0], o[1] - CELL / 2 + hs.at[1], o[2] + hs.at[2]], tier: hs.tier, orient: hs.orient, house: true, ...(hs.prefab ? { prefab: hs.prefab } : {}) });
     if (v.wares) console.error(`${v.kind}: cells ${v.x},${v.y}, ${Math.round(townDist(v.x, v.y))} cells from the town, ${(st.houseShops ?? []).length} stands`);
     if (st.casino) {
@@ -4656,6 +4656,7 @@ if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid,
   if (drop.size) { let k = 0; for (let i = 0; i < bricks.length; i++) if (!drop.has(i)) bricks[k++] = bricks[i]; bricks.length = k; }
   console.error(`ride surface pieces dropped for objects on the road: ${drop.size}`);
 }
+{ let k = 0; for (const b of bricks) if (!b.ghost) bricks[k++] = b; bricks.length = k; } // ghosts (town.mjs vending): boxes held for prefabs loaded later
 for (const b of bricks) { delete b.gameSize; delete b.group; delete b.ride; delete b.soft; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups; ride surface marks)
 
 stage('output');

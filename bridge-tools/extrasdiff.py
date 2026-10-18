@@ -78,6 +78,8 @@ for name, prefab, box, dz in (("pots", "pot", (10, 10, 21), 0), ("bushes", "bush
     if name == "shops":
         for e in new:
             e.setdefault("prefab", "shop_" + e.get("tier", "bronze"))
-    job([{"op": "cmd", "line": f"br.World.ClearRegion {e['at'][0]} {e['at'][1]} {e['at'][2] + dz} {box[0]} {box[1]} {box[2]}", "captureMs": 150} for e in gone])
+    # (2026-10-18) sandro's vending machine (town.mjs vending): 12 back/front x 21 a side round the load point, floor -37 .. top +58
+    cbox = lambda e: ((13, 22, 50) if e.get("orient", 16) % 2 == 0 else (22, 13, 50), 11) if e.get("prefab") == "vending" else (box, dz)
+    job([{"op": "cmd", "line": f"br.World.ClearRegion {e['at'][0]} {e['at'][1]} {e['at'][2] + cbox(e)[1]} {cbox(e)[0][0]} {cbox(e)[0][1]} {cbox(e)[0][2]}", "captureMs": 150} for e in gone])
     job([{"op": "cmd", "line": f'br.Prefab.Load "{e.get("prefab", prefab)}" {e["at"][0]} {e["at"][1]} {e["at"][2] + LDZ.get(name, 0)} 0 {e.get("orient", 16)}', "captureMs": 150} for e in new])
     print(f"{name}: cleared {len(gone)}, loaded {len(new)}")

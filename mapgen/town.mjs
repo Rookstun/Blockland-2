@@ -2303,6 +2303,35 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     count('walkway');
   }
   /**
+   * vending machines (2026-10-18, owner: "add it in the world procedurally"): the player
+   * -=[sandro]=-'s SQUAWK soda machine (prefab "vending" = prefabs_owner/sandro_vending.brz:
+   * 5 coins -> a soda can) against a building front beside the door, back to the wall,
+   * listed with the stands (stats.houseShops -> shops.json). Prefab.Load point = floor + 37,
+   * the machine 12 behind / 12 ahead of it and 21 to each side, front +x at orient 16.
+   * A ghost brick (dropped at output) holds its box so nothing later is built into it.
+   */
+  const VEND_P = { shop: 0.7, armory: 0.5, gunsmith: 0.5, sodashack: 0.8, tavern: 0.7, bank: 0.5, casino: 0.8, warehouse: 0.4, dininghall: 0.6, gunstore: 0.6, western: 0.5, library: 0.4, meadhall: 0.3, townhouse: 0.2, cottage: 0.12, splitlevel: 0.25 };
+  function vending(own, type, fx, fy, door, s) {
+    if (!door || !(rnd(s, 931) < (VEND_P[type] ?? 0))) return;
+    const lat = fx ? [0, 1] : [1, 0];
+    const ox = Math.round(door[0] / 2) * 2, oy = Math.round(door[1] / 2) * 2;
+    const sides = rnd(s, 932) < 0.5 ? [1, -1] : [-1, 1];
+    for (const L of [56, 72, 90]) for (const sd of sides) for (let d = 0; d <= 16; d += 2) {
+      const cx = ox + fx * (d + 12) + lat[0] * sd * L, cy = oy + fy * (d + 12) + lat[1] * sd * L;
+      const hx = fx ? 12 : 22, hy = fx ? 22 : 12;
+      const q = [cx - hx, cy - hy, cx + hx, cy + hy];
+      if (taken.some(t => t !== own && q[0] < t[2] && t[0] < q[2] && q[1] < t[3] && t[1] < q[3])) continue;
+      if ((plan && onPath(cx, cy)) || riverAt(cx, cy) || [[q[0], q[1]], [q[2], q[1]], [q[0], q[3]], [q[2], q[3]], [cx, cy]].some(([x, y]) => lv(x, y) !== (zCtx ?? lv(cx, cy)) || (groundAt && zCtx != null && groundAt(x, y) !== zCtx))) continue;
+      if (!free(q[0], q[1], 0, q[2], q[3], 98)) continue; // touching the wall is fine; inside it is not (try further out)
+      box(q[0], q[1], 0, q[2], q[3], 98, { asset: 'PB_DefaultMicroBrick', color: [0, 0, 0], ghost: 1 });
+      taken.push(q);
+      stats.houseShops.push({ at: [cx, cy, 37 + (zCtx ?? 0)], orient: fx > 0 ? 16 : fy > 0 ? 17 : fx < 0 ? 18 : 19, tier: 'vending', prefab: 'vending' });
+      count('vending machine');
+      return;
+    }
+    count('vending: no room');
+  }
+  /**
    * houses along the paths, both sides, facing the path: walk each path every
    * `step` units; pickType(x, y, s) names the building (or null to skip)
    */
@@ -2323,7 +2352,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const r = boxOf(cx, cy, fx, fy, fp);
           if (!rectClear(r, { edge, margin, claim: true })) continue;
           taken.push(r);
-          onSite(r, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); });
+          onSite(r, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); });
           if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
         }
       }
@@ -2353,7 +2382,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const r = boxOf(cx, cy, fx, fy, footprint(type, s, small));
         if (!rectClear(r, { edge, margin, claim: true })) continue;
         taken.push(r);
-        onSite(r, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); });
+        onSite(r, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); });
         if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
       }
   }
@@ -2429,7 +2458,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   if (single) {
     if (!TYPES[single.type]) throw new Error(`town: no building type ${single.type}`);
     const [sfx, sfy] = single.facing ?? [0, -1];
+    lastDoor = null;
     TYPES[single.type](0, 0, sfx, sfy, single.seed, false, single.wares ?? single.god);
+    vending(null, single.type, sfx, sfy, lastDoor, single.seed);
     return stats;
   }
   if (village) {
