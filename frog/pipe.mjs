@@ -28,7 +28,28 @@ setInterval(() => {
 const say = line => job([{ op: 'cmd', line: `br.Chat.Command /frog ${line.replace(/[^\w .\-]/g, '')}` }]);
 // {say: text}: one chat line from the frog (br.Chat.Broadcast; console lines must stay < 500 chars)
 const chat = text => job([{ op: 'say', msg: `<color="7dffa0">Frog</>: ${text.replace(/[\r\n"\\]/g, ' ').slice(0, 420)}` }]);
-readline.createInterface({ input: process.stdin }).on('line', l => { try { const m = JSON.parse(l); if (m.cmd) say(m.cmd); if (m.say) chat(m.say); } catch {} });
+// {ask: {id, system, prompt}}: one question to free-claude-code (FCC), the same proxy + model + token the
+// chatbot plugin uses (its plugin_config) -> {t:'answer', id, text} (owner 2026-10-17: "only freeclaude", never claude -p)
+const { DatabaseSync } = await import('node:sqlite');
+const botCfg = (() => { try {
+  const db = new DatabaseSync(path.join(ROOT, 'data/omegga-plugins.db'), { readOnly: true });
+  const r = db.prepare("select value from plugin_config where plugin like '%chatbot%'").get(); db.close();
+  return JSON.parse(r?.value ?? '{}');
+} catch { return {}; } })();
+async function askFCC({ id, system, prompt }) {
+  const base = botCfg['base-url'] || 'http://127.0.0.1:8083', token = botCfg['proxy-token'] || 'freecc';
+  let text = '';
+  try {
+    const res = await fetch(base + '/v1/messages', { method: 'POST', signal: AbortSignal.timeout(150000),
+      headers: { 'content-type': 'application/json', 'x-api-key': token, authorization: 'Bearer ' + token, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: botCfg.model || 'claude-opus-5', max_tokens: 500, system, messages: [{ role: 'user', content: prompt }] }) });
+    const j = await res.json();
+    text = res.ok ? (j.content ?? []).filter(b => b.type === 'text').map(b => b.text).join(' ') : '';
+    if (!res.ok) { out({ t: 'answer', id, text: '', err: `FCC ${res.status}` }); return; }
+  } catch (e) { out({ t: 'answer', id, text: '', err: String(e.message || e) }); return; }
+  out({ t: 'answer', id, text });
+}
+readline.createInterface({ input: process.stdin }).on('line', l => { try { const m = JSON.parse(l); if (m.cmd) say(m.cmd); if (m.say) chat(m.say); if (m.ask) askFCC(m.ask); } catch {} });
 process.stdin.on('end', () => process.exit(0));
 
 say('watch 30'); setInterval(() => say('watch 30'), 20000);

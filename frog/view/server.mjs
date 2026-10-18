@@ -1,7 +1,7 @@
 // Frog drone view: node frog/view/server.mjs -> http://localhost:8791
 // One ssh connection runs frog/pipe.mjs on the server (eye rows, pose, players in; /frog orders out).
 // The page gets everything over SSE (/events); POST /cmd {cmd} sends an order; the brain here is the
-// frog's autopilot (on by default; auto on|off): Navi to the nearest player; answers questions via claude -p.
+// frog's autopilot (on by default; auto on|off): Navi to the nearest player; answers questions via free-claude-code (FCC) on the server.
 import http from 'http'; import fs from 'fs'; import path from 'path'; import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +40,8 @@ function onMsg(m) {
     const p = m.s.split('|');
     state.pose = { x: +p[1], y: +p[2], z: +p[3], yaw: +p[4], pitch: +p[5], hop: p[6] === 'true', t: Date.now() };
     send('pose', state.pose);
+  } else if (m.t === 'answer') {
+    answers.get(m.id)?.(m);
   } else if (m.t === 'fq') {
     const [, name, ...q] = m.s.split('|'); ask(name || 'friend', q.join('|'));
   } else if (m.t === 'chat') {
@@ -85,14 +87,13 @@ function pump() {
   const { name, q } = queue.shift(); thinking = true;
   const ctx = history.slice(-6).map(h => `${h.name} asked: ${h.q}\nYou answered: ${h.a}`).join('\n');
   const prompt = (ctx ? `Earlier:\n${ctx}\n\n` : '') + `${name} asks: ${q}`;
-  const cwd = path.join(process.env.TEMP ?? '/tmp', 'frogbrain'); fs.mkdirSync(cwd, { recursive: true });
-  const p = spawn('claude', ['-p', '--model', process.env.FROG_MODEL ?? 'sonnet', '--tools', '', '--setting-sources', '', '--strict-mcp-config',
-    '--no-session-persistence', '--system-prompt', SYS], { cwd, windowsHide: true });
-  let out = ''; p.stdout.on('data', d => out += d); p.stderr.on('data', d => process.stderr.write('[brain] ' + d));
-  const kill = setTimeout(() => p.kill(), 60000);
-  p.on('close', () => {
-    clearTimeout(kill); thinking = false;
-    let a = out.replace(/\s+/g, ' ').replace(/[*_`#]/g, '').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
+  // answered by free-claude-code on the server (pipe.mjs askFCC), never claude -p (owner: "only freeclaude")
+  const id = ++askId;
+  const kill = setTimeout(() => answers.get(id)?.({ text: '', err: 'timeout' }), 160000);
+  answers.set(id, ({ text, err }) => {
+    clearTimeout(kill); answers.delete(id); thinking = false;
+    if (err) console.log('[brain]', err);
+    let a = text.replace(/<thinking>[\s\S]*?<\/thinking>/g, '').replace(/\s+/g, ' ').replace(/[*_`#]/g, '').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/!{4,}/g, '!').trim();
     if (!a) a = 'My soul hums but no words come. Ask me again.';
     if (a.length > 300) a = a.slice(0, 297) + '...';
     history.push({ name, q, a }); while (history.length > 20) history.shift();
@@ -100,8 +101,9 @@ function pump() {
     send('qa', { name, q, a }); console.log(`[qa] ${name}: ${q} -> ${a}`);
     pump();
   });
-  p.stdin.end(prompt);
+  pipe?.stdin.write(JSON.stringify({ ask: { id, system: SYS, prompt } }) + '\n');
 }
+let askId = 0; const answers = new Map();
 const speak = text => pipe?.stdin.write(JSON.stringify({ say: text }) + '\n');
 const ADDRESS = /^(?:hey|hi|yo|ok|oi|oh)?[\s,]*(?:frog|froggy|navi|fairy)\b[\s,:!?.]*(.*)$/i;
 
