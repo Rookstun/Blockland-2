@@ -1268,17 +1268,18 @@ module.exports = class Media {
   /**
    * /ogrid: the video as a SQUARE n x n grid of coloured O's on one text
    * display, STREAMED: one receiver prefab per viewer (ogrid.mjs
-   * buildReceiver: screen + chat-command gate + For Loop decoder) stays put;
-   * every frame goes out as run tokens in `br.Chat.Command /og<id>` lines
-   * (the only console door into wires) and the chip rebuilds the coloured
-   * text. Sound = a speech device per chunk, cut from the same seconds and
-   * loaded when that chunk's first frame is sent.
+   * buildReceiver: screen + Custom Global Event gate + For Loop decoders)
+   * stays put; per chunk a CARTRIDGE prefab (frames as run tokens in an
+   * ArrayVar, own stopwatch) sends each frame to it as a global event, and the
+   * chip rebuilds the coloured text. Sound = a speech device per chunk, cut
+   * from the same seconds and loaded on the same tick as its cartridge.
+   * (2026-10-17: was ~24 x 500-char `br.Chat.Command` lines a second: 3
+   * server crashes. Now 2 console lines a chunk.)
    */
   async oGridCommand(name, args) {
     const key = `ogrid:${name}`;
     if (!this.og || !this.brs4) return this.whisper(name, '<color="f55">/ogrid is not installed (lib/brs4.mjs missing).</>');
-    // 2026-10-16: two server crashes (array index assert) while /ogrid lines streamed into a receiver being cleared/replaced: off until fixed
-    if (!this.config['ogrid-enabled']) return this.whisper(name, '<color="f55">/ogrid is switched off for now (it crashed the server twice).</>');
+    if (this.config['ogrid-enabled'] === false) return this.whisper(name, '<color="f55">/ogrid is switched off for now.</>');
     if (!args.length) return this.whisper(name, 'Usage: /ogrid <link or search words> [size 32] [fps=N] [-x|+x|-y|+y] [mute] [letters] [start=S] [len=S]   /ogrid stop');
     if (args[0] === 'stop' || args[0] === 'off') {
       const hadOne = this.stopSession(name, key);
@@ -1299,18 +1300,14 @@ module.exports = class Media {
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(5, this.config['ogrid-chunk-seconds'] ?? 20);
-    // the game reads console input at about 24 x 500-char lines a second (more backs up for many seconds)
     const strips = n % 4 === 0 && n >= 32 ? 4 : 1; // stacked text displays: one string caps at 32768 chars
-    const linesPerFrame = Math.max(1, Math.floor((this.config['ogrid-lines-per-sec'] ?? 24) / fps));
-    const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(linesPerFrame * 118, this.og.stripRunCap(n, strips) * strips); // tokens incl. row ends: 3 lines a frame
-    // several chat commands in one game tick clobber each other (only some parts land): space them
-    const gapMs = this.config['ogrid-line-gap-ms'] ?? Math.max(25, Math.floor((900 / fps) / linesPerFrame));
-    const lead = (this.config['ogrid-lead-ms'] ?? 80) / 1000; // the chip shows a frame ~50-130 ms after its last part
+    // runs a frame: what the strips can hold, and what the decoders get through in a frame's time
+    // (4 loops share the owner's 10 ms wire budget a tick; 1416 runs at 2 fps ran live)
+    const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(this.og.stripRunCap(n, strips) * strips, Math.floor((this.config['ogrid-runs-per-sec'] ?? 6000) / fps));
     const crypto = require('crypto');
     const hash = crypto.createHash('sha1').update('ogrid:' + name).digest('hex');
     const owner = this.og.ownerFor(hash.slice(0, 12));
-    const cmd = 'og' + hash.slice(0, 6);
-    const prefix = `br.Chat.Command /${cmd} `;
+    const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
     const L = this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.5, textScale: this.config['ogrid-text-scale'] ?? 1.6875 });
 
     this.stopSession(name, key);
@@ -1345,7 +1342,7 @@ module.exports = class Media {
         const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
           '-vf', `fps=${fps},crop='min(iw,ih)':'min(iw,ih)',scale=${n}:${n}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
         const fb = n * n * 3, frames = [];
-        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(this.og.frameParts(this.og.encodeFrame(raw.subarray(o, o + fb), n, { maxRuns, strips }), prefix));
+        for (let o = 0; o + fb <= raw.length; o += fb) frames.push(this.og.encodeFrame(raw.subarray(o, o + fb), n, { maxRuns, strips }));
         if (!frames.length) throw new Error('no frames decoded');
         let audio = null;
         if (withSound) {
@@ -1374,35 +1371,32 @@ module.exports = class Media {
       // the receiver: loaded once, then only data goes out
       this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
       for (const [c, h] of this.og.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
-      const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.og.buildReceiver(this.brs4, L, { cmd, owner, glyph, strips }));
-      this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
-      setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
+      const loadAt = buf => {
+        const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+        fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), buf);
+        this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
+        setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
+      };
+      loadAt(this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
       await sleep(1500);
       this.whisper(name, `<color="9cf">Showing ${n}x${n} ${glyph === 'O' ? "O's" : 'blocks'} at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). /ogrid stop ends it.</>`);
-      let sent = 0, lines = 0, skipped = 0, prevAudio = null, set = first;
+      let sent = 0, prevAudio = null, set = first;
       for (let k = 0; k < chunks && !session.stopped; k++) {
         if (k > 0) set = await next.catch(e => (console.error(`[media] ogrid chunk ${k}`, e), null));
         if (k + 1 < chunks) next = build(k + 1); // decode the next chunk while this one plays
         if (!set) { await sleep(chunkSec * 1000); continue; }
+        // cartridges alternate between two slots: this slot held chunk k-2 (long done)
+        const slot = k % 2, [c, h] = this.og.cartridgeBox(L, slot);
+        this.clearBox(world(c), T(h).map(Math.abs));
+        loadAt(this.og.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner }));
         const old = prevAudio;
         prevAudio = loadAudio(set.audio, k);
         if (old) setTimeout(old, 1500);
-        const t0 = Date.now() / 1000;
-        for (let f = 0; f < set.frames.length && !session.stopped; f++) {
-          const due = t0 + f / fps - lead, now = Date.now() / 1000;
-          if (now > due + 1 / fps && f + 1 < set.frames.length) { skipped++; continue; } // behind: drop it
-          if (due > now) await sleep((due - now) * 1000);
-          for (let i = 0; i < set.frames[f].length; i++) {
-            if (i) await sleep(gapMs);
-            this.omegga.writeln(prefix + set.frames[f][i]);
-          }
-          sent++; lines += set.frames[f].length;
-        }
-        const end = t0 + set.dur;
+        sent += set.frames.length;
+        const end = Date.now() / 1000 + set.dur;
         while (!session.stopped && Date.now() / 1000 < end) await sleep(50);
       }
-      console.log(`[media] ogrid ${name}: ${n}x${n} ${fps} fps, ${sent} frames sent (${lines} lines, ${skipped} skipped), at ${at.join(',')} orient ${orient}`);
+      console.log(`[media] ogrid ${name}: ${n}x${n} ${fps} fps, ${sent} frames in ${chunks} cartridge(s), at ${at.join(',')} orient ${orient}`);
       await sleep(1500);
       // the screen stays up after the video (players tune its text settings); the next /ogrid or /ogrid stop clears it
       if (!session.stopped) audioClears.splice(0).forEach(c => c());

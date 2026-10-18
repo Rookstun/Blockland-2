@@ -5,10 +5,11 @@
 // exists (the server), DIR/ogrid_audio_<k>.brz cut from the same seconds.
 // Load chunk k and its audio on the same tick; the next chunk replaces the
 // screen after `dur` seconds (DIR/ogrid.json lists them).
-// STREAMED form (what /ogrid plays): DIR/receiver.brz (screen + /<cmd> gate +
-// For Loop decoder, load once) and DIR/stream_<k>.json = per frame the console
-// lines to send at k*chunk + f/fps: `br.Chat.Command /<cmd> <part>` (--cmd og0000aa),
-// a frame's lines >= 30 ms apart (several in one game tick clobber each other).
+// STREAMED form (what /ogrid plays): DIR/receiver.brz (screen + global event
+// gate + For Loop decoders, load once) and DIR/cart_<k>.brz = chunk k's
+// cartridge (frames as run tokens, sends them as the --event og.test event);
+// load each at the receiver's origin at k*chunk, its audio on the same tick,
+// cartridges alternate between 2 slots (clear the slot first: ogrid.mjs cartridgeBox).
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
@@ -39,9 +40,8 @@ const { autoStart } = await import(pathToFileURL(path.join(PLUGIN, 'autostart.mj
 const SPEECH = ['--audio-mode', 'voice', '--max-voices', '32', '--voice-release', '15', '--attack', '5', '--release', '60', '--leveling', '0', '--gain', '3',
   '--audio-fps', '60', '--synth', 'sine', '--no-loop', '--speakers-in-chip', '--no-control-buttons', '--inner-radius', '100', '--max-distance', '400'];
 
-const cmd = flag('cmd', 'og0000aa');
-fs.writeFileSync(path.join(out, 'receiver.brz'), og.buildReceiver(lib, L, { cmd }));
-const prefix = `br.Chat.Command /${cmd} `;
+const event = flag('event', 'og.test'), strips = n % 4 === 0 && n >= 32 ? 4 : 1;
+fs.writeFileSync(path.join(out, 'receiver.brz'), og.buildReceiver(lib, L, { event, strips }));
 const list = [];
 for (let k = 0; k * chunk < seconds; k++) {
   const t0 = start + k * chunk, dur = Math.min(chunk, seconds - k * chunk);
@@ -53,9 +53,9 @@ for (let k = 0; k * chunk < seconds; k++) {
   const strs = og.oFrames(frames, n, { max: Number(flag('max', og.MAX_CHARS)) });
   const f = path.join(out, `ogrid_${k}.brz`);
   fs.writeFileSync(f, og.buildOGrid(lib, L, strs, { fps, dur }));
-  const lines = frames.map(fr => og.frameParts(og.encodeFrame(fr, n), prefix).map(p => prefix + p));
-  fs.writeFileSync(path.join(out, `stream_${k}.json`), JSON.stringify(lines));
-  const item = { k, t0, dur, video: path.basename(f), stream: `stream_${k}.json`, frames: strs.length, chars: Math.max(...strs.map(s => s.length)), lines: lines.flat().length };
+  const tokens = frames.map(fr => og.encodeFrame(fr, n, { maxRuns: Math.min(og.stripRunCap(n, strips) * strips, Math.floor(6000 / fps)), strips }));
+  fs.writeFileSync(path.join(out, `cart_${k}.brz`), og.buildCartridge(lib, L, tokens, { event, fps, dur, slot: k % 2 }));
+  const item = { k, t0, dur, video: path.basename(f), cart: `cart_${k}.brz`, slot: k % 2, frames: strs.length, chars: Math.max(...strs.map(s => s.length)) };
   if (audio) {
     const wav = path.join(out, `ogrid_${k}.wav`), dev = path.join(out, `ogrid_audio_${k}.brz`);
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-ss', String(t0), '-t', String(dur), '-i', src, '-vn', '-ac', '1', '-ar', '44100', wav]);
@@ -67,5 +67,5 @@ for (let k = 0; k * chunk < seconds; k++) {
   list.push(item);
   console.log(`chunk ${k}: ${t0}s +${dur}s, ${strs.length} frames, longest ${item.chars} chars${audio ? ', audio' : ''}`);
 }
-fs.writeFileSync(path.join(out, 'ogrid.json'), JSON.stringify({ n, fps, chunk, side: L.side, cmd, receiver: 'receiver.brz', chunks: list }, null, 1));
+fs.writeFileSync(path.join(out, 'ogrid.json'), JSON.stringify({ n, fps, chunk, side: L.side, event, receiver: 'receiver.brz', chunks: list }, null, 1));
 console.log(`${list.length} chunk(s) -> ${out} (${n}x${n} O's, 7 bricks a chunk)`);

@@ -119,19 +119,21 @@ export function oBoxes(L) {
   return [[[0, 0, L.z0 + hx], [hx, 2, hx]], [[0, 40, L.z0 + 10], [130, 10, 10]]];
 }
 
-// ---------- STREAMED O-GRID: the plugin sends frames, a For Loop chip decodes them ----------
-// The receiver is loaded once per session: screen + a chat-command gate
-// (/og<id>; the server's br.Chat.Command is the only console door into
-// wires: there is no command that fires a Custom Global Event) + a For Loop
-// decoder. Omegga refuses console lines of 512+ chars, so a frame travels as
-// RUN TOKENS, 4 chars each, letters of ALPHA: red, green, blue (LEVELS steps
-// 0..83 each, near true colour) + run length; red = NL ends a row. Long frames
-// go in several commands, at least a game tick apart (two in one tick clobber
-// each other: only some parts land): the first char of each says a = first part (reset),
-// b = middle, c = last, d = whole. The last part arms `pending`; a 20 Hz clock
-// then runs the loop (by then the buffer Var is settled), which rebuilds
-// <color="rrggbb">███</>... runs in a string Var and copies it into the
-// screen when the loop completes.
+// ---------- STREAMED O-GRID: cartridges carry the frames, a For Loop chip decodes them ----------
+// The receiver is loaded once per session: screen + a Custom Global Event gate
+// + one For Loop decoder per strip. Frames travel as RUN TOKENS, 4 chars each,
+// letters of ALPHA: red, green, blue (LEVELS steps 0..83 each, near true
+// colour) + run length; red = NL ends a row. A CARTRIDGE (buildCartridge, one
+// small prefab per chunk, loaded beside the receiver) holds the chunk's frames
+// in a Str ArrayVar; its Stopwatch starts on load and every new frame index
+// sends the frame's tokens as the event's DataOut1. The receiver arms
+// `pending`; a 20 Hz clock then runs the decoders, which rebuild
+// <color="rrggbb">███</>... runs and copy them into the screens.
+// 2026-10-17: was a /og<id> chat command fed by ~24 x 500-char console lines a
+// second; the server crashed 3 times (Array.h index assert, shallow stack off
+// the engine loop) while those lines streamed, and the game's console reader
+// already showed a fixed ~512 buffer (lines of 506-511 chars vanished).
+// Now the console only carries one Prefab.Load + one ClearRegion a chunk.
 
 export const ALPHA = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$&()*+,-./:;=?@[]^_|~';
 export const LEVELS = ALPHA.length - 1; // 84 steps a channel; index 84 (red) = newline
@@ -139,7 +141,6 @@ export const NL = LEVELS;
 const lv = i => Math.round((i * 255) / (LEVELS - 1));
 const LV_HEX = Array.from({ length: LEVELS }, (_, i) => lv(i).toString(16).padStart(2, '0')).join('');
 export const TOKEN = 4;
-export const LINE_MAX = 500; // Omegga refuses 512+, the game silently drops lines of ~506-511 (505 got through)
 const q = v => Math.max(0, Math.min(LEVELS - 1, Math.round((v * (LEVELS - 1)) / 255)));
 
 export const STRIP_SEP = '%'; // not in ALPHA
@@ -191,22 +192,13 @@ export function decodeTokens(t, glyph = GLYPH) {
   return out;
 }
 
-/** Tokens -> command argument strings that fit a console line after `prefix` (e.g. 'br.Chat.Command /og1a2b3c '). */
-export function frameParts(tokens, prefix) {
-  const room = Math.floor((LINE_MAX - prefix.length - 1) / TOKEN) * TOKEN; // whole tokens
-  const parts = [];
-  for (let i = 0; i < tokens.length; i += room) parts.push(tokens.slice(i, i + room));
-  if (!parts.length) parts.push('');
-  return parts.map((p, i) => (parts.length === 1 ? 'd' : i === 0 ? 'a' : i === parts.length - 1 ? 'c' : 'b') + p);
-}
-
 /**
  * The receiver: a screen of `strips` stacked text displays (n / strips rows each:
  * one display's string caps at 32768 chars) + the command gate + one For Loop
  * decoder per strip, all run at once on their own section of the frame.
- * cmd = chat command name (letters/digits).
+ * event = Custom Global Event name the cartridges send (unique per session).
  */
-export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph = GLYPH, strips = 1 } = {}) {
+export function buildReceiver(lib, L, { event, owner = OWNER, debug = false, glyph = GLYPH, strips = 1 } = {}) {
   const OS = glyph.repeat(ALPHA.length);
   const { World, brdb } = lib;
   const C = brdb.COMPONENTS;
@@ -222,10 +214,10 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
   }
   for (const zc of [L.z0 + 2, L.z0 + L.side - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [hx, 2, 2], position: [0, 0, zc], color: [6, 6, 8], owner_index: O });
   const slots = new Map();
-  const gate = (c, data = {}, grid) => {
+  const gate = (c, data = {}, grid, extra = {}) => {
     const k = grid ?? 'main', i = slots.get(k) ?? 0; slots.set(k, i + 1);
     const position = grid ? [(i % 8) * 40 - 140, -Math.floor(i / 8) * 40, 2] : [(i % 8) * 40 - 140, 40 + Math.floor(i / 8) * 40, L.z0 + 10];
-    const h = w.addBrick({ asset: c.BRICK, position, color: [200, 200, 200], owner_index: O, visibility: false, collision: false, components: [{ type: c.NAME, data }] }, grid);
+    const h = w.addBrick({ asset: c.BRICK, position, color: [200, 200, 200], owner_index: O, visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra }, grid);
     return { h, c };
   };
   const wire = (a, ap, b, bp) => {
@@ -246,21 +238,10 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
     return [x, 'Output'];
   };
 
-  // ---- receive: buf = (reset ? '' : buf) + payload; the last part arms pending
-  const ev = gate(C.Event_ChatCommand, { CommandName: cmd, HelpText: 'O grid data (server only)' });
-  const args = [ev, 'Arguments'];
-  const flag = sub(null, args, K(null, 0), 1);
-  const payload = sub(null, args, K(null, 1), 100000);
-  const isFlag = s => { const x = gate(C.Expr_String_Contains, { Input: s, Search: '', bCaseSensitive: true }); wire(...flag, x, 'Search'); return [x, 'Output']; };
-  const reset = isFlag('ad'), final = isFlag('cd');
+  // ---- receive: buf = the frame's tokens (one event = one whole frame); arm pending
+  const ev = gate(C.Event_CustomGlobal, { EventName: event, bIsObjectEvent: false, DataOut1: str(''), ...EVENT_REST }, null, { size: EVENT_SIZE });
   const buf = gate(C.Var, { Value: str('') }), pending = gate(C.Var, { Value: num(0) });
-  const bufGet = gate(C.Exec_Var_Get); wire(buf, 'VarRef', bufGet, 'VarRef');
-  const cat = gate(C.Expr_String_Concatenate, { Separator: '' });
-  wire(...select(null, [bufGet, 'Value'], K(null, ''), reset), cat, 'InputA'); wire(...payload, cat, 'InputB');
-  const isLast = gate(C.Exec_Branch); wire(...final, isLast, 'bCond');
-  chain(bufGet, set(null, buf, [cat, 'Output']), isLast);
-  wire(ev, 'ExecOut', bufGet, 'Exec');
-  wire(isLast, 'ExecOutA', set(null, pending, K(null, 2)), 'Exec');
+  wire(ev, 'ExecOut', chain(set(null, buf, [ev, 'DataOut1']), set(null, pending, K(null, 2)))[0], 'Exec');
 
   // ---- scheduler: pending 2 (last part in) -> next tick: snapshot buf into dbuf, pending 1 -> a later
   // tick when every decoder is idle: pending 0 + all decoders start. busy flags are Vars (a wire from a
@@ -335,9 +316,57 @@ export function buildReceiver(lib, L, { cmd, owner = OWNER, debug = false, glyph
   return w.toBrz({ bundle: { description: 'O grid receiver' }, externalAssets: FONTS });
 }
 
+const EVENT_SIZE = [10, 5, 2]; // PB_Gate_Event_CustomGlobal / SendCustomEventGlobal as the game saves them (pot_pool, the owner's bush)
+const EVENT_REST = Object.fromEntries([2, 3, 4, 5, 6, 7, 8].map(i => [`DataOut${i}`, { $variant: 'f64', value: 0 }]));
+
+/** Where cartridge `slot` (0/1, chunks alternate) sits: a gate row behind the receiver's gate field. */
+const cartY = slot => 700 + slot * 40;
+
+/**
+ * One chunk's CARTRIDGE: frames (token strings) in a Str ArrayVar; a Stopwatch
+ * started on load -> Floor(Time x fps + 1) -> ChangeDetectorExec -> ArrayVar_Get
+ * (index - 1) -> in bounds -> SendCustomEventGlobal(event, tokens). Frame f
+ * goes out f/fps s after the load (same zero as the soundtrack loaded with it).
+ */
+export function buildCartridge(lib, L, tokens, { event, fps, dur, slot = 0, owner = OWNER } = {}) {
+  const { World, brdb } = lib;
+  const C = brdb.COMPONENTS;
+  const w = new World();
+  const O = w.addOwner(owner);
+  let i = 0;
+  const gate = (c, data = {}, extra = {}) => {
+    const h = w.addBrick({ asset: c.BRICK, position: [-160 + 40 * i++, cartY(slot), L.z0 + 10], color: [200, 200, 200], owner_index: O,
+      visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra });
+    return { h, c };
+  };
+  const wire = (a, ap, b, bp) => {
+    if (!a.c.PORTS[ap] || !b.c.PORTS[bp]) throw Error(`bad port ${a.c.NAME}.${ap} -> ${b.c.NAME}.${bp}`);
+    w.addWire({ brick: a.h, component_type: a.c.NAME, port: a.c.PORTS[ap] }, { brick: b.h, component_type: b.c.NAME, port: b.c.PORTS[bp] });
+  };
+  const num = v => ({ $variant: 'f64', value: v });
+  const frames = gate(C.ArrayVar, { Value: { $elementType: 'WireValue', $array: tokens.map(value => ({ $variant: 'Str', value })) } });
+  const sw = gate(C.Stopwatch, { Limit: dur + 30, Time: 0, bRunning: true });
+  const mul = gate(C.Expr_MathMultiply, { InputB: num(fps) }); wire(sw, 'Time', mul, 'InputA');
+  const add = gate(C.Expr_MathAdd, { InputB: num(1) }); wire(mul, 'Output', add, 'InputA');
+  const fl = gate(C.Expr_Floor); wire(add, 'Output', fl, 'Input');
+  const chg = gate(C.Expr_ChangeDetectorExec); wire(fl, 'Output', chg, 'Input');
+  const idx = gate(C.Expr_MathSubtract, { InputB: num(1) }); wire(fl, 'Output', idx, 'InputA');
+  const get = gate(C.Exec_ArrayVar_Get);
+  wire(frames, 'ArrayVarRef', get, 'ArrayVarRef'); wire(idx, 'Output', get, 'Index'); wire(chg, 'OnChanged', get, 'Exec');
+  const br = gate(C.Exec_Branch); wire(get, 'bOutOfBounds', br, 'bCond'); wire(get, 'ExecOut', br, 'Exec');
+  const send = gate(C.Exec_SendCustomEventGlobal, { EventName: event, DataIn1: { $variant: 'Str', value: '' },
+    ...Object.fromEntries([2, 3, 4, 5, 6, 7, 8].map(k => [`DataIn${k}`, num(0)])) }, { size: EVENT_SIZE });
+  wire(get, 'Value', send, 'DataIn1'); wire(br, 'ExecOutB', send, 'ExecIn');
+  w.makePrefab({});
+  return w.toBrz({ bundle: { description: 'O grid cartridge' } });
+}
+
+/** Clear box of cartridge slot `slot` (file coords [centre, half]). */
+export const cartridgeBox = (L, slot) => [[0, cartY(slot), L.z0 + 10], [200, 12, 12]];
+
 /** Clear boxes of a receiver (file coords [centre, half]): screen + gate field. */
 export function receiverBoxes(L) {
   const hx = L.side / 2;
   // gates: 8 a row, 40 apart from y 40 (4 strips = about 110 gates = 14 rows)
-  return [[[0, 0, L.z0 + hx], [hx, 2, hx]], [[0, 330, L.z0 + 10], [180, 310, 20]]];
+  return [[[0, 0, L.z0 + hx], [hx, 2, hx]], [[0, 330, L.z0 + 10], [180, 310, 20]], cartridgeBox(L, 0), cartridgeBox(L, 1)];
 }
