@@ -18,6 +18,7 @@ Owner = renderman (in-game soapstain22). Terse, token-limited: act, don't ask, s
 - Commands need `br.`: `br.World.Load/Save/SaveAs/ClearRegion`, `br.Prefab.Load "name" x y z 0 16`, `br.Prefab.SaveRegion "name" cx cy cz hx hy hz 0`, `br.Server.Environment.LoadPreset "sea"`, `br.Chat.Command /TP "name" x y z 0`, `br.Server.Players.Kill "name"`, `br.Bricks.Clear <ownerId> 1`.
 - Read bricks: SaveRegion -> `data/Saved/Prefabs/name.brz`, `brs.WorldReader.from(bytes)` (`plugins/bridge/lib/brs.mjs`); .brdb: `new brs.Brdb(new DatabaseSync(file,{readOnly:true}))`, wrap `r.bricks(g)` in try. Owner index 1-based. Owner list script: server `/tmp/owners.mjs <brdb>`.
 - Plugin deploys: scp, then `node bridge/tools/reload.mjs <plugin...>` (no args = all). Omegga 1.20 web API = tRPC over HTTP with a blank admin login (`bridge/tools/trpc.mjs`; rpc.mjs `<procedure> [json] [query]`, e.g. plugin.config). NEVER restart the server with players online without asking; `~/restart_omegga.sh` (run with setsid) only if a reload cannot do it, then load the world.
+- GAME UPDATE: server ~/update_game.sh (stops Omegga, ~/brickadia/update.sh = steamcmd app 3017590, relaunch; log ~/update_game.log; run with setsid nohup). Omegga auto-update did NOT pick up build 26019787 (2026-10-18, installed by hand from 26016497).
 - Other sessions use this server (ListAgents; message before town deploys).
 
 ## Traps
