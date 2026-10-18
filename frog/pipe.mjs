@@ -1,6 +1,7 @@
 // Server side of the frog view (runs on the server through ONE ssh connection, started by frog/view/server.mjs):
 //   stdout: JSON lines {t:'fe'|'fr', s:'<the chip line>'} from the game log, {t:'players', p:[...]} every 2 s
-//   stdin:  JSON lines {cmd:'go 10 20'} -> br.Chat.Command /frog go 10 20 (bridge inbox, no waiting)
+//   stdin:  JSON lines {cmd:'go 10 20'} -> br.Chat.Command /frog go 10 20 (bridge inbox, no waiting); {say:text} -> chat line
+//   also {t:'chat'} for every player chat line and {t:'fq'} for /frog ask
 // Keeps the frog's eyes on (/frog watch 30) while this runs.
 import fs from 'fs'; import path from 'path'; import readline from 'readline';
 const ROOT = path.join(process.env.HOME, 'omegga-server');
@@ -25,7 +26,9 @@ setInterval(() => {
 }, 200);
 
 const say = line => job([{ op: 'cmd', line: `br.Chat.Command /frog ${line.replace(/[^\w .\-]/g, '')}` }]);
-readline.createInterface({ input: process.stdin }).on('line', l => { try { const m = JSON.parse(l); if (m.cmd) say(m.cmd); } catch {} });
+// {say: text}: one chat line from the frog (br.Chat.Broadcast; console lines must stay < 500 chars)
+const chat = text => job([{ op: 'say', msg: `<color="7dffa0">Frog</>: ${text.replace(/[\r\n"\\]/g, ' ').slice(0, 420)}` }]);
+readline.createInterface({ input: process.stdin }).on('line', l => { try { const m = JSON.parse(l); if (m.cmd) say(m.cmd); if (m.say) chat(m.say); } catch {} });
 process.stdin.on('end', () => process.exit(0));
 
 say('watch 30'); setInterval(() => say('watch 30'), 20000);
@@ -51,9 +54,15 @@ setInterval(() => {
   fs.readSync(fd, buf, 0, buf.length, pos); fs.closeSync(fd); pos = size;
   const lines = (rest + buf.toString('utf8')).split('\n'); rest = lines.pop();
   for (const l of lines) {
+    const ci = l.indexOf('LogChat: [SenderId: ');
+    if (ci >= 0) {
+      const m = /LogChat: \[SenderId: ([0-9a-f-]+)\] ([^:]+): (.*)$/.exec(l);
+      if (m) out({ t: 'chat', id: m[1], name: m[2], msg: m[3].trim() });
+      continue;
+    }
     const i = l.indexOf('LogBrickadia: [Wire Graph] f');
     if (i < 0) continue;
     const s = l.slice(i + 27).trim();
-    if (s.startsWith('fe|') || s.startsWith('fr|')) out({ t: s.slice(0, 2), s });
+    if (/^f[erq]\|/.test(s)) out({ t: s.slice(0, 2), s });
   }
 }, 120);

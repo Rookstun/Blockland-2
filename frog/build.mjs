@@ -12,42 +12,23 @@ export const OWNER = { id: 'f2060000-0000-4b0b-9a11-00000000f206', name: 'FrogSo
 const [W, H, HFOV] = [+(process.argv[2] ?? 40), +(process.argv[3] ?? 24), +(process.argv[4] ?? 100)];
 
 // ---- body ----
+// (2026-10-17, owner: "wait this is its new body ... this") = the owner's clipboard frog/frog_owner.brz: ONE
+// PB_Frog brick (green glass, as placed: rotation 2). The soul (tools/Clipboard_2026-10-17_19-55-35.brz)
+// lives in it: its point light + creepy hum components go on the frog brick. Collision off (it orbits heads).
+// (The earlier micro-brick frog with glow wings is in git history, 1fcf628..)
 const w = new brs.World();
 const owner = w.addOwner({ id: OWNER.id, name: OWNER.name, display_name: OWNER.display });
 const NOCOL = { player: false, weapon: false, interaction: false, physics: false };
-const C = { skin: [58, 140, 52], dark: [34, 92, 36], spot: [24, 66, 30], belly: [196, 206, 120], eye: [236, 222, 96], pupil: [12, 12, 12], mouth: [70, 30, 30], toe: [92, 170, 70] };
-const boxes = [];
-// box by EVEN corners [x0,x1) etc. -> micro brick
-const box = (x0, x1, y0, y1, z0, z1, color, extra = {}) => boxes.push({ asset: 'PB_DefaultMicroBrick', size: [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2], position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], color, ...extra });
-for (const s of [-1, 1]) {
-  const Y = (a, b) => s > 0 ? [a, b] : [-b, -a];
-  box(-22, -8, ...Y(14, 20), 0, 10, C.dark);       // folded back thigh
-  box(-8, 6, ...Y(14, 22), 0, 2, C.toe);           // back foot
-  box(8, 14, ...Y(14, 18), 0, 8, C.skin);          // front leg
-  box(14, 22, ...Y(12, 20), 0, 2, C.toe);          // front foot
-  box(12, 20, ...Y(6, 14), 18, 26, C.eye);         // bulging eye
-  box(20, 22, ...Y(8, 12), 20, 24, C.pupil);       // pupil
-}
-box(-18, 16, -14, 14, 2, 6, C.belly);              // belly
-box(-18, 16, -14, 14, 6, 16, C.skin);              // body
-box(16, 22, -14, 14, 8, 10, C.belly);              // chin
-box(16, 22, -14, 14, 10, 12, C.mouth);             // mouth line
-box(16, 22, -14, 14, 12, 18, C.skin);              // snout
-// back hump, open round the soul (soul = 10x10x12 at x -6..4, y -5..5, z 16..28)
-box(-16, -6, -12, 12, 16, 22, C.skin);
-box(4, 12, -12, 12, 16, 18, C.skin);
-box(-6, 4, -12, -6, 16, 22, C.skin); box(-6, 4, 6, 12, 16, 22, C.skin);
-box(-14, -10, -10, -6, 22, 24, C.spot); box(-14, -10, 6, 10, 22, 24, C.spot); box(6, 10, -4, 4, 18, 20, C.spot);
-box(12, 16, -14, -6, 16, 18, C.skin); box(12, 16, 6, 14, 16, 18, C.skin);
-for (const b of boxes) w.addBrick({ ...b, owner_index: owner, collision: NOCOL });
-// the soul, exactly as the owner made it
-const soulR = (await import(pathToFileURL(path.join(here, '../tools/brs4/dist.mjs')).href)).WorldReader
-  .from(fs.readFileSync(path.join(here, '../tools/Clipboard_2026-10-17_19-55-35.brz')));
-const soulB = [...soulR.bricks(1)][0];
+const brs4 = await import(pathToFileURL(path.join(here, '../tools/brs4/dist.mjs')).href);
+const frogR = brs4.WorldReader.from(fs.readFileSync(path.join(here, 'frog_owner.brz')));
+const frogB = [...frogR.bricks(1)][0];
+const soulR = brs4.WorldReader.from(fs.readFileSync(path.join(here, '../tools/Clipboard_2026-10-17_19-55-35.brz')));
 const soulC = soulR.componentChunk(1, soulR.brickChunkIndex(1)[0].index).components;
-w.addBrick({ asset: 'PB_DefaultBrick', size: soulB.size, position: [-1, 0, 22], color: soulB.color, material: 'BMC_Glass',
-  material_intensity: soulB.material_intensity, owner_index: owner, collision: NOCOL,
+w.addBrick({ asset: frogR.brickAssets()[frogB.asset_name_index], size: frogB.size, position: [0, 0, frogB.size[2]],
+  direction: frogB.direction, rotation: frogB.rotation, color: frogB.color, material: frogR.materials()[frogB.material_index],
+  material_intensity: frogB.material_intensity, owner_index: owner, collision: NOCOL,
   components: soulC.map(c => ({ type: c.typeName, data: c.data })) });
+const boxes = [];
 w.makePrefab();
 const body = w.toBrz({ externalAssets: soulR.externalAssets() });
 fs.writeFileSync(path.join(here, 'frog_body.brz'), body);
@@ -59,7 +40,7 @@ let eyes = `      let rw = row
       let fr0 = frame
       let pT = poseT
       let ya = Deg2Rad(y1)
-      let pa = Deg2Rad(pi0)
+      let pa = Deg2Rad(pi1)
       let F = Vec(cos(pa) * cos(ya), cos(pa) * sin(ya), sin(pa))
       let R = Vec(0.0 - sin(ya), cos(ya), 0.0)
       let UP = Vec(0.0 - sin(pa) * cos(ya), 0.0 - sin(pa) * sin(ya), cos(pa))
@@ -83,12 +64,12 @@ ${ind}on s${c}_${k}.Miss {
 };
 for (let c = 0; c < W; c++) eyes += `      let d${c} = Normalize(F + R * ${U[c].toFixed(6)} + UP * v)
 ` + ray(c, 0, '      ');
-eyes += `      PrintToConsole(Fmt("fe|{A:.0}|{B:.0}|{C:.1}|{D:.1}|{E:.1}|{F:.1}|{G}", fr0, rw, E.x, E.y, E.z, y1, Fmt("{A:.1}|{B}", pi0, cells.join(","))))
+eyes += `      PrintToConsole(Fmt("fe|{A:.0}|{B:.0}|{C:.1}|{D:.1}|{E:.1}|{F:.1}|{G}", fr0, rw, E.x, E.y, E.z, y1, Fmt("{A:.1}|{B}", pi1, cells.join(","))))
       row = if rw + 1.0 >= ${H}.0 then 0.0 else rw + 1.0
       frame = if rw + 1.0 >= ${H}.0 then fr0 + 1.0 else fr0
       poseT = if pT + dt > POSE_EVERY then 0.0 else pT + dt
       if pT + dt > POSE_EVERY {
-        PrintToConsole(Fmt("fr|{A:.1}|{B:.1}|{C:.1}|{D:.1}|{E:.1}|{F}", p1.x, p1.y, p1.z, y1, pi0, h0))
+        PrintToConsole(Fmt("fr|{A:.1}|{B:.1}|{C:.1}|{D:.1}|{E:.1}|{F}", p1.x, p1.y, p1.z, y1, pi1, hb0))
       }`;
 let src = fs.readFileSync(path.join(here, 'frog.ws'), 'utf8')
   .replace('//@EYES@', eyes)

@@ -1,7 +1,7 @@
 // Frog drone view: node frog/view/server.mjs -> http://localhost:8791
 // One ssh connection runs frog/pipe.mjs on the server (eye rows, pose, players in; /frog orders out).
 // The page gets everything over SSE (/events); POST /cmd {cmd} sends an order; the brain here is the
-// frog's autopilot (on by default; /auto on|off): go see the nearest player, stare at them, look around.
+// frog's autopilot (on by default; auto on|off): Navi to the nearest player; answers questions via claude -p.
 import http from 'http'; import fs from 'fs'; import path from 'path'; import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -16,7 +16,8 @@ let pipe = null;
 function startPipe() {
   const src = fs.readFileSync(path.join(here, '../pipe.mjs'), 'utf8');
   // copy the pipe script up and run it, all in one ssh session
-  const remote = `cat > /tmp/frogpipe.mjs <<'FROGEOF'\n${src}\nFROGEOF\nexec ~/node22/bin/node /tmp/frogpipe.mjs`;
+  // (base64: Windows argument quoting mangled backslashes in a heredoc)
+  const remote = `echo ${Buffer.from(src).toString('base64')} | base64 -d > /tmp/frogpipe.mjs && exec ~/node22/bin/node /tmp/frogpipe.mjs`;
   pipe = spawn('ssh', ['-o', 'ServerAliveInterval=15', '-o', 'BatchMode=yes', HOST, remote], { windowsHide: true });
   let buf = '';
   pipe.stdout.on('data', d => {
@@ -39,33 +40,70 @@ function onMsg(m) {
     const p = m.s.split('|');
     state.pose = { x: +p[1], y: +p[2], z: +p[3], yaw: +p[4], pitch: +p[5], hop: p[6] === 'true', t: Date.now() };
     send('pose', state.pose);
+  } else if (m.t === 'fq') {
+    const [, name, ...q] = m.s.split('|'); ask(name || 'friend', q.join('|'));
+  } else if (m.t === 'chat') {
+    const r = ADDRESS.exec(m.msg); if (r && r[1].length > 1) ask(m.name, r[1]);
   } else if (m.t === 'players') {
     state.players = m.p.filter(x => x.pos); send('players', state.players);
   }
 }
 
-// ---- the brain (what Claude chose for its frog) ----
-let lastGo = 0, lastLook = 0, target = null;
+// ---- the brain (what Claude chose for its frog): be a Navi to the nearest player ----
+let buddy = null, lastBuddySwitch = 0;
+const greeted = new Map(); // name -> last "Hey! Listen!"
 setInterval(() => {
   const f = state.pose; if (!state.auto || !f || Date.now() - f.t > 5000) return;
   const near = state.players.map(p => ({ p, d: Math.hypot(p.pos[0] - f.x, p.pos[1] - f.y) })).sort((a, b) => a.d - b.d)[0];
   const now = Date.now();
-  if (near && near.d < 2500) {
-    const [px, py, pz] = near.p.pos, dx = px - f.x, dy = py - f.y;
-    if (near.d > 110 && now - lastGo > 2500) {
-      const k = (near.d - 70) / near.d; order(`go ${(f.x + dx * k).toFixed(0)} ${(f.y + dy * k).toFixed(0)}`); lastGo = now;
-      state.mood = `hopping to ${near.p.name}`;
-    } else if (near.d <= 110 && now - lastLook > 1500) {
-      const yaw = Math.atan2(dy, dx) * 180 / Math.PI, pitch = Math.atan2(pz + 20 - (f.z + 20), near.d) * 180 / Math.PI;
-      order(`look ${yaw.toFixed(0)} ${Math.max(-60, Math.min(70, pitch)).toFixed(0)}`); lastLook = now;
-      state.mood = `staring at ${near.p.name}`;
-    }
-  } else if (now - lastLook > 6000) {
-    order(`look ${(f.yaw + (Math.random() * 140 - 70)).toFixed(0)} ${(Math.random() * 30 - 10).toFixed(0)}`); lastLook = now;
-    state.mood = 'looking around';
+  const want = near && near.d < 2500 ? near.p.name : null;
+  if (want !== buddy && now - lastBuddySwitch > 8000) {
+    buddy = want; lastBuddySwitch = now;
+    if (buddy) {
+      order(`follow ${buddy}`);
+      if (now - (greeted.get(buddy) ?? 0) > 10 * 60000) { greeted.set(buddy, now); order('say'); speak(`Hey! Listen! ${buddy}, I answer questions now. Start a message with "frog" or type /frog ask.`); }
+    } else order('free');
   }
+  state.mood = buddy ? `fluttering round ${buddy}` : 'wandering, alone, glowing';
   send('mood', { mood: state.mood, auto: state.auto });
-}, 700);
+}, 1000);
+
+// ---- questions: "/frog ask ..." or a chat line starting with frog/froggy/navi/fairy -> claude -p -> chat ----
+const SYS = `You are Frog: a small green frog with fairy wings and a glowing green glass soul on its back, flying around a Brickadia server (a multiplayer LEGO-like building game) as a Navi-style companion. A player named renderman made your soul and gave you life.
+Answer the player's question truthfully and helpfully in at most 2 short sentences (under 220 characters). Dry, absurd, deadpan humour is welcome; occasionally open with "Hey! Listen!". Plain text only: no markdown, no emoji, no line breaks.
+What you know about this world: players spawn in a town with a plaza and fountain; the town has an armory (swords), a gunsmith (guns, a free derringer), soda kiosks (sodas heal), a casino, and market stalls. Smash pots and bushes for coins, arrows, ammo and health. Bots (goblins, skeletons, zombies, wizards) roam and drop coins and XP; dungeons, ruins and keeps hold tougher ones; there is a death forest and a volcano far south past the snow. Limestone caverns hold glowing gems you can mine for gold. Coins buy gear; XP and coins are saved. Your commands: /frog follow, /frog free, /frog ask <question>.
+If you do not know something about this specific server, say so briefly instead of inventing it.`;
+const history = [];
+const queue = []; let thinking = false; const lastAsk = new Map();
+function ask(name, q) {
+  q = q.trim().slice(0, 300); if (!q) return;
+  if (Date.now() - (lastAsk.get(name) ?? 0) < 5000) return; lastAsk.set(name, Date.now());
+  queue.push({ name, q }); send('qa', { name, q }); pump();
+}
+function pump() {
+  if (thinking || !queue.length) return;
+  const { name, q } = queue.shift(); thinking = true;
+  const ctx = history.slice(-6).map(h => `${h.name} asked: ${h.q}\nYou answered: ${h.a}`).join('\n');
+  const prompt = (ctx ? `Earlier:\n${ctx}\n\n` : '') + `${name} asks: ${q}`;
+  const cwd = path.join(process.env.TEMP ?? '/tmp', 'frogbrain'); fs.mkdirSync(cwd, { recursive: true });
+  const p = spawn('claude', ['-p', '--model', process.env.FROG_MODEL ?? 'sonnet', '--tools', '', '--setting-sources', '', '--strict-mcp-config',
+    '--no-session-persistence', '--system-prompt', SYS], { cwd, windowsHide: true });
+  let out = ''; p.stdout.on('data', d => out += d); p.stderr.on('data', d => process.stderr.write('[brain] ' + d));
+  const kill = setTimeout(() => p.kill(), 60000);
+  p.on('close', () => {
+    clearTimeout(kill); thinking = false;
+    let a = out.replace(/\s+/g, ' ').replace(/[*_`#]/g, '').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
+    if (!a) a = 'My soul hums but no words come. Ask me again.';
+    if (a.length > 300) a = a.slice(0, 297) + '...';
+    history.push({ name, q, a }); while (history.length > 20) history.shift();
+    if (name !== 'friend') order(`follow ${name}`); order('say'); speak(`${name}, ${a}`);
+    send('qa', { name, q, a }); console.log(`[qa] ${name}: ${q} -> ${a}`);
+    pump();
+  });
+  p.stdin.end(prompt);
+}
+const speak = text => pipe?.stdin.write(JSON.stringify({ say: text }) + '\n');
+const ADDRESS = /^(?:hey|hi|yo|ok|oi|oh)?[\s,]*(?:frog|froggy|navi|fairy)\b[\s,:!?.]*(.*)$/i;
 
 // ---- http ----
 http.createServer((req, res) => {
