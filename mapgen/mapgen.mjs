@@ -1980,6 +1980,13 @@ const holy = [];
     pick1(kind, Math.round(tune('wshop.' + kind, 3, `${kind}s (weapon shops) by the roads`)), 9, 6, 30 * K, [10, 34], 26);
   // (2026-10-16, owner: "make shops like the soda spawn randomly") soda shacks (3 seeded flavours each) by the roads; picked last
   pick1('sodashack', Math.round(tune('roadside.sodashack', 6, 'soda shacks (3 random flavours) by the roads')), 3, 4, 30 * K, [2, 8], 6);
+  // (2026-10-17, owner: "no new houses were added": this map's hamlets are too small to fit any) lone
+  // houses by the roads, each a town.mjs HOUSE_TYPES archetype (croft .. manor); picked last so no older site moves
+  {
+    const want = { cottage: Math.round(tune('roadside.cottage', 14, 'lone cottages (HOUSE_TYPES) by the roads')), townhouse: Math.round(tune('roadside.townhouse', 10, 'lone townhouses (HOUSE_TYPES) by the roads')) };
+    // one at a time, alternating, so both kinds get lots before the flat ground runs out
+    for (let round = 0; round < 20; round++) for (const kind of ['townhouse', 'cottage']) if (round < want[kind]) pick1(kind, 1, 6, 4, 12 * K, [2, 24], 24);
+  }
   holy.forEach((v, k) => {
     v.seed = 17000 + k;
     // the door faces the nearest road cell
