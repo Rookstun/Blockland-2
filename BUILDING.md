@@ -85,6 +85,16 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
   or flat plateaus. **(owner)**
 
 ## 5. Players, bikes and bots
+- PLAYER (owner 2026-10-18, exact): 4 bricks = 48 units tall, jumps 300 long / 108 high. (Measured
+  capsule estimate below said ~54.) **(owner)**
+- STAIRS ARE BRICKWORK (owner 2026-10-18: "when your stairs extend from the floor it creates a striped
+  pattern instead of the brick"): never build a step as its own column from the floor. Lay a stair in
+  courses: rise = the wall's course height (10 on 10-high coursework), each course a running-bond row over
+  every step at least that high, so the sides read as brick and the steps line up with the walls; run the
+  stair flush against walls / battered faces (fill out to the face per course). npctalk/temple.mjs coursed().
+- WIRES SHOW: a wire is drawn as a line between its two bricks, through rooms. Keep gates in an invisible
+  microchip in a pocket right beside the sensor / actuator and link far apart parts with a global custom
+  event (Exec_SendCustomEventGlobal -> Event_CustomGlobal), never with long wires. **(owner)**
 - PLAYER SCALE (2026-10-17, measured + owner): the players op's position (capsule centre) stands 25-28
   above the floor, so a player is about 54 units tall (shoulder ~42, eye ~48); 38-high counters read as
   shoulder height (owner). Furnish at real size x 0.31 units/cm: ceiling 76, door 64 x 30, sill 26, window

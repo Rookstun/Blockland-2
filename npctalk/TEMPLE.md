@@ -15,6 +15,13 @@ Live in world `site 2026-10-18` (active), saved. Also read the QUESTS / MAIN QUE
   wide area for traps, 5x5 tiles you have to jump on. ferns should use the fern brick. entrance at top.
   corridors. spikes instakill no message. dark gradient downward to spikes to make them seem deeper".
 
+## v5 (2026-10-18, owner: "bricks arent meshing together, stairs arent aligned ... stairs extend from the floor creates a striped pattern ... utilize negative space in the temple to add more room to floors, we can see the wires connecting the pressure plate to the spike trap")
+- Every stair (central, side, landing, upper, stairwell flights, S2, E1) = coursed(): rise 10 / run 10, running-bond courses over the steps (no per-step columns); side stairs + landing fill back to the battered face course by course; flights flush on the walls (FA/FB to the stairwell walls, WELL v0 -126).
+- Corners interlock: tier courses and room faces alternate which face takes the corner each course; no recessed bricks.
+- Bigger rooms in the solid core: HALL u -400..200 v -320..300 (wide ledges; S2 stands inside it, from the antechamber's west edge), ANT v -200..200, SAN v -200..200 (E1 -380..-200, E2 -480..-380), C1 is just the doorway u -80..-60.
+- No visible wires: each trap tile has an invisible B_1x1_Microchip in a 12x12x12 pocket in its pillar (zone bOccupied -> EdgeDetectorExec -> SendCustomEventGlobal 'temple.trap' (row, col, 1/0)); each dart (16: west darts skipped where S2 blocks the row, east where C3 is) has a chip in a pocket 8..20 behind the wall face (Event_CustomGlobal -> row/col match -> Var -> bEnabled). Pockets are reserved before the masonry (label 'pocket', dropped at output). NOT TESTED IN GAME: the trap events (needs a player on a trap tile).
+- Live 2026-10-18 in site 2026-10-18: cleared 26,897, loaded 33,6xx (76 overlap rejects, as v4), saved; backup `backup pre_temple5 site 2026-10-18`. Old prefab = git HEAD~ of qout/temple.brz.
+
 ## Current build (v4, Ur-Nammu style): `npctalk/temple.mjs`
 ```
 node npctalk/temple.mjs <abs path tools/brs4/dist.mjs> mapgen/out_site_1018vend npctalk/qout/temple3_live.json npctalk/qout

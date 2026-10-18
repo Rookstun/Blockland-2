@@ -45,17 +45,17 @@ const halfAt = (t, z) => [t.hu - 2 * Math.floor((z - t.zb) / 10), t.hv - 2 * Mat
 const topHalf = t => halfAt(t, t.zt - 10);
 const F = 540;                                 // trap hall / sanctum floor
 const ROOMS = {
-  WELL: { u0: -60, u1: 60, v0: -124, v1: 140, z0: 760, z1: 996 },     // switchback stairwell under the shrine
+  WELL: { u0: -60, u1: 60, v0: -126, v1: 140, z0: 760, z1: 996 },     // switchback stairwell under the shrine
   SHR: { u0: -88, u1: 88, v0: -68, v1: 68, z0: 1000, z1: 1120 },      // the shrine room (the entrance)
-  C1: { u0: -300, u1: -60, v0: 100, v1: 140, z0: 760, z1: 860 },      // corridor stairwell -> antechamber
-  ANT: { u0: -300, u1: -80, v0: -60, v1: 140, z0: 760, z1: 860 },     // glyph antechamber
-  S2: { u0: -300, u1: -240, v0: -70, v1: 130, z0: F, z1: 860 },       // stair down the hall's west wall
-  HALL: { u0: -320, u1: 200, v0: -300, v1: 140, z0: F, z1: 690 },     // the trap hall (ledges + pit)
+  C1: { u0: -80, u1: -60, v0: 100, v1: 140, z0: 760, z1: 860 },       // doorway stairwell -> antechamber
+  ANT: { u0: -300, u1: -80, v0: -200, v1: 200, z0: 760, z1: 860 },    // glyph antechamber (grown into the core)
+  S2: { u0: -300, u1: -240, v0: -100, v1: 130, z0: F, z1: 860 },      // stair down from the antechamber into the hall
+  HALL: { u0: -400, u1: 200, v0: -320, v1: 300, z0: F, z1: 690 },     // the trap hall: wide ledges round the pit
   PIT: { u0: -240, u1: 160, v0: -300, v1: 140, z0: 380, z1: F },      // its spike pit
   C3: { u0: 200, u1: 240, v0: -40, v1: 20, z0: F, z1: F + 100 },      // corridor hall -> sanctum
-  SAN: { u0: 240, u1: 400, v0: -120, v1: 120, z0: F, z1: 690 },       // sanctum
-  E1: { u0: 310, u1: 370, v0: -300, v1: -120, z0: 360, z1: 660 },     // exit stair down
-  E2: { u0: 310, u1: 370, v0: -480, v1: -300, z0: 360, z1: 470 },     // exit tunnel out the south face
+  SAN: { u0: 240, u1: 400, v0: -200, v1: 200, z0: F, z1: 690 },       // sanctum
+  E1: { u0: 310, u1: 370, v0: -380, v1: -200, z0: 360, z1: 660 },     // exit stair down
+  E2: { u0: 310, u1: 370, v0: -480, v1: -380, z0: 360, z1: 470 },     // exit tunnel out the south face
 };
 const voids = Object.values(ROOMS);
 const carveOf = r => ({ u0: r.u0 - 8, u1: r.u1 + 8, v0: r.v0 - 8, v1: r.v1 + 8, z0: r.z0 - 4, z1: r.z1 });
@@ -121,39 +121,91 @@ const minusVoids = (u, v, u1, v1, z0, z1) => {
 };
 const solid = (u0, v0, z0, u1, v1, z1, m, label) => { for (const [a, b] of minusVoids(u0, v0, u1, v1, z0, z1)) mass(u0, v0, a, u1, v1, b, m, label); };
 
-// ---------------------------------------------------------------- stairs first (the courses behind them get dropped)
-const inCentral = (u, v) => Math.abs(u) < US.w + 12 && v > 60 && v < 460; // upper stair band through the tiers
+// ---------------------------------------------------------------- hidden chip pockets (behind the dart walls)
+// (owner 2026-10-18: "we can see the wires connecting the pressure plate to the spike trap"): every dart
+// gets its own invisible microchip in a pocket in the masonry right behind it, every trap tile one inside
+// its pillar; they talk through a global custom event, so no wire crosses a room. The pockets are
+// reserved before the masonry (the core pieces that would fill them are left out) and dropped at output.
+const DZ = F + 30;
+const DARTS = [];
+for (let r = 0; r < 5; r++) { const v = -250 + r * 80;
+  if (!(v > ROOMS.S2.v0 - 10 && v < ROOMS.S2.v1 + 10)) DARTS.push({ kind: 'r', i: r, dir: 0, u: ROOMS.HALL.u0, v, du: 1, dv: 0 });
+  if (!(v > ROOMS.C3.v0 - 10 && v < ROOMS.C3.v1 + 10)) DARTS.push({ kind: 'r', i: r, dir: 1, u: ROOMS.HALL.u1, v, du: -1, dv: 0 }); }
+for (let c = 0; c < 5; c++) { const u = -190 + c * 80;
+  DARTS.push({ kind: 'c', i: c, dir: 2, u, v: ROOMS.HALL.v0, du: 0, dv: 1 });
+  DARTS.push({ kind: 'c', i: c, dir: 3, u, v: ROOMS.HALL.v1, du: 0, dv: -1 }); }
+for (const d of DARTS) { // the chip sits 8..20 behind the wall face (behind the 8-deep face bricks)
+  d.cu = d.u - d.du * 14; d.cv = d.v - d.dv * 14;
+  ubox(d.cu - 6, d.cv - 6, DZ - 4, d.cu + 6, d.cv + 6, DZ + 8, { color: [0, 0, 0] }, 'pocket');
+}
+
+// ---------------------------------------------------------------- stairs first, laid in brick courses
+// (owner 2026-10-18: "stairs aren't aligned ... when your stairs extend from the floor it creates a
+// striped pattern instead of the brick"): rise 10 = one wall course, run 10; every course of a stair is
+// a row of 20-long running-bond bricks over all the steps at least that high, so the sides read as
+// brickwork and the steps line up with the walls' courses.
+// coursed(axis 'u'|'v', a0 (the top step's edge), dir (+-1 along the run), n steps, top0, dz (+-10 per
+// step), cross(z) -> [c0, c1], base(c0, c1, a0, a1, z1) -> the floor/ground under a brick, key)
+function coursed(axis, a0, dir, n, top0, dz, cross, base, key, label = 'stair') {
+  const tops = Array.from({ length: n }, (_, k) => top0 + dz * k);
+  const zLo = Math.floor(Math.min(...tops.map((tp, k) => { const r = [a0 + dir * 10 * k, a0 + dir * 10 * (k + 1)]; const [c0, c1] = cross(tp - 10); return base(c0, c1, Math.min(...r), Math.max(...r), tp); })) / 10) * 10;
+  for (let z = zLo, c = 0; z < Math.max(...tops); z += 10, c++) {
+    // the steps this course runs under: contiguous ranges along the run
+    const inc = tops.map(tp => tp >= z + 10);
+    const [c0, c1] = cross(z);
+    if (c1 <= c0) continue;
+    for (let k0 = 0; k0 < n; k0++) {
+      if (!inc[k0] || (k0 && inc[k0 - 1])) continue;
+      let k1 = k0; while (k1 + 1 < n && inc[k1 + 1]) k1++;
+      const s0 = Math.min(a0 + dir * 10 * k0, a0 + dir * 10 * (k1 + 1)), s1 = Math.max(a0 + dir * 10 * k0, a0 + dir * 10 * (k1 + 1));
+      // running bond: joints every 20 from the stair's top edge, offset 10 on odd courses
+      for (let b = Math.floor((s0 - a0 - (c % 2) * 10) / 20) * 20 + a0 + (c % 2) * 10; b < s1; b += 20) {
+        const p = Math.max(s0, b), q = Math.min(s1, b + 20);
+        if (q - p < 2) continue;
+        const g = base(c0, c1, p, q, z + 10);
+        if (z + 10 <= g) continue;
+        const zb = Math.max(z, g + (g % 2 + 2) % 2);
+        const qx = axis === 'v' ? { u0: c0, u1: c1, v0: p, v1: q } : { u0: p, u1: q, v0: c0, v1: c1 };
+        if (inVoid({ ...qx, z0: zb, z1: z + 10 })) continue;
+        ubox(qx.u0, qx.v0, zb, qx.u1, qx.v1, z + 10, clay(key, p, z), label);
+      }
+    }
+  }
+}
+const groundV = (c0, c1, p, q, below) => gTop(c0, p, c1, q, below);   // axis v: cross = u
+const groundU = (c0, c1, p, q, below) => gTop(p, c0, q, c1, below);   // axis u: cross = v
+const floorAt = z => () => z;
+const faceV = z => halfAt(TIERS[0], Math.min(z, TIERS[0].zt - 10))[1]; // T1's north face at course z
+const inCentral = (u, v) => Math.abs(u) < US.w + 12 && v > US_END && v < 460; // upper stair band through the tiers
 const steps = [];
 // central lower stair: north from v 440 (z 700) down to the ground
-for (let s = 0; s < 60; s++) {
-  const top = 700 - 12 * s, v0 = CS.v0 + 12 * s, v1 = v0 + 12;
-  if (top <= gTop(-CS.w, v0, CS.w, v1, top) + 2) break;
-  for (let u = -CS.w; u < CS.w; u += 40) { const g = gTop(u, v0, u + 40, v1, top); solid(u, v0, g, u + 40, v1, top - 2, { color: CORE }, 'stair'); ubox(u, v0, top - 2, u + 40, v1, top, sand(u, s), 'tread'); }
-  for (const [c0, c1] of [[-CS.w - 12, -CS.w], [CS.w, CS.w + 12]]) { const g = gTop(c0, v0, c1, v1, top + 14); ubox(c0, v0, g, c1, v1, top + 14, clay(c0, s, 1), 'cheek'); }
-  steps.push(s);
+let csN = 0; while (csN < 60 && 700 - 10 * csN > gTop(-CS.w, CS.v0 + 10 * csN, CS.w, CS.v0 + 10 * csN + 10, 700 - 10 * csN) + 2) { steps.push(csN); csN++; }
+coursed('v', CS.v0, +1, csN, 700, -10, () => [-CS.w, CS.w], groundV, 1);
+for (const [c0, c1] of [[-CS.w - 12, -CS.w], [CS.w, CS.w + 12]]) coursed('v', CS.v0, +1, csN, 720, -10, () => [c0, c1], groundV, 2, 'cheek');
+// landing where the three stairs meet: from the battered face out to v 440, courses up to z 700
+for (let z = Math.floor(gTop(LAND.u0, LAND.v0, LAND.u1, LAND.v1, 700) / 10) * 10, c = 0; z < 700; z += 10, c++) {
+  // v LAND.v0..v1 across the whole landing; between the face and LAND.v0 only beside the upper stair's band
+  const v0 = faceV(z), UB = US.w + 12;
+  for (const [ua, ub, va] of [[LAND.u0, LAND.u1, LAND.v0], [LAND.u0, -UB, v0], [UB, LAND.u1, v0]]) {
+    const vb = va === LAND.v0 ? LAND.v1 : LAND.v0;
+    if (vb <= va) continue;
+    for (let b = ua - (c % 2) * 10; b < ub; b += 20) { const p = Math.max(ua, b), q = Math.min(ub, b + 20); if (q - p < 2) continue;
+      const g = gTop(p, va, q, vb, z + 10); if (z + 10 <= g) continue;
+      ubox(p, va, Math.max(z, g + (g % 2 + 2) % 2), q, vb, z + 10, clay(3, p, z), 'landing'); }
+  }
 }
-// landing where the three stairs meet
-solid(LAND.u0, LAND.v0, gTop(LAND.u0, LAND.v0, LAND.u1, LAND.v1, 700), LAND.u1, LAND.v1, 698, { color: CORE }, 'landing');
-for (let u = LAND.u0; u < LAND.u1; u += 40) ubox(u, LAND.v0, 698, u + 40, LAND.v1, 700, sand(u, 9), 'tread');
-// side stairs climbing along the face toward the landing
-for (const sg of [-1, 1]) for (let s = 0; s < 60; s++) {
-  const top = 700 - 12 * s, a0 = SS.u0 + 12 * s, a1 = a0 + 12, u0 = sg < 0 ? -a1 : a0, u1 = sg < 0 ? -a0 : a1;
-  const g = gTop(u0, SS.v0, u1, SS.v1, top);
-  if (top <= g + 2) break;
-  solid(u0, SS.v0, g, u1, SS.v1, top - 2, { color: CORE }, 'sidestair'); ubox(u0, SS.v0, top - 2, u1, SS.v1, top, sand(u0, s), 'tread');
-  ubox(u0, SS.v1, gTop(u0, SS.v1, u1, SS.v1 + 12, top + 14), u1, SS.v1 + 12, top + 14, clay(u0, s, 2), 'cheek');
+// side stairs climbing along the face toward the landing; each course reaches back to the face
+for (const sg of [-1, 1]) {
+  let n = 0; while (n < 60 && 700 - 10 * n > gTop(sg < 0 ? -(SS.u0 + 10 * n + 10) : SS.u0 + 10 * n, SS.v0, sg < 0 ? -(SS.u0 + 10 * n) : SS.u0 + 10 * n + 10, SS.v1, 700 - 10 * n) + 2) n++;
+  coursed('u', sg * SS.u0, sg, n, 700, -10, z => [faceV(z), SS.v1], groundU, 4, 'sidestair');
+  coursed('u', sg * SS.u0, sg, n, 720, -10, () => [SS.v1, SS.v1 + 12], groundU, 5, 'cheek');
 }
-// upper stair: from the landing south up to the shrine door (rise 12, tread 12), through the gatehouse
-let usTop = 700, usV = LAND.v0;
-while (usTop < TIERS[2].zt) {
-  const v1 = usV, v0 = usV - 12, top = usTop + 12;
-  solid(-US.w, v0, gTop(-US.w, v0, US.w, v1, top), US.w, v1, top - 2, { color: CORE }, 'ustair');
-  for (let u = -US.w; u < US.w; u += 50) ubox(u, v0, top - 2, u + 50, v1, top, sand(u, top), 'tread');
-  for (const [c0, c1] of [[-US.w - 12, -US.w], [US.w, US.w + 12]]) solid(c0, v0, gTop(c0, v0, c1, v1, top), c1, v1, top + 14, clay(c0, top, 3), 'cheek');
-  usTop = top; usV = v0;
-}
-const US_END = usV; // v where the stair arrives at the summit (z 1000)
-ubox(-US.w - 12, ROOMS.SHR.v1 + 12, TIERS[2].zt - 2, US.w + 12, US_END, TIERS[2].zt, sand(5, 5), 'tread'); // apron to the door
+// upper stair: from the landing south up to the shrine door (rise 10, run 10), through the gatehouse
+const usN = (TIERS[2].zt - 700) / 10;
+const US_END = LAND.v0 - 10 * usN; // v where the stair arrives at the summit (z 1000)
+coursed('v', LAND.v0, -1, usN, 710, 10, () => [-US.w, US.w], groundV, 6, 'ustair');
+for (const [c0, c1] of [[-US.w - 12, -US.w], [US.w, US.w + 12]]) coursed('v', LAND.v0, -1, usN, 730, 10, () => [c0, c1], groundV, 7, 'cheek');
+ubox(-US.w - 12, ROOMS.SHR.v1 + 12, TIERS[2].zt - 10, US.w + 12, US_END, TIERS[2].zt, clay(5, 5), 'apron'); // apron to the door
 
 // ---------------------------------------------------------------- tiers: cores, battered courses, pilasters
 // core columns on one grid, split at every void edge, inside each tier's top rectangle inset 8
@@ -180,7 +232,10 @@ TIERS.forEach((t, ti) => {
   for (let z = t.zb, c = 0; z < t.zt; z += 10, c++) {
     const [hu, hv] = halfAt(t, z), z1 = z + 10;
     // north + south faces span the full width, east + west between them
-    const sides = [['v', hv, -hu, hu, +1], ['v', -hv, -hu, hu, -1], ['u', hu, -hv + 8, hv - 8, +1], ['u', -hu, -hv + 8, hv - 8, -1]];
+    // corners interlock (owner: "bricks aren't meshing together"): the N/S courses take the corner on
+    // even courses, the E/W ones on odd courses
+    const ns = c % 2 ? 8 : 0, ew = c % 2 ? 0 : 8;
+    const sides = [['v', hv, -hu + ns, hu - ns, +1], ['v', -hv, -hu + ns, hu - ns, -1], ['u', hu, -hv + ew, hv - ew, +1], ['u', -hu, -hv + ew, hv - ew, -1]];
     for (const [axis, at, a0, a1, dir] of sides) {
       const P = (a, d) => axis === 'u' ? [at - dir * d, a] : [a, at - dir * d];
       const put = (aa0, aa1, d0, d1, m, label) => { const [p0, q0] = P(aa0, d0), [p1, q1] = P(aa1, d1);
@@ -198,7 +253,7 @@ TIERS.forEach((t, ti) => {
         const s = Math.max(a0, a), e = Math.min(a1, a + 20);
         if (e - s < 2) continue;
         const r = hash(ti, axis === 'u' ? 1 : 2, Math.sign(at), a, z);
-        put(s, e, r < 0.1 ? 2 : 0, 8, clay(ti, at, a, z), 'brick');
+        void r; put(s, e, 0, 8, clay(ti, at, a, z), 'brick');
       }
       // pilasters: buttress strips standing 8 proud, every 120 along the face (not over the stairs)
       for (let pc = a0 + 70; pc + PIL / 2 < a1 - 50; pc += PIL_STEP) {
@@ -213,10 +268,11 @@ TIERS.forEach((t, ti) => {
 });
 
 // ---------------------------------------------------------------- flush brick faces for the rooms
-function face(axis, at, a0, a1, zb, zt, dir, { skip = () => false, key = 0, shadeZ = null } = {}) {
+function face(axis, at, A0, A1, zb, zt, dir, { skip = () => false, key = 0, shadeZ = null, corner = 0 } = {}) {
   skip ??= () => false;
   const P = (a, d) => axis === 'u' ? [at - dir * d, a] : [a, at - dir * d];
-  for (let z = zb, c = 0; z < zt; z += 10, c++) for (let a = a0 - (c % 2) * 10; a < a1; a += 20) {
+  // corner: +8 = this face reaches over the corners on even courses, -8 = on odd courses (interlocking)
+  for (let z = zb, c = 0; z < zt; z += 10, c++) for (let a0 = A0 + (corner && ((c % 2 === 0) !== (corner > 0)) ? 8 : 0), a1 = A1 - (corner && ((c % 2 === 0) !== (corner > 0)) ? 8 : 0), a = a0 - (c % 2) * 10; a < a1; a += 20) {
     const s = Math.max(a0, a), e = Math.min(a1, a + 20);
     if (e - s < 2 || skip((s + e) / 2, z + 5) || skip(s + 1, z + 5) || skip(e - 1, z + 5)) continue;
     const [p0, q0] = P(s, 0), [p1, q1] = P(e, 8), r = hash(key, at, a, z);
@@ -226,10 +282,10 @@ function face(axis, at, a0, a1, zb, zt, dir, { skip = () => false, key = 0, shad
   }
 }
 function roomFaces(r, o = {}, key = 20) {
-  face('v', r.v1, r.u0 - 8, r.u1 + 8, r.z0, r.z1, -1, { skip: o.N, key: key + 1, shadeZ: o.shadeZ });
-  face('v', r.v0, r.u0 - 8, r.u1 + 8, r.z0, r.z1, +1, { skip: o.S, key: key + 2, shadeZ: o.shadeZ });
-  face('u', r.u1, r.v0, r.v1, r.z0, r.z1, -1, { skip: o.E, key: key + 3, shadeZ: o.shadeZ });
-  face('u', r.u0, r.v0, r.v1, r.z0, r.z1, +1, { skip: o.W, key: key + 4, shadeZ: o.shadeZ });
+  face('v', r.v1, r.u0 - 8, r.u1 + 8, r.z0, r.z1, -1, { skip: o.N, key: key + 1, shadeZ: o.shadeZ, corner: 8 });
+  face('v', r.v0, r.u0 - 8, r.u1 + 8, r.z0, r.z1, +1, { skip: o.S, key: key + 2, shadeZ: o.shadeZ, corner: 8 });
+  face('u', r.u1, r.v0 - 8, r.v1 + 8, r.z0, r.z1, -1, { skip: o.E, key: key + 3, shadeZ: o.shadeZ, corner: -8 });
+  face('u', r.u0, r.v0 - 8, r.v1 + 8, r.z0, r.z1, +1, { skip: o.W, key: key + 4, shadeZ: o.shadeZ, corner: -8 });
 }
 const hole = (a0, a1, z0, z1) => (a, z) => a > a0 && a < a1 && z > z0 && z < z1;
 const corbel = (c, w, z0, zs) => (a, z) => { if (z < z0) return false; const half = w / 2 - (z >= zs ? (Math.floor((z - zs) / 10) + 1) * 4 : 0); return half > 0 && Math.abs(a - c) < half; };
@@ -237,7 +293,7 @@ const R = ROOMS;
 roomFaces(R.WELL, { W: hole(R.C1.v0, R.C1.v1, R.C1.z0 - 1, R.C1.z1) }, 10);
 roomFaces(R.C1, { E: () => true, W: () => true }, 12);
 roomFaces(R.ANT, { E: hole(R.C1.v0, R.C1.v1, R.C1.z0 - 1, R.C1.z1), N: () => false, W: (a, z) => false, S: hole(R.S2.u0, R.S2.u1, 0, 2000) }, 14);
-roomFaces({ ...R.HALL, z0: F }, { E: hole(R.C3.v0, R.C3.v1, F - 1, R.C3.z1), N: hole(R.S2.u0 - 8, R.S2.u1 + 8, F - 1, 2000) }, 16);
+roomFaces({ ...R.HALL, z0: F }, { E: hole(R.C3.v0, R.C3.v1, F - 1, R.C3.z1) }, 16);
 roomFaces(R.PIT, { shadeZ: pitShade }, 18);
 roomFaces(R.C3, { E: () => true, W: () => true }, 22);
 roomFaces(R.SAN, { W: hole(R.C3.v0, R.C3.v1, F - 1, R.C3.z1), S: hole(R.E1.u0, R.E1.u1, 0, 2000) }, 24);
@@ -249,31 +305,31 @@ floor(R.ANT, 760, (u, v) => inRect(R.S2, u, v)); floor(R.C1, 760); floor(R.C3, F
 floor({ ...R.HALL }, F, (u, v) => inRect(R.PIT, u, v) || inRect(R.S2, u, v));
 floor(R.WELL, 760);
 // shrine: floor over the stairwell except flight A's opening
-const FA = { u0: -56, u1: -8 }, FB = { u0: 8, u1: 56 };
+const FA = { u0: -60, u1: -8 }, FB = { u0: 8, u1: 60 }; // flush on the stairwell walls
 for (let u = R.WELL.u0; u < R.WELL.u1; u += 20) for (let v = R.WELL.v0; v < R.WELL.v1; v += 20) {
   if (u >= FA.u0 - 4 && u < FA.u1 && v >= -64 && v < 64) continue;
   ubox(u, v, 996, Math.min(R.WELL.u1, u + 20), Math.min(R.WELL.v1, v + 20), 1000, sand(u, v, 1000), 'floor');
 }
 
 // ---------------------------------------------------------------- the switchback stairwell
-const flight = (u0, u1, vStart, dirV, zTop, n, label) => { for (let s = 0; s < n; s++) {
-  const top = zTop - 12 * (s + 1), va = vStart + dirV * 12 * s, vb = va + dirV * 12;
-  ubox(u0, Math.min(va, vb), R.WELL.z0, u1, Math.max(va, vb), top, sand(u0, s, top), label); } };
-flight(FA.u0, FA.u1, 64, -1, 1000, 10, 'flightA');                 // 1000 -> 880 going south
-ubox(-60, -124, R.WELL.z0, 60, -56, 880, sand(7, 7), 'wlanding');    // south landing
-flight(FB.u0, FB.u1, -56, +1, 880, 10, 'flightB');                 // 880 -> 760 going north
-ubox(-8, -56, R.WELL.z0, 8, 64, 996, clay(4, 4), 'spine');
+coursed('v', 64, -1, 12, 990, -10, () => [FA.u0, FA.u1], floorAt(R.WELL.z0), 31, 'flightA');   // 1000 -> 880 going south
+coursed('v', -56, -1, 7, 880, 0, () => [-60, 60], floorAt(R.WELL.z0), 32, 'wlanding');            // south landing (v -56..-126)
+coursed('v', -56, +1, 12, 870, -10, () => [FB.u0, FB.u1], floorAt(R.WELL.z0), 33, 'flightB');   // 880 -> 760 going north
+coursed('v', -56, +1, 12, 990, 0, () => [-8, 8], floorAt(R.WELL.z0), 34, 'spine');
 // stair S2 down the hall's west wall: 760 -> 544
-for (let s = 0; s < 18; s++) { const top = 760 - 12 * (s + 1), v1 = R.S2.v1 - 10 * s, v0 = v1 - 10; ubox(R.S2.u0, v0, F, R.S2.u1, v1, top, sand(s, 61), 'stairS2'); }
+coursed('v', R.S2.v1, -1, 22, 750, -10, () => [R.S2.u0, R.S2.u1], floorAt(F), 35, 'stairS2'); // 760 -> 540 going south
 // exit stair E1: 540 -> 360 going south, then E2 flat out
-for (let s = 0; s < 15; s++) { const top = F - 12 * (s + 1), v1 = R.E1.v1 - 12 * s, v0 = v1 - 12; ubox(R.E1.u0, v0, R.E1.z0 - 4, R.E1.u1, v1, top, sand(s, 62), 'stairE'); }
+coursed('v', R.E1.v1, -1, 18, F - 10, -10, () => [R.E1.u0, R.E1.u1], floorAt(R.E1.z0 - 4), 36, 'stairE'); // 540 -> 360 going south
 
 // ---------------------------------------------------------------- the trap hall: 5x5 jump tiles over the spikes
 const TILE = 14, PITCH = 80, GU0 = -190, GV0 = -250;
 const tiles = [];
 for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
   const u = GU0 + c * PITCH, v = GV0 + r * PITCH, trap = hash(r, c, 77) < 0.36 && !(r === 2 && c === 0);
-  for (let z = R.PIT.z0; z < F - 4; z += 20) ubox(u - TILE + 2, v - TILE + 2, z, u + TILE - 2, v + TILE - 2, Math.min(F - 4, z + 20), { color: shade(clayC(u, v, z), pitShade(z + 10)) }, 'tilepillar');
+  for (let z = R.PIT.z0; z < F - 16; z += 20) ubox(u - TILE + 2, v - TILE + 2, z, u + TILE - 2, v + TILE - 2, Math.min(F - 16, z + 20), { color: shade(clayC(u, v, z), pitShade(z + 10)) }, 'tilepillar');
+  { const pc = { color: shade(clayC(u, v, F), pitShade(F - 10)) }, a = TILE - 2; // the ring round the chip pocket (12 x 12 x 12)
+    ubox(u - a, v - a, F - 16, u - 6, v + a, F - 4, pc, 'tilepillar'); ubox(u + 6, v - a, F - 16, u + a, v + a, F - 4, pc, 'tilepillar');
+    ubox(u - 6, v - a, F - 16, u + 6, v - 6, F - 4, pc, 'tilepillar'); ubox(u - 6, v + 6, F - 16, u + 6, v + a, F - 4, pc, 'tilepillar'); }
   ubox(u - TILE, v - TILE, F - 4, u + TILE, v + TILE, F, { color: SAND[(r + c) % 3], ...(trap ? { trap: { r, c } } : {}) }, trap ? 'traptile' : 'tile');
   tiles.push({ r, c, u, v, trap });
 }
@@ -281,14 +337,9 @@ const nearTile = (u, v) => tiles.some(t => Math.abs(u - t.u) < TILE + 2 && Math.
 for (let u = R.PIT.u0 + 2; u < R.PIT.u1 - 10; u += 14) for (let v = R.PIT.v0 + 2; v < R.PIT.v1 - 10; v += 14)
   if (!nearTile(u + 5, v + 5)) ubox(u, v, R.PIT.z0, u + 10, v + 10, R.PIT.z0 + 10, { asset: 'PB_Spike', color: [40, 38, 36], spike: true }, 'spike');
 ubox(R.PIT.u0, R.PIT.v0, R.PIT.z0 - 4, R.PIT.u1, R.PIT.v1, R.PIT.z0, { color: [10, 8, 8] }, 'pitfloor');
-// darts: per row one each in the west + east walls, per column one each in the north + south walls
-const DZ = F + 30;
-for (let r = 0; r < 5; r++) { const v = GV0 + r * PITCH;
-  ubox(R.HALL.u0, v - 2, DZ, R.HALL.u0 + 4, v + 2, DZ + 4, { color: [20, 16, 14], dart: { kind: 'r', i: r, dir: 0 } }, 'dart');
-  if (!inRect(R.C3, R.HALL.u1 + 1, v)) ubox(R.HALL.u1 - 4, v - 2, DZ, R.HALL.u1, v + 2, DZ + 4, { color: [20, 16, 14], dart: { kind: 'r', i: r, dir: 1 } }, 'dart'); }
-for (let c = 0; c < 5; c++) { const u = GU0 + c * PITCH;
-  ubox(u - 2, R.HALL.v0, DZ, u + 2, R.HALL.v0 + 4, DZ + 4, { color: [20, 16, 14], dart: { kind: 'c', i: c, dir: 2 } }, 'dart');
-  ubox(u - 2, R.HALL.v1 - 4, DZ, u + 2, R.HALL.v1, DZ + 4, { color: [20, 16, 14], dart: { kind: 'c', i: c, dir: 3 } }, 'dart'); }
+// darts: per row in the west + east walls, per column in the north + south walls (DARTS, above)
+for (const d of DARTS) ubox(d.u - (d.du ? (d.du > 0 ? 0 : 4) : 2), d.v - (d.dv ? (d.dv > 0 ? 0 : 4) : 2), DZ, d.u + (d.du ? (d.du > 0 ? 4 : 0) : 2), d.v + (d.dv ? (d.dv > 0 ? 4 : 0) : 2), DZ + 4,
+  { color: [20, 16, 14], dart: d }, 'dart');
 
 // ---------------------------------------------------------------- sanctum: THE STASH
 const PU = 320, PV = 0;
@@ -375,7 +426,7 @@ TIERS.forEach((t, ti) => {
   for (let a = -hv + 20; a < hv - 20; a += 26) for (const u of [hu - 12, -hu + 12]) if (hash(a, u, ti, 1) < 0.4) fern(u, a, t.zt);
   void next;
 });
-for (const s of steps) if (hash(s, 5) < 0.3) fern(CS.w + 6, CS.v0 + 12 * s + 6, 700 - 12 * s + 14);
+for (const s of steps) if (hash(s, 5) < 0.3) fern(CS.w + 6, CS.v0 + 10 * s + 5, 700 - 10 * s + 20);
 for (const [u, v] of [[-290, -50], [-90, -50], [-290, 130], [-95, 128]]) fern(u, v, 760);
 
 // ---------------------------------------------------------------- plaque at the shrine door
@@ -385,7 +436,7 @@ plaque({ put: (b, x, y, z) => B.add({ ...b, position: [x, y, z] }, 'plaque'), te
 // ---------------------------------------------------------------- write the prefab (+ wires) and the jobs
 const dropped = B.dropped.filter(d => !d.startsWith('terrain'));
 const byLabel = {}; for (const d of dropped) { const l = d.split(' ')[0] + (/ hits terrain /.test(d) ? '>terrain' : ''); byLabel[l] = (byLabel[l] ?? 0) + 1; }
-const mine = B.bricks.slice(nObst);
+const mine = B.bricks.slice(nObst).filter(b => b.label !== 'pocket');
 console.error(`${mine.length} temple bricks; dropped ${JSON.stringify(byLabel)}; ferns ${ferns}; trap tiles ${mine.filter(b => b.trap).length}; darts ${mine.filter(b => b.dart).length}; spikes ${mine.filter(b => b.spike).length}; lights ${mine.filter(b => b.light).length}; clear ${CLEAR.length} props + ${liveClear.length} bushes`);
 if (process.env.TEMPLE_DEBUG) for (const d of dropped) if (new RegExp(process.env.TEMPLE_DEBUG).test(d)) console.error(d.slice(0, 220));
 
@@ -408,17 +459,46 @@ for (const brick of mine) {
   const h = w.addBrick({ ...b, position: [b.position[0] - CX, b.position[1] - CY, b.position[2] - ZOFF], owner_index: o, components: comps });
   if (trap) zones.push({ trap, h, c: COMP.AttachedZone });
   if (dart) darts.push({ dart, h, c: COMP.ProjectileSpawner });
+  void label;
 }
-let gi = 0;
-const gate = (c, data = {}) => ({ h: w.addBrick({ asset: c.BRICK, position: [-200 + (gi % 20) * 20, -200 + Math.floor(gi++ / 20) * 20, SH.zt + 260 - ZOFF], color: [200, 200, 200], owner_index: o, visibility: false, collision: NOCOLL, components: [{ type: c.NAME, data }] }), c });
-const wire = (a, ap, b, bp) => w.addWire({ brick: a.h, component_type: a.c.NAME, port: a.c.PORTS[ap] }, { brick: b.h, component_type: b.c.NAME, port: b.c.PORTS[bp] });
-// row r darts <- OR of the trap tiles in row r; column c darts <- OR of the trap tiles in column c
-for (const [kind, key] of [['r', 'r'], ['c', 'c']]) for (let i = 0; i < 5; i++) {
-  const zs = zones.filter(z => z.trap[key] === i), ds = darts.filter(d => d.dart.kind === kind && d.dart.i === i);
-  if (!zs.length || !ds.length) continue;
-  let src = [zs[0], 'bOccupied'];
-  for (const z of zs.slice(1)) { const or = gate(COMP.Expr_LogicalOR); wire(...src, or, 'bInputA'); wire(z, 'bOccupied', or, 'bInputB'); src = [or, 'bOutput']; }
-  for (const d of ds) wire(...src, d, 'bEnabled');
+// every trap tile / dart has its own invisible microchip (house rule: chips invisible, no collision) in its
+// pocket; the tile's chip sends 'temple.trap' (row, column, 1 on / 0 off) on the zone's edges, every
+// dart's chip keeps an on/off Var for its row (or column) and drives bEnabled. All wires stay inside
+// the bricks round the pocket.
+const f64 = v => ({ $variant: 'f64', value: v });
+const EVENT_SIZE = [10, 5, 2];
+const DATA8 = (pre, set) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map(k => [pre + k, f64(set[k] ?? 0)]));
+const chipAt = (x, y, z) => {
+  const brick = w.addBrick({ asset: 'B_1x1_Microchip', position: [x - CX, y - CY, z - ZOFF], owner_index: o, visibility: false, collision: false, components: [{ type: 'Component_Internal_Microchip' }] });
+  const grid = w.addBrickGrid({ type: 'Entity_MicrochipDynamicBrickGrid', location: { X: 0, Y: 0, Z: 40 }, data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 14, Y: 14, Z: 2 } } });
+  w.registerMicrochipLink(brick, grid);
+  let n = 0;
+  const g = (c, data = {}, extra = {}) => ({ h: w.addBrick({ asset: c.BRICK, position: [(n % 6) * 40, Math.floor(n++ / 6) * 40, 2], color: [200, 200, 200], owner_index: o, components: [{ type: c.NAME, data }], ...extra }, grid), c });
+  return g;
+};
+const wire = (a, ap, b, bp) => { if (!a.c.PORTS[ap] || !b.c.PORTS[bp]) throw new Error(`bad port ${a.c.NAME}.${ap} -> ${b.c.NAME}.${bp}`); w.addWire({ brick: a.h, component_type: a.c.NAME, port: a.c.PORTS[ap] }, { brick: b.h, component_type: b.c.NAME, port: b.c.PORTS[bp] }); };
+for (const z of zones) {
+  const t = tiles.find(q => q.r === z.trap.r && q.c === z.trap.c);
+  const g = chipAt(X(t.u), Y(t.v), F - 10);
+  const edge = g(COMP.Expr_EdgeDetectorExec);
+  const on = g(COMP.Exec_SendCustomEventGlobal, { EventName: 'temple.trap', ...DATA8('DataIn', { 1: z.trap.r, 2: z.trap.c, 3: 1 }) }, { size: EVENT_SIZE });
+  const off = g(COMP.Exec_SendCustomEventGlobal, { EventName: 'temple.trap', ...DATA8('DataIn', { 1: z.trap.r, 2: z.trap.c, 3: 0 }) }, { size: EVENT_SIZE });
+  wire(z, 'bOccupied', edge, 'Input'); wire(edge, 'OnRisingEdge', on, 'ExecIn'); wire(edge, 'OnFallingEdge', off, 'ExecIn');
+}
+for (const d of darts) {
+  const dd = d.dart;
+  if (!zones.some(z => z.trap[dd.kind] === dd.i)) continue; // no trap tile in this row / column
+  const g = chipAt(X(dd.cu), Y(dd.cv), DZ + 2);
+  const ev = g(COMP.Event_CustomGlobal, { EventName: 'temple.trap', bIsObjectEvent: false, ...DATA8('DataOut', {}) }, { size: EVENT_SIZE });
+  const mine = g(COMP.Expr_CompareEqual, { InputA: f64(-1), InputB: f64(dd.i) });
+  const br = g(COMP.Exec_Branch);
+  const st = g(COMP.Var, { Value: f64(0) });
+  const set = g(COMP.Exec_Var_Set);
+  const onOff = g(COMP.Expr_CompareGreater, { InputA: f64(0), InputB: f64(0.5) });
+  wire(ev, dd.kind === 'r' ? 'DataOut1' : 'DataOut2', mine, 'InputA');
+  wire(ev, 'ExecOut', br, 'Exec'); wire(mine, 'bOutput', br, 'bCond');
+  wire(st, 'VarRef', set, 'VarRef'); wire(ev, 'DataOut3', set, 'Value'); wire(br, 'ExecOutA', set, 'Exec');
+  wire(st, 'Value', onOff, 'InputA'); wire(onOff, 'bOutput', d, 'bEnabled');
 }
 w.makePrefab({});
 writeFileSync(`${outDir}/temple.brz`, w.toBrz({ bundle: { description: 'Temple of the Stash' }, externalAssets: EXT }));
