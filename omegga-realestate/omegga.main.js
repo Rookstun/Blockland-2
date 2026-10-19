@@ -17,6 +17,8 @@
 //   /plot abandon          give it back to the town for half its town price; your builds on it are cleared
 //   /plot trust <player> | untrust <player>   let someone else build on your lot
 //   admin: /plot give <lot> <player>, /plot reset <lot>, /plot price <lot> <coins>
+// FOR SALE signs (realestate/salesign.mjs, the owner's own sign): E on it -> ConsoleTag event:plot:<id>
+// -> "click to buy? /confirm" -> /confirm within CONFIRM_MS buys that lot (no need to stand on it).
 const fs = require('fs');
 const path = require('path');
 
@@ -24,22 +26,26 @@ const C = (hex, s) => `<color="${hex}">${s}</>`;
 const PLOTS = JSON.parse(fs.readFileSync(path.join(__dirname, 'plots.json'), 'utf8'));
 const BY_ID = new Map(PLOTS.map(p => [p.id, p]));
 const RESEND_MS = 4000;
+const CONFIRM_MS = 10_000;
 
 module.exports = class RealEstate {
   constructor(omegga, config, store) {
     this.omegga = omegga; this.config = config ?? {}; this.store = store;
     this.where = new Map();   // player id -> lot id they stand on (or 0)
     this.granted = new Map(); // player id -> { name, lot, at } while we hold their build permission on
+    this.offers = new Map();  // player id -> { lot, until } after clicking a FOR SALE sign
   }
 
   async init() {
     const on = (e, fn) => { this.omegga.removeAllListeners(e); this.omegga.on(e, (...a) => fn(...a).catch(err => console.error('[realestate]', e, err))); };
     for (const e of ['cmd:plot', 'chatcmd:plot', 'cmd:lot', 'chatcmd:lot']) on(e, (name, ...a) => this.cmd(name, a));
+    for (const e of ['cmd:confirm', 'chatcmd:confirm']) on(e, name => this.confirm(name));
+    on('event:plot', (who, id) => this.clickSign(who, id));
     on('join', p => this.onJoin(p));
-    on('leave', async p => { this.where.delete(p.id); this.granted.delete(p.id); });
+    on('leave', async p => { this.where.delete(p.id); this.granted.delete(p.id); this.offers.delete(p.id); });
     this.ticker = setInterval(() => this.tick().catch(err => console.error('[realestate] tick', err)), 1000);
     console.log(`[realestate] ${PLOTS.length} lots`);
-    return { registeredCommands: ['plot', 'lot'] };
+    return { registeredCommands: ['plot', 'lot', 'confirm'] };
   }
   async stop() {
     clearInterval(this.ticker);
@@ -145,25 +151,8 @@ module.exports = class RealEstate {
       }
       case 'list': return this.list(pl);
       case 'buy': {
-        if (!here) return say('Stand on a lot to buy it. /plot list shows them all.');
-        const s = await this.lot(here.id);
-        if (s.owner === pl.id) return say('You already own this lot.');
-        const mine = (await Promise.all(PLOTS.map(async p => (await this.lot(p.id)).owner === pl.id))).filter(Boolean).length;
-        if (mine >= (this.config['max-lots'] ?? 2)) return say(`You own ${mine} lots already (limit ${this.config['max-lots'] ?? 2}).`);
-        const cost = s.owner ? s.sale : await this.price(here);
-        if (s.owner && !s.sale) return say(`${here.name} belongs to ${s.ownerName} and is not for sale.`);
-        const have = await this.coins(pl);
-        if (have < cost) return say(`${here.name} costs ${cost} coins. You have ${have}.`);
-        await this.pay(pl, -cost);
-        if (s.owner) {
-          const seller = this.omegga.getPlayer(s.owner);
-          if (seller) { await this.pay(seller, cost); this.omegga.whisper(seller, C('8f8', `${pl.name} bought ${here.name}: +${cost} coins.`)); }
-          else { const pend = (await this.store.get('pay:' + s.owner)) ?? { coins: 0 }; pend.coins += cost; await this.store.set('pay:' + s.owner, pend); }
-        }
-        const prev = s.ownerName;
-        await this.putLot(here.id, { owner: pl.id, ownerName: pl.name, sale: null, trust: [], since: Date.now(), paid: cost });
-        console.log(`[realestate] ${pl.name} bought lot ${here.id} for ${cost}${prev ? ` from ${prev}` : ''}`);
-        return say(`${here.name} is yours for ${cost} coins. Stand on it and open build mode.${prev ? ` (${prev}'s builds came with it.)` : ''}`, '8f8');
+        if (!here) return say('Stand on a lot to buy it, or click its FOR SALE sign. /plot list shows them all.');
+        return this.buyLot(pl, here);
       }
       case 'sell': {
         if (!here) return say('Stand on your lot to sell it.');
@@ -230,6 +219,50 @@ module.exports = class RealEstate {
       default:
         return say('/plot [list|buy|sell <coins>|unlist|abandon|trust <player>|untrust <player>]');
     }
+  }
+
+  /** E on a FOR SALE sign */
+  async clickSign(who, id) {
+    const p = BY_ID.get(+id), pl = p && who && this.omegga.getPlayer(who.id ?? who.name);
+    if (!pl) return;
+    const s = await this.lot(p.id);
+    const say = s2 => { this.omegga.middlePrint(pl.name, s2); this.omegga.whisper(pl, s2); };
+    if (s.owner === pl.id) return say(C('8f8', `<b>${p.name}</> is yours.`) + (s.sale ? C('8cf', ` For sale at ${s.sale} coins (/plot unlist).`) : ''));
+    if (s.owner && !s.sale) return say(`${C('ffd34d', `<b>${p.name}</>`)} ${C('8cf', `belongs to ${s.ownerName} and is not for sale.`)}`);
+    const cost = s.owner ? s.sale : await this.price(p);
+    this.offers.set(pl.id, { lot: p.id, until: Date.now() + CONFIRM_MS });
+    say(`${C('ffd34d', `<b>${p.name}</> · ${p.studs}x${p.studs} studs · ${cost} coins`)}${s.owner ? C('8cf', ` from ${s.ownerName}`) : ''} ${C('fff', `Click to buy? Type <b>/confirm</> within ${CONFIRM_MS / 1000} seconds.`)}`);
+  }
+
+  async confirm(name) {
+    const pl = this.omegga.getPlayer(name);
+    if (!pl) return;
+    const o = this.offers.get(pl.id);
+    this.offers.delete(pl.id);
+    if (!o || Date.now() > o.until) return this.omegga.whisper(pl, C('f88', o ? 'Too slow: the offer ran out. Click the sign again.' : 'Nothing to confirm. Click a FOR SALE sign first.'));
+    return this.buyLot(pl, BY_ID.get(o.lot));
+  }
+
+  async buyLot(pl, here) {
+    const say = (s, hex = '8cf') => this.omegga.whisper(pl, C(hex, s));
+    const s = await this.lot(here.id);
+    if (s.owner === pl.id) return say('You already own this lot.');
+    const mine = (await Promise.all(PLOTS.map(async p => (await this.lot(p.id)).owner === pl.id))).filter(Boolean).length;
+    if (mine >= (this.config['max-lots'] ?? 2)) return say(`You own ${mine} lots already (limit ${this.config['max-lots'] ?? 2}).`);
+    const cost = s.owner ? s.sale : await this.price(here);
+    if (s.owner && !s.sale) return say(`${here.name} belongs to ${s.ownerName} and is not for sale.`);
+    const have = await this.coins(pl);
+    if (have < cost) return say(`${here.name} costs ${cost} coins. You have ${have}.`);
+    await this.pay(pl, -cost);
+    if (s.owner) {
+      const seller = this.omegga.getPlayer(s.owner);
+      if (seller) { await this.pay(seller, cost); this.omegga.whisper(seller, C('8f8', `${pl.name} bought ${here.name}: +${cost} coins.`)); }
+      else { const pend = (await this.store.get('pay:' + s.owner)) ?? { coins: 0 }; pend.coins += cost; await this.store.set('pay:' + s.owner, pend); }
+    }
+    const prev = s.ownerName;
+    await this.putLot(here.id, { owner: pl.id, ownerName: pl.name, sale: null, trust: [], since: Date.now(), paid: cost });
+    console.log(`[realestate] ${pl.name} bought lot ${here.id} for ${cost}${prev ? ` from ${prev}` : ''}`);
+    return say(`${here.name} is yours for ${cost} coins. Stand on it and open build mode.${prev ? ` (${prev}'s builds came with it.)` : ''}`, '8f8');
   }
 
   async list(pl) {

@@ -9,13 +9,15 @@
 //                  bIsBuildingZone (not loose: builds stay fully inside), projecting up from its top face; a micro ring around it
 //   z g+4 .. g+30  dirt fill        -> the projector's top face is 30 units = 3 studs under the lot surface
 //   z g+30 .. g+34 grass top        (the lot surface players build on)
-//   4-stud micro wedge bank all round (wedge corners), down to the lawn; a LOT n plaque on a post.
+//   4-stud micro wedge bank all round (wedge corners), down to the lawn; the owner's FOR SALE sign (salesign.mjs).
 // The game rejects a brick inside the terrain (solid stacked columns), so "underground" = under our pad.
 // Outputs: OUT/plots.json (id, centre, surface z, interior half, zone box, price) + OUT/pads.json (one
 // bricks op, map owner) + OUT/clear.json (ClearRegion boxes for lawn tufts inside each pad box).
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { orientFor } from '../mapgen/orient.mjs';
-import { plaque, EXTERNAL_ASSETS } from '../mapgen/ruins.mjs';
+import { EXTERNAL_ASSETS } from '../mapgen/ruins.mjs';
+import { saleSign, SIGN_FONT } from './salesign.mjs';
+const ASSETS = [...EXTERNAL_ASSETS, SIGN_FONT];
 
 const args = process.argv.slice(2);
 const dir = args[0];
@@ -116,17 +118,16 @@ plots.forEach((p, n) => {
   wedge(x - I, y + I, g, x + I, y + I + B, S, 0, -1, GRASS2); wedge(x - I, y - I - B, g, x + I, y - I, S, 0, 1, GRASS2);
   corner(x + I, y + I, g, x + I + B, y + I + B, S, -1, -1, GRASS2); corner(x - I - B, y + I, g, x - I, y + I + B, S, 1, -1, GRASS2);
   corner(x - I - B, y - I - B, g, x - I, y - I, S, 1, 1, GRASS2); corner(x + I, y - I - B, g, x + I + B, y - I, S, -1, 1, GRASS2);
-  // LOT n plaque on a post outside the bank, on the side facing the plaza
+  // FOR SALE sign outside the bank, on the side facing the plaza
   const fx = Math.abs(SPAWN[0] - x) > Math.abs(SPAWN[1] - y) ? Math.sign(SPAWN[0] - x) : 0, fy = fx ? 0 : Math.sign(SPAWN[1] - y);
   const ox = x + fx * (I + B + 10) + (fy ? -I + 40 : 0), oy = y + fy * (I + B + 10) + (fx ? I - 40 : 0);
-  micro(ox - 4, oy - 4, g, ox + 4, oy + 4, g + 52, POST);
-  plaque({ put, text: `LOT ${id}\n/plot`, facing: [fx, fy], x: ox + fx * 5, y: oy + fy * 5, z: g + 40, w: 30, h: 14, color: [60, 44, 30], style: { LineHeight: 4, Font: 1 } });
+  bricks.push(...saleSign(id, ox, oy, g, [fx, fy], ASSETS.length - 1)); // the owner's FOR SALE sign, click = buy (realestate/salesign.mjs)
   // lawn decoration (tufts, clover, daisies, pebbles: collision off) touching the pad or the post:
   // one ClearRegion per brick, its own box + 1 (a box over the pad would also take walkway flags)
   for (const d of deco) {
     const [dx, dy, dz] = d.position, [sx, sy, sz] = d.size?.[0] ? d.size : [5, 5, 6], m = Math.max(sx, sy);
     const hitPad = Math.abs(dx - x) < I + B + m && Math.abs(dy - y) < I + B + m;
-    const hitPost = Math.abs(dx - ox) < 16 + m && Math.abs(dy - oy) < 16 + m;
+    const hitPost = Math.abs(dx - ox) < 40 + m && Math.abs(dy - oy) < 40 + m;
     if ((hitPad || hitPost) && dz + sz > g && dz - sz < S + 60) clears.push([dx, dy, dz, m + 1, m + 1, sz + 1]);
   }
   const studs = (2 * I) / 10, price = Math.round(studs * studs * 2 / 100) * 100;
@@ -135,7 +136,7 @@ plots.forEach((p, n) => {
 });
 mkdirSync(OUT, { recursive: true });
 writeFileSync(`${OUT}/plots.json`, JSON.stringify(out, null, 1));
-writeFileSync(`${OUT}/pads.json`, JSON.stringify({ ops: [{ op: 'bricks', at: [0, 0, 0], captureMs: 2500, externalAssets: EXTERNAL_ASSETS,
+writeFileSync(`${OUT}/pads.json`, JSON.stringify({ ops: [{ op: 'bricks', at: [0, 0, 0], captureMs: 2500, externalAssets: ASSETS,
   owner: { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'abysmal garbage' }, bricks }] }));
 writeFileSync(`${OUT}/clear.json`, JSON.stringify(clears));
 console.log(JSON.stringify(out.map(p => [p.id, p.x, p.y, p.surface, p.studs, p.price])), bricks.length, 'bricks');
