@@ -21,10 +21,12 @@ const TEXT = {
   Typeface: 1, Billboard: 1, Material: 0, Shading: 0, bFlipShading: false, Outline: 0, bSharpCorners: true, bSharpOutlines: true, bOverrideOutlineColor: true, bForeground: true, Text: '',
 };
 const NOCOL = { player: false, weapon: false, interaction: false, physics: false };
-const SPLAT = { ...TEXT, LineHeight: +(process.env.HS_DOT ?? 9), Color: { R: 190, G: 12, B: 12, A: 255 }, Outline: 2, OutlineWidth: 2, OutlineColor: { R: 70, G: 0, B: 0, A: 255 }, bForeground: false, Text: '●' };
+// splat = '✹' 12-point black star (MonaspaceKrypton has U+2726-273A; owner 2026-10-18 "make the icon different" from the old '●';
+// rotated full blocks don't work: Rotation is ignored on a billboard and '█' is a tall slab)
+const SPLAT = { ...TEXT, LineHeight: +(process.env.HS_DOT ?? 11), Color: { R: 185, G: 10, B: 10, A: 255 }, Outline: 2, OutlineWidth: 2, OutlineColor: { R: 60, G: 0, B: 0, A: 255 }, bForeground: false, Text: '✹' };
 const NUM = { ...TEXT, LineHeight: +(process.env.HS_NUM ?? 4), Outline: 2, OutlineWidth: 2, OutlineColor: { R: 40, G: 0, B: 0, A: 255 }, Text: '' };
 const vis = process.env.HS_VIS === '1';
-w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [1, 1, 1], position: [0, 0, 1], color: [190, 12, 12], owner_index: O, visibility: vis, collision: NOCOL, components: [{ type: C.TextDisplay.NAME, data: SPLAT }] });
+w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [1, 1, 1], position: [0, 0, 1], color: [185, 10, 10], owner_index: O, visibility: vis, collision: NOCOL, components: [{ type: C.TextDisplay.NAME, data: SPLAT }] });
 const num = { h: w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [1, 1, 1], position: [0, 0, 3], color: [255, 255, 255], owner_index: O, visibility: vis, collision: NOCOL, components: [{ type: C.TextDisplay.NAME, data: NUM }] }), c: C.TextDisplay };
 let i = 0;
 const gate = (c, data = {}, extra = {}) => ({ h: w.addBrick({ asset: c.BRICK, position: [0, 0, -20 - 12 * i++], color: [200, 200, 200], owner_index: O, visibility: false, collision: NOCOL, components: [{ type: c.NAME, data }], ...extra }), c });
