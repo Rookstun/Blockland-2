@@ -1938,8 +1938,11 @@ const camps = [];
 // levelled and reserved like the camps, each door toward its road
 const HOLY = { shrines: Math.round(tune('holy.shrines', 7, 'wayside shrines (x K)') * K), temples: Math.round(tune('holy.temples', 2, 'temples (x K)') * K) };
 const holy = [];
+// ground under the Georgian estates' lots before they were levelled (2026-10-18): the cave search plans with it so
+// an estate lot (picked last) never moves a cave elsewhere on the map; the carving still stops under the lot
+const lotPre = new Map();
 {
-  const pick1 = (kind, count, Rr, blend, spacing, [near0, near1], rough) => {
+  const pick1 = (kind, count, Rr, blend, spacing, [near0, near1], rough, off = siteOff) => {
     const cand = [];
     for (let cx = 30; cx < N - 30; cx += 3)
       for (let cy = 30; cy < N - 30; cy += 3) {
@@ -1951,7 +1954,7 @@ const holy = [];
         let lo = Infinity, hi = -Infinity, sum = 0, n = 0, bad = false;
         for (let x = cx - Rr; x <= cx + Rr && !bad; x++) for (let y = cy - Rr; y <= cy + Rr; y++) {
           const c = x * N + y, h = H[c];
-          if (h <= SEA + 2 || keepOut[c] || reserved[c] || trenchCell[c] || pathCell[c] || siteOff(c)) { bad = true; break; }
+          if (h <= SEA + 2 || keepOut[c] || reserved[c] || trenchCell[c] || pathCell[c] || off(c)) { bad = true; break; }
           lo = Math.min(lo, h); hi = Math.max(hi, h); sum += h; n++;
         }
         if (bad || hi - lo > rough) continue;
@@ -1993,6 +1996,10 @@ const holy = [];
   // (2026-10-18, owner photos) Dutch Colonials (town.mjs TYPES.dutchcolonial, ~59 x 48 studs with the porch and the
   // detached garage) on lots sized like the split-levels'; picked last so no older site moves
   pick1('dutchcolonial', Math.round(tune('roadside.dutchcolonial', 6, 'Dutch Colonial houses (gambrel, porch, garage) by the roads')), 8, 5, 12 * K, [2, 32], 40);
+  // (2026-10-18, owner: a Zillow listing) Georgian estates (town.mjs TYPES.georgian, 84 x 77 studs: main block, wings,
+  // Aspen room, pool, motor court) on 23-cell lots (the house fills the flat core inside the edge ring's ramps; blend 2
+  // so they fit between the older sites), also on the old volcano's ground (siteOff only pins older searches); picked last
+  pick1('georgian', Math.round(tune('roadside.georgian', 3, 'Georgian brick estates (wings, great room, pool) by the roads')), 11, 2, 30 * K, [2, 40], 60, c => tailOff(c));
   holy.forEach((v, k) => {
     v.seed = 17000 + k;
     // the door faces the nearest road cell
@@ -2004,6 +2011,7 @@ const holy = [];
         if (!inBounds(x, y)) continue;
         const c = x * N + y, d = Math.max(Math.abs(x - v.x), Math.abs(y - v.y));
         if (pathCell[c] || riverCell[c]) continue;
+        if (v.kind === 'georgian' && d < v.r + v.blend && !lotPre.has(c)) lotPre.set(c, H[c]);
         if (d <= v.r) { H[c] = v.h; reserved[c] = 1; }
         else if (d < v.r + v.blend) H[c] = Math.round(lerp(v.h, H[c], smooth(v.r, v.r + v.blend, d)));
       }
@@ -2567,28 +2575,29 @@ let carved = 0;
   const sites = [];
   for (let x = 4; x < N - 4; x++)
     for (let y = 4; y < N - 4; y++) {
-      const h = H[x * N + y];
+      const h = lotPre.get(x * N + y) ?? H[x * N + y];
       if (h <= SEA + 1 || !GRASS.includes(surfaceMat[x * N + y]) && !ROCK.includes(surfaceMat[x * N + y])) continue;
       if (DUNGEONS.some(d => footDist(d, x, y) <= PLAZA_RING + BLEND) || keepOut[x * N + y] || townDist(x, y) <= TOWN.blend || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend || hengeDist(x, y) <= HENGE.blend + 12 || reserved[x * N + y] || siteOff(x * N + y)) continue;
       for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-        if (hAt(x - dx, y - dy) > h + 1) continue; // open ground in front of the door
+        if ((lotPre.get((x - dx) * N + y - dy) ?? hAt(x - dx, y - dy)) > h + 1) continue; // open ground in front of the door
         sites.push({ x, y, dx, dy, h, r: hash(x, y, 77) });
       }
     }
   // the room must sit under real hillside; the passage gets a built rock facade.
   // Checked lazily in pick order (2026-10-06, editor speed: was every candidate
   // up front) against the heights from before any facade went up: same caves.
-  const H0 = H.slice();
+  const H0 = H.slice(), HC = H0.slice();
+  for (const [c, h] of lotPre) HC[c] = h;
   const fitsMC = ({ x, y, dx, dy, h }) => {
     for (let k = 1; k <= 12; k++) { // a real hill behind the door, or the tunnels have nowhere to go
       const cx = x + dx * k, cy = y + dy * k;
-      if (!inMap(cx, cy) || H0[cx * N + cy] < h + CAVE.door + CAVE.cover + (k > 2 ? 1 : 0) + (k > 6 ? 3 : 0)) return false;
+      if (!inMap(cx, cy) || HC[cx * N + cy] < h + CAVE.door + CAVE.cover + (k > 2 ? 1 : 0) + (k > 6 ? 3 : 0)) return false;
       if (townDist(cx, cy) <= TOWN.blend || DUNGEONS.some(d => footDist(d, cx, cy) <= PLAZA_RING)) return false;
     }
     return true;
   };
-  const fitsZelda = ({ x, y, dx, dy, h }) => cellsOf(x, y, dx, dy).every(([cx, cy, t, , , , role]) => inMap(cx, cy) && (role === 'passage' || H0[cx * N + cy] >= h + t + CAVE.cover) &&
-    H0[cx * N + cy] >= h + 2 &&
+  const fitsZelda = ({ x, y, dx, dy, h }) => cellsOf(x, y, dx, dy).every(([cx, cy, t, , , , role]) => inMap(cx, cy) && (role === 'passage' || HC[cx * N + cy] >= h + t + CAVE.cover) &&
+    HC[cx * N + cy] >= h + 2 &&
     townDist(cx, cy) > TOWN.blend && !DUNGEONS.some(d => footDist(d, cx, cy) <= PLAZA_RING));
   const fits = MC ? fitsMC : fitsZelda;
   // (2026-10-16, owner: "the limestone caves look like crap. more wedges, natural geometry, gems ...,
@@ -2611,7 +2620,14 @@ let carved = 0;
     const c = cx * N + cy;
     return facades.has(c) ? (H[c] - 2 + 1) * VZ : (Math.min(H[c], H0[c]) - CAVE.cover + 1) * VZ;
   };
-  const roofAt = (wx, wy) => roofCell(Math.floor((wx - X0) / CELL), Math.floor((wy - Y0) / CELL));
+  // planning sees the estate lots' old ground (lotPre); the field (carving) above still clamps to the lot
+  const roofPlan = (cx, cy) => {
+    if (!inMap(cx, cy) || !okCell(cx, cy)) return -Infinity;
+    const c = cx * N + cy;
+    if (!lotPre.has(c) || facades.has(c)) return roofCell(cx, cy);
+    return (Math.min(H[c] === H0[c] ? HC[c] : H[c], HC[c]) - CAVE.cover + 1) * VZ;
+  };
+  const roofAt = (wx, wy) => roofPlan(Math.floor((wx - X0) / CELL), Math.floor((wy - Y0) / CELL));
   const floorMin = (SEA + 3) * VZ; // never under the sea plane (it floods)
   // each cave's nodes; all caves are carved as ONE field after the site loop (two caves may meet)
   const carveMC = s => {
