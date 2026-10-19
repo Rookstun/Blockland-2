@@ -19,7 +19,7 @@ for (const p of plots) {
   const old = [{ asset: 'PB_DefaultMicroBrick', size: [4, 4, 26], position: [ox, oy, g + 26] }];
   plaque({ put: (b, px, py, pz) => old.push({ ...b, position: [px, py, pz] }), text: '', facing: [fx, fy], x: ox + fx * 5, y: oy + fy * 5, z: g + 40, w: 30, h: 14 });
   for (const b of old) { const [lo, hi] = worldBox(b); clears.push(lo.map((v, i) => (v + hi[i]) / 2).concat(hi.map((v, i) => (v - lo[i]) / 2 + 1))); }
-  bricks.push(...saleSign(id, ox, oy, g, [fx, fy], ASSETS.length - 1));
+  bricks.push(...saleSign(id, ox, oy, g, [fx, fy], ASSETS.length - 1, p));
 }
 writeFileSync(`${DIR}/signclear.json`, JSON.stringify(clears));
 writeFileSync(`${DIR}/signs.json`, JSON.stringify({ ops: [{ op: 'bricks', at: [0, 0, 0], captureMs: 2500, externalAssets: ASSETS,

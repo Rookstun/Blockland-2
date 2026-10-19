@@ -121,7 +121,7 @@ plots.forEach((p, n) => {
   // FOR SALE sign outside the bank, on the side facing the plaza
   const fx = Math.abs(SPAWN[0] - x) > Math.abs(SPAWN[1] - y) ? Math.sign(SPAWN[0] - x) : 0, fy = fx ? 0 : Math.sign(SPAWN[1] - y);
   const ox = x + fx * (I + B + 10) + (fy ? -I + 40 : 0), oy = y + fy * (I + B + 10) + (fx ? I - 40 : 0);
-  bricks.push(...saleSign(id, ox, oy, g, [fx, fy], ASSETS.length - 1)); // the owner's FOR SALE sign, click = buy (realestate/salesign.mjs)
+  bricks.push(...saleSign(id, ox, oy, g, [fx, fy], ASSETS.length - 1, { studs: (2 * I) / 10, price: Math.round(((2 * I) / 10) ** 2 * 2 / 100) * 100 })); // the owner's FOR SALE sign, click = buy (realestate/salesign.mjs)
   // lawn decoration (tufts, clover, daisies, pebbles: collision off) touching the pad or the post:
   // one ClearRegion per brick, its own box + 1 (a box over the pad would also take walkway flags)
   for (const d of deco) {
