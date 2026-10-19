@@ -48,7 +48,7 @@ function patch(c, t) {
   const d = c.data, p = t.price;
   switch (c.typeName) {
     case 'BrickComponentType_WireGraphPseudo_Var': d.Value = setVariant(d.Value, p); break;
-    case 'Component_TextDisplay': d.Text = String(p); break;
+    case 'Component_TextDisplay': d.Text = String(p); d.Material = typeof d.Material === 'bigint' ? 2n : 2; break; // Plastic (owner: graffiti text doesn't work)
     case 'Component_ItemSpawn':
       d.ItemNameOverride = t.name; d.DamageMultiplier = t.heal ?? 1; d.bOverridePickupColors = true; d.PickupMeshColors = recolor(d.PickupMeshColors, t); break;
     case 'BrickComponentType_WireGraph_Exec_Character_AddInventoryItemAdv':

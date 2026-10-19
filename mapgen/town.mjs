@@ -1417,6 +1417,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // local -y (the street): 16 -y, 17 +x, 18 +y, 19 -x
     h.at = (x, y) => { let [u, v] = [x - lx, y - ly]; for (let i = 0; i < r; i++) [u, v] = [-v, u]; return [cx + u, cy + v]; };
     h.frontOrient = [16, 17, 18, 19][r];
+    h.rot = r;
     if (h.door) lastDoor = h.at(h.door[0] * 10, 0);
     return h;
   }
@@ -1620,6 +1621,16 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     const sp = shapedSpec(type, rnd, s, small), h = shapedTown(cx, cy, fx, fy, sp, s);
     // booths: a shop stand on the boardwalk, button to the street
     if (h.stand) { const [px, py] = h.at(h.stand[0], h.stand[1]); stats.houseShops.push({ at: [px, py, h.stand[2] + (zCtx ?? 0)], orient: h.frontOrient, tier: pick(shopTiers, s, 78) }); }
+    // racks, counters, wall tables and the display case (faire.mjs stands): button the way `face` says (local)
+    const OFF = { '-y': 0, '+x': 1, '+y': 2, '-x': 3 };
+    for (const st of h.stands ?? []) {
+      const [px, py] = h.at(st.at[0], st.at[1]);
+      stats.houseShops.push({ at: [px, py, st.at[2] + (zCtx ?? 0)], orient: 16 + ((OFF[st.face] + h.rot) % 4), tier: st.prefab, prefab: st.prefab });
+    }
+    // the shopkeeper (spawn = goal point, homed by loadnpcs.py like the town NPCs)
+    if (h.npc) { const [px, py] = h.at(h.npc[0], h.npc[1]); (stats.faireNpcs ??= []).push({ at: [px, py, h.npc[2] + (zCtx ?? 0)], prefab: 'npc_quartermaster', role: 'quartermaster' }); }
+    // helpers for joining boardwalks / paths later (owner: "leave helpers for door and dock connections")
+    if (h.dock) (stats.faireDocks ??= []).push({ facing: [fx, fy], z: h.dock.z + (zCtx ?? 0), dock: [h.at(h.dock.x0, h.dock.y0), h.at(h.dock.x1, h.dock.y1)], doors: (h.doors ?? []).map(d => ({ at: h.at(d.x, d.y), w: d.w })) });
     count(sp.kind); count('faire: ' + h.scheme + ' ' + h.roofType + ' ' + h.storeys);
   }
   const TYPES = {

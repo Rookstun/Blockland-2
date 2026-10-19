@@ -4614,6 +4614,10 @@ for (const hs of townStats.houseShops) shops.push({ at: hs.at.map((v, k) => town
 for (const ws of wildShops) shops.push(ws);
 // the spawn market: every sword shop and gun stand on the plaza
 for (const [x, y] of townStats.potSpots ?? []) pots.push({ at: [townOrigin[0] + x, townOrigin[1] + y, townOrigin[2] + townPlan.levelAt(x, y) + 12], where: 'town' });
+// faire shopkeepers (2026-10-19) and the faire door / boardwalk helpers, in world units like the shops
+const faireNpcs = (townStats.faireNpcs ?? []).map(n => ({ ...n, at: n.at.map((v, k) => townOrigin[k] + v) }));
+const faireDocks = (townStats.faireDocks ?? []).map(d => ({ ...d, z: d.z + townOrigin[2], dock: d.dock.map(([x, y]) => [x + townOrigin[0], y + townOrigin[1]]), doors: d.doors.map(o => ({ ...o, at: [o.at[0] + townOrigin[0], o.at[1] + townOrigin[1]] })) }));
+delete townStats.faireDocks; delete townStats.faireNpcs;
 for (const ts of townStats.townShops ?? []) shops.push({ at: ts.at.map((v, k) => townOrigin[k] + v), tier: ts.tier, orient: ts.orient, market: true, ...(ts.prefab ? { prefab: ts.prefab } : {}) });
 const townRemoved = townStats.removed.map(({ type, lo, hi }) => ({
   type,
@@ -4753,6 +4757,8 @@ if (!DRY) {
   for (const p of gems) p.at = mv(p.at);
   if (CAVE_DUMP) fs.writeFileSync(process.env.CAVE_DUMP, JSON.stringify(CAVE_DUMP)); // (shifted with the rest: same objects)
   for (const p of casinoGames) p.at = mv(p.at);
+  for (const n of faireNpcs) n.at = mv(n.at);
+  for (const d of faireDocks) { d.z += SHIFT[2]; d.dock = d.dock.map(([x, y]) => [x + SHIFT[0], y + SHIFT[1]]); for (const o of d.doors) o.at = [o.at[0] + SHIFT[0], o.at[1] + SHIFT[1]]; }
   console.error(`shifted by ${SHIFT.join(',')}: town centre now at 0,0`);
   // live editor edits (liveedit/: owner 2026-10-13, "no world-only fixes"): every deployed,
   // not undone change set is replayed on the output (live coordinates), matched by shape + place
@@ -4781,6 +4787,8 @@ if (!DRY) {
   fs.writeFileSync(path.join(OUT, 'pots.json'), JSON.stringify(pots));
   fs.writeFileSync(path.join(OUT, 'casino.json'), JSON.stringify(casinoGames)); // br.Prefab.Load "<prefab>" x y z 0 <orient>
   fs.writeFileSync(path.join(OUT, 'gods.json'), JSON.stringify(holy.filter(v => v.god).map(v => ({ kind: v.kind, at: [X0 + v.x * CELL + SHIFT[0], Y0 + v.y * CELL + SHIFT[1], (v.h + 1) * VZ], ...v.god })), null, 1));
+  fs.writeFileSync(path.join(OUT, 'npcs.json'), JSON.stringify(faireNpcs)); // python3 bridge/tools/loadnpcs.py npcs.json <tag>: homed npc_<role> spawners
+  fs.writeFileSync(path.join(OUT, 'docks.json'), JSON.stringify(faireDocks)); // faire boardwalk rects + door spots (helpers, nothing loads them)
   fs.writeFileSync(path.join(OUT, 'gems.json'), JSON.stringify(gems)); // br.Prefab.Load "gem_<kind>" x y z 0 16 (z = the floor)
   fs.writeFileSync(path.join(OUT, 'bushes.json'), JSON.stringify(bushes)); // br.Prefab.Load "bush" x y z 0 16 // br.Prefab.Load "pot" x y z 0 16
   // overview image source for a quick look: height + water + dungeons
