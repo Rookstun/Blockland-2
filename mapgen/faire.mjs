@@ -768,10 +768,31 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   // shop stands are prefabs loaded later (mapgen shops.json): each gets a ghost box here so nothing is built
   // where it will stand. face = the way its button looks (local).
   const stands = [];
+  // tables and counters show daggers only: a bare stand hangs its item ~25 (dagger) to ~55 (sword) under
+  // itself, so a dagger stand 28 over a top sits on it; swords hang on the wall racks (owner screenshots 2026-10-19)
+  const dagger = k => `shop_${tiers[k % tiers.length]}_dagger_bare`;
+  // (owner 2026-10-19: "you arent using the system for weapons ... all materials of dagger can be bought in this
+  // shop from bronze to rune") a drawn shop sells ONE line, every material / model in order, priced by the
+  // stand prefabs: blades (bronze..rune of one type) on the racks (daggers also on the counter: short enough),
+  // bows (bow..magic) on the racks + the cheapest in the case, guns: pistols in the case, long guns on the racks
+  const T7 = ['bronze', 'iron', 'steel', 'black', 'mithril', 'adamant', 'rune'];
+  const LINE = (() => {
+    const u = hash(seed, 91);
+    if (u < 0.7) { const ty = ['dagger', '', 'longsword', 'scimitar', 'spatha', '2h'][Math.floor(hash(seed, 92) * 6)]; return { kind: 'blade', name: ty || 'sword', short: ty === 'dagger', rack: T7.map(t => `shop_${t}${ty ? '_' + ty : ''}_bare`), cas: [] }; }
+    if (u < 0.85) { const b = ['bow', 'oak', 'willow', 'maple', 'yew', 'magic']; return { kind: 'bow', name: 'bows', short: false, rack: b.map(x => `bow_${x}_bare`), cas: b.map(x => `bow_${x}_case`) }; }
+    return { kind: 'gun', name: 'guns', short: false, rack: ['huntingshotgun', 'leveraction', 'boltaction', 'magnum'].map(x => `gun_${x}_bare`), cas: ['derringer', 'guardpistol', 'revolver'].map(x => `gun_${x}_case`) };
+  })();
+  let wq = 0; const nextWare = () => (wq < LINE.rack.length ? LINE.rack[wq++] : null);
+  let cq = 0; const nextCase = () => (cq < LINE.cas.length ? LINE.cas[cq++] : null);
+  // a house's wall table: daggers from bronze up
+  let tq = 0; const nextDagger = () => (tq < T7.length ? `shop_${T7[tq++]}_dagger_bare` : null);
   const blade = k => { const t = tiers[k % tiers.length], ty = ['dagger', '', 'longsword', 'scimitar', 'spatha'][Math.floor(hash(k, seed, 61) * 5)]; return `shop_${t}${ty ? '_' + ty : ''}_bare`; };
   const CASEW = ['gun_derringer_case', 'gun_guardpistol_case', 'gun_revolver_case', 'bow_bow_case', 'bow_oak_case'];
   const standAt = (x, y, zTop, face, prefab, hw = 10) => {
-    if (!B.free([X0 + x - hw, Y0 + y - hw, zTop], [X0 + x + hw, Y0 + y + hw, zTop + 36])) return false;
+    if (!B.free([X0 + x - hw, Y0 + y - hw, zTop], [X0 + x + hw, Y0 + y + hw, zTop + 36])) { if (process.env.FD) console.error('stand blocked', x, y, zTop); return false; }
+    if (typeof prefab === 'function') prefab = prefab(); // take a ware only for a spot that fits
+    if (process.env.FD && !prefab) console.error('no ware left', x, y);
+    if (!prefab) return false;
     box(x - hw, y - hw, zTop, x + hw, y + hw, zTop + 36, { color: [255, 0, 255], ghost: true }, 'stand ghost');
     stands.push({ at: [X0 + x, Y0 + y, zTop + 12], face, prefab });
     return true;
@@ -791,15 +812,15 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
     const mid = (c0 + c1) / 2, face = axis === 'y' ? (inward > 0 ? '+x' : '-x') : (inward > 0 ? '+y' : '-y');
     for (let i = 0; i < n; i++) {
       const a = Math.round((a0 + (a1 - a0) * (i + 0.5) / n) / 2) * 2;
-      if (axis === 'y' ? standAt(mid, a, top, face, blade(nStand++)) : standAt(a, mid, top, face, blade(nStand++))) k++;
+      if (axis === 'y' ? standAt(mid, a, top + 16, face, nextDagger) : standAt(a, mid, top + 16, face, nextDagger)) k++;
     }
     return k;
   }
   // a wall rack (the drawing's red): backboard on the wall, a plank shelf, bare stands on it
   function wallRack(axis, wallFace, inward, a0, a1, z0 = F) {
-    const n = Math.floor((a1 - a0 - 10) / 35);
+    const n = Math.floor((a1 - a0 - 10) / 30);
     if (n < 1) return;
-    const sh = z0 + 44, back = (p, q, z, zt, m, lab) => (axis === 'y' ? opt(inward > 0 ? wallFace + p : wallFace - q, a0, z, inward > 0 ? wallFace + q : wallFace - p, a1, zt, m, lab) : opt(a0, inward > 0 ? wallFace + p : wallFace - q, z, a1, inward > 0 ? wallFace + q : wallFace - p, zt, m, lab));
+    const sh = z0 + 48, back = (p, q, z, zt, m, lab) => (axis === 'y' ? opt(inward > 0 ? wallFace + p : wallFace - q, a0, z, inward > 0 ? wallFace + q : wallFace - p, a1, zt, m, lab) : opt(a0, inward > 0 ? wallFace + p : wallFace - q, z, a1, inward > 0 ? wallFace + q : wallFace - p, zt, m, lab));
     // (owner screenshot 2026-10-19: the bare stands hang their item ~50 below them, through a shelf plank):
     // no shelf, the stands high on the board so the blades hang clear with their tips over the floor
     if (!back(0, 2, z0 + 10, z0 + 84, { color: shade(WOOD[0], 0.85) }, 'rack board')) return; // under the tie beams / upper floor (92)
@@ -807,7 +828,7 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
     const face = axis === 'y' ? (inward > 0 ? '+x' : '-x') : (inward > 0 ? '+y' : '-y'), c = wallFace + inward * 14;
     for (let i = 0; i < n; i++) {
       const a = Math.round((a0 + (a1 - a0) * (i + 0.5) / n) / 2) * 2;
-      axis === 'y' ? standAt(c, a, sh, face, blade(nStand++)) : standAt(a, c, sh, face, blade(nStand++));
+      axis === 'y' ? standAt(c, a, sh, face, nextWare) : standAt(a, c, sh, face, nextWare);
     }
   }
   // lanterns (owner: "should not be floating ... made out of glass and metal, no glow, with a point light"):
@@ -855,7 +876,7 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
     const along = roofType === 'front' ? 'x' : 'y', zb = UT - 8;
     const [lo, hi] = along === 'x' ? [-jetty + 20, BD - 20] : [20, BW - 20];
     const n = Math.max(1, Math.round((hi - lo) / 90));
-    for (let i = 0; i <= n; i++) {
+    for (let i = 0; !upTop && i <= n; i++) { // none in two-storey houses: upstairs they sat 56 over the floor (player 60)
       const c = Math.round((lo + ((hi - lo) * i) / n) / 10) * 10 - 4;
       const ok = along === 'x' ? opt(10, c, zb, BW - 10, c + 8, UT, { color: timber }, 'tie beam') : opt(c, -jetty + 10, zb, c + 8, BD - 10, UT, { color: timber }, 'tie beam');
       if (ok) beams.push({ along, c: c + 4 });
@@ -901,13 +922,15 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
     // partitions: across from the side wall to the counter, along from the counter's end to the back wall
     { const [a, b] = mr(10, CX0); partition('x', PY, a, b, F, [], groundCap); }
     { const [a] = mr(PX, PX + 10); partition('y', a, CY1, BD - 10, F, [], groundCap); }
-    // the L counter: 3 bricks high (player 5), bare stands on it facing the shop
-    const top = F + 36;
+    // the L counter: 2.5 bricks high (player 5), dagger stands 28 over it (their tops under the 92 ceiling)
+    const top = F + 30;
     const cbox = (x0, x1, y0, y1) => { const [a, b] = mr(x0, x1); box(a, y0, F, b, y1, top - 4, { color: shade(WOOD[0], 0.9) }, 'counter'); box(a, y0, top - 4, b, y1, top, { color: WOOD[2] }, 'counter top'); };
     cbox(CX0, PX + 20, PY, PY + 20);
     cbox(PX, PX + 20, PY + 20, CY1);
-    for (let x = CX0 + 22; x <= PX - 12; x += 35) standAt(mx(x), PY + 10, top, '-y', blade(nStand++));
-    for (let y = PY + 50; y <= CY1 - 14; y += 35) standAt(mx(PX + 10), y, top, backLeft ? '+x' : '-x', blade(nStand++));
+    if (LINE.short) { // daggers start on the counter (bronze nearest the door side), the rest go on the racks
+      for (let x = CX0 + 22; x <= PX - 12; x += 35) standAt(mx(x), PY + 10, top + 16, '-y', nextWare);
+      for (let y = PY + 50; y <= CY1 - 14; y += 35) standAt(mx(PX + 10), y, top + 16, backLeft ? '+x' : '-x', nextWare);
+    }
     // the shopkeeper's spawn and goal point, behind the counter
     npc = [X0 + mx(Math.round((CX0 + PX) / 20) * 10), Y0 + PY + 50, F + 14];
     box(mx(Math.round((CX0 + PX) / 20) * 10) - 14, PY + 36, F, mx(Math.round((CX0 + PX) / 20) * 10) + 14, PY + 64, F + 60, { color: [255, 0, 255], ghost: true }, 'npc ghost');
@@ -931,21 +954,21 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
       }
     }
     // sword racks: the side wall in front of the back room, and the far side wall (the drawing's red)
-    const rackRun = (axis, wallFace, inward, a0, a1) => { const n = Math.max(1, Math.round((a1 - a0) / 90)), L = Math.floor((a1 - a0) / n / 2) * 2; for (let i = 0; i < n; i++) wallRack(axis, wallFace, inward, a0 + i * L + 4, a0 + (i + 1) * L - 4); };
+    const rackRun = (axis, wallFace, inward, a0, a1) => wallRack(axis, wallFace, inward, a0, a1); // one continuous rack per wall: every slot counts
     rackRun('y', mx(10), backLeft ? 1 : -1, 24, PY - 8);
     rackRun('y', mx(BW - 10), backLeft ? -1 : 1, 24, BD - 24);
     // the display case under the front window (the drawing's green): metal base, glass walls, case stands
     {
       const MET = { color: [160, 160, 160], material: 'BMC_Metallic' }, CG = { color: [255, 255, 255], material: 'BMC_Glass' };
-      const c0 = SHOPWIN.a0 - 4, c1 = SHOPWIN.a1 + 4, y0 = 12, y1 = 42;
-      if (opt(c0, y0, F, c1, y1, F + 20, MET, 'case base')) {
+      const c0 = DOOR.a1 + 8, c1 = DOOR2.a0 - 8, y0 = 12, y1 = 42; // between the doors (the doorways stay clear)
+      if (LINE.cas.length && opt(c0, y0, F, c1, y1, F + 20, MET, 'case base')) {
         box(c0, y1 - 2, F + 20, c1, y1, F + 30, CG, 'case glass'); box(c0, y0, F + 20, c1, y0 + 2, F + 30, CG, 'case glass');
         box(c0, y0 + 2, F + 20, c0 + 2, y1 - 2, F + 30, CG, 'case glass'); box(c1 - 2, y0 + 2, F + 20, c1, y1 - 2, F + 30, CG, 'case glass');
         box(c0, y1 - 2, F + 30, c1, y1, F + 32, MET, 'case rail'); box(c0, y0, F + 30, c1, y0 + 2, F + 32, MET, 'case rail');
-        const k = Math.max(1, Math.floor((c1 - c0 - 10) / 36));
+        const k = Math.max(1, Math.floor((c1 - c0 - 10) / 30));
         for (let i = 0; i < k; i++) {
           const x = Math.round((c0 + (c1 - c0) * (i + 0.5) / k) / 2) * 2;
-          stands.push({ at: [X0 + x, Y0 + y1 - 12, F + 32], face: '+y', prefab: CASEW[Math.floor(hash(i, seed, 71) * CASEW.length)] });
+          const w = nextCase(); if (w) stands.push({ at: [X0 + x, Y0 + y1 - 12, F + 32], face: '+y', prefab: w });
         }
       }
     }
@@ -975,7 +998,8 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
     lanternNear(Math.round(BW * 0.3), Math.round(BD * 0.45), ceil);
     lanternNear(Math.round(BW * 0.7), Math.round(BD * 0.45), ceil);
   }
-  if (upTop) { lanternNear(Math.round(BW * 0.5), Math.round(BD * 0.35), null, U); lanternNear(Math.round(BW * 0.25), Math.round(BD * 0.7), null, U); }
+  // upstairs: lanterns on wall brackets over head height
+  if (upTop) { let n = 0; for (const [face, out] of [[10, 1], [BW - 10, -1]]) for (const y of [Math.round(BD * 0.3 / 2) * 2, Math.round(BD * 0.7 / 2) * 2]) if (n < 2 && wallLantern('y', face, out, y, U + 72)) n++; }
   // decor on the inside of the side and back walls (free spots only), and a shield over a door outside
   {
     let k = Math.floor(hash(seed, 81) * 3);
@@ -1018,7 +1042,7 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   // rectangle in the shapedTown frame, so a town pass can join neighbours' boardwalks / lay paths to doors
   const doors = [DOOR, DOOR2].filter(Boolean).map(d => ({ x: X0 + (d.a0 + d.a1) / 2, y: Y0, w: d.a1 - d.a0 }));
   const dock = { x0: X0 - 10, x1: X0 + BW + 10, y0: Y0 - PD, y1: Y0 - 2, z: F };
-  return { bricks, W: Wst, D: Dst, door: [Math.round((X0 + doorA + doorW / 2) / 10)], doors, dock, stand, stands, npc, layout, scheme: sc.name, roofType, storeys, count: bricks.length };
+  return { line: layout === 'shop' ? LINE.name : null, bricks, W: Wst, D: Dst, door: [Math.round((X0 + doorA + doorW / 2) / 10)], doors, dock, stand, stands, npc, layout, scheme: sc.name, roofType, storeys, count: bricks.length };
 }
 
 if (process.argv[1]?.endsWith('faire.mjs')) {
