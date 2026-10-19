@@ -55,7 +55,9 @@ for name in ("shops", "pots", "bushes", "casino", "gems"):  # casino.json: the g
 # hits, credits kills, drops coins or gives XP (2026-10-08 outage).
 CONTROLLERS = [("skeleton_drop", -8260, -7400, 8000), ("speakspell", -8200, -7400, 8000), ("tts", -8140, -7400, 8000), ("pot_pool", -8080, -7400, 8000), ("casino_house", -8020, -7400, 8000),
                # Wordle bulletin board (wordle/gen.mjs, 2026-10-15): plaza lawn NE of the fountain, faces -y; ground z 624 in out_delta
-               ("wordle", 560, 250, 624)]
+               ("wordle", 560, 250, 624),
+               # hitsplats (hitsplat/build.mjs, 2026-10-18): damage number over every hit
+               ("hitsplat", -7800, -12000, 8000)]
 res = job([load(p, x, y, z) for p, x, y, z in CONTROLLERS])
 for (p, *_), r in zip(CONTROLLERS, res):
     print(f"controller {p}:", "clean" if not any(w in json.dumps(r) for w in ("not found", "overlapping", "Missing brick")) else r)
