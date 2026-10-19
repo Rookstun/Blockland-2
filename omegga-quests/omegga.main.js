@@ -9,8 +9,9 @@
 // Quest list on the right of the screen: questhud chip (/questhud <player>|<text>).
 // Kills: NPC bodies log quest.died|<npc id>|<killer uid>; skeletons come from the
 // skeleton_drop chip's "[xp debug] C killer=<name> lim=<max health>".
-// Fizzwick's side quest gives +1 Regen (leaderboard value "Regen", read by the regen chip:
-// npctalk/regenchip.mjs; overheal bleeds off with a tick).
+// Fizzwick's side quest gives +1 Regen (stored here + leaderboard value "Regen" for show); every
+// second tick() sends br.Chat.Command /regen <player>|<regen> to the regen chip
+// (npctalk/regenchip.mjs: heals, overheal bleeds off with a tick).
 // Main quest = story.js (The Vice Grips of Truth); step types are documented there.
 //
 //   !quest        your quests     !quest drop <n>   give one up (not the main quest)
@@ -231,7 +232,7 @@ module.exports = class Quests {
     }
   }
 
-  /** every second: reach / escape steps */
+  /** every second: regen ticks, reach / escape steps */
   async tick() {
     const players = this.omegga.getPlayers();
     if (!players.length) return;
@@ -239,6 +240,8 @@ module.exports = class Quests {
     for (const pl of players) {
       if (this.busy.has(pl.id)) continue;
       const s = await this.get(pl.id);
+      // regen chip (npctalk/regenchip.mjs) heals one player per /regen line
+      if (s.regen > 0) this.run(`br.Chat.Command /regen ${clean(pl.name, 64)}|${s.regen}`);
       const live = Object.entries(s.active).filter(([qid, a]) => !a.waiting && ['reach', 'escape'].includes(Q[qid].steps[a.step]?.do));
       if (!live.length) continue;
       pos ??= new Map((await this.omegga.getAllPlayerPositions()).map(e => [e.player.id, e.pos]));
