@@ -57,7 +57,9 @@ CONTROLLERS = [("skeleton_drop", -8260, -7400, 8000), ("speakspell", -8200, -740
                # Wordle bulletin board (wordle/gen.mjs, 2026-10-15): plaza lawn NE of the fountain, faces -y; ground z 624 in out_delta
                ("wordle", 560, 250, 624),
                # hitsplats (hitsplat/build.mjs, 2026-10-18): damage number over every hit
-               ("hitsplat", -7800, -12000, 8000)]
+               ("hitsplat", -7800, -12000, 8000),
+               # real estate build-permission chip (realestate/permchip.mjs, 2026-10-19), driven by the realestate plugin
+               ("plotperm", -5000, -12000, 8000)]
 res = job([load(p, x, y, z) for p, x, y, z in CONTROLLERS])
 for (p, *_), r in zip(CONTROLLERS, res):
     print(f"controller {p}:", "clean" if not any(w in json.dumps(r) for w in ("not found", "overlapping", "Missing brick")) else r)
@@ -67,3 +69,14 @@ ARENA = "/home/max/omegga-server/bridge/arena/arena_bricks.json"
 OWNER = {"id": "891c4675-d18a-4ce1-a465-f4193ffe8b39", "name": "abysmal garbage"}
 res = job([{"op": "bricks", "at": [0, 0, 0], "owner": OWNER, "captureMs": 4000, "bricks": json.load(open(ARENA))["bricks"]}])
 print("arena:", "clean" if "overlapping" not in json.dumps(res) else "OVERLAPS")
+
+# Real estate lots (realestate/plots.mjs MAPDIR --out DIR, 2026-10-19): raised pads with a buried
+# build-zone projector. Regenerate plots/pads/clear for every new map, copy pads.json + clear.json to
+# bridge/realestate/ and plots.json to plugins/realestate/ (then reload the plugin).
+RE = "/home/max/omegga-server/bridge/realestate/"
+if os.path.exists(RE + "pads.json"):
+    clr = [{"op": "cmd", "line": "br.World.ClearRegion " + " ".join(map(str, b)), "captureMs": 120} for b in json.load(open(RE + "clear.json"))]
+    for i in range(0, len(clr), 150):  # lawn tufts under the pads, one box each; paced (back-to-back clears drop)
+        job(clr[i:i + 150])
+    res = job(json.load(open(RE + "pads.json"))["ops"])
+    print("realestate lots:", "clean" if "overlapping" not in json.dumps(res) else "OVERLAPS (check with re_ver.mjs)")

@@ -1,0 +1,11 @@
+{
+  "name": "realestate",
+  "description": "Lots (plots.json) with a buried build-zone projector: buy and sell them for coins, the owner (and players they trust) get build mode while standing on their lot.",
+  "author": "pooper",
+  "config": {
+    "max-lots": { "description": "Lots one player may own", "type": "number", "default": 2 }
+  },
+  "commands": [
+    { "name": "/plot", "description": "Real estate: list, buy, sell <coins>, unlist, abandon, trust <player>, untrust <player>", "example": "/plot buy", "args": [{ "name": "action", "description": "list|buy|sell|unlist|abandon|trust|untrust", "required": false }] }
+  ]
+}
