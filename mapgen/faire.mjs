@@ -194,7 +194,15 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
       }
       // shingles: caps merged in short runs across the slope, each run its own shade
       const usedC = new Set();
-      const ck = t => t.cap && t.cap[0] + t.cap[1].join(';') + t.cap[2] + '|' + t.base;
+      // gable-edge shingles take the trim colour, so the rake reads as one band (owner screenshot 2026-10-19:
+      // shingle ends alternating with trim lips made a zigzag of teeth)
+      const rake = t => {
+        if (!t.cap) return false;
+        if (t.cap[0] !== 'PB_DefaultMicroWedge') return [[10, 0], [-10, 0], [0, 10], [0, -10]].some(([a, b]) => !tiles.has(key(t.x + a, t.y + b)));
+        const along = t.cap[1][0][0] ? [[0, 10], [0, -10]] : [[10, 0], [-10, 0]];
+        return along.some(([a, b]) => !tiles.has(key(t.x + a, t.y + b)));
+      };
+      const ck = t => t.cap && t.cap[0] + t.cap[1].join(';') + t.cap[2] + '|' + t.base + '|' + rake(t);
       for (const t of tiles.values()) {
         if (!t.cap || usedC.has(key(t.x, t.y))) continue;
         const [asset, dirs, dz] = t.cap;
@@ -207,7 +215,7 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
         for (let m = 0; m < len; m++) usedC.add(key(t.x + px * m * 10, t.y + py * m * 10));
         const ext = [px ? len * 5 : 5, py ? len * 5 : 5, dz / 2];
         const tone = [0.86, 0.93, 1, 1.05, 1.1][Math.floor(hash(t.x, t.y, seed, 7) * 5)];
-        piece(asset, dirs, ext, [t.x + ext[0], t.y + ext[1], t.base + dz / 2], shade(roofC, tone), 'shingles');
+        piece(asset, dirs, ext, [t.x + ext[0], t.y + ext[1], t.base + dz / 2], rake(t) ? edgeC : shade(roofC, tone), 'shingles');
       }
     }
     return { tiles, at, bottom, pointH, heightAt, build };
@@ -309,7 +317,7 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
       for (let a = pa0; a < pa1; a += 2) ptop = Math.min(ptop, topAt(a, L.relief));
       const bands = [[z0 + 8, pat.midRail], [pat.midRail + 4, Math.min(W.plate ?? UT, ptop - 4)]];
       bands.forEach(([pz0, pz1], bi) => {
-        if (pz1 - pz0 < 16 || pa1 - pa0 < 16) return;
+        if (pz1 - pz0 < 30 || pa1 - pa0 < 16) return; // short panels: braces came out as loose triangles
         if (open.some(o => o.a0 - 6 < pa1 && o.a1 + 6 > pa0 && o.z0 - 6 < pz1 && o.z1 + 6 > pz0)) return;
         const k = Math.floor(hash(pa0, pz0, seed, 3) * 6), m = Math.round((pa0 + pa1) / 4) * 2;
         if (k === 1 || k === 2) braceBand(Wl, pa0, pa1, pz0, pz1, k === 1, timber);
