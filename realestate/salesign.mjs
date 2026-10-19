@@ -18,7 +18,7 @@ const TEXT = {
 /** font = index of SIGN_FONT in the load's externalAssets */
 export function saleSign(id, x, y, g, [fx, fy], font, { studs, price } = {}) {
   // owner's text + the lot's facts (owner: "put all that text on the sign like lot 3 and cost and studs")
-  const facts = studs ? `\r\nLot ${id} · ${studs}x${studs} studs\r\n<color="1a7a1a">${price} coins</>\r\n<size="5">press E to buy</>` : '';
+  const facts = studs ? `\r\nLot ${id} · ${studs}x${studs} studs\r\n<color="1a7a1a">${price} coins</>` : '';
   const text = `<color="ff3333">For Sale</><size="7">\r\n<font="GlacialIndifference">by owner${facts}</></>`;
   const interact = { type: 'Component_Interact', data: { InteractSound: null, Message: '', ConsoleTag: `event:plot:${id}`,
     bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: `Buy Lot ${id}` } };
