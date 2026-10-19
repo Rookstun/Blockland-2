@@ -60,7 +60,7 @@ const stepTo = (q, st) => st?.to ?? (st?.do === 'back' ? q.giver : null);
 const named = key => BY[key]?.name ?? key;
 
 module.exports = class Quests {
-  constructor(omegga, config, store) { this.omegga = omegga; this.config = config ?? {}; this.store = store; this.pending = new Map(); this.busy = new Set(); }
+  constructor(omegga, config, store) { this.omegga = omegga; this.config = config ?? {}; this.store = store; this.pending = new Map(); this.busy = new Set(); this.level = new Map(); }
 
   async init() {
     const on = (e, fn) => { this.omegga.removeAllListeners(e); this.omegga.on(e, (...a) => fn(...a).catch(err => console.error('[quests]', e, err))); };
@@ -71,7 +71,8 @@ module.exports = class Quests {
     this.omegga.__questsLine = line => this.onLine(line).catch(err => console.error('[quests] line', err));
     this.omegga.on('line', this.omegga.__questsLine);
     // Regen lives on a leaderboard value the game forgets on a reset: keep it set
-    this.timer = setInterval(() => this.syncRegen().catch(() => {}), 30_000);
+    this.timer = setInterval(() => this.syncRegen().catch(() => {}), 30_000); // also caches levels for the regen cap
+    this.syncRegen().catch(() => {});
     this.ticker = setInterval(() => this.tick().catch(err => console.error('[quests] tick', err)), 1000);
     // the HUD is lost when the world (re)loads or a player joins before the questhud chip exists:
     // keep re-sending it (owner 2026-10-19: "quest menu doesnt pop up every login")
@@ -241,7 +242,8 @@ module.exports = class Quests {
       if (this.busy.has(pl.id)) continue;
       const s = await this.get(pl.id);
       // regen chip (npctalk/regenchip.mjs) heals one player per /regen line
-      if (s.regen > 0) this.run(`br.Chat.Command /regen ${clean(pl.name, 64)}|${s.regen}`);
+      // cap = max health for their level (skeleton_drop capHp): regen never heals past it
+      if (s.regen > 0) this.run(`br.Chat.Command /regen ${clean(pl.name, 64)}|${s.regen}|${Math.floor(100 * (1 + 0.05 * ((this.level.get(pl.id) ?? 1) - 1)))}`);
       const live = Object.entries(s.active).filter(([qid, a]) => !a.waiting && ['reach', 'escape'].includes(Q[qid].steps[a.step]?.do));
       if (!live.length) continue;
       pos ??= new Map((await this.omegga.getAllPlayerPositions()).map(e => [e.player.id, e.pos]));
@@ -322,6 +324,7 @@ module.exports = class Quests {
   async syncRegen() {
     for (const p of this.omegga.getPlayers()) {
       const pl = this.omegga.getPlayer(p.id), s = await this.get(p.id);
+      if (pl && s.regen) this.level.set(p.id, Math.max(1, +(await pl.getLeaderboard('Level')) || 1));
       if (pl && s.regen && +(await pl.getLeaderboard('Regen')) !== s.regen) pl.setLeaderboard('Regen', s.regen);
     }
   }
