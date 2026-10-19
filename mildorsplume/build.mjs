@@ -1,8 +1,8 @@
-// node cavestory/build.mjs  -> cavestory/cavestory_chip.brz (the game chip alone: wire it up yourself)
-//                              cavestory/cavestory.brz      (arcade cabinet: seat, clock, O-grid screen, msg line)
+// node mildorsplume/build.mjs  -> mildorsplume/mildorsplume_chip.brz (the game chip alone: wire it up yourself)
+//                              mildorsplume/mildorsplume.brz (arcade cabinet: seat, clock, O-grid screen, msg line)
 // The chip and the seat-adapter gates sit hidden BEHIND the cabinet (y 90+): hidden bricks still get rejected for overlaps.
 // Both carry the synth speakers ON the chip's own plane, wired from its P/V outs, so the chip makes its own sound.
-// Load: br.Prefab.Load "cavestory" x y z 0 16. Owner "Cave Story" (own wire budget).
+// Load: br.Prefab.Load "mildorsplume" x y z 0 16. Owner "Mildors Plume" (own wire budget).
 // Seat controls: A/D walk, W aim up, S aim down (in the air), Space or right mouse jump, left mouse or E shoot.
 // Needs tools/patch_brs4.mjs applied to tools/brs4/dist.mjs (component types newer than brs4).
 import fs from 'node:fs';
@@ -12,21 +12,21 @@ import { generate } from './gen.mjs';
 import { bundle } from '../tools/wsbundle.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const OWNER = { id: 'c5700000-0000-4b0b-9a11-00000000c570', name: 'Cave Story', display_name: 'Cave Story' };
+const OWNER = { id: 'c5700000-0000-4b0b-9a11-00000000c570', name: 'Mildors Plume', display_name: 'Mildors Plume' };
 const DEBUG = process.env.CS_DEBUG === '1';
 
 const gen = generate({ debug: DEBUG });
 const src = gen.src;
-fs.writeFileSync(join(here, 'cavestory.gen.ws'), src);
+fs.writeFileSync(join(here, 'mildorsplume.gen.ws'), src);
 
 const sdk = join(here, '..', 'tools', 'wspkg');
 const wasm = await import(pathToFileURL(join(sdk, 'wasm.js')).href);
 if (typeof wasm.default === 'function') await wasm.default({ module_or_path: fs.readFileSync(join(sdk, 'wasm_bg.wasm')) });
 const compile = wasm.wirescript_compile ?? wasm.default?.wirescript_compile;
 const diag = wasm.wirescript_diagnostics ?? wasm.default?.wirescript_diagnostics;
-const ds = JSON.parse(diag(src, 'cavestory', '{}') || '[]');
+const ds = JSON.parse(diag(src, 'mildorsplume', '{}') || '[]');
 for (const d of ds) console.error(`${d.severity} ${d.code} line ${d.startLine}: ${d.message}`);
-const compiled = new Uint8Array(compile(src, 'cavestory', '{}', '{}'));
+const compiled = new Uint8Array(compile(src, 'mildorsplume', '{}', '{}'));
 console.log(`chip compiled, ${compiled.length} bytes`);
 
 const SYN = [...new Set(gen.synths)].map(s => `BA_Synth_Basic_${s}`);
@@ -46,7 +46,7 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
 {
   const b = await bundle(compiled, { owner: OWNER });
   const extra = speakers(b);
-  fs.writeFileSync(join(here, 'cavestory_chip.brz'), b.finish({ extraAssets: extra, description: 'CAVE STORY chip' }));
+  fs.writeFileSync(join(here, 'mildorsplume_chip.brz'), b.finish({ extraAssets: extra, description: 'MILDORS PLUME chip' }));
 }
 
 // ---- 2. the cabinet. Prefab local: ground z 0, the screen faces -y, the player sits at -y.
@@ -82,6 +82,10 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
     const s = textBrick(-HX, HX, z1 - stripH, z1, { LineHeight: +(CELL * 0.645).toFixed(3), WidthScale: 2, Color: rgba(hex(gen.PAL[0])), Text: '' });
     wireFrom(`strip${k}`, s, C.TextDisplay.NAME, 'Text');
   }
+  // the title: a TextDisplay over the middle of the picture on a hidden micro brick, text only while out title_ is set
+  const title = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -7, Z1 - PH / 2 + 8], visibility: false, collision: false, owner_index: O,
+    components: [{ type: C.TextDisplay.NAME, data: { ...TEXT, Font: font('PirataOne'), LineHeight: 14, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([255, 200, 90]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([90, 20, 30]), Text: '' } }] });
+  wireFrom('title_', title, C.TextDisplay.NAME, 'Text');
   // message line + hud line under the picture
   const msg = textBrick(-HX, HX, Z0 - 12, Z0, { LineHeight: 3.2, Color: rgba([240, 240, 240]), Font: font('MonaspaceKrypton') });
   wireFrom('msg_', msg, C.TextDisplay.NAME, 'Text');
@@ -97,7 +101,7 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
   for (const s of [-1, 1]) box(s * (HX + 12), -4, 0, s * (HX + 14), 70, Z1 + 24, GLOW(RED, 2));
   box(-HX - 14, -4, Z1 + 24, HX + 14, 72, Z1 + 28, { color: DARK });
   const marquee = w.addBrick({ asset: MB, ...GLOW([40, 10, 16], 1), size: [HX, 2, 10], position: [0, -2, Z1 + 12], owner_index: O,
-    components: [{ type: C.TextDisplay.NAME, data: { ...TEXT, Font: font('PirataOne'), LineHeight: 13, Text: 'CAVE STORY', Color: rgba([255, 220, 120]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba(RED) } }] });
+    components: [{ type: C.TextDisplay.NAME, data: { ...TEXT, Font: font('PirataOne'), LineHeight: 13, Text: "MILDOR'S PLUME", Color: rgba([255, 220, 120]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba(RED) } }] });
   void marquee;
   box(-HX - 12, -30, 0, HX + 12, 0, 50, { color: DARK });                    // control desk
   box(-HX - 12, -32, 50, HX + 12, 0, 54, GLOW(RED, 2));
@@ -107,7 +111,7 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
   // stool + seat -> input splitter -> bools for the chip's pins
   w.addBrick({ asset: 'PB_DefaultPole', color: [150, 150, 160], material: 'BMC_Metallic', size: [5, 5, 6], position: [0, -80, 6], owner_index: O });
   const seat = w.addBrick({ asset: 'B_Seat', position: [0, -80, 27], direction: 4, rotation: 0, color: [20, 20, 24], owner_index: O,
-    components: [{ type: C.Seat.NAME, data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: 'Play CAVE STORY' } }] });
+    components: [{ type: C.Seat.NAME, data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: "Play MILDOR'S PLUME" } }] });
   let gi = 0;
   const gate = (c, data = {}) => ({ h: w.addBrick({ asset: c.BRICK, position: [-50 + (gi % 10) * 10, 140, 10 + Math.floor(gi++ / 10) * 10], color: [200, 200, 200], owner_index: O,
     visibility: false, collision: false, components: [{ type: c.NAME, data }] }), c });
@@ -128,6 +132,6 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
   const clock = gate(C.Clock, { IntervalSeconds: 0.05, bEnabled: true });
   wireTo(port(clock, 'Pulse'), 'tick');
 
-  fs.writeFileSync(join(here, 'cavestory.brz'), b.finish({ extraAssets: assets.slice(b.ext.length), description: 'CAVE STORY cabinet' }));
+  fs.writeFileSync(join(here, 'mildorsplume.brz'), b.finish({ extraAssets: assets.slice(b.ext.length), description: 'MILDORS PLUME cabinet' }));
 }
-console.log('wrote cavestory_chip.brz, cavestory.brz');
+console.log('wrote mildorsplume_chip.brz, mildorsplume.brz');

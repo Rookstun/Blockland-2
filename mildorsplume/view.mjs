@@ -1,5 +1,5 @@
-// Renders O-grid rows (the chip's rows/strip text) to a PNG, to check frames without the game.
-//   node cavestory/view.mjs <log file with "csrow|r|text" lines> out.png [scale]   (the last dump wins per row)
+// mildorsplume/view.mjs: renders O-grid rows (the chip's rows/strip text) to a PNG, to check frames without the game.
+//   node mildorsplume/view.mjs <log file with "csrow|r|text" lines> out.png [scale]   (the last dump wins per row)
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 import { PAL, W, H } from './gen.mjs';
