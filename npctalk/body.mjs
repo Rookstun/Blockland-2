@@ -8,7 +8,7 @@
 //   parts), homed to its spot, wanders round it (owner: "expect him to wander around")
 // - its own talk rod: a small prefab (ONE resized PB_DefaultPole, interaction collision only,
 //   Interact "Talk to <name>" with ConsoleTag event:npctalk:<id> -> the npctalk plugin)
-//   spawned 2 s after load by an Exec_PrefabSpawner, frozen and made invisible with
+//   spawned by an Exec_PrefabSpawner (again whenever it is not frozen, checked every 2 s), frozen and made invisible with
 //   Entity_SetVisible; every 0.1 s it is set (upright) onto the bot while the bot is within
 //   15 m of home, above ground and not the last one that died, else parked 400 m up
 // - all gates hidden, no collision, floating 2.5 m above the spot 40 apart (at floor
@@ -98,13 +98,17 @@ for (const npc of NPCS) {
     components: [{ type: 'Component_BotSpawn', data: { ...role.data, BotName: npc.name, Skin: costume(npc, ext),
       MovementAmount: WANDER.MovementAmount, MovementRandomness: WANDER.MovementRandomness, MoveTarget: { X: sx, Y: sy, Z: sz }, ...npc.bot } }] }), c: C.BotSpawn };
 
-  // spawn the talk cylinder once, invisible + frozen, keep its entity
-  const sw = gate(C.Stopwatch, { Limit: 2, Time: 0, bRunning: true });
-  const edge = gate(C.Expr_EdgeDetectorExec); wire(sw, 'Expired', edge, 'Input');
+  // the talk cylinder, invisible + frozen, kept in a Var. Checked every 2 s: a rod that is not
+  // frozen (none yet, or a stale ref after a restart / World.Load) is spawned again (Limit 1
+  // replaces the old one). Was a one-shot 2 s stopwatch: after a restart the rods never came back.
+  const chk = gate(C.Clock, { bEnabled: true, bPulseOn: false, OnTimeSeconds: 1, OffTimeSeconds: 1, IntervalSeconds: 2 });
+  const chkE = gate(C.Expr_EdgeDetectorExec); wire(chk, 'Pulse', chkE, 'Input');
+  const tube = gate(C.Var, { Value: k.num(0) });
+  const isF = gate(C.Exec_Entity_IsFrozen); wire(chkE, 'OnRisingEdge', isF, 'Exec'); wire(tube, 'Value', isF, 'Entity');
+  const need = gate(C.Exec_Branch); wire(isF, 'bFrozen', need, 'bCond'); wire(isF, 'ExecOut', need, 'Exec');
   const spawn = gate(C.Exec_PrefabSpawner, { Prefab: w.addPrefab(tubePrefab(npc)), SpawnOffset: { X: 0, Y: 0, Z: 0 }, SpawnOffsetRotation: { Pitch: 0, Yaw: 0, Roll: 0 },
     SpawnVelocity: { X: 0, Y: 0, Z: 0 }, Lifetime: 0, Limit: 1, SpawnedEntityIds: [], SpawnedInstanceIds: [] });
-  wire(edge, 'OnRisingEdge', spawn, 'Exec');
-  const tube = gate(C.Var, { Value: k.num(0) });
+  wire(need, 'ExecOutB', spawn, 'Exec');
   const keep = gate(C.Exec_Var_Set, { bChangeType: true }); wire(tube, 'VarRef', keep, 'VarRef'); wire(spawn, 'Entity', keep, 'Value'); wire(spawn, 'ExecOut', keep, 'Exec');
   const freeze = gate(C.Exec_Entity_SetFrozen, { bFrozen: true }); wire(keep, 'ExecOut', freeze, 'Exec'); wire(spawn, 'Entity', freeze, 'Entity');
   const hide = gate(C.Exec_Entity_SetVisible, { bVisible: false }); wire(freeze, 'ExecOut', hide, 'Exec'); wire(spawn, 'Entity', hide, 'Entity');

@@ -72,10 +72,13 @@ module.exports = class Quests {
     // Regen lives on a leaderboard value the game forgets on a reset: keep it set
     this.timer = setInterval(() => this.syncRegen().catch(() => {}), 30_000);
     this.ticker = setInterval(() => this.tick().catch(err => console.error('[quests] tick', err)), 1000);
+    // the HUD is lost when the world (re)loads or a player joins before the questhud chip exists:
+    // keep re-sending it (owner 2026-10-19: "quest menu doesnt pop up every login")
+    this.hudTimer = setInterval(() => this.hudAll().catch(() => {}), 120_000);
     console.log(`[quests] ${NPCS.length} NPCs, ${QUESTS.length} quests (${MAIN.length} main chapters)`);
     return { registeredCommands: ['quest', 'quests'] };
   }
-  async stop() { clearInterval(this.timer); clearInterval(this.ticker); if (this.omegga.__questsLine) this.omegga.off('line', this.omegga.__questsLine); }
+  async stop() { clearInterval(this.timer); clearInterval(this.ticker); clearInterval(this.hudTimer); if (this.omegga.__questsLine) this.omegga.off('line', this.omegga.__questsLine); }
 
   get = async id => { const s = (await this.store.get('qs:' + id)) ?? {}; s.active ??= {}; s.done ??= {}; s.regen ??= 0; s.grips ??= 0; return s; };
   put = (id, s) => this.store.set('qs:' + id, s);
@@ -271,7 +274,18 @@ module.exports = class Quests {
     }
   }
 
+  async hudAll() {
+    for (const pl of this.omegga.getPlayers()) {
+      const p = this.omegga.getPlayer(pl.id), s = p && await this.get(p.id);
+      if (p) { if (s.regen) p.setLeaderboard('Regen', s.regen); this.hud(p, s); }
+    }
+  }
+
   async onLine(line) {
+    if (/World successfully loaded|LogBRBundles: Opening existing bundle/.test(line)) {
+      for (const ms of [15e3, 40e3]) setTimeout(() => this.hudAll().catch(() => {}), ms);
+      return;
+    }
     let m = /\[Wire Graph\] quest\.(yes|no)\|([0-9a-f-]{36})/.exec(line);
     if (m) {
       const pend = this.pending.get(m[2]);
@@ -296,7 +310,10 @@ module.exports = class Quests {
   async onJoin(player) {
     const p = this.omegga.getPlayer(player.id ?? player.name);
     if (!p) return;
-    setTimeout(async () => { const s = await this.get(p.id); if (s.regen) p.setLeaderboard('Regen', s.regen); this.hud(p, s); }, 8000);
+    for (const ms of [8e3, 25e3, 60e3]) setTimeout(async () => {
+      if (!this.omegga.getPlayer(p.id)) return;
+      const s = await this.get(p.id); if (s.regen) p.setLeaderboard('Regen', s.regen); this.hud(p, s);
+    }, ms);
   }
 
   async syncRegen() {
