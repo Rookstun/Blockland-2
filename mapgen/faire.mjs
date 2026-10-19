@@ -240,7 +240,7 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
   // a wall course on the stud grid, painted per 2 x 2 cell. axis 'x': along x at y line..line+10;
   // 'y': along y at x line..line+10. out -1 / +1 = the outside face is at the low / high side.
   // layers: core (8, the room's side), skin (2, the facade colours), relief (2 proud, timbers / trim)
-  const ROOMC = [222, 210, 186];
+  const PAINT = pick([[226, 214, 186], [196, 206, 180], [186, 200, 212], [220, 196, 150], [236, 232, 222], [200, 176, 150], [214, 188, 188]]);
   function wall(W) {
     const { axis, line, out, a0, a1, z0, z1, open = [], finish, color, corners = [false, false] } = W;
     const L = out < 0 ? { relief: [line - 2, line], skin: [line, line + 2], core: [line + 2, line + 10] }
@@ -282,7 +282,8 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
     const cornerCol = a => (corners[0] && a < a0 + 8) || (corners[1] && a >= a1 - 8);
     const keyOf = c => c.join();
     const matOf = k => ({ color: k.split(',').map(Number) });
-    emit('core', (a, z, top) => (cornerCol(a) ? keyOf(pat(a, z, top)[0]) : keyOf(W.room ?? ROOMC)), matOf, 'wall core');
+    // inside: painted vertical planks (owner 2026-10-19)
+    emit('core', (a, z, top) => (cornerCol(a) ? keyOf(pat(a, z, top)[0]) : keyOf(shade(PAINT, Math.floor((a - a0) / 6) % 2 ? 0.93 : 1))), matOf, 'wall core');
     emit('skin', (a, z, top) => keyOf(pat(a, z, top)[0]), matOf, 'wall skin');
     emit('relief', (a, z, top) => { const [c, rel] = pat(a, z, top); return rel ? keyOf(c) : null; }, matOf, 'timber');
     // wrap the proud corner posts round the corner (front / back walls own the corners)
@@ -301,27 +302,50 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
         z = zt;
       }
     });
-    return { ...W, L, topAt };
+    // braces over the framed panels (below and above the mid rail), none where an opening is near
+    const Wl = { ...W, L, topAt };
+    for (const [pa0, pa1] of pat.panels) {
+      let ptop = Infinity;
+      for (let a = pa0; a < pa1; a += 2) ptop = Math.min(ptop, topAt(a, L.relief));
+      const bands = [[z0 + 8, pat.midRail], [pat.midRail + 4, Math.min(W.plate ?? UT, ptop - 4)]];
+      bands.forEach(([pz0, pz1], bi) => {
+        if (pz1 - pz0 < 16 || pa1 - pa0 < 16) return;
+        if (open.some(o => o.a0 - 6 < pa1 && o.a1 + 6 > pa0 && o.z0 - 6 < pz1 && o.z1 + 6 > pz0)) return;
+        const k = Math.floor(hash(pa0, pz0, seed, 3) * 6), m = Math.round((pa0 + pa1) / 4) * 2;
+        if (k === 1 || k === 2) braceBand(Wl, pa0, pa1, pz0, pz1, k === 1, timber);
+        else if ((k === 3 || k === 4) && (m - pa0) % 4 === 0 && (pa1 - m) % 4 === 0) {
+          // V / inverted V: two half-panel diagonals meeting in the middle
+          const v = k === 3;
+          if (braceBand(Wl, pa0, m, pz0, pz1, !v, timber)) braceBand(Wl, m, pa1, pz0, pz1, v, timber);
+        }
+        void bi;
+      });
+    }
+    return Wl;
   }
-  // facade pattern: (a, z, columnTop) -> [colour, proud]
+  // facade pattern: (a, z, columnTop) -> [colour, proud]. Diagonal braces are NOT painted (stair-stepped
+  // cells broke the plaster into strips, owner 2026-10-19): pattern.panels lists the framed panels and
+  // wall() lays the braces over them as micro-wedge bands
   function facadePattern(W) {
     const { a0, a1, z0, open = [], finish, color, corners = [false, false], plate = UT } = W;
     const tim = finish === 'boards' || finish === 'stone' ? trim : timber;
     const frame = frameC && (finish === 'braced' || finish === 'close') ? frameC : tim;
-    const Lw = a1 - a0;
     const posts = [];
+    const in0 = a0 + (corners[0] ? 8 : 4), in1 = a1 - (corners[1] ? 8 : 4);
     if (finish === 'close') for (let a = a0 + 16; a < a1 - 16; a += 14) posts.push(a);
-    if (finish === 'braced') { const n = Math.max(1, Math.round(Lw / 54)); for (let i = 1; i < n; i++) posts.push(a0 + Math.round((Lw * i) / n / 2) * 2 - 2); }
-    const midRail = z0 === 0 ? F + 22 : z0 + 22;
+    if (finish === 'braced') {
+      // panels a multiple of 8 wide (the brace slices need even steps), the odd remainder in the middle panel
+      const span = in1 - in0, k = Math.max(0, Math.round(span / 56)), clear = span - 4 * k;
+      const w8 = Math.floor(clear / (k + 1) / 8) * 8, left = clear - (k + 1) * w8;
+      let a = in0;
+      for (let i = 0; i < k; i++) { a += w8 + (i === Math.floor(k / 2) ? left : 0); posts.push(a); a += 4; }
+    }
+    const midRail = z0 === 0 ? 28 : z0 + 24;
     const nearOpen = (a, z) => open.find(o => a >= o.a0 - 4 && a < o.a1 + 4 && z >= o.z0 - 4 && z < o.z1 + 4);
-    const panelOpen = (pa0, pa1, pz0, pz1) => open.some(o => o.a0 - 6 < pa1 && o.a1 + 6 > pa0 && o.z0 - 6 < pz1 && o.z1 + 6 > pz0);
-    const vlines = [a0 + (corners[0] ? 8 : 4), ...posts.flatMap(p => [p, p + 4]), a1 - (corners[1] ? 8 : 4)];
-    const segLine = (px, pz, qx, qz, a, z) => {
-      const cx = a + 1, cz = z + 1, dx = qx - px, dz = qz - pz, l2 = dx * dx + dz * dz;
-      const t = Math.max(0, Math.min(1, ((cx - px) * dx + (cz - pz) * dz) / l2));
-      return Math.hypot(cx - (px + t * dx), cz - (pz + t * dz));
-    };
-    return (a, z, top) => {
+    const vlines = [in0, ...posts.flatMap(p => [p, p + 4]), in1];
+    const panels = [];
+    for (let i = 0; i + 1 < vlines.length; i += 2) panels.push([vlines[i], vlines[i + 1]]);
+    const pat = (a, z, top) => {
       const o = nearOpen(a, z);
       if (o) return [frame, true];
       if (finish === 'stone') {
@@ -343,28 +367,40 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
       if (posts.some(p => a >= p && a < p + 4)) return [timber, true];
       if (z >= midRail && z < midRail + 4) return [timber, true];
       if (z >= plate && z < plate + 4 && top > plate + 12) return [timber, true]; // collar in a gable
-      if (finish === 'braced') {
-        if (z >= plate + 4) {
-          // gable: king post and two struts down to the collar ends
-          const mid = Math.round((a0 + a1) / 4) * 2, apex = Math.min(top, plate + 4 + (a1 - a0) / 2);
-          if (a >= mid - 2 && a < mid + 2) return [timber, true];
-          if (segLine(mid, apex - 8, a0 + 8, plate + 4, a, z) < 2.2 || segLine(mid, apex - 8, a1 - 8, plate + 4, a, z) < 2.2) return [timber, true];
-          return [color, false];
-        }
-        // the panel this cell is in
-        let pa0 = a0, pa1 = a1;
-        for (const v of vlines) { if (v <= a) pa0 = v; else { pa1 = v; break; } }
-        const below = z < midRail, pz0 = below ? z0 + 8 : midRail + 4, pz1 = below ? midRail : Math.min(plate, top - 4);
-        if (pz1 - pz0 >= 16 && pa1 - pa0 >= 16 && !panelOpen(pa0, pa1, pz0, pz1)) {
-          const kind = Math.floor(hash(pa0, pz0, seed, 3) * 5);
-          const d1 = segLine(pa0, pz0, pa1, pz1, a, z), d2 = segLine(pa0, pz1, pa1, pz0, a, z);
-          const m = (pa0 + pa1) / 2;
-          const d3 = Math.min(segLine(pa0, pz1, m, pz0, a, z), segLine(m, pz0, pa1, pz1, a, z));
-          if ((kind === 1 && d1 < 2.2) || (kind === 2 && d2 < 2.2) || (kind === 3 && (d1 < 2.2 || d2 < 2.2)) || (kind === 4 && d3 < 2.2)) return [timber, true];
-        }
+      if (finish === 'braced' && z >= plate + 4) {
+        const mid = Math.round((a0 + a1) / 4) * 2;                         // gable king post
+        if (a >= mid - 2 && a < mid + 2) return [timber, true];
       }
       return [color, false];
     };
+    pat.panels = finish === 'braced' ? panels : [];
+    pat.midRail = midRail;
+    return pat;
+  }
+  // a brace band from one panel corner to the opposite one, of micro wedges: n slices s wide rising r each,
+  // per slice the triangle under the diagonal and (after the first) the one above the line one r lower.
+  // up = rises toward +a. Returns false when the panel has no even slicing.
+  function braceBand(Wl, x0, x1, z0, z1, up, color) {
+    const w = x1 - x0, h = z1 - z0;
+    let best = 0;
+    for (let n = 1; n <= 14; n++) {
+      if (w % (2 * n) || h % (2 * n) || w / n < 4 || h / n < 4) continue;
+      if (!best || Math.abs(h / n - 12) < Math.abs(h / best - 12)) best = n;
+    }
+    if (!best) return false;
+    const n = best, sw = w / n, r = h / n, [t0, t1] = Wl.L.relief;
+    const pieces = [];
+    for (let i = 0; i < n; i++) {
+      const xi = x0 + i * sw;
+      pieces.push([xi, xi + sw, z0 + i * r, z0 + (i + 1) * r, 1, -1]);
+      if (i) pieces.push([xi, xi + sw, z0 + (i - 1) * r, z0 + i * r, -1, 1]);
+    }
+    for (const [p, q, za, zb, sa, sz] of pieces) {
+      const [pa, qa, ca] = up ? [p, q, sa] : [x0 + x1 - q, x0 + x1 - p, -sa];
+      if (Wl.axis === 'x') tri(pa, t0, za, qa, t1, zb, 'y', [ca, 0, sz], { color }, 'brace');
+      else tri(t0, pa, za, t1, qa, zb, 'x', [0, ca, sz], { color }, 'brace');
+    }
+    return true;
   }
 
   // openings
@@ -377,7 +413,14 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
   const DOOR = op(doorA, doorA + doorW, F, F + doorH, 'door');
   const groundFront = [DOOR];
   let booth = [];
-  if (kind === 'booth') {
+  // (owner 2026-10-19: "sometimes things can be open like this") some booths are a wide open bay at floor
+  // level instead of a counter, its two plank doors swung back
+  const bay = kind === 'booth' && r() < 0.4;
+  if (bay) {
+    const b0 = doorLeft ? doorA + doorW + 24 : 30, b1 = doorLeft ? BW - 30 : doorA - 24;
+    const w = Math.min(100, Math.floor((b1 - b0) / 4) * 4), m = Math.round((b0 + b1) / 4) * 2;
+    if (w >= 48) { booth = [op(m - w / 2, m + w / 2, F, F + 72, 'bay')]; groundFront.push(...booth); }
+  } else if (kind === 'booth') {
     const b0 = doorLeft ? doorA + doorW + 24 : 30, b1 = doorLeft ? BW - 30 : doorA - 24;
     if (b1 - b0 >= 150) { const m = Math.round((b0 + b1) / 4) * 2; booth = [op(b0, m - 4, F + 30, F + 76, 'booth'), op(m + 4, b1, F + 30, F + 76, 'booth')]; }
     else if (b1 - b0 >= 40) booth = [op(b0, b1, F + 30, F + 76, 'booth')];
@@ -420,14 +463,31 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
   // ground storey: front (owns the corners), back, sides
   W.push(wall({ name: 'front', axis: 'x', line: 0, out: -1, a0: 0, a1: BW, z0: gz0, z1: gz1, open: groundFront, finish: fin1, color: c1, corners: [true, true], plate: upTop ? 10000 : UT }));
   W.push(wall({ name: 'back', axis: 'x', line: BD - 10, out: 1, a0: 0, a1: BW, z0: gz0, z1: gz1, open: backG, finish: fin1, color: c1, corners: [true, true], plate: upTop ? 10000 : UT }));
-  const sideG = BD >= 220 ? winsAlong(10, BD - 10, 1, 30, F + 28, F + 64) : [];
-  if (!upTop && roofType === 'side') sideG.push(...gw('y', 0, Math.round(BD / 4) * 2 - 10, 20));
-  for (const [line, out] of [[0, -1], [BW - 10, 1]])
+  // the stair (two storeys) runs up the side wall away from the door, toward the back
+  const stairRight = doorA + doorW / 2 < BW / 2;
+  const SX = stairRight ? [BW - 40, BW - 10] : [10, 40];
+  const RISE = [10, 10, 10, 10, 10, 10, 10, 10, 12], TREAD = 12, YS = BD - 10 - TREAD * RISE.length;
+  for (const [line, out] of [[0, -1], [BW - 10, 1]]) {
+    const stairWall = upTop && (line === 0) === !stairRight;
+    const sideG = BD >= 220 && !stairWall ? winsAlong(10, BD - 10, 1, 30, F + 28, F + 64) : [];
+    if (!upTop && roofType === 'side') sideG.push(...gw('y', line, Math.round(BD / 4) * 2 - 10, 20));
     W.push(wall({ name: 'side', axis: 'y', line, out, a0: 10, a1: BD - 10, z0: gz0, z1: gz1, open: sideG, finish: fin1, color: c1, plate: upTop ? 10000 : UT }));
+  }
   // gable windows (one-storey front gable: in the front / back gable; side gable: in the side gables)
+  const OY0 = YS + TREAD;
   if (upTop) {
     // the floor beam between the storeys (it is the upper floor), jettied at the front
-    box(0, -jetty, GT, BW, BD, U, { color: timber }, 'floor beam');
+    // the upper floor: a timber beam ring (it shows between the storeys outside), plank boards inside with the
+    // stairwell over the treads from the second one up
+    box(0, -jetty, GT, BW, -jetty + 10, U, { color: timber }, 'floor beam');
+    box(0, BD - 10, GT, BW, BD, U, { color: timber }, 'floor beam');
+    box(0, -jetty + 10, GT, 10, BD - 10, U, { color: timber }, 'floor beam');
+    box(BW - 10, -jetty + 10, GT, BW, BD - 10, U, { color: timber }, 'floor beam');
+    for (let x = 10, k = 0; x < BW - 10; x += 10, k++) {
+      const q = Math.min(BW - 10, x + 10), c = { color: shade(WOOD[k % 3], 1.05) };
+      if (q <= SX[0] || x >= SX[1]) box(x, -jetty + 10, GT, q, BD - 10, U, c, 'floor planks');
+      else box(x, -jetty + 10, GT, q, OY0, U, c, 'floor planks');
+    }
     // upper storey
     const upF = [];
     for (const cr of crosses) upF.push(...winsAlong(cr.cx0, cr.cx1, 1, 28, U + 16, U + 52));
@@ -465,6 +525,7 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
   for (const w of W) for (const o of w.open) {
     if (o.kind !== 'win') continue;
     const { axis, L, out } = w;
+    const openWin = w.name.startsWith('u') && o.z0 < UT && hash(o.a0, o.z0, seed, 41) < 0.3;
     const [g0] = [L.core[0] + 2];
     const pb = (a, b, z, zt, t0, t1, m, lab, must = true) => (axis === 'x' ? (must ? box : opt)(a, t0, z, b, t1, zt, m, lab) : (must ? box : opt)(t0, a, z, t1, b, zt, m, lab));
     const cells = [];
@@ -480,7 +541,7 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
     // merge vertically identical runs
     const runs = new Map();
     for (const [a, b, z, lead] of cells) { const k = a + ',' + b + ',' + lead; (runs.get(k) ?? runs.set(k, []).get(k)).push(z); }
-    for (const [k, zs] of runs) {
+    if (!openWin) for (const [k, zs] of runs) {
       const [a, b, lead] = k.split(','); zs.sort((p, q) => p - q);
       let s = zs[0], prev = s;
       for (const z of [...zs.slice(1), Infinity]) {
@@ -491,7 +552,7 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
     }
     // shutters (beyond the proud frame) and a flower box under the sill
     const [s0, s1] = out < 0 ? [L.relief[0] - 2, L.relief[0]] : [L.relief[1], L.relief[1] + 2];
-    if (hash(o.a0, o.z0, seed, 9) < 0.8 && o.a1 - o.a0 >= 24) for (const [a, b] of [[o.a0 - 4 - 14, o.a0 - 4], [o.a1 + 4, o.a1 + 4 + 14]]) {
+    if ((openWin || hash(o.a0, o.z0, seed, 9) < 0.8) && o.a1 - o.a0 >= 24) for (const [a, b] of [[o.a0 - 4 - 14, o.a0 - 4], [o.a1 + 4, o.a1 + 4 + 14]]) {
       if (a < w.a0 + 10 || b > w.a1 - 10) continue;
       pb(a, b, o.z0 - 2, o.z1 + 2, s0, s1, { color: trim }, 'shutter', false);
     }
@@ -510,13 +571,31 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
   {
     const fw = wallOf('front')[0];
     box(DOOR.a0, 10, F, DOOR.a0 + 4, 10 + doorW - 2, F + doorH - 2, { color: trim }, 'door leaf');
-    box(DOOR.a0 + 4, 10 + 4, F + 30, DOOR.a0 + 6, 10 + 8, F + 34, { color: [40, 40, 44] }, 'door ring');
+    for (const [p, q] of [[DOOR.a0 - 2, DOOR.a0], [DOOR.a0 + 4, DOOR.a0 + 6]]) box(p, 10 + doorW - 10, F + 30, q, 10 + doorW - 6, F + 34, { color: [40, 40, 44] }, 'door ring');
     const la = DOOR.a1 + 8;
     if (opt(la, fw.L.relief[0] - 6, F + 50, la + 6, fw.L.relief[0] - 2, F + 52, { color: [40, 40, 44] }, 'lantern arm'))
       opt(la, fw.L.relief[0] - 10, F + 40, la + 6, fw.L.relief[0] - 4, F + 50, GLOW([255, 196, 110], 5), 'lantern');
   }
   // booth fronts: counter through the wall, corner brackets, an awning when nothing shelters it
-  for (const o of booth) {
+  for (const o of booth.filter(o => o.kind === 'bay')) {
+    for (const [a, sgn] of [[o.a0, -1], [o.a1 - 10, 1]]) tri(a, 0, o.z1 - 10, a + 10, 10, o.z1, 'y', [sgn, 0, 1], { color: timber }, 'opening bracket');
+    // the two leaves: swung out flat on the front wall, else swung in
+    const fw = wallOf('front')[0], lw = (o.a1 - o.a0) / 2, [s0, s1] = [fw.L.relief[0] - 2, fw.L.relief[0]];
+    const clearOf = (p, q) => p >= 10 && q <= BW - 10 && (q <= DOOR.a0 - 8 || p >= DOOR.a1 + 18) && Math.abs((p + q) / 2 - signA) > lw / 2 + 4;
+    for (const [p, q, ip] of [[o.a0 - 4 - lw, o.a0 - 4, o.a0], [o.a1 + 4, o.a1 + 4 + lw, o.a1 - 4]]) {
+      let done = false;
+      if (clearOf(p, q)) done = opt(p, s0, F, q, s1, F + 70, { color: trim }, 'bay leaf');
+      if (done) for (const z of [F + 14, F + 52]) opt(p + 2, s0 - 2, z, q - 2, s0, z + 4, { color: [40, 40, 44] }, 'strap hinge');
+      else opt(ip, 10, F, ip + 4, 10 + lw, F + 70, { color: trim }, 'bay leaf');
+    }
+    // a display table just inside
+    const tm = Math.round((o.a0 + o.a1) / 4) * 2;
+    if (opt(tm - 24, 26, F + 22, tm + 24, 46, F + 24, { color: WOOD[2] }, 'display table')) {
+      for (const [a, b] of [[-22, 28], [18, 28], [-22, 40], [18, 40]]) opt(tm + a, b, F, tm + a + 4, b + 4, F + 22, { color: WOOD[0] }, 'table leg');
+      for (let a = -20; a < 18; a += 8) opt(tm + a, 30, F + 24, tm + a + 6, 42, F + 24 + 2 * (1 + Math.floor(hash(a, seed, 25) * 4)), { color: GOODS[Math.floor(hash(a, seed, 26) * GOODS.length)] }, 'goods');
+    }
+  }
+  for (const o of booth.filter(o => o.kind === 'booth')) {
     box(o.a0, -8, o.z0, o.a1, 18, o.z0 + 4, { color: shade(WOOD[1], 1.05) }, 'counter');
     box(o.a0 + 4, 10, F, o.a1 - 4, 14, o.z0, { color: shade(WOOD[0], 0.9) }, 'counter front');
     for (const [a, sgn] of [[o.a0, -1], [o.a1 - 10, 1]]) tri(a, 0, o.z1 - 10, a + 10, 10, o.z1, 'y', [sgn, 0, 1], { color: timber }, 'opening bracket');
@@ -562,16 +641,82 @@ export function faire({ seed = 1, kind = 'booth', small = false } = {}) {
   }
   // barrels and a planter on the deck
   for (const [a, k] of [[-6, 0], [BW - 14, 1]]) {
-    if (hash(a, seed, 31) < 0.6) { if (B.free([X0 + a - 10, Y0 - PD + 2, F], [X0 + a + 10, Y0 - PD + 22, F + 28])) B.pole(X0 + a, Y0 - PD + 12, F, F + 28, 10, { color: shade(WOOD[k], 0.85) }, 'barrel'); }
+    if (hash(a, seed, 31) < 0.6) {
+      if (B.free([X0 + a - 10, Y0 - PD + 2, F], [X0 + a + 10, Y0 - PD + 22, F + 32]) && B.pole(X0 + a, Y0 - PD + 12, F, F + 28, 10, { color: shade(WOOD[k], 0.85) }, 'barrel') && hash(a, seed, 32) < 0.6)
+        for (const [u, v] of [[-6, -6], [-2, -6], [2, -6], [-6, -2], [-2, -2], [2, -2], [-6, 2], [-2, 2], [2, 2]]) opt(a + u, -PD + 12 + v, F + 28, a + u + 4, -PD + 16 + v, F + 32 + (hash(u, v, seed) < 0.4 ? 2 : 0), { color: hash(u, v, a, seed) < 0.3 ? [70, 130, 60] : BLOOMS[Math.floor(hash(u, v, seed, 7) * 2)] }, 'barrel blooms');
+    }
     else if (opt(a - 8, -PD + 4, F, a + 8, -PD + 16, F + 10, { color: shade(WOOD[1], 0.8) }, 'planter'))
       for (let q = a - 6; q < a + 6; q += 4) opt(q, -PD + 6, F + 10, q + 4, -PD + 14, F + 14 + (hash(q, seed) < 0.5 ? 4 : 0), { color: hash(q, seed, 2) < 0.4 ? [70, 130, 60] : pick(BLOOMS) }, 'blooms');
   }
   // ground floor planks inside, shelves of goods on the back wall, a table, lanterns
   for (let y = 10, k = 0; y < BD - 10; y += 10, k++) box(10, y, 0, BW - 10, Math.min(BD - 10, y + 10), F, { color: shade(WOOD[k % 3], 1.05) }, 'floor planks');
+  // a board partition (axis 'x' along x at y line..line+10 / 'y'), painted planks, up to the roof; a
+  // timber lintel board over each doorway
+  function partition(axis, line, a0, a1, z0, opens) {
+    const pb = (a, q, z, zt, c) => (axis === 'x' ? box(a, line, z, q, line + 10, zt, { color: c }, 'partition') : box(line, a, z, line + 10, q, zt, { color: c }, 'partition'));
+    for (let a = a0, b = 0; a < a1; a += 6, b++) {
+      const q = Math.min(a1, a + 6);
+      let top = 10000;
+      for (const t of [line, line + 9]) for (const u of [a, q - 1]) { const v = axis === 'x' ? main.bottom(u, t) : main.bottom(t, u); if (v != null) top = Math.min(top, v); }
+      if (top > 2000) continue;
+      const c = shade(PAINT, b % 2 ? 0.93 : 1);
+      let z = z0;
+      for (const o of opens.filter(o => o.a0 < q && o.a1 > a).sort((x, y) => x.z0 - y.z0)) {
+        if (o.z0 > z) pb(a, q, z, Math.min(top, o.z0), c);
+        z = Math.max(z, o.z1);
+        if (top > z + 4) { pb(a, q, z, z + 4, timber); z += 4; }
+      }
+      if (top > z) pb(a, q, z, top, c);
+    }
+  }
+  if (upTop) {
+    // the stair: courses (one box per riser band, BUILDING.md), from the floor to the upper floor
+    let z = F;
+    RISE.forEach((h, k) => { box(SX[0], YS + k * TREAD, z, SX[1], BD - 10, z + h, { color: shade(WOOD[k % 3], 1.08) }, 'stair'); z += h; });
+    // guard rail round the stairwell upstairs, open at the top for the 3-stud landing
+    const rx = stairRight ? SX[0] - 2 : SX[1];
+    const ry0 = YS + TREAD - 2, ry1 = BD - 10 - 30;
+    box(rx, ry0 + 2, U + 24, rx + 2, ry1, U + 28, { color: timber }, 'stair rail');
+    for (let y = ry0 + 2; y < ry1; y += 14) box(rx, y, U, rx + 2, Math.min(ry1, y + 2), U + 24, { color: timber }, 'baluster');
+    box(SX[0], ry0, U, SX[1], ry0 + 2, U + 28, { color: timber }, 'stair rail');
+    // upstairs: a board partition across the middle with a doorway, a bed in the room away from the stair
+    const upOpen = W.filter(w => w.name === 'ufront' || w.name === 'uback').flatMap(w => w.open);
+    let PX = null;
+    for (let x = 70; x <= BW - 80; x += 10) if (!upOpen.some(o => o.a0 - 6 < x + 10 && o.a1 + 6 > x) && (PX == null || Math.abs(x - BW / 2) < Math.abs(PX - BW / 2))) PX = x;
+    const bed = (bx0, bx1, by0, by1, headLow) => {
+      if (bx1 - bx0 < 32 || by1 - by0 < 60) return;
+      if (headLow) by1 = by0 + 60; else by0 = by1 - 60;
+      if (!opt(bx0, by0, U, bx1, by1, U + 10, { color: WOOD[0] }, 'bed frame')) return;
+      const [p0, p1, hb0, hb1] = headLow ? [by0 + 4, by0 + 14, by0, by0 + 2] : [by1 - 14, by1 - 4, by1 - 2, by1];
+      opt(bx0 + 2, headLow ? by0 + 16 : by0 + 2, U + 10, bx1 - 2, headLow ? by1 - 2 : by1 - 16, U + 16, { color: pick([[140, 40, 60], [60, 90, 160], [70, 120, 70], [180, 140, 60]]) }, 'blanket');
+      opt(bx0 + 4, p0, U + 10, bx1 - 4, p1, U + 16, { color: [236, 232, 222] }, 'pillow');
+      opt(bx0, hb0, U + 16, bx1, hb1, U + 30, { color: WOOD[0] }, 'headboard');
+    };
+    if (PX != null) {
+      // lengthwise: the stair room and a bedroom side by side
+      const dy = Math.round(((-jetty + 10) + (BD - 10)) / 20) * 10 - 40;
+      partition('y', PX, -jetty + 10, BD - 10, U, [{ a0: dy, a1: dy + 32, z0: U, z1: U + 64 }]);
+      bed(stairRight ? 12 : Math.max(PX + 14, BW - 52), stairRight ? Math.min(PX - 4, 52) : BW - 12, BD - 72, BD - 12, false);
+    } else {
+      // across: a front bedroom, the stair room behind (gable windows sit where a lengthwise wall would go)
+      const sideOpen = W.filter(w => w.name === 'uside').flatMap(w => w.open);
+      let PY = null;
+      for (let y = OY0 - 20; y >= -jetty + 80; y -= 10) if (!sideOpen.some(o => o.a0 - 6 < y + 10 && o.a1 + 6 > y)) { PY = y; break; }
+      if (PY != null) {
+        const da = stairRight ? 30 : BW - 62;
+        partition('x', PY, 10, BW - 10, U, [{ a0: da, a1: da + 32, z0: U, z1: U + 64 }]);
+        bed(stairRight ? BW - 52 : 12, stairRight ? BW - 12 : 52, -jetty + 12, PY - 2, true);
+      }
+    }
+  } else if (BD >= 220) {
+    // one storey, deep: a back room behind a board partition with a doorway
+    const PY = BD - 10 - 80, da = Math.round(BW / 20) * 10 + (doorLeft ? 30 : -30) - 16;
+    partition('x', PY, 10, BW - 10, F, [{ a0: da, a1: da + 32, z0: F, z1: F + 64 }]);
+  }
   {
     const sy0 = BD - 10 - 12, sy1 = BD - 10;
     for (const sz of [F + 26, F + 50]) {
-      const [p, q] = [24, BW - 24];
+      const [p, q] = upTop ? (stairRight ? [24, SX[0] - 4] : [SX[1] + 4, BW - 24]) : [24, BW - 24];
       if (!opt(p, sy0, sz, q, sy1, sz + 2, { color: WOOD[1] }, 'shelf')) continue;
       for (let a = p + 2; a < q - 6; a += 8 + Math.floor(hash(a, sz, seed) * 3) * 2) {
         const h = 4 + 2 * Math.floor(hash(a, sz, seed, 1) * 5), wd = 4 + 2 * Math.floor(hash(a, sz, seed, 2) * 2);
