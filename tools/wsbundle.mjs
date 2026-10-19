@@ -5,6 +5,7 @@
 //   b.pin('frame')            -> handle of the outer rerouter pin of an @left/@right port (wire from/into RER_Output/RER_Input)
 //   b.outSource('P0')         -> { brick, component_type, port } that feeds the out port inside the chip
 //   b.addInside(brick)        -> add a brick on the chip's top plane (grid of the root microchip)
+//   b.gates                   -> [{ grid, asset, comps: [{ type, data }] }] of the compiled chip (data is live: edit before finish)
 //   b.w (World), b.C (COMPONENTS), b.finish({ extraAssets, description }) -> brz bytes
 import fs from 'node:fs';
 
@@ -128,5 +129,7 @@ export async function bundle(bytes, { owner, offset = [0, 0, 0], hide = false } 
     }
     return out;
   };
-  return { lib, w, C, O, ext, pin, outSource, addInside, insideZ, rootPlane, rootPos, finish };
+  // the chip's own gates (compiled components), e.g. to fill a brick[] var's ArrayVar with refs before finish()
+  const gates = all.map(b => ({ grid: b.g, asset: b.asset, comps: b.comps }));
+  return { lib, w, C, O, ext, pin, outSource, addInside, insideZ, rootPlane, rootPos, gates, finish };
 }

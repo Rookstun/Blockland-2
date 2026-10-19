@@ -1,5 +1,8 @@
 // node mildorsplume/build.mjs  -> mildorsplume/mildorsplume_chip.brz (the game chip alone: wire it up yourself)
-//                              mildorsplume/mildorsplume.brz (arcade cabinet: seat, clock, O-grid screen, msg line)
+//                              mildorsplume/mildorsplume.brz (arcade cabinet: seat, clock, 64 x 36 screen of 1x1 micro bricks, msg line)
+// The cabinet's chip is built in brick-screen mode (gen bricks): it recolours the screen bricks itself (Set Brick Property
+// through a brick[] whose refs are filled in here, two passes: build, read the pixel refs back, build again).
+// SCREEN=text builds the old O-grid TextDisplay strips instead.
 // The chip and the seat-adapter gates sit hidden BEHIND the cabinet (y 90+): hidden bricks still get rejected for overlaps.
 // Both carry the synth speakers ON the chip's own plane, wired from its P/V outs, so the chip makes its own sound.
 // Load: br.Prefab.Load "mildorsplume" x y z 0 16. Owner "Mildors Plume" (own wire budget).
@@ -10,24 +13,32 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generate } from './gen.mjs';
 import { bundle } from '../tools/wsbundle.mjs';
+import { brickRefs } from '../omegga-media/tv.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OWNER = { id: 'c5700000-0000-4b0b-9a11-00000000c570', name: 'Mildors Plume', display_name: 'Mildors Plume' };
 const DEBUG = process.env.CS_DEBUG === '1';
 
+const SCREEN = process.env.SCREEN ?? 'bricks';
 const gen = generate({ debug: DEBUG });
-const src = gen.src;
-fs.writeFileSync(join(here, 'mildorsplume.gen.ws'), src);
+fs.writeFileSync(join(here, 'mildorsplume.gen.ws'), gen.src);
+const genB = generate({ debug: DEBUG, bricks: true });
+fs.writeFileSync(join(here, 'mildorsplume_bricks.gen.ws'), genB.src);
 
 const sdk = join(here, '..', 'tools', 'wspkg');
 const wasm = await import(pathToFileURL(join(sdk, 'wasm.js')).href);
 if (typeof wasm.default === 'function') await wasm.default({ module_or_path: fs.readFileSync(join(sdk, 'wasm_bg.wasm')) });
 const compile = wasm.wirescript_compile ?? wasm.default?.wirescript_compile;
 const diag = wasm.wirescript_diagnostics ?? wasm.default?.wirescript_diagnostics;
-const ds = JSON.parse(diag(src, 'mildorsplume', '{}') || '[]');
-for (const d of ds) console.error(`${d.severity} ${d.code} line ${d.startLine}: ${d.message}`);
-const compiled = new Uint8Array(compile(src, 'mildorsplume', '{}', '{}'));
-console.log(`chip compiled, ${compiled.length} bytes`);
+function cc(src) {
+  const ds = JSON.parse(diag(src, 'mildorsplume', '{}') || '[]');
+  for (const d of ds) console.error(`${d.severity} ${d.code} line ${d.startLine}: ${d.message}`);
+  const out = new Uint8Array(compile(src, 'mildorsplume', '{}', '{}'));
+  console.log(`chip compiled, ${out.length} bytes`);
+  return out;
+}
+const compiled = cc(gen.src);
+const compiledB = SCREEN === 'bricks' ? cc(genB.src) : compiled;
 
 const SYN = [...new Set(gen.synths)].map(s => `BA_Synth_Basic_${s}`);
 function speakers(b, { inner = 300, range = 1600 } = {}) {
@@ -50,8 +61,8 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
 }
 
 // ---- 2. the cabinet. Prefab local: ground z 0, the screen faces -y, the player sits at -y.
-{
-  const b = await bundle(compiled, { owner: OWNER, offset: [0, 110, 30], hide: true });
+async function cabinet(refs) {
+  const b = await bundle(compiledB, { owner: OWNER, offset: [0, 110, 30], hide: true });
   const { w, C, O } = b;
   const extra = speakers(b);
   const assets = [...b.ext, ...extra];
@@ -74,13 +85,24 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
   const wireFrom = (port, brick, comp, target) => w.addWire({ brick: b.pin(port), component_type: 'Component_Internal_Rerouter', port: 'RER_Output' }, { brick, component_type: comp, port: target });
   const wireTo = (src, port) => w.addWire(src, { brick: b.pin(port), component_type: 'Component_Internal_Rerouter', port: 'RER_Input' });
 
-  // screen: 64 x 36 cells of 2 units, 6 strips of 6 rows (row pitch 2 = 1.55 x LineHeight; square at WidthScale 2)
+  // screen: 64 x 36 cells of 2 units
   const CELL = 2, PW = gen.W * CELL, PH = gen.H * CELL, Z1 = 186, Z0 = Z1 - PH, HX = PW / 2;
-  const stripH = gen.STRIP * CELL;
-  for (let k = 0; k < gen.H / gen.STRIP; k++) {
-    const z1 = Z1 - k * stripH;
-    const s = textBrick(-HX, HX, z1 - stripH, z1, { LineHeight: +(CELL * 0.645).toFixed(3), WidthScale: 2, Color: rgba(hex(gen.PAL[0])), Text: '' });
-    wireFrom(`strip${k}`, s, C.TextDisplay.NAME, 'Text');
+  const pixPos = i => [HX - CELL / 2 - (i % gen.W) * CELL, -CELL / 2, Z1 - CELL / 2 - Math.floor(i / gen.W) * CELL]; // seen from -y, +x is LEFT
+  if (SCREEN === 'bricks') {
+    // 1x1 micro bricks (2-unit pixels), recoloured by the chip through scr[i] (row-major, i = row * W + col)
+    for (let i = 0; i < gen.W * gen.H; i++) w.addBrick({ asset: MB, size: [CELL / 2, CELL / 2, CELL / 2], position: pixPos(i), color: hex(gen.PAL[0]),
+      material: 'BMC_Glow', material_intensity: +(process.env.GLOW ?? 2), owner_index: O });
+    const scr = b.gates.flatMap(g => g.comps).filter(c => c.data?.Value?.$elementType === 'brick_handle');
+    if (scr.length !== 1) throw Error(`expected one brick[] var, found ${scr.length}`);
+    const none = { GridPersistentIndex: 1, ChunkIndex: { X: 0, Y: 0, Z: 0 }, BrickIndexInChunk: 0 };
+    scr[0].data.Value = { $elementType: 'WireValue', $array: Array.from({ length: gen.W * gen.H }, (_, i) => ({ $variant: 'BRSavedBrickRef', value: refs?.get(pixPos(i).join(',')) ?? none })) };
+  } else {
+    const stripH = gen.STRIP * CELL;
+    for (let k = 0; k < gen.H / gen.STRIP; k++) {
+      const z1 = Z1 - k * stripH;
+      const s = textBrick(-HX, HX, z1 - stripH, z1, { LineHeight: +(CELL * 0.645).toFixed(3), WidthScale: 2, Color: rgba(hex(gen.PAL[0])), Text: '' });
+      wireFrom(`strip${k}`, s, C.TextDisplay.NAME, 'Text');
+    }
   }
   // the title: a TextDisplay over the middle of the picture on a hidden micro brick, text only while out title_ is set
   const title = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -7, Z1 - PH / 2 + 8], visibility: false, collision: false, owner_index: O,
@@ -132,6 +154,17 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
   const clock = gate(C.Clock, { IntervalSeconds: 0.05, bEnabled: true });
   wireTo(port(clock, 'Pulse'), 'tick');
 
-  fs.writeFileSync(join(here, 'mildorsplume.brz'), b.finish({ extraAssets: assets.slice(b.ext.length), description: 'MILDORS PLUME cabinet' }));
+  return { bytes: b.finish({ extraAssets: assets.slice(b.ext.length), description: 'MILDORS PLUME cabinet' }), pixPos, lib: b.lib };
+}
+{
+  const first = await cabinet(null);
+  let out = first.bytes;
+  if (SCREEN === 'bricks') {
+    const refs = brickRefs(first.lib.WorldReader, first.bytes);
+    const miss = Array.from({ length: gen.W * gen.H }, (_, i) => refs.get(first.pixPos(i).join(','))).filter(x => !x).length;
+    if (miss) throw Error(`${miss} pixel refs not found`);
+    out = (await cabinet(refs)).bytes;
+  }
+  fs.writeFileSync(join(here, 'mildorsplume.brz'), out);
 }
 console.log('wrote mildorsplume_chip.brz, mildorsplume.brz');
