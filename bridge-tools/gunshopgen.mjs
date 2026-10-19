@@ -17,6 +17,7 @@ const src = fs.readFileSync(path.join(PREFABS, 'shop_bronze.brz'));
 // western guns, priced in "coins" against the sword ladder (bronze 150 .. rune 20000)
 const TIERS = [
   { key: 'derringer', name: 'Derringer', item: 'Weapon_Derringer', pickup: 'BP_ItemPickup_Derringer', price: 0 }, // free (owner 2026-10-16: "make derringer free"; was 300)
+  { key: 'guardpistol', name: 'Guard Pistol', item: 'Weapon_GuardPistol', pickup: 'BP_ItemPickup_GuardPistol', price: 150 }, // owner 2026-10-18: "add the guard pistol for 150$ at spawn"
   { key: 'revolver', name: 'Revolver', item: 'Weapon_Revolver', pickup: 'BP_ItemPickup_Revolver', price: 800 },
   { key: 'huntingshotgun', name: 'Hunting Shotgun', item: 'Weapon_HuntingShotgun', pickup: 'BP_ItemPickup_HuntingShotgun', price: 1800 },
   { key: 'leveraction', name: 'Lever-Action Rifle', item: 'Weapon_LeverActionRifle', pickup: 'BP_ItemPickup_LeverActionRifle', price: 3500 },

@@ -2741,7 +2741,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   function placeWeaponShops(paths) {
     const SPAWN = {
       armory: ['bronze', 'iron'].flatMap(t => [`${t}_dagger`, t, `${t}_longsword`].map(tier => ({ tier }))),
-      gunsmith: [{ tier: 'derringer', prefab: 'gun_derringer' }, { tier: 'revolver', prefab: 'gun_revolver' }, { tier: 'bow', prefab: 'bow_bow' }, { tier: 'oak', prefab: 'bow_oak' }],
+      gunsmith: [{ tier: 'derringer', prefab: 'gun_derringer' }, { tier: 'guardpistol', prefab: 'gun_guardpistol' }, { tier: 'revolver', prefab: 'gun_revolver' }, { tier: 'bow', prefab: 'bow_bow' }, { tier: 'oak', prefab: 'bow_oak' }],
     };
     stats.weaponShops = [];
     // the town is dense: the full-size lot first, then smaller ones

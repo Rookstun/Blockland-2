@@ -22,12 +22,12 @@ const src = fs.readFileSync(path.join(PREFABS, 'shop_bronze.brz'));
 // colour slots 2-8 as on the owner's bows (string, arrow fletching, tip, ...)
 const REST = [{ B: 255, G: 255, R: 255, A: 255 }, { B: 0, G: 0, R: 207, A: 255 }, { B: 170, G: 170, R: 170, A: 255 }, { B: 255, G: 255, R: 255, A: 255 }, { B: 255, G: 255, R: 255, A: 255 }, { B: 255, G: 255, R: 255, A: 255 }, { B: 255, G: 255, R: 255, A: 255 }];
 const TIERS = [
-  { key: 'bow', name: 'Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 50, damage: 0.5, speed: 1, colors: [{ B: 0, G: 31, R: 75, A: 255 }, ...REST] },
-  { key: 'oak', name: 'Oak Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 400, damage: 0.8, speed: 1.125, colors: [{ B: 0, G: 137, R: 186, A: 255 }, ...REST] },
-  { key: 'willow', name: 'Willow Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 1000, damage: 1, speed: 1.25, colors: [{ B: 130, G: 186, R: 183, A: 255 }, ...REST] },
-  { key: 'maple', name: 'Maple Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 4000, damage: 1.1, speed: 1.375, colors: [{ B: 157, G: 140, R: 186, A: 255 }, ...REST] },
-  { key: 'yew', name: 'Yew Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 8000, damage: 1.3, speed: 1.625, colors: [{ B: 0, G: 157, R: 185, A: 255 }, ...REST] },
-  { key: 'magic', name: 'Magic Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 20000, damage: 1.5, speed: 1.875, colors: [{ B: 255, G: 210, R: 4, A: 255 }, ...REST] },
+  { key: 'bow', name: 'Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 50, damage: 0.5, speed: 2, colors: [{ B: 0, G: 31, R: 75, A: 255 }, ...REST] },
+  { key: 'oak', name: 'Oak Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 400, damage: 0.8, speed: 2.25, colors: [{ B: 0, G: 137, R: 186, A: 255 }, ...REST] },
+  { key: 'willow', name: 'Willow Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 1000, damage: 1, speed: 2.5, colors: [{ B: 130, G: 186, R: 183, A: 255 }, ...REST] },
+  { key: 'maple', name: 'Maple Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 4000, damage: 1.1, speed: 2.75, colors: [{ B: 157, G: 140, R: 186, A: 255 }, ...REST] },
+  { key: 'yew', name: 'Yew Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 8000, damage: 1.3, speed: 3.25, colors: [{ B: 0, G: 157, R: 185, A: 255 }, ...REST] },
+  { key: 'magic', name: 'Magic Bow', item: 'Weapon_Bow', pickup: 'BP_ItemPickup_Bow', price: 20000, damage: 1.5, speed: 3.75, colors: [{ B: 255, G: 210, R: 4, A: 255 }, ...REST] },
 ];
 
 const reader = brs.WorldReader.from(src);

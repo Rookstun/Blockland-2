@@ -370,23 +370,28 @@ mod buyName(uid: string, it: entity) -> string {
       invBuy.remove("${uid}:25")
       return "Volcano Cola"
     }
+  } else if it == $BRItemBase/Weapon_GuardPistol {
+    if invBuy.has("${uid}:150") && GetUnixTime() - invBuy.get("${uid}:150") <= 20 {
+      invBuy.remove("${uid}:150")
+      return "Guard Pistol"
+    }
   }
   return ""
 }
 // put an item in a slot: a shop name gives that shop's advanced item, else the plain item
 mod giveNamed(ch: character, slot: int, name: string, it: entity) {
   if name == "Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.500, speed = 1.000, itemName = "Bow", overrideColors = true, meshColors = [ColorSRGB(75, 31, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.500, speed = 2.000, itemName = "Bow", overrideColors = true, meshColors = [ColorSRGB(75, 31, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Magic Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.500, speed = 1.875, itemName = "Magic Bow", overrideColors = true, meshColors = [ColorSRGB(4, 210, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.500, speed = 3.750, itemName = "Magic Bow", overrideColors = true, meshColors = [ColorSRGB(4, 210, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Maple Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.100, speed = 1.375, itemName = "Maple Bow", overrideColors = true, meshColors = [ColorSRGB(186, 140, 157, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.100, speed = 2.750, itemName = "Maple Bow", overrideColors = true, meshColors = [ColorSRGB(186, 140, 157, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Oak Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.800, speed = 1.125, itemName = "Oak Bow", overrideColors = true, meshColors = [ColorSRGB(186, 137, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 0.800, speed = 2.250, itemName = "Oak Bow", overrideColors = true, meshColors = [ColorSRGB(186, 137, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Willow Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, speed = 1.250, itemName = "Willow Bow", overrideColors = true, meshColors = [ColorSRGB(183, 186, 130, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, speed = 2.500, itemName = "Willow Bow", overrideColors = true, meshColors = [ColorSRGB(183, 186, 130, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Yew Bow" {
-    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.300, speed = 1.625, itemName = "Yew Bow", overrideColors = true, meshColors = [ColorSRGB(185, 157, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_Bow, slot = slot, damage = 1.300, speed = 3.250, itemName = "Yew Bow", overrideColors = true, meshColors = [ColorSRGB(185, 157, 0, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(207, 0, 0, 255), ColorSRGB(170, 170, 170, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Bolt-Action Rifle" {
     ch.SetInventoryItemAdv($BRItemBase/Weapon_BoltActionRifle, slot = slot, itemName = "Bolt-Action Rifle")
   } else if name == "Derringer" {
@@ -503,6 +508,8 @@ mod giveNamed(ch: character, slot: int, name: string, it: entity) {
     ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 12.000, itemName = "Voidberry Nectar", overrideColors = true, meshColors = [ColorSRGB(40, 10, 70, 255), ColorSRGB(180, 90, 255, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
   } else if name == "Volcano Cola" {
     ch.SetInventoryItemAdv($BRItemBase/Weapon_SodaCan, slot = slot, damage = 7.000, itemName = "Volcano Cola", overrideColors = true, meshColors = [ColorSRGB(150, 20, 10, 255), ColorSRGB(255, 140, 0, 255), ColorSRGB(200, 200, 205, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255), ColorSRGB(255, 255, 255, 255)])
+  } else if name == "Guard Pistol" {
+    ch.SetInventoryItemAdv($BRItemBase/Weapon_GuardPistol, slot = slot, itemName = "Guard Pistol")
   } else {
     ch.SetInventoryItem(it, slot)
   }
@@ -701,6 +708,9 @@ mod catClass(id: int) -> entity {
   if id == 64 {
     return $BRItemBase/Weapon_SodaCan
   }
+  if id == 65 {
+    return $BRItemBase/Weapon_GuardPistol
+  }
   return $BRItemBase/Weapon_ArmingSword
 }
 mod catName(id: int) -> string {
@@ -895,6 +905,9 @@ mod catName(id: int) -> string {
   }
   if id == 64 {
     return "Volcano Cola"
+  }
+  if id == 65 {
+    return "Guard Pistol"
   }
   return ""
 }
