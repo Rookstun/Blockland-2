@@ -771,8 +771,8 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   const blade = k => { const t = tiers[k % tiers.length], ty = ['dagger', '', 'longsword', 'scimitar', 'spatha'][Math.floor(hash(k, seed, 61) * 5)]; return `shop_${t}${ty ? '_' + ty : ''}_bare`; };
   const CASEW = ['gun_derringer_case', 'gun_guardpistol_case', 'gun_revolver_case', 'bow_bow_case', 'bow_oak_case'];
   const standAt = (x, y, zTop, face, prefab, hw = 10) => {
-    if (!B.free([X0 + x - hw, Y0 + y - hw, zTop], [X0 + x + hw, Y0 + y + hw, zTop + 40])) return false;
-    box(x - hw, y - hw, zTop, x + hw, y + hw, zTop + 40, { color: [255, 0, 255], ghost: true }, 'stand ghost');
+    if (!B.free([X0 + x - hw, Y0 + y - hw, zTop], [X0 + x + hw, Y0 + y + hw, zTop + 36])) return false;
+    box(x - hw, y - hw, zTop, x + hw, y + hw, zTop + 36, { color: [255, 0, 255], ghost: true }, 'stand ghost');
     stands.push({ at: [X0 + x, Y0 + y, zTop + 12], face, prefab });
     return true;
   };
@@ -780,13 +780,13 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   // a wall table (flush on a wall, owner: "tables should be flush against the wall" and have shop items on
   // them): top at 44 like the weapon shops' display tables, bare stands 35 apart, buttons away from the wall
   function wallTable(axis, wallFace, inward, a0, a1, z0 = F) {
-    const D = 22, top = z0 + 44, n = Math.floor((a1 - a0 - 10) / 35);
+    const D = 28, top = z0 + 24, n = Math.floor((a1 - a0 - 10) / 35); // 2 bricks high (owner: player is exactly 5 bricks, tables were gigantic); stands 14 off the wall (11 = item spawn rejected)
     if (n < 1) return 0;
     const [c0, c1] = inward > 0 ? [wallFace, wallFace + D] : [wallFace - D, wallFace];
     const tb = (p, q, z, zt, m, lab) => (axis === 'y' ? opt(c0 + (p ?? 0), a0 + 0, z, c1, a1, zt, m, lab) : opt(a0, c0, z, a1, c1, zt, m, lab));
     if (!tb(0, 0, top - 4, top, { color: WOOD[2] }, 'wall table')) return 0;
     for (const a of [a0 + 2, a1 - 6]) for (const c of inward > 0 ? [c1 - 4] : [c0]) axis === 'y' ? opt(c, a, z0, c + 4, a + 4, top - 4, { color: WOOD[0] }, 'table leg') : opt(a, c, z0, a + 4, c + 4, top - 4, { color: WOOD[0] }, 'table leg');
-    axis === 'y' ? opt(inward > 0 ? c0 : c1 - 2, a0 + 2, top - 12, inward > 0 ? c0 + 2 : c1, a1 - 2, top - 4, { color: WOOD[0] }, 'table apron') : opt(a0 + 2, inward > 0 ? c0 : c1 - 2, top - 12, a1 - 2, inward > 0 ? c0 + 2 : c1, top - 4, { color: WOOD[0] }, 'table apron');
+    axis === 'y' ? opt(inward > 0 ? c0 : c1 - 2, a0 + 2, top - 8, inward > 0 ? c0 + 2 : c1, a1 - 2, top - 4, { color: WOOD[0] }, 'table apron') : opt(a0 + 2, inward > 0 ? c0 : c1 - 2, top - 8, a1 - 2, inward > 0 ? c0 + 2 : c1, top - 4, { color: WOOD[0] }, 'table apron');
     let k = 0;
     const mid = (c0 + c1) / 2, face = axis === 'y' ? (inward > 0 ? '+x' : '-x') : (inward > 0 ? '+y' : '-y');
     for (let i = 0; i < n; i++) {
@@ -799,10 +799,11 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   function wallRack(axis, wallFace, inward, a0, a1, z0 = F) {
     const n = Math.floor((a1 - a0 - 10) / 35);
     if (n < 1) return;
-    const sh = z0 + 40, back = (p, q, z, zt, m, lab) => (axis === 'y' ? opt(inward > 0 ? wallFace + p : wallFace - q, a0, z, inward > 0 ? wallFace + q : wallFace - p, a1, zt, m, lab) : opt(a0, inward > 0 ? wallFace + p : wallFace - q, z, a1, inward > 0 ? wallFace + q : wallFace - p, zt, m, lab));
-    if (!back(0, 2, z0 + 20, z0 + 74, { color: shade(WOOD[0], 0.85) }, "rack board")) return;
-    back(2, 18, sh - 4, sh, { color: WOOD[1] }, 'rack shelf');
-    back(2, 4, z0 + 70, z0 + 74, { color: timber }, 'rack rail');
+    const sh = z0 + 44, back = (p, q, z, zt, m, lab) => (axis === 'y' ? opt(inward > 0 ? wallFace + p : wallFace - q, a0, z, inward > 0 ? wallFace + q : wallFace - p, a1, zt, m, lab) : opt(a0, inward > 0 ? wallFace + p : wallFace - q, z, a1, inward > 0 ? wallFace + q : wallFace - p, zt, m, lab));
+    // (owner screenshot 2026-10-19: the bare stands hang their item ~50 below them, through a shelf plank):
+    // no shelf, the stands high on the board so the blades hang clear with their tips over the floor
+    if (!back(0, 2, z0 + 10, z0 + 84, { color: shade(WOOD[0], 0.85) }, 'rack board')) return; // under the tie beams / upper floor (92)
+    back(2, 4, z0 + 80, z0 + 84, { color: timber }, 'rack rail');
     const face = axis === 'y' ? (inward > 0 ? '+x' : '-x') : (inward > 0 ? '+y' : '-y'), c = wallFace + inward * 14;
     for (let i = 0; i < n; i++) {
       const a = Math.round((a0 + (a1 - a0) * (i + 0.5) / n) / 2) * 2;
@@ -900,8 +901,8 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
     // partitions: across from the side wall to the counter, along from the counter's end to the back wall
     { const [a, b] = mr(10, CX0); partition('x', PY, a, b, F, [], groundCap); }
     { const [a] = mr(PX, PX + 10); partition('y', a, CY1, BD - 10, F, [], groundCap); }
-    // the L counter: top at 44, bare stands on it facing the shop
-    const top = F + 44;
+    // the L counter: 3 bricks high (player 5), bare stands on it facing the shop
+    const top = F + 36;
     const cbox = (x0, x1, y0, y1) => { const [a, b] = mr(x0, x1); box(a, y0, F, b, y1, top - 4, { color: shade(WOOD[0], 0.9) }, 'counter'); box(a, y0, top - 4, b, y1, top, { color: WOOD[2] }, 'counter top'); };
     cbox(CX0, PX + 20, PY, PY + 20);
     cbox(PX, PX + 20, PY + 20, CY1);
@@ -944,7 +945,7 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
         const k = Math.max(1, Math.floor((c1 - c0 - 10) / 36));
         for (let i = 0; i < k; i++) {
           const x = Math.round((c0 + (c1 - c0) * (i + 0.5) / k) / 2) * 2;
-          stands.push({ at: [X0 + x, Y0 + y1 - 14, F + 32], face: '+y', prefab: CASEW[Math.floor(hash(i, seed, 71) * CASEW.length)] });
+          stands.push({ at: [X0 + x, Y0 + y1 - 12, F + 32], face: '+y', prefab: CASEW[Math.floor(hash(i, seed, 71) * CASEW.length)] });
         }
       }
     }

@@ -85,6 +85,7 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
   or flat plateaus. **(owner)**
 
 ## 5. Players, bikes and bots
+- PLAYER (owner 2026-10-19, exact, supersedes the 48 below): the character is exactly 5 bricks = 60 units tall. Tables 2 bricks (top 24 over the floor), counters 3 (36); a 44-high display table read as "gigantic". **(owner)**
 - PLAYER (owner 2026-10-18, exact): 4 bricks = 48 units tall, jumps 300 long / 108 high. (Measured
   capsule estimate below said ~54.) **(owner)**
 - STAIRS ARE BRICKWORK (owner 2026-10-18: "when your stairs extend from the floor it creates a striped
