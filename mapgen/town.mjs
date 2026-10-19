@@ -21,6 +21,7 @@ import { splitLevel } from './splitlevel.mjs';
 import { dutchColonial } from './dutchcolonial.mjs';
 import { georgian } from './georgian.mjs';
 import { faire } from './faire.mjs';
+import { buildTree } from '../trees/tree.mjs';
 import { turnBrick } from './orient.mjs';
 import { castleStone, VX as CVX, VZ as CVZ } from './castle.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
@@ -68,6 +69,19 @@ export const TOWN_R = 2250;               // flattened town radius (ragged edge)
 // threads its course through these
 export const RIVER_LOCAL = [[2900, -1650], [1500, -1250], [200, -1450], [-1200, -1850], [-2900, -1600]];
 const CASTLE = [0, 1500], CHURCH = [1450, 850];
+// (2026-10-19, owner: "remove the castle for now and put a park in its place") the park's half side
+// on the castle's old block (centre CASTLE)
+const PARK_H = 460;
+/** a straight polyline through waypoints, a point every 20 units (like windPath, no bends) */
+export function straightPath(way) {
+  const out = [];
+  for (let i = 0; i + 1 < way.length; i++) {
+    const [ax, ay] = way[i], [bx, by] = way[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 20));
+    for (let k = 0; k < n; k++) out.push([ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n]);
+  }
+  out.push(way[way.length - 1]);
+  return out;
+}
 
 const dist2seg = (px, py, ax, ay, bx, by) => {
   const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy;
@@ -218,13 +232,18 @@ export function planTown(rnd) {
     { dir: [1, 0], at: [HALF, 300] }, { dir: [-1, 0], at: [-HALF, 200] },
     { dir: [0, 1], at: [-1100, HALF] }, { dir: [0, -1], at: [300, -HALF] },
   ];
+  // (2026-10-19, owner screenshot with a red cross drawn on: "make the roads straight") the roads
+  // run dead straight: east, west and south along the axes from the plaza (a short dog-leg outside
+  // the town disc to the old exits, so the roads beyond keep their routes), north straight to its
+  // exit, a straight spur up to the park (where the castle stood) and to the church door
+  const NX = exits[2].at, NL = Math.hypot(...NX), NS = [NX[0] / NL * (PLAZA_R - 30), NX[1] / NL * (PLAZA_R - 30)];
   const main = [
-    windPath([[PLAZA_R - 30, 60], [900, 230], [1700, 160], [2300, 280], exits[0].at], 60, ph(3)),
-    windPath([[-PLAZA_R + 30, 110], [-1000, 200], [-1800, 300], [-2300, 220], exits[1].at], 60, ph(4)),
-    windPath([[-130, PLAZA_R - 30], [-420, 800], [-920, 1250], [-1020, 2000], exits[2].at], 50, ph(5)),
-    windPath([[40, -PLAZA_R + 30], [200, -900], [180, -1450], [300, -2100], exits[3].at], 30, ph(6)),
-    windPath([[0, PLAZA_R - 30], [0, CASTLE[1] - 460]], 0, 0),                 // up to the castle gate
-    windPath([[CHURCH[0], 200], [CHURCH[0], CHURCH[1] - 290]], 0, 0),          // off the east road to the church door
+    straightPath([[PLAZA_R - 30, 0], [TOWN_R + 80, 0], exits[0].at]),
+    straightPath([[-PLAZA_R + 30, 0], [-TOWN_R - 80, 0], exits[1].at]),
+    straightPath([NS, NX]),
+    straightPath([[0, -PLAZA_R + 30], [0, -TOWN_R - 80], exits[3].at]),
+    straightPath([[0, PLAZA_R - 30], [0, CASTLE[1] - PARK_H - 10]]),          // up to the park gate
+    straightPath([[CHURCH[0], 0], [CHURCH[0], CHURCH[1] - 290]]),             // off the east road to the church door
   ];
   // a few lanes off the main paths, ending in little closes
   const lanes = [];
@@ -237,12 +256,12 @@ export function planTown(rnd) {
     if (Math.hypot(x, y) < 650) continue;
     const tl = Math.hypot(qx - x, qy - y) || 1, side = rnd(4244, k) < 0.5 ? 1 : -1;
     const nx = (-(qy - y) / tl) * side, ny = ((qx - x) / tl) * side, len = 600 + rnd(4245, k) * 500;
-    const end = [x + nx * len + (qx - x) / tl * 150, y + ny * len + (qy - y) / tl * 150];
+    const end = [x + nx * len, y + ny * len]; // straight out, square to its parent
     if (Math.hypot(...end) > edgeR(...end) - 300) continue;
     if (keepOff.some(([c, r]) => Math.hypot(end[0] - c[0], end[1] - c[1]) < r)) continue;
     if (distToLine(...end, RIVER_LOCAL) < 450 || distToLine(x + nx * len / 2, y + ny * len / 2, RIVER_LOCAL) < 450) continue;
     if (lanes.some(l => Math.hypot(l[l.length - 1][0] - end[0], l[l.length - 1][1] - end[1]) < 480)) continue;
-    const lane = windPath([[x, y], [x + nx * len * 0.5, y + ny * len * 0.5], end], 40, ph(10 + k));
+    const lane = straightPath([[x, y], end]);
     // fan out: a lane keeps 360 off every other path (and 300 off its parent once clear of it)
     if (lane.slice(10).some(([a, b2]) => [...main, ...lanes].some(o => o !== p && distToLine(a, b2, o) < 330))) continue;
     if (lane.slice(20).some(([a, b2]) => distToLine(a, b2, p) < 280)) continue;
@@ -396,6 +415,7 @@ const georgianOf = (s, mirror) => { const k = s + ',' + mirror; if (!georgianCac
 // houses and cottages replace the town's shapedhouse homes and wallgen shops (smith houses stay)
 const faireCache = new Map();
 const faireOf = (s, fkind, small) => { const k = s + ',' + fkind + ',' + small; if (!faireCache.has(k)) faireCache.set(k, faire({ seed: s, kind: fkind, small })); return faireCache.get(k); };
+const TOWN_RES = { townSplit: 'splitlevel', townDutch: 'dutchcolonial' }, resSeed = s => 76000 + (s % 12);
 const FAIRE_KIND = { faireBooth: 'booth', faireHouse: 'house', faireCottage: 'cottage' };
 const SMALL_MAX = { cottage: [32, 20, 8], townhouse: [36, 24, 12] }; // W, D, E of the old small lots
 function shapedSpec0(type, rnd, s, small = false) {
@@ -1634,13 +1654,10 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     count(sp.kind); count('faire: ' + h.scheme + ' ' + h.roofType + ' ' + h.storeys);
   }
   const TYPES = {
-    cottage(cx, cy, fx, fy, s, small) {
-      if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 32 + GROW, 24 + GROW, 1, s, {
-        wallColor: pick(PALETTE.brick, s, 3), roofColor: pick(PALETTE.roof, s, 4), rise: 72 + Math.floor(rnd(s, 5) * 3) * 12,
-      });
-      else { const sp = shapedSpec('cottage', rnd, s, small); shapedTown(cx, cy, fx, fy, sp, s); count(sp.kind); }
-      count('cottage');
-    },
+    // (2026-10-19, owner: "remove old houses and only keep the ren faire houses and the residential houses"):
+    // every cottage / townhouse lot (hamlets, roadside lone houses) gets a faire house; the old wallHouse /
+    // shapedhouse HOUSE_TYPES builds are retired (lone roadside lots are small: small faire builds)
+    cottage(cx, cy, fx, fy, s, small) { faireTown('faireCottage', cx, cy, fx, fy, s, small || !!single); count('cottage'); },
     // the desert gun store (owner, 2026-10-03): a wide false-front western
     // building, six gun stands (gun_<key>.brz, made by bridge/tools/gunshopgen.mjs
     // from the bronze sword shop) along the back walls, buttons toward the door
@@ -1658,13 +1675,10 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       shapedTown(cx, cy, fx, fy, { shape: 'rect', W: 28 + GROW + Math.floor(rnd(s, 31) * 2) * 4, D: 24 + GROW, E: 0, storeys: rnd(s, 32) < 0.4 ? 2 : 1, attic: false, style: 'western' }, s);
       count('western');
     },
-    townhouse(cx, cy, fx, fy, s, small) {
-      if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 36 + GROW, 28 + GROW, 2 + (rnd(s, 1) < 0.35 ? 1 : 0), s, {
-        wallColor: pick(PALETTE.brick, s, 3), upperColor: pick(PALETTE.plaster, s, 6), roofColor: pick(PALETTE.roof, s, 4), rise: 96 + Math.floor(rnd(s, 5) * 2) * 24,
-      });
-      else { const sp = shapedSpec('townhouse', rnd, s, small); shapedTown(cx, cy, fx, fy, sp, s); count(sp.kind); }
-      count('townhouse');
-    },
+    townhouse(cx, cy, fx, fy, s, small) { faireTown('faireHouse', cx, cy, fx, fy, s, small || !!single); count('townhouse'); },
+    // town lots (2026-10-19): residential designs from a pool of 12 seeds (every trial lot measures its house)
+    townSplit(cx, cy, fx, fy, s) { TYPES.splitlevel(cx, cy, fx, fy, resSeed(s)); },
+    townDutch(cx, cy, fx, fy, s) { TYPES.dutchcolonial(cx, cy, fx, fy, resSeed(s)); },
     splitlevel(cx, cy, fx, fy, s) {
       const sp = shapedSpec('splitlevel', rnd, s);
       shapedTown(cx, cy, fx, fy, sp, s);
@@ -2284,6 +2298,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   };
   /** across-front width and depth of a building type with this seed (units, generous) */
   const footprint = (type, s, small) => {
+    if (TOWN_RES[type]) return footprint(TOWN_RES[type], resSeed(s), small);
     if (type === 'garden') return [360, 360];
     if (type === 'shop') return [380 + GROW * 10, 330 + GROW * 10];
     if (type === 'bank') return [340, 300];
@@ -2298,7 +2313,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (type === 'gunstore') return [380, 330];
     if (type === 'western') return [340 + GROW * 10, 330 + GROW * 10];
     if (FAIRE_KIND[type]) { const sp = shapedSpec(type, rnd, s, small); return [(sp.W + 1) * 10 + 20, shapedDepth(sp) + 20]; }
-    if (isSmith(rnd, s)) return type === 'cottage' ? [340 + GROW * 10, 290 + GROW * 10] : [380 + GROW * 10, 330 + GROW * 10];
+    if (type === 'cottage' || type === 'townhouse') type = type === 'cottage' ? 'faireCottage' : 'faireHouse';
+    if (FAIRE_KIND[type]) { const sp = shapedSpec(type, rnd, s, small); return [(sp.W + 1) * 10 + 20, shapedDepth(sp) + 20]; }
     const sp = shapedSpec(type, rnd, s, small);
     return [(sp.W + 1) * 10 + 20, shapedDepth(sp) + 20];
   };
@@ -2407,7 +2423,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const [fx, fy] = Math.abs(nx) >= Math.abs(ny) ? [-Math.sign(nx), 0] : [0, -Math.sign(ny)];
           const fp = footprint(type, s, small), half = fx ? fp[1] / 2 : fp[1] / 2;
           const off = PATH_W / 2 + 50 + half;
-          const cx = Math.round((x - fx * off) / 10) * 10, cy = Math.round((y - fy * off) / 10) * 10;
+          const g = TOWN_RES[type] ? 40 : 10; // residential designs sit on the 40 grid (like their roadside lots)
+          const cx = Math.round((x - fx * off) / g) * g, cy = Math.round((y - fy * off) / g) * g;
           const r = boxOf(cx, cy, fx, fy, fp);
           if (!rectClear(r, { edge, margin, claim: true })) continue;
           taken.push(r);
@@ -2437,7 +2454,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const type = pickType(x, y, s);
         if (!type) continue;
         const [fx, fy] = Math.abs(bx - x) >= Math.abs(by - y) ? [Math.sign(bx - x) || 1, 0] : [0, Math.sign(by - y) || 1];
-        const cx = Math.round(x / 10) * 10, cy = Math.round(y / 10) * 10;
+        const g = TOWN_RES[type] ? 40 : 10;
+        const cx = Math.round(x / g) * g, cy = Math.round(y / g) * g;
         const r = boxOf(cx, cy, fx, fy, footprint(type, s, small));
         if (!rectClear(r, { edge, margin, claim: true })) continue;
         taken.push(r);
@@ -2587,6 +2605,141 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     }
     count('village');
     return stats;
+  }
+
+  // ---------------------------------------------------------------- park --
+  // (2026-10-19, owner: "remove the castle for now and put a park in its place") a hedged square
+  // on the castle's block (half side PARK_H): gravel cross walks from four hedge gates (the south
+  // one under a stone arch with the name board, where the road from the plaza comes in) to a gravel
+  // ring round a stone-rimmed pond of real water with lily pads, a bandstand in one quarter, raised
+  // flower beds in the others, grown trees (trees/tree.mjs) along the hedge and benches on the walks.
+  // Local frame: (0, 0) = the park centre, +y away from the plaza.
+  function park(CX, CY) {
+    const MB = 'PB_DefaultMicroBrick', H = PARK_H, GATE = 50, PW = 40, RW = 96, RIM = 112, R0 = 120, R1 = 176;
+    const B = (x0, y0, z0, x1, y1, z1, b) => box(CX + x0, CY + y0, z0, CX + x1, CY + y1, z1, { asset: MB, ...b });
+    const HEDGE = [[52, 104, 44], [46, 96, 40], [60, 112, 50], [56, 100, 46]];
+    const GRAVEL = [[196, 188, 170], [184, 176, 158], [204, 198, 184], [190, 184, 168]];
+    const STONE = [150, 144, 134], PALE = [206, 198, 182], CUT = [170, 162, 150];
+    const s0 = 9301;
+    // hedge: 10 thick, 30 high, in 80-unit sections of shades; gaps for the four gates
+    let hk = 0;
+    const hedgeRun = (alongX, c0, c1, a0, a1) => {
+      for (let a = a0; a < a1; a += 80, hk++) {
+        const b = Math.min(a1, a + 80), col = { color: HEDGE[Math.floor(rnd(s0, hk, 1) * HEDGE.length)] };
+        if (alongX) B(a, c0, 0, b, c1, 30, col); else B(c0, a, 0, c1, b, 30, col);
+      }
+    };
+    for (const sg of [-1, 1]) {
+      const [c0, c1] = sg > 0 ? [H - 10, H] : [-H, -H + 10];
+      for (const [a0, a1] of [[-H, -GATE - 16], [GATE + 16, H]]) hedgeRun(true, c0, c1, a0, a1);          // north / south sides
+      for (const [a0, a1] of [[-H + 10, -GATE - 16], [GATE + 16, H - 10]]) hedgeRun(false, c0, c1, a0, a1); // east / west sides
+    }
+    // gate pillars (16 square, capped) either side of every gap
+    for (const [gx, gy, alongX] of [[0, -H + 5, true], [0, H - 5, true], [-H + 5, 0, false], [H - 5, 0, false]])
+      for (const sg of [-1, 1]) {
+        const px = alongX ? gx + sg * (GATE + 8) : gx, py = alongX ? gy : gy + sg * (GATE + 8);
+        B(px - 8, py - 8, 0, px + 8, py + 8, 44, { color: CUT });
+        B(px - 10, py - 10, 44, px + 10, py + 10, 50, { color: PALE });
+      }
+    // the south gate's name board, resting on its pillar caps
+    plaque({ put, text: pick(['Ye Olde Publick Grasse', 'The Municipal Lawn of Sitting Down', 'Unofficial Duck Embassy', 'Park (Sic)'], s0, 2),
+      facing: [0, -1], x: CX, y: CY - H + 5, z: 60, w: GATE + 16, h: 10, color: [62, 92, 54],
+      style: { Font: 1, LineHeight: 3.5, Color: { R: 240, G: 226, B: 170, A: 255 } } });
+    // walks + ring + pond on a 10-unit raster, rows merged into runs (no two pieces overlap)
+    const C = 10;
+    const kindAt = (x, y) => { // cell centre -> 'water' | 'rim' | 'walk' | null
+      const r = Math.hypot(x, y);
+      if (r < RW) return 'water';
+      if (r < RIM) return 'rim';
+      if (r >= R0 && r < R1) return 'walk';
+      if (r >= R1 && (Math.abs(x) < PW || Math.abs(y) < PW) && Math.abs(x) < H - (Math.abs(y) < PW ? 0 : 10) && Math.abs(y) < H - (Math.abs(x) < PW ? 0 : 10)) return 'walk';
+      return null;
+    };
+    const ZW = { ...WATER_ZONE_TOWN, ZoneEndDistance: 6 };
+    let wk = 0;
+    for (let y = -H; y < H; y += C) {
+      let run = null;
+      const flush = xe => {
+        if (!run) return;
+        const [x0, k] = run;
+        if (k === 'water') put({ asset: MB, color: [62, 78, 86], size: [(xe - x0) / 2, C / 2, 1],
+          components: [{ type: 'Component_Internal_AttachedZone', data: ZW }] }, CX + (x0 + xe) / 2, CY + y + C / 2, 1);
+        else if (k === 'rim') { B(x0, y, 0, xe, y + C, 8, { color: STONE }); B(x0, y, 8, xe, y + C, 10, { color: PALE }); }
+        else for (let a = x0; a < xe; a += 40, wk++) B(a, y, 0, Math.min(xe, a + 40), y + C, 2, { color: GRAVEL[Math.floor(rnd(s0, wk, 3) * GRAVEL.length)] });
+        run = null;
+      };
+      for (let x = -H; x <= H; x += C) {
+        const k = x < H ? kindAt(x + C / 2, y + C / 2) : null;
+        if (run && run[1] === k) continue;
+        flush(x);
+        if (k) run = [x, k];
+      }
+    }
+    // lily pads floating on the pond (water up to z 8), a few in flower
+    for (let k = 0; k < 9; k++) {
+      const a = rnd(s0, k, 4) * Math.PI * 2, r = 24 + rnd(s0, k, 5) * 52;
+      const x = Math.round((Math.cos(a) * r) / 2) * 2, y = Math.round((Math.sin(a) * r) / 2) * 2, w = rnd(s0, k, 6) < 0.5 ? 6 : 8;
+      if ([[x - w, y - w], [x + w, y + w]].some(([u, v]) => Math.hypot(u, v) > RW - 4)) continue;
+      if (!free(CX + x - w, CY + y - w, 8, CX + x + w, CY + y + w, 12)) continue;
+      B(x - w, y - w, 8, x + w, y + w, 10, { color: [70, 132, 58] });
+      if (rnd(s0, k, 7) < 0.4) B(x - 2, y - 2, 10, x + 2, y + 2, 12, { color: [240, 170, 200] });
+    }
+    // the bandstand in the north-east quarter: stone plinth, white posts, a stepped red roof, a lantern finial
+    {
+      const gx = 280, gy = 280, P = 60;
+      B(gx - P - 6, gy - P - 6, 0, gx + P + 6, gy + P + 6, 4, { color: CUT });
+      B(gx - P, gy - P, 4, gx + P, gy + P, 8, { color: PALE });
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) B(gx + sx * (P - 8) - 4, gy + sy * (P - 8) - 4, 8, gx + sx * (P - 8) + 4, gy + sy * (P - 8) + 4, 72, { color: [244, 242, 236] });
+      B(gx - P, gy - P, 72, gx + P, gy + P, 76, { color: [244, 242, 236] });
+      for (let t = 0, w = P + 8; w > 6; t++, w -= 10) B(gx - w, gy - w, 76 + t * 6, gx + w, gy + w, 82 + t * 6, { color: t & 1 ? [150, 46, 40] : [170, 56, 48] });
+      B(gx - 3, gy - 3, 76 + 7 * 6, gx + 3, gy + 3, 76 + 7 * 6 + 8, GLOW([255, 210, 130], 4));
+      count('park: bandstand');
+    }
+    // raised flower beds in the other three quarters: stone kerb, soil, rows of leaves with blooms
+    const BLOOM = [[220, 60, 70], [250, 200, 60], [180, 90, 200], [250, 140, 170], [250, 250, 240], [240, 120, 40]];
+    for (const [sx, sy] of [[-1, 1], [-1, -1], [1, -1]]) {
+      const bx0 = sx > 0 ? 200 : -360, by0 = sy > 0 ? 200 : -360, bw = 160, bh = 160;
+      B(bx0, by0, 0, bx0 + bw, by0 + bh, 4, { color: STONE });
+      B(bx0 + 4, by0 + 4, 4, bx0 + bw - 4, by0 + bh - 4, 6, { color: [96, 70, 48] });
+      for (const [e0, e1, f0, f1] of [[0, bw, 0, 4], [0, bw, bh - 4, bh]]) B(bx0 + e0, by0 + f0, 4, bx0 + e1, by0 + f1, 10, { color: CUT });
+      for (const [e0, e1] of [[0, 4], [bw - 4, bw]]) B(bx0 + e0, by0 + 4, 4, bx0 + e1, by0 + bh - 4, 10, { color: CUT });
+      const col = (sx + 1) * 2 + (sy + 1);
+      for (let i = 0, n = 0; bx0 + 14 + i * 14 + 8 <= bx0 + bw - 8; i++)
+        for (let j = 0; by0 + 14 + j * 14 + 8 <= by0 + bh - 8; j++, n++) {
+          const x = bx0 + 12 + i * 14, y = by0 + 12 + j * 14;
+          B(x, y, 6, x + 8, y + 8, 10, { color: [62, 118, 52] });
+          B(x + 2, y + 2, 10, x + 6, y + 6, 14, { color: BLOOM[(col + Math.floor(i / 3)) % BLOOM.length] });
+        }
+      count('park: flower bed');
+    }
+    // benches beside the walks, facing them
+    const bench = (x, y, fx, fy) => {
+      const ux = -fy, uy = fx;
+      const at = (a, b) => [x + a * ux + b * fx, y + a * uy + b * fy];
+      const bx = (a0, b0, z0, a1, b1, z1, br) => { const [p, q] = at(a0, b0), [r, t] = at(a1, b1); B(Math.min(p, r), Math.min(q, t), z0, Math.max(p, r), Math.max(q, t), z1, br); };
+      for (const a of [-1, 1]) bx(a * 30, -8, 0, a * 24, 10, 14, { color: CUT });
+      for (const [b0, b1] of [[-8, -2], [0, 6], [8, 10]]) bx(-30, b0, 14, 30, b1, 18, { color: PALETTE.timber[1] });
+      for (const a of [-1, 1]) bx(a * 30, -12, 0, a * 24, -8, 40, { color: PALETTE.timber[0] });
+      for (const z of [22, 32]) bx(-24, -12, z, 24, -8, z + 6, { color: PALETTE.timber[1] });
+      count('park: bench');
+    };
+    for (const d of [1, -1]) for (const along of [260, 380]) {
+      if (along === 260 && d === 1) continue; // the bandstand's corner
+      bench(PW + 22, d * along, -1, 0);
+      bench(d * along, -(PW + 22), 0, 1);
+    }
+    bench(-(PW + 22), 260, 1, 0); bench(-260, PW + 22, 0, -1); bench(260, -(PW + 22), 0, 1);
+    // grown trees along the hedge, clear of the walks; a tree goes in whole or not at all
+    const KINDS = ['oak', 'cherry', 'birch', 'autumn', 'oak', 'cherry'];
+    let tk = 0;
+    for (const [tx, ty] of [[-380, 380], [-380, 160], [-160, 380], [380, -380], [380, -160], [160, -380], [-380, -380], [-160, -390], [-390, -160], [400, 400], [140, 400], [400, 140]]) {
+      const kind = KINDS[tk % KINDS.length], bricks = buildTree(kind, s0 + tk * 13, 0.8); tk++;
+      const at = b => [CX + tx + b.position[0], CY + ty + b.position[1], b.position[2]];
+      if (!bricks.every(b => { const [x, y, z] = at(b); return free(x - b.size[0], y - b.size[1], z - b.size[2], x + b.size[0], y + b.size[1], z + b.size[2]); })) { count('park: tree skipped'); continue; }
+      for (const b of bricks) { const [x, y, z] = at(b); put(b, x, y, z); }
+      stats.trees++; count('park: tree');
+    }
+    count('park');
   }
 
   // ------------------------------------------------------- plaza decor --
@@ -2995,8 +3148,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   };
   // landmarks
   const [CX, CY] = plan.castle, [HX, HY] = plan.church;
-  onSite([CX - 1, CY - 1, CX + 1, CY + 1], () => castle(CX, CY));
-  taken.push([CX - 540, CY - 520, CX + 540, CY + 520]);
+  onSite([CX - 1, CY - 1, CX + 1, CY + 1], () => park(CX, CY)); // the castle (castle()) is out for now (owner 2026-10-19)
+  taken.push([CX - PARK_H - 20, CY - PARK_H - 20, CX + PARK_H + 20, CY + PARK_H + 20]);
   onSite([HX - 1, HY - 1, HX + 1, HY + 1], () => church(HX, HY));
   taken.push([HX - 640, HY - 560, HX + 280, HY + 380]);
   onSite([-541, -201, -539, -199], () => TYPES.bank(-540, -200, 1, 0, 7001));
@@ -3023,13 +3176,20 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (r < 1000) return u < 0.5 ? 'shop' : 'townhouse';
     return u < 0.1 ? 'garden' : u < 0.2 ? 'shop' : u < 0.6 ? 'townhouse' : 'cottage';
   };
-  // (2026-10-19) the faire lane: shops are faire booths, homes faire houses / cottages; smith houses stay
+  // (2026-10-19) the faire lane: shops are faire booths, homes faire houses / cottages
+  // (2026-10-19, owner: "remove old houses and only keep the ren faire houses and the residential houses"): smith houses too
   const townType = (x, y, s) => {
     const t = townType0(x, y, s);
     if (t === 'shop') return 'faireBooth';
-    if ((t === 'townhouse' || t === 'cottage') && !isSmith(rnd, s)) return t === 'townhouse' ? (rnd(s, 52) < 0.5 ? 'faireBooth' : 'faireHouse') : 'faireCottage';
+    if (t === 'townhouse' || t === 'cottage') return t === 'townhouse' ? (rnd(s, 52) < 0.5 ? 'faireBooth' : 'faireHouse') : 'faireCottage';
     return t;
   };
+  // the residential houses (split-levels; the Dutch Colonial's 76-deep porch ceiling is off the stud grid in town
+  // facings, so it stays on its roadside lots) take big lots along the main roads out past the faire
+  // lanes first, then the faire rows fill the rest
+  housesAlong(plan.main.slice(0, 4), { step: 140, edge: plan.edgeR, seed: 76, margin: 20,
+    pickType: (x, y, s) => (Math.hypot(x, y) < 1100 || rnd(s, 54) < 0.3 ? null : 'townSplit') });
+  infill({ step: 60, edge: plan.edgeR, seed: 75, reach: 900, margin: 20, pickType: (x, y, s) => (Math.hypot(x, y) < 1000 ? null : 'townSplit') });
   housesAlong(plan.paths, { step: 60, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType }); // step 80 -> 60 (2026-10-13: bigger houses, same count)
   infill({ step: 80, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
   // (2026-10-19) faire lane: a second, tighter pass of small booths along every lane fills the frontage

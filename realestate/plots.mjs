@@ -66,6 +66,10 @@ function flatAt(cx, cy, h) {
 }
 
 const plots = [];
+// --keep PLOTS.json --ids 4,5,6 (2026-10-19, town rebuild: only some lawns moved): those lots stay where they are
+// (no checks), first in the list; the search fills up to --n round them
+if (opt('keep', null)) { const ids = String(opt('ids', '')).split(',').map(Number);
+  for (const p of JSON.parse(readFileSync(opt('keep'), 'utf8'))) if (ids.includes(p.id)) plots.push({ x: p.x, y: p.y, g: p.ground, half: p.half, W: p.studs + 6 }); }
 for (const W of SIZES) {
   if (plots.length >= N_PLOTS) break;
   const H = W * 5, R = H + MARGIN;
