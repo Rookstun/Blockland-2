@@ -2856,6 +2856,7 @@ const PAVE_BED = mat([128, 122, 112]);
       return out;
     };
     // medallions first (squares), then lane diamonds clear of them
+    const medal = new Set();
     const med = pickSpaced([...cells].filter(k => D(k) >= 9 && ridge(k)).map(k => [...k.split(',').map(Number), D(k)]), 30);
     for (const [ca, cb, v] of med) {
       const R = Math.min(v - 3, 10);
@@ -2863,6 +2864,7 @@ const PAVE_BED = mat([128, 122, 112]);
         const k = a + ',' + b; if (!cells.has(k)) continue;
         const x = a - ca, y = b - cb, r = Math.hypot(x, y), t = Math.atan2(y, x);
         if (r > R + 0.3) continue;
+        medal.add(k);
         const star = r < (R - 1.6) * (0.35 + 0.65 * Math.pow(Math.abs(Math.cos(4 * t)), 6));
         cls.set(k, r <= 1.2 ? 'hub' : r >= R - 0.9 ? 'band' : r >= R - 1.9 ? 'kerb' : star ? ((Math.round(t / (Math.PI / 4)) & 1) ? 'cream' : 'band') : 'field');
       }
@@ -2874,8 +2876,13 @@ const PAVE_BED = mat([128, 122, 112]);
         const m = Math.abs(x) + Math.abs(y), k = (ca + x) + ',' + (cb + y);
         if (m <= 2 && cells.has(k) && D(k) >= 4) cls.set(k, m === 0 ? 'hub' : m === 1 ? 'cream' : 'band');
       }
+    cls.medal = medal;
     return cls;
   };
+  // (2026-10-19, owner photos of a Ren faire: "make the spawn town look like this") the town's lanes are
+  // gravel: 1-2 stud tiles in five greys, no kerb or bands; the plaza medallions stay
+  const GRAVEL = { pattern: 'tiles', asset: 'PB_DefaultTile', maxSide: 2, colors: [[168, 162, 150], [152, 148, 140], [182, 176, 164], [140, 136, 128], [160, 150, 136]] };
+  const inTownStud = k => { const [a, b] = k.split(','); return !!townKind[Math.floor(+a / 4) * N + Math.floor(+b / 4)]; };
   const INLAY = {
     kerb: [[104, 100, 96], [114, 110, 104], [96, 94, 92]],
     band: [[150, 74, 56], [138, 68, 52], [162, 82, 60]],
@@ -2887,8 +2894,9 @@ const PAVE_BED = mat([128, 122, 112]);
     size: [(r.x1 - r.x0) * 5, (r.y1 - r.y0) * 5, 2], color: r.brick.color,
   });
   for (const [top, cells] of paved) {
-    const cls = inlay(cells), field = new Set(), parts = new Map();
-    for (const k of cells) { const c = cls.get(k); if (!c || c === 'field') field.add(k); else (parts.get(c) ?? parts.set(c, new Set()).get(c)).add(k); }
+    const cls = inlay(cells), field = new Set(), parts = new Map(), gravel = new Set();
+    for (const k of cells) { const c = cls.get(k); if (!cls.medal.has(k) && inTownStud(k)) gravel.add(k); else if (!c || c === 'field') field.add(k); else (parts.get(c) ?? parts.set(c, new Set()).get(c)).add(k); }
+    for (const r of floorPieces(gravel, GRAVEL, { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 94) * C.length)] })) emit(top, r);
     for (const r of floorPieces(field, 'paving', { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 91) * C.length)] })) emit(top, r);
     for (const [c, set] of parts)
       for (const r of floorPieces(set, { pattern: 'tiles', asset: 'PB_DefaultTile', maxSide: 2, colors: INLAY[c] }, { pick: (r, C) => C[Math.floor(hash(r.x0, r.y0, 92) * C.length)] })) emit(top, r);

@@ -20,6 +20,7 @@ import { shapedHouse } from './shapedhouse.mjs';
 import { splitLevel } from './splitlevel.mjs';
 import { dutchColonial } from './dutchcolonial.mjs';
 import { georgian } from './georgian.mjs';
+import { faire } from './faire.mjs';
 import { turnBrick } from './orient.mjs';
 import { castleStone, VX as CVX, VZ as CVZ } from './castle.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
@@ -391,6 +392,11 @@ const dutchCache = new Map();
 const dutchOf = (s, mirror) => { const k = s + ',' + mirror; if (!dutchCache.has(k)) dutchCache.set(k, dutchColonial({ seed: s, mirror })); return dutchCache.get(k); };
 const georgianCache = new Map();
 const georgianOf = (s, mirror) => { const k = s + ',' + mirror; if (!georgianCache.has(k)) georgianCache.set(k, georgian({ seed: s, mirror })); return georgianCache.get(k); };
+// Ren-faire lane (owner photos 2026-10-19: "make the spawn town look like this"): faire.mjs shops,
+// houses and cottages replace the town's shapedhouse homes and wallgen shops (smith houses stay)
+const faireCache = new Map();
+const faireOf = (s, fkind, small) => { const k = s + ',' + fkind + ',' + small; if (!faireCache.has(k)) faireCache.set(k, faire({ seed: s, kind: fkind, small })); return faireCache.get(k); };
+const FAIRE_KIND = { faireBooth: 'booth', faireHouse: 'house', faireCottage: 'cottage' };
 const SMALL_MAX = { cottage: [32, 20, 8], townhouse: [36, 24, 12] }; // W, D, E of the old small lots
 function shapedSpec0(type, rnd, s, small = false) {
   // split-level ranch (owner photo 2026-10-17, splitlevel.mjs): too wide for town lots, so it
@@ -410,6 +416,10 @@ function shapedSpec0(type, rnd, s, small = false) {
   if (type === 'georgian') {
     const mirror = rnd(s, 97) < 0.5, h = georgianOf(s, mirror);
     return { builder: 'georgian', mirror, shape: 'rect', W: h.W - GROW, D: h.D - GROW, E: 0, storeys: 2, kind: 'georgian estate' };
+  }
+  if (FAIRE_KIND[type]) {
+    const fkind = FAIRE_KIND[type], h = faireOf(s, fkind, small);
+    return { builder: 'faire', fkind, small, shape: 'rect', W: h.W - GROW, D: h.D - GROW, E: 0, storeys: h.storeys, kind: 'faire ' + fkind };
   }
   const pool = HOUSE_TYPES[type] ?? HOUSE_TYPES.townhouse;
   const tot = pool.reduce((a, h) => a + h.w, 0);
@@ -1395,7 +1405,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
 
   /** a shapedhouse.mjs house centred (cx, cy), its front door facing (fx, fy) */
   function shapedTown(cx, cy, fx, fy, sp, s) {
-    const h = sp.builder === 'splitlevel' ? splitLevelOf(s, sp.mirror) : sp.builder === 'dutchcolonial' ? dutchOf(s, sp.mirror) : sp.builder === 'georgian' ? georgianOf(s, sp.mirror) : shapedHouse({ ...sp, seed: s });
+    const h = sp.builder === 'faire' ? faireOf(s, sp.fkind, sp.small) : sp.builder === 'splitlevel' ? splitLevelOf(s, sp.mirror) : sp.builder === 'dutchcolonial' ? dutchOf(s, sp.mirror) : sp.builder === 'georgian' ? georgianOf(s, sp.mirror) : shapedHouse({ ...sp, seed: s });
     const lx = ((sp.W + 1) * 10) / 2, ly = shapedDepth(sp) / 2;
     // local front faces -y; quarter turns that bring it round to (fx, fy)
     const r = fy < 0 ? 0 : fx > 0 ? 1 : fy > 0 ? 2 : 3;
@@ -1606,6 +1616,12 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     }
     return { frontPos: [cx + fx * (fx ? ex : 0), cy + fy * (fy ? ey : 0)] };
   }
+  function faireTown(type, cx, cy, fx, fy, s, small) {
+    const sp = shapedSpec(type, rnd, s, small), h = shapedTown(cx, cy, fx, fy, sp, s);
+    // booths: a shop stand on the boardwalk, button to the street
+    if (h.stand) { const [px, py] = h.at(h.stand[0], h.stand[1]); stats.houseShops.push({ at: [px, py, h.stand[2] + (zCtx ?? 0)], orient: h.frontOrient, tier: pick(shopTiers, s, 78) }); }
+    count(sp.kind); count('faire: ' + h.scheme + ' ' + h.roofType + ' ' + h.storeys);
+  }
   const TYPES = {
     cottage(cx, cy, fx, fy, s, small) {
       if (isSmith(rnd, s)) wallHouse(cx, cy, fx, fy, 32 + GROW, 24 + GROW, 1, s, {
@@ -1648,6 +1664,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       shapedTown(cx, cy, fx, fy, sp, s);
       count('dutch colonial');
     },
+    faireBooth(cx, cy, fx, fy, s, small) { faireTown('faireBooth', cx, cy, fx, fy, s, small); },
+    faireHouse(cx, cy, fx, fy, s, small) { faireTown('faireHouse', cx, cy, fx, fy, s, small); },
+    faireCottage(cx, cy, fx, fy, s, small) { faireTown('faireCottage', cx, cy, fx, fy, s, small); },
     georgian(cx, cy, fx, fy, s) {
       const sp = shapedSpec('georgian', rnd, s);
       shapedTown(cx, cy, fx, fy, sp, s);
@@ -2267,6 +2286,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (type === 'casino') return [600, 480];
     if (type === 'gunstore') return [380, 330];
     if (type === 'western') return [340 + GROW * 10, 330 + GROW * 10];
+    if (FAIRE_KIND[type]) { const sp = shapedSpec(type, rnd, s, small); return [(sp.W + 1) * 10 + 20, shapedDepth(sp) + 20]; }
     if (isSmith(rnd, s)) return type === 'cottage' ? [340 + GROW * 10, 290 + GROW * 10] : [380 + GROW * 10, 330 + GROW * 10];
     const sp = shapedSpec(type, rnd, s, small);
     return [(sp.W + 1) * 10 + 20, shapedDepth(sp) + 20];
@@ -2657,8 +2677,11 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // in an L round it facing in; each on its own spot's ground level
     const CORNERS = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
     // ---- benches
+    // the bank (placed later at -540,-200 facing +x) stands its portico columns inside the
+    // square's west edge: no bench there
+    const LATER = [[-440, -350, -380, -50]];
     for (const [sx, sy] of CORNERS) {
-      for (const [cx, cy, fx, fy] of [[300 * sx, 400 * sy, 0, -sy], [400 * sx, 300 * sy, -sx, 0]]) onSite([cx - 42, cy - 42, cx + 42, cy + 42], () => {
+      for (const [cx, cy, fx, fy] of [[300 * sx, 400 * sy, 0, -sy], [400 * sx, 300 * sy, -sx, 0]]) if (!LATER.some(([a, b, c, d]) => cx + 42 > a && cx - 42 < c && cy + 42 > b && cy - 42 < d)) onSite([cx - 42, cy - 42, cx + 42, cy + 42], () => {
         const { bx } = frame(cx, cy, fx, fy);
         for (const a of [-1, 1]) bx(a * 40, -10, 0, a * 34, 12, 16, { color: CUT });               // stone ends
         for (const [b0, b1] of [[-10, -4], [-2, 4], [6, 12]]) bx(-40, b0, 16, 40, b1, 20, { color: PALETTE.timber[1] }); // seat planks
@@ -2984,13 +3007,23 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // houses along every path: shops near the plaza, homes further out
   // (2026-10-10, owner: "make the houses more dense"): step 160 -> 80, margin 40 -> 30,
   // then back lots between the rows (infill), smaller houses there
-  const townType = (x, y, s) => {
+  const townType0 = (x, y, s) => {
     const r = Math.hypot(x, y), u = rnd(s, 51);
     if (r < 1000) return u < 0.5 ? 'shop' : 'townhouse';
     return u < 0.1 ? 'garden' : u < 0.2 ? 'shop' : u < 0.6 ? 'townhouse' : 'cottage';
   };
+  // (2026-10-19) the faire lane: shops are faire booths, homes faire houses / cottages; smith houses stay
+  const townType = (x, y, s) => {
+    const t = townType0(x, y, s);
+    if (t === 'shop') return 'faireBooth';
+    if ((t === 'townhouse' || t === 'cottage') && !isSmith(rnd, s)) return t === 'townhouse' ? (rnd(s, 52) < 0.5 ? 'faireBooth' : 'faireHouse') : 'faireCottage';
+    return t;
+  };
   housesAlong(plan.paths, { step: 60, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType }); // step 80 -> 60 (2026-10-13: bigger houses, same count)
   infill({ step: 80, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
+  // (2026-10-19) faire lane: a second, tighter pass of small booths along every lane fills the frontage
+  // left between the houses and stalls, so the lanes read as rows of shops (owner's Ren faire photos)
+  housesAlong(plan.paths, { step: 40, small: true, edge: plan.edgeR, seed: 79, margin: 10, pickType: (x, y, s) => (rnd(s, 53) < 0.8 ? 'faireBooth' : 'faireHouse') });
   propsAlong(plan.paths, 120, plan.edgeR, 503);
   trees(26, 7100, (x, y) => Math.hypot(x, y) < plan.edgeR(x, y) - 120);
   return stats;
