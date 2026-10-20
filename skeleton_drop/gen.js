@@ -39,11 +39,15 @@ const ENEMY = {
   // the homeless war (npctalk/war.json hp x100): normal loot
   'fire homeless': [90, 'Fire Homeless'], 'water homeless': [95, 'Water Homeless'],
 };
+// (2026-10-19) balance.json (bridge/balance, the /reload plugin) overrides enemy health by name: BALANCE=<file>
+const BAL = process.env.BALANCE ? JSON.parse(require('fs').readFileSync(process.env.BALANCE, 'utf8')) : null;
+if (BAL) for (const v of Object.values(ENEMY)) { const h = BAL.enemies?.[v[1]]?.health; if (h != null) v[0] = Math.round(h * 100); }
 const QUEST_HP = Object.entries(ENEMY).filter(([k]) => k.startsWith('q ')).map(([, [hp]]) => hp);
 {
   const seen = {};
   for (const [k, [hp]] of Object.entries(ENEMY)) { if (seen[hp]) throw new Error(`max health ${hp} used by ${seen[hp]} and ${k}`); seen[hp] = k; }
 }
+if (process.env.GEN_CHECK_ONLY) process.exit(0);
 const DEFAULT = [3, 70, 65, 30, 12];
 const COPPER = [2, 4];   // copper coins per copper roll (owner 2026-10-10: more coins)
 const COIN_LIFE = 180;   // seconds a dropped coin lies there (was forever: with 2-4x the coins the spawn limits filled up)
@@ -166,6 +170,7 @@ const SWORDS = [
   ['Adamant', 8000, 1.5, [42, 96, 56]],
   ['Rune', 20000, 2.0, [38, 150, 178]],
 ];
+if (BAL) for (const w of SWORDS) { const d = BAL.weapons?.[`${w[0]} Sword`]?.damage; if (d != null) w[2] = d; }
 // keep the shop sword across leave/rejoin: a coin drop of exactly a sword's
 // price (the shops charge by IncrementLeaderboardValue coins -price) records
 // "SwordTier"; a spawn after 30 s unseen (a join) gives that sword back.
