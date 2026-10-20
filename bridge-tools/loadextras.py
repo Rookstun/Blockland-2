@@ -57,9 +57,7 @@ CONTROLLERS = [("skeleton_drop", -8260, -7400, 8000), ("speakspell", -8200, -740
                # Wordle bulletin board (wordle/gen.mjs, 2026-10-15): plaza lawn NE of the fountain, faces -y; ground z 624 in out_delta
                ("wordle", 560, 250, 624),
                # hitsplats (hitsplat/build.mjs, 2026-10-18): damage number over every hit
-               ("hitsplat", -7800, -12000, 8000),
-               # real estate build-permission chip (realestate/permchip.mjs, 2026-10-19), driven by the realestate plugin
-               ("plotperm", -5000, -12000, 8000)]
+               ("hitsplat", -7800, -12000, 8000)]
 res = job([load(p, x, y, z) for p, x, y, z in CONTROLLERS])
 for (p, *_), r in zip(CONTROLLERS, res):
     print(f"controller {p}:", "clean" if not any(w in json.dumps(r) for w in ("not found", "overlapping", "Missing brick")) else r)
@@ -80,3 +78,9 @@ if os.path.exists(RE + "pads.json"):
         job(clr[i:i + 150])
     res = job(json.load(open(RE + "pads.json"))["ops"])
     print("realestate lots:", "clean" if "overlapping" not in json.dumps(res) else "OVERLAPS (check with re_ver.mjs)")
+    # each lot's zone projector + FOR SALE sign + its wires (realestate/lotchip.mjs, 2026-10-20: all in wires,
+    # no plugin): Prefabs/lot_<id>.brz loaded at the lot centre on its ground; owners = realestate/site/owners.json
+    # at build time (rebuild it from the log's 'realestate|bought|' lines before a regen, or buyers lose their lots)
+    if os.path.exists(RE + "lots.json"):
+        res = job([load("lot_%d" % l["id"], *l["at"]) for l in json.load(open(RE + "lots.json"))])
+        print("realestate lot chips:", "clean" if not any(w in json.dumps(res) for w in ("not found", "overlapping", "Missing brick")) else res)

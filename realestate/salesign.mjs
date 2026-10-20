@@ -16,16 +16,25 @@ const TEXT = {
 };
 
 /** font = index of SIGN_FONT in the load's externalAssets */
-export function saleSign(id, x, y, g, [fx, fy], font, { studs, price } = {}) {
+/** the board text: for sale (owner's text + the lot's facts), or sold to `owner` */
+export function signText(id, studs, price, owner) {
+  const facts = studs ? `\r\nLot ${id} · ${studs}x${studs} studs` : '';
+  if (owner != null) return `<color="ff3333">SOLD</><size="7">\r\n<font="GlacialIndifference">to ${owner}${facts}</></>`;
+  return `<color="ff3333">For Sale</><size="7">\r\n<font="GlacialIndifference">by owner${facts}${studs ? `\r\n<color="1a7a1a">${price} coins</>` : ''}</></>`;
+}
+
+// button: true = the board is a wire button (Component_Button, lotchip.mjs) instead of an Omegga Interact
+export function saleSign(id, x, y, g, [fx, fy], font, { studs, price, text, button } = {}) {
   // owner's text + the lot's facts (owner: "put all that text on the sign like lot 3 and cost and studs")
-  const facts = studs ? `\r\nLot ${id} · ${studs}x${studs} studs\r\n<color="1a7a1a">${price} coins</>` : '';
-  const text = `<color="ff3333">For Sale</><size="7">\r\n<font="GlacialIndifference">by owner${facts}</></>`;
-  const interact = { type: 'Component_Interact', data: { InteractSound: null, Message: '', ConsoleTag: `event:plot:${id}`,
-    bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: `Buy Lot ${id}` } };
+  text ??= signText(id, studs, price);
+  const interact = button
+    ? { type: 'Component_Button', data: { bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: `Lot ${id}` } }
+    : { type: 'Component_Interact', data: { InteractSound: null, Message: '', ConsoleTag: `event:plot:${id}`,
+      bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: `Buy Lot ${id}` } };
   const M = 'PB_DefaultMicroBrick';
   // local frame = the captured sign: text toward +x, board hanging on the +y side of the post
   const local = [
-    { asset: M, size: [3, 4, 27], position: [0, 0, 27], direction: 4, rotation: 0, color: [96, 70, 46], components: [interact] },
+    { asset: M, size: [3, 4, 27], position: [0, 0, 27], direction: 4, rotation: 0, color: [96, 70, 46], components: button ? [] : [interact] },
     { asset: M, size: [15, 1, 1], position: [0, 19, 43], direction: 0, rotation: 1, color: IRON },
     { asset: M, size: [1, 1, 1], position: [0, 9, 41], direction: 4, rotation: 0, color: IRON },
     { asset: M, size: [1, 1, 1], position: [0, 29, 41], direction: 4, rotation: 0, color: IRON },

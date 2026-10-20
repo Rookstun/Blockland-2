@@ -16,7 +16,7 @@
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { orientFor } from '../mapgen/orient.mjs';
 import { EXTERNAL_ASSETS } from '../mapgen/ruins.mjs';
-import { saleSign, SIGN_FONT } from './salesign.mjs';
+import { SIGN_FONT } from './salesign.mjs';
 const ASSETS = [...EXTERNAL_ASSETS, SIGN_FONT];
 
 const args = process.argv.slice(2);
@@ -105,10 +105,8 @@ const out = [];
 plots.forEach((p, n) => {
   const id = n + 1, { x, y, g, half: I } = p;
   const S = g + 34, P = 10; // P = projector inset (micro ring) from the interior edge
-  // projector + ring (z g..g+4)
-  bricks.push({ asset: 'BP_ZoneProjector', size: [I - P, I - P, 2], position: [x, y, g + 2], color: [255, 255, 255],
-    visibility: false, collision: false,
-    components: [{ type: 'Component_Internal_AttachedZone', data: { ZoneStartDistance: 0, ZoneEndDistance: DEPTH + ZONE_H, bIsBuildingZone: true, bIsLooseZone: false, bIsShareZone: false, bWater: false } }] });
+  // projector ring (z g..g+4); the projector itself = lotchip.mjs
+  // the BP_ZoneProjector (build zone) lives in the lot's wire prefab (realestate/lotchip.mjs): the chip wires its ZoneRef
   micro(x - I, y - I, g, x + I, y - I + P, g + 4, DIRT); micro(x - I, y + I - P, g, x + I, y + I, g + 4, DIRT);
   micro(x - I, y - I + P, g, x - I + P, y + I - P, g + 4, DIRT); micro(x + I - P, y - I + P, g, x + I, y + I - P, g + 4, DIRT);
   // fill + grass (split into <= 400-unit slabs)
@@ -125,7 +123,7 @@ plots.forEach((p, n) => {
   // FOR SALE sign outside the bank, on the side facing the plaza
   const fx = Math.abs(SPAWN[0] - x) > Math.abs(SPAWN[1] - y) ? Math.sign(SPAWN[0] - x) : 0, fy = fx ? 0 : Math.sign(SPAWN[1] - y);
   const ox = x + fx * (I + B + 10) + (fy ? -I + 40 : 0), oy = y + fy * (I + B + 10) + (fx ? I - 40 : 0);
-  bricks.push(...saleSign(id, ox, oy, g, [fx, fy], ASSETS.length - 1, { studs: (2 * I) / 10, price: Math.round(((2 * I) / 10) ** 2 * 2 / 100) * 100 })); // the owner's FOR SALE sign, click = buy (realestate/salesign.mjs)
+  // the FOR SALE sign at (ox, oy) is in the lot's wire prefab too (lotchip.mjs: button board, owner text)
   // lawn decoration (tufts, clover, daisies, pebbles: collision off) touching the pad or the post:
   // one ClearRegion per brick, its own box + 1 (a box over the pad would also take walkway flags)
   for (const d of deco) {
