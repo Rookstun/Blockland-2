@@ -79,7 +79,10 @@ export const newState = L => ({ shown: Array.from({ length: L.tw * L.th }, () =>
  */
 // refresh = tiles a frame re-sent although unchanged, longest-unsent first: a lost packet or a slow drift
 // under thresh heals within T / refresh frames (owner 2026-10-18: tiles "left behind").
-export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, perSec = 20, step = 8, refresh = 0 } = {}) {
+// full = session frames that redraw every tile (the first packets can arrive before a just-loaded
+// receiver is live: 2026-10-20 the top 9 rows = one lost 288-tile packet stayed black). refresh slots are
+// reserved even on busy frames, so stale tiles always heal (T / refresh frames for a whole pass).
+export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, perSec = 20, step = 8, refresh = 0, full = [0] } = {}) {
   const packets = [], due = [];
   const q = v => Math.min(255, Math.round(v / step) * step);
   const T = L.tw * L.th, slots = Math.max(1, Math.floor(perSec / fps));
@@ -98,9 +101,10 @@ export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, per
       if (d > thresh) cand.push([d, t]);
     }
     cand.sort((a, b) => b[0] - a[0]);
-    const take = state.frame === 0 ? cand.length : Math.min(slots * per, cand.length);
-    const send = cand.slice(0, take).map(c => c[1]);
-    if (refresh && state.frame > 0) {
+    const all = full.includes(state.frame);
+    const take = all ? cand.length : Math.min(slots * per - (refresh && state.frame > 0 ? Math.min(refresh, slots * per) : 0), cand.length);
+    const send = all ? [...Array(T).keys()] : cand.slice(0, take).map(c => c[1]);
+    if (refresh && !all) {
       state.sent ??= new Array(T).fill(0);
       const inSend = new Set(send);
       const room = Math.min(refresh, slots * per - send.length);
@@ -154,20 +158,21 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
   const out = c => (c.PORTS.bOutput ? 'bOutput' : 'Output');
   const E = entryLen(L);
   const ev = gate(C.Event_CustomGlobal, { EventName: event, bIsObjectEvent: false, DataOut1: str(''), DataOut2: num(0), ...EVENT_REST }, { size: EVENT_SIZE });
-  const pkt = gate(C.Var, { Value: str('') });
-  const setP = gate(C.Exec_Var_Set); wire(pkt, 'VarRef', setP, 'VarRef'); wire(ev, 'DataOut1', setP, 'Value'); wire(ev, 'ExecOut', setP, 'Exec');
+  // the packet straight off the event: a Var Set then read in the same exec chain gave the PREVIOUS
+  // packet (2026-10-20 debug: packet 0 applied 0 entries = the top 9 panel rows never drawn)
+  const PKT = 'DataOut1';
   const shell = gate(C.Microchip_CountFor, { Count: 0, FirstIndex: 0, Step: 1, bRunAcrossTicks: false });
-  const len = gate(C.Expr_String_Length); wire(pkt, 'Value', len, 'Input');
+  const len = gate(C.Expr_String_Length); wire(ev, PKT, len, 'Input');
   const dv = gate(C.Expr_MathDivide, { InputB: num(E) }); wire(len, 'Output', dv, 'InputA');
   const fl = gate(C.Expr_Floor); wire(dv, 'Output', fl, 'Input'); wire(fl, 'Output', shell, 'Count');
-  wire(setP, 'ExecOut', shell, 'Exec');
+  wire(ev, 'ExecOut', shell, 'Exec');
   const grid = w.addBrickGrid({ type: 'Entity_MicrochipDynamicBrickGrid', location: { X: 0, Y: 0, Z: 40 },
     data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 14, Y: 14, Z: 2 } } });
   w.registerMicrochipLink(shell.h, grid);
   let j = 0;
   const ig = (c, data = {}) => { const h = w.addBrick({ asset: c.BRICK, position: [(j % 10) * 40, Math.floor(j / 10) * 40, 2], color: [200, 200, 200], owner_index: O, components: [{ type: c.NAME, data }] }, grid); j++; return { h, c }; };
   const iop = (c, a, bb, data = {}) => { const x = ig(c, data); if (a) wire(...a, x, c.PORTS.InputA ? 'InputA' : 'Input'); if (bb) wire(...bb, x, 'InputB'); return [x, out(c)]; };
-  const din = ig(C.MicrochipInput, { PortLabel: 'pkt', PortOrder: 0 }); wire(pkt, 'Value', din, 'RER_Input');
+  const din = ig(C.MicrochipInput, { PortLabel: 'pkt', PortOrder: 0 }); wire(ev, PKT, din, 'RER_Input');
   const data = [din, 'RER_Output'];
   const entry = ig(C.CallableEntry_CountFor);
   const base = iop(C.Expr_MathMultiply, [entry, 'Index'], null, { InputB: num(E) });

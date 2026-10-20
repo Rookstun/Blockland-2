@@ -210,7 +210,7 @@ const run = (cmd, args, timeout = 120_000, maxBuffer = 64 << 20) =>
     execFile(cmd, args, { timeout, maxBuffer, encoding: 'buffer' }, (err, stdout, stderr) => {
       if (!err) return resolve(stdout);
       const why = String(stderr || '').trim().split('\n').pop() || err.message;
-      reject(new Error(`${path.basename(cmd)} failed: ${why}`));
+      reject(Object.assign(new Error(`${path.basename(cmd)} failed: ${why}`), { stdout }));
     })
   );
 
@@ -498,6 +498,36 @@ module.exports = class Media {
       return alive;
     })().finally(() => { this.proxyTesting = null; });
     return this.proxyTesting;
+  }
+
+  /**
+   * FAST START (2026-10-20, owner: /stream "not loading fast"): the direct stream URLs of a link or
+   * search (yt-dlp -j, ~3.5 s) so ffmpeg can cut the first chunks straight off YouTube while the whole
+   * file downloads (an 18 min video took ~28 s before the first picture). Direct route only; null when
+   * YouTube bot-checks us or anything fails (callers then wait for download()).
+   * -> { v, a (video / audio URLs, may be equal), duration, page (the video's own link) }
+   */
+  async quickSource(link, maxMin) {
+    if (!fs.existsSync(YTDLP) || (this.directBlockedUntil && Date.now() < this.directBlockedUntil)) return null;
+    const search = /^ytsearch\d*:/.test(link);
+    const href = search ? link : await this.checkLink(link);
+    let out;
+    try {
+      out = await run(YTDLP, ['--js-runtimes', `node:${process.execPath}`, '-j', '--no-playlist', '--quiet', '--no-warnings',
+        '--match-filter', `duration <=? ${maxMin * 60}`, ...(search ? ['--max-downloads', '1'] : []),
+        // plain https AVC + m4a: a cut anywhere takes ~0.15 s (AV1 360p ~8 s a seek, webm audio mid-file ~9 s); 240p is plenty for 64x36
+        '-f', 'bv*[height<=240][vcodec^=avc1][protocol=https]+ba[ext=m4a][protocol=https]/bv*[height<=360][vcodec^=avc1][protocol=https]+ba[protocol=https]/b[height<=480][protocol=https]', href], 30_000);
+    } catch (e) {
+      out = e.stdout; // --max-downloads exits 101 with the one video printed
+      if (!out?.length) throw e;
+    }
+    const j = JSON.parse(String(out).trim().split(/\r?\n/)[0]);
+    const fmts = j.requested_formats ?? [j];
+    // byte size of each stream (bounds the ffmpeg requests, see oGridCommand cut())
+    const pick = f => f && f.url && { url: f.url, size: Number(f.filesize || /[?&]clen=(\d+)/.exec(f.url)?.[1] || f.filesize_approx) || 0 };
+    const v = pick(fmts.find(f => f.vcodec && f.vcodec !== 'none')), a = pick(fmts.find(f => f.acodec && f.acodec !== 'none'));
+    if (!v || !j.duration) return null;
+    return { v, a: a || null, duration: Number(j.duration), page: j.webpage_url || href, title: j.title };
   }
 
   async fetchMedia(link, kind, withAudio = false, maxMin = this.config['max-minutes'] ?? 10) {
@@ -1502,16 +1532,29 @@ module.exports = class Media {
       }
     };
     this.sessions.set(key, session);
-    let file;
+    let file, fileP = null;
     try {
       const pos = panel ? null : await this.playerSpot(name);
       this.whisper(name, `<color="999">${loading()}...</>`);
       const maxMin = this.config['video-max-minutes'] ?? 240;
-      file = await this.download(link, 'video', withSound, maxMin);
+      // fast start: chunks come straight off the stream URLs until the whole file is here (quickSource)
+      const t0ms = Date.now();
+      const cached = this.cache.has(`video|${withSound}|${maxMin}|${link}`);
+      const quick = cached || this.config['ogrid-fast-start'] === false ? null
+        : await this.quickSource(link, maxMin).catch(e => (console.log(`[media] ogrid quick source: ${String(e.message).slice(0, 120)}`), null));
       if (session.stopped) return;
-      const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width:format=duration', '-of', 'json', file])));
-      if (!probe.streams?.[0]?.width) throw new Error('that link has no picture');
-      const total = Number(probe.format?.duration) || maxMin * 60;
+      let total;
+      if (quick) {
+        fileP = this.download(quick.page, 'video', withSound, maxMin).then(f => (file = f), e => (console.error('[media] ogrid background download', e.message), null));
+        total = quick.duration;
+      } else {
+        file = await this.download(link, 'video', withSound, maxMin);
+        if (session.stopped) return;
+        const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width:format=duration', '-of', 'json', file])));
+        if (!probe.streams?.[0]?.width) throw new Error('that link has no picture');
+        total = Number(probe.format?.duration) || maxMin * 60;
+      }
+      console.log(`[media] ogrid ${name}: source ready in ${Date.now() - t0ms} ms (${quick ? 'stream URL' : cached ? 'cache' : 'download'})`);
       const startAt = Math.max(0, Math.min(total - 1, opt('start') || 0));
       const seconds = Math.min(total - startAt, maxMin * 60, opt('len') || Infinity);
       const chunks = Math.max(1, Math.ceil(seconds / chunkSec));
@@ -1527,24 +1570,40 @@ module.exports = class Media {
       const tgState = tiles ? this.tg.newState(L) : null; // what every tile shows (chunks build in order)
       const build = async k => {
         const t0 = startAt + k * chunkSec, dur = Math.min(chunkSec, seconds - k * chunkSec);
-        const raw = await run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), '-i', file,
-          '-vf', `fps=${fps},crop='min(iw,ih*${L.aspect})':'min(ih,iw/${L.aspect})',scale=${fw}:${fh}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30);
-        const fb = fw * fh * 3, rawFrames = [];
+        // URL cuts: YouTube throttles open-ended ranges (300 KB took 10 s, bounded 50 ms), so -end_offset
+        // bounds every request to a generous guess past the chunk's end. A stream URL that fails (expired,
+        // 403) or comes back short falls back to the downloaded file.
+        const cut = async (mk, st, ok) => {
+          if (file || !st) return mk(file ?? (await fileP), []);
+          const end = st.size ? Math.min(st.size, Math.ceil(st.size * Math.min(1, (t0 + dur) / quick.duration) * 1.05 + 2e6)) : 0;
+          try {
+            const r = await mk(st.url, end ? ['-end_offset', String(end)] : []);
+            if (ok(r)) return r;
+            console.log(`[media] ogrid URL cut ${k} came back short, waiting for the file`);
+          } catch (e) { console.log(`[media] ogrid URL cut ${k} failed (${String(e.message).slice(0, 80)}), waiting for the file`); }
+          return mk(file ?? (await fileP), []);
+        };
+        const fb = fw * fh * 3, rawFrames = [], tb = Date.now();
+        const raw = await cut((src, pre) => run('ffmpeg', ['-v', 'error', '-ss', String(t0), '-t', String(dur), ...pre, '-i', src,
+          '-vf', `fps=${fps},crop='min(iw,ih*${L.aspect})':'min(ih,iw/${L.aspect})',scale=${fw}:${fh}:flags=area`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], 300_000, 1 << 30),
+          quick?.v, r => r.length / fb >= Math.floor(dur * fps) - 2);
         for (let o = 0; o + fb <= raw.length; o += fb) rawFrames.push(raw.subarray(o, o + fb));
         if (!rawFrames.length) throw new Error('no frames decoded');
         // tiles: packets of tile updates (16 of the 20 packet slots a second, the rest lets a backlog catch up)
-        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (panel ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (panel ? this.config['stream-thresh'] ?? 32 : 28), refresh: panel ? (this.config['stream-refresh'] ?? 0) : 0, per: panel ? (this.config['stream-per'] ?? 288) : 120 })
+        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (panel ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (panel ? this.config['stream-thresh'] ?? 32 : 28), refresh: panel ? (this.config['stream-refresh'] ?? 24) : 0, per: panel ? (this.config['stream-per'] ?? 288) : 120, full: [0, 2 * fps] })
           : rawFrames.map(fr => this.og.encodeFrame(fr, n, { maxRuns, strips }));
         const nFrames = rawFrames.length;
         let audio = null;
         if (withSound) {
-          const wav = file.replace(/\.[^.]+$/, '') + `.og${k}.wav`;
+          const wav = path.join(TMP, `og_${owner.id.slice(-12)}_${k}.wav`);
           try {
-            await run('ffmpeg', ['-v', 'error', '-y', '-ss', String(t0), '-t', String(dur), '-i', file, '-vn', '-ac', '1', '-ar', '44100', wav], 300_000);
+            await cut((src, pre) => run('ffmpeg', ['-v', 'error', '-y', '-ss', String(t0), '-t', String(dur), ...pre, '-i', src, '-vn', '-ac', '1', '-ar', '44100', wav], 300_000),
+              quick?.a ?? quick?.v, () => fs.statSync(wav).size >= 44100 * 2 * (dur - 0.3));
             audio = await this.buildAudioDevice(wav, { mode: 'voice', flags: [...SPEECH_FLAGS, '--no-control-buttons'] });
           } catch (e) { console.error(`[media] ogrid soundtrack ${k}`, e); }
           finally { fs.rmSync(wav, { force: true }); }
         }
+        console.log(`[media] ogrid chunk ${k} built in ${Date.now() - tb} ms (${file ? 'file' : 'URL'})`);
         return { frames, audio, dur, nFrames };
       };
       // the soundtrack chip stands beside the screen (in speaker range of whoever watches it), chunks alternate sides so a swap never clears the playing one
@@ -1582,6 +1641,7 @@ module.exports = class Media {
         const slot = k % 2, [c, h] = M.cartridgeBox(L, slot);
         this.clearBox(world(c), T(h).map(Math.abs));
         loadAt(M.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner, debug: opts.includes('debug') }));
+        if (k === 0) console.log(`[media] ogrid ${name}: first cartridge loaded ${Date.now() - t0ms} ms after the command`);
         const old = prevAudio;
         prevAudio = loadAudio(set.audio, k);
         if (old) setTimeout(old, 1500);
@@ -1599,7 +1659,8 @@ module.exports = class Media {
       }
     } finally {
       session.stopped = true;
-      if (file) setTimeout(() => this.release(file), 60_000);
+      const done = f => f && setTimeout(() => this.release(f), 60_000);
+      if (fileP) fileP.then(done); else done(file);
       if (this.sessions.get(key) === session) this.sessions.delete(key);
     }
   }
