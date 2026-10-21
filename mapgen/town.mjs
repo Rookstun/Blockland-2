@@ -369,7 +369,8 @@ const WEAPON_NAMES = {
 // every brick's space stay the same, or road routing and every later site drift map-wide) but as GHOST bricks
 // (dropped at output, like vending boxes) and without their stands, so their lots stand empty.
 // + the spawn bank (2026-10-21, owner screenshot: "remove this").
-export const LEGACY = new Set(['tavern', 'warehouse', 'temple', 'bank']);
+// + the exotic soda vendors (2026-10-21, owner: "remove exotic soda vendors"): spawn soda market + roadside soda shacks.
+export const LEGACY = new Set(['tavern', 'warehouse', 'temple', 'bank', 'sodashack', 'sodamarket']);
 export const WEAPON_SHOP = { W: 52, D: 40, FC: 12 }; // studs: building W x D, forecourt FC deep
 // Houses (2026-10-03, owner): shapedhouse.mjs rect / L / T houses with rounded
 // roofs and attics; the blacksmith houses (HOUSE_SHOP_CHANCE) stay wallgen
@@ -2959,7 +2960,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const r = [cx - hx, cy - hy, cx + hx, cy + hy];
           if (!rectClear(r, { margin: 30, edge: plan.edgeR, claim: true })) continue;
           taken.push(r);
-          onSite(r, () => sodaMarket(cx, cy, fx, fy));
+          onSite(r, () => { const n = stats.townShops.length; ghosting = true; try { sodaMarket(cx, cy, fx, fy); } finally { ghosting = false; stats.townShops.length = n; } });
           stats.sodaMarket = [cx, cy];
           return;
         }

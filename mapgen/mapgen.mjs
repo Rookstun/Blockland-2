@@ -4161,7 +4161,8 @@ stage('fingerposts');
     const tiers = [...new Set(v.wares.filter(w => !w.prefab).map(w => w.tier.split('_')[0]))].map(t => t[0].toUpperCase() + t.slice(1));
     dest.push({ c: [v.x, v.y], text: v.kind === 'armory' ? 'Armory' + NL + tiers.join(' & ') + ' swords' : 'Gunsmith' + NL + 'All the guns', kind: 'trade' });
   }
-  for (const v of holy) if (v.kind === 'sodashack') dest.push({ c: [v.x, v.y], text: 'Soda' + NL + 'Heals (allegedly)', kind: 'trade' });
+  // soda shacks are legacy (2026-10-21): no fingerpost boards to them
+  if (false) for (const v of holy) if (v.kind === 'sodashack') dest.push({ c: [v.x, v.y], text: 'Soda' + NL + 'Heals (allegedly)', kind: 'trade' });
   const WANT = tune('signs.posts', 45, 'fingerposts beside the roads'), GAP = tune('signs.spacing', 26, 'cells between fingerposts') * K / 2;
   const near = new Int16Array(N * N).fill(99);
   for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if (pathCell[x * N + y]) for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { const i = (x + a) * N + y + b; if (inMap(x + a, y + b)) near[i] = Math.min(near[i], Math.max(Math.abs(a), Math.abs(b))); }
