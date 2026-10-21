@@ -6,7 +6,7 @@
 // on stall counters in the weapon shops.
 // (2026-10-16, owner screenshot of the spawn gunsmith: "this looks very wrong": the hidden
 // pedestal still held the weapon ~2 bricks over a low table) the display pickup now hangs
-// DOWN from the pedestal top (PickupOffsetDirection Z-, PICKUP_DROP units, bob PICKUP_BOB),
+// from the pedestal top (PickupOffsetDirection Z+ since 2026-10-21, owner: "item face set to -z when it needs to be +z"; was Z-, PICKUP_DROP units, bob PICKUP_BOB),
 // so it rests just over the counter the stand stands on; env overrides for tuning.
 //
 //   node barestand.mjs            (server: reads/writes data/Saved/Prefabs)
@@ -21,7 +21,7 @@ import { pathToFileURL } from 'url';
 
 const brs = await import(pathToFileURL(path.join(process.env.HOME, 'omegga-server/plugins/bridge/lib/brs.mjs')).href);
 const PREFABS = path.join(process.env.HOME, 'omegga-server/data/Saved/Prefabs');
-const PICKUP_DIR = Number(process.env.PICKUP_DIR ?? 5), PICKUP_DROP = Number(process.env.PICKUP_DROP ?? 6), PICKUP_BOB = Number(process.env.PICKUP_BOB ?? 1);
+const PICKUP_DIR = Number(process.env.PICKUP_DIR ?? 4), PICKUP_DROP = Number(process.env.PICKUP_DROP ?? 6), PICKUP_BOB = Number(process.env.PICKUP_BOB ?? 1);
 // CASE=1 (2026-10-16, the owner's glass gun case in the spawn gunsmith): writes <name>_case.brz
 // instead, the same plus the price button moved BUTTON_OUT units further out and BUTTON_DOWN down,
 // so it sits on the case's front glass (mapgen gunCase: stand 13 units behind the glass centre)
