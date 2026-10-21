@@ -252,6 +252,10 @@ ${pad}  let invLine = "${R.map(k => I(`e${k}`) + '=' + I(`n${k}`)).join('|')}"
 ${pad}  if !invLast.has(uid) || invLast.get(uid).Value != invLine {
 ${pad}    invLast.set(uid, invLine)
 ${pad}    PrintToConsole("[inv] ${I('uid')} ${I('invLine')}")
+${pad}    // weapon bank chip (weaponbank/): the named slots ("|name|..|"; the free Derringer by class), so purchases
+${pad}    // unlock weapons there and it knows what each player holds (one copy at a time)
+` + R.map(k => `${pad}    let bk${k} = if e${k} == $BRItemBase/Weapon_Derringer && n${k} == "" then "Derringer" else n${k}
+`).join('') + `${pad}    SendGlobalCustomEvent("bank.inv", uid, "|${R.map(k => I(`bk${k}`)).join('|')}|")
 ${pad}  }
 ${pad}}
 ${pad}// one flagged slot per tick becomes its shop item (giveNamed is big: one call site)

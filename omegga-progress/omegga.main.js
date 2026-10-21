@@ -27,7 +27,6 @@
 const KEYS = ['coins', 'XP', 'Level', 'SwordTier'];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clean = s => String(s).replace(/[<>"\\;]/g, '');
-const Bank = require('./bank.js');
 const CAT_ID = new Map(require('./itemcatalog.json').map((e, i) => [e.name, i + 1]));
 
 module.exports = class Progress {
@@ -39,7 +38,6 @@ module.exports = class Progress {
     this.busy = false;
     this.joined = new Map(); // userId -> join time (ms)
     this.chipRestored = new Map(); // userId -> time the chip said it restored them
-    this.bank = new Bank(this); // weapon bank at spawn (bank.js)
   }
 
   async init() {
@@ -67,8 +65,6 @@ module.exports = class Progress {
         for (const line of buf.toString('utf8').split('\n')) if (line.includes('[inv]') && !line.includes('WRITE')) this.onLine(line);
       }
     } catch (e) { console.error('[progress] log catch-up', e.message); }
-    await this.bank.init();
-    this.bank.quiet = false;
     const every = Math.max(5, this.config?.interval ?? 20) * 1000;
     this.timer = setInterval(() => this.tick().catch(err => console.error('[progress] tick', err)), every);
     return { registeredCommands: ['progress', 'eco'] };
@@ -103,12 +99,10 @@ module.exports = class Progress {
       const slots = parts.map(([c]) => (!c || c === 'None' ? null : c.replace(/_C$/, '')));
       const names = parts.map(([c, n], i) => (slots[i] && n ? n : null));
       if (slots.some(Boolean)) this.store.set('inv:' + m[1], { slots, names, at: Date.now() }).catch(() => {});
-      this.bank.onInv(m[1], slots, names).catch(err => console.error('[bank] inv', err));
       return;
     }
     const r = /\[inv-restored\] ([0-9a-f-]{36})/.exec(line);
     if (r) this.chipRestored.set(r[1], Date.now());
-    if (line.includes('[bank] ')) this.bank.onLine(line).catch(err => console.error('[bank]', err));
   }
 
   async onJoin(p) {
