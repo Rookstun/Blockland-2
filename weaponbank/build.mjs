@@ -176,8 +176,12 @@ ${DEBUG ? `    PrintToConsole("bankdisp|${SLOT.map(I).join(',')}|was ${K.map(k =
       let key = "${I('uid')}:${I('cur')}"
       let last = gaveAt.get(key)
       let now = GetUnixTime()
-      if held.get(uid).Contains("|${I('nm')}|") || (last > 0 && now - last < 15) {
+      // (owner 2026-10-21: "says i already have an iron dagger when i dont" = the old 15 s cooldown) a short
+      // double-press guard with its own message; "already have" only when a slot holds it by name
+      if held.get(uid).Contains("|${I('nm')}|") {
         pc.ShowStatusMessage("<color=\\"ff8888\\">You already have a ${I('nm')}.</> One at a time.")
+      } else if last > 0 && now - last < 3 {
+        pc.ShowStatusMessage("<color=\\"ffd34d\\">${I('nm')}</> is on its way. Check your inventory.")
       } else {
         gaveAt.set(key, now)
 ${ORDER.map((id, p) => `        ${p ? '} else ' : ''}if cur == ${p} {
