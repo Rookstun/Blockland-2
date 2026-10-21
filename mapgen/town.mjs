@@ -1177,7 +1177,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       for (let i = 0; i < k; i++) {
         const u = line + dir * 1.4, c = b0 + 0.2 + 1.5 + i * 3, w = wares[n++];
         const [px, py] = along === 'y' ? at(u, c) : at(c, u);
-        stats.houseShops.push({ at: [px, py, f + ORG + (zCtx ?? 0)], orient: o, tier: w.tier, prefab: (w.prefab ?? 'shop_' + w.tier) + '_case' });
+        stats.houseShops.push({ at: [px, py, f + ORG + (zCtx ?? 0)], orient: o, tier: w.tier, prefab: (w.prefab ?? 'shop_' + w.tier) + '_cab' });
       }
     }
     if (!guns && n < wares.length) count('weapon shop: stands short ' + (wares.length - n));
@@ -3186,7 +3186,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   onSite([-541, -201, -539, -199], () => legacyBuild('bank', () => TYPES.bank(-540, -200, 1, 0, 7001)));
   taken.push([-680, -380, -370, -20]);
   placeStands();
-  onSite([559, -761, 561, -759], () => TYPES.tavern(560, -760, -1, 0, 7002));
+  onSite([559, -761, 561, -759], () => legacyBuild('tavern', () => TYPES.tavern(560, -760, -1, 0, 7002))); // spawn tavern legacy too (owner 2026-10-21)
   taken.push([420, -960, 700, -560]);
   // river crossings first, so nothing lands on a bridge
   bridges(plan.paths);
