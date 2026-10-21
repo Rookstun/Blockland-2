@@ -58,8 +58,9 @@ for i, e in enumerate(new):
     name = f"home_new_{x}_{y}".replace("-", "m")
     for lift in (0, 12, 24, 36, 48):
         subprocess.run([NODE, "homes.mjs", "prefab", PREFABS + base + ".brz", PREFABS + name + ".brz", str(x), str(y), str(z + lift)], cwd=TOOLS, capture_output=True)
-        r = job([{"op": "cmd", "line": f'br.Prefab.Load "{name}" {x} {y} {z + lift} 0 16', "captureMs": 1200}])
-        if "Component_BotSpawn" not in json.dumps(r):
+        # (2026-10-21) a 1.2 s capture missed the rejection warnings: 52 spawners were counted placed and never loaded
+        r = json.dumps(job([{"op": "cmd", "line": f'br.Prefab.Load "{name}" {x} {y} {z + lift} 0 16', "captureMs": 3000}]))
+        if "Component_BotSpawn" not in r and "overlapping" not in r:
             placed += 1
             break
     else:
