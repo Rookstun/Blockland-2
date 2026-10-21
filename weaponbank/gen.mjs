@@ -10,17 +10,23 @@
 //   OUT/bankd_<id>.brz   one display plate per catalog weapon (catalog id = itemcatalog.json index + 1),
 //                        its ItemSpawn copied from the shop stand (class, name, damage, speed, colours),
 //                        pickup off. Prefab.Load "bankd_<id>" <slot x y z> 0 16.
-//   node gen.mjs <brs4 dist> <itemcatalog.json> <Prefabs dir> <bank_owner.brz> <out dir>
+//   node gen.mjs <brs4 dist> <itemcatalog.json> <Prefabs dir> <bank_owner.brz> <out dir> [X Y Z ORIENT]
+// (owner 2026-10-21: "put it near spawn") bank.brz is local to the counter's centre (the counter is in it
+// now); X Y Z = where the counter centre goes, ORIENT 16 (as built) or 18 (turned 180 deg). Default =
+// in front of the plaza spawn point (0,200): counter at 0,300 facing the spawn.
 import fs from 'node:fs';
 import path from 'node:path';
 
-const [DIST, CATF, PREFABS, OWNERF, OUT] = process.argv.slice(2);
+const [DIST, CATF, PREFABS, OWNERF, OUT, AX = '0', AY = '300', AZ = '634', AO = '18'] = process.argv.slice(2);
+const AT = [+AX, +AY, +AZ], ORIENT = +AO;
+if (ORIENT !== 16 && ORIENT !== 18) throw Error('orient 16 or 18 only');
+const toWorld = ([x, y, z]) => ORIENT === 16 ? [AT[0] + x, AT[1] + y, AT[2] + z] : [AT[0] - x, AT[1] - y, AT[2] + z];
 const lib = await import(new URL(`file://${path.resolve(DIST).replace(/\\/g, '/').replace(/^([A-Z]:)/, '/$1')}`).href);
 const { World, brdb, WorldReader } = lib;
 const C = brdb.COMPONENTS;
 const MAP_OWNER = { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'abysmal garbage', display_name: 'renderman' };
 const CAT = JSON.parse(fs.readFileSync(CATF, 'utf8'));
-const GATE_Z = 2200, GATE_BASE = [-250, -1300];
+const GATE_Z = 1600, GATE_BASE = [-250, -220]; // local to the counter
 const HIDE = { visibility: false, collision: { player: false, weapon: false, interaction: false, tool: true, physics: false } };
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -38,6 +44,9 @@ const assetOf = b => ownAssets[b.asset_name_index]?.name ?? ownAssets[b.asset_na
 const buttons = ownBricks.filter(b => assetOf(b) === 'B_Button').sort((a, b) => a.position[0] - b.position[0]);
 const plate = ownBricks.find(b => assetOf(b) === 'BP_ZoneProjector');
 const displays = ownBricks.filter(b => assetOf(b) === 'B_2x2f_Plate_Center').sort((a, b) => a.position[0] - b.position[0]);
+const counter = ownBricks.find(b => assetOf(b) === 'PB_DefaultMicroBrick');
+if (!counter) throw Error('bank_owner: no counter');
+const PIV = counter.position, loc = p => p.map((v, i) => v - PIV[i]);
 if (buttons.length !== 3 || !plate || displays.length !== 5) throw Error(`bank_owner: ${buttons.length} buttons, plate ${!!plate}, ${displays.length} displays`);
 
 // asset-reference fields in component data are indexes into the prefab's externalAssets
@@ -94,7 +103,7 @@ const wire = (a, ap, b, bp) => {
   if (!a.c.PORTS[ap] || !b.c.PORTS[bp]) throw Error(`bad port ${a.c.NAME}.${ap} -> ${b.c.NAME}.${bp}`);
   w.addWire({ brick: a.h, component_type: a.c.NAME, port: a.c.PORTS[ap] }, { brick: b.h, component_type: b.c.NAME, port: b.c.PORTS[bp] });
 };
-const copyBrick = (b, comps) => w.addBrick({ ...brickOf(b), owner_index: oi, components: comps.map(c => ({ type: c.typeName, data: remap(c.data ?? {}, ownExt, EXT) })) });
+const copyBrick = (b, comps) => w.addBrick({ ...brickOf(b, { position: loc(b.position) }), owner_index: oi, components: comps.map(c => ({ type: c.typeName, data: remap(c.data ?? {}, ownExt, EXT) })) });
 const report = (exec, character, act) => {
   const ps = gate(C.Exec_PlayerState_GetFromEntity); wire(exec[0], exec[1], ps, 'Exec'); wire(character[0], character[1], ps, 'Entity');
   const id = gate(C.Exec_PlayerState_GetUserId); wire(ps, 'ExecOut', id, 'Exec'); wire(ps, 'PlayerState', id, 'PlayerState');
@@ -116,11 +125,12 @@ const report = (exec, character, act) => {
   const ent = gate(C.CharacterZoneEvent_Entered); wire(Z, 'ZoneRef', ent, 'Zone');
   report([ent, 'Exec'], [ent, 'Character'], 'enter');
 }
+copyBrick(counter, []);
 w.makePrefab({});
 fs.writeFileSync(path.join(OUT, 'bank.brz'), w.toBrz({ bundle: { description: 'Weapon bank: buttons + plate + gates' }, externalAssets: EXT }));
 // where things are, for the plugin + reloads
 fs.writeFileSync(path.join(OUT, 'bank.json'), JSON.stringify({
-  slots: displays.map(b => b.position),
-  buttons: buttons.map(b => b.position), plate: plate.position, gates: { base: GATE_BASE, z: GATE_Z, n: gi },
+  at: AT, orient: ORIENT, slots: displays.map(b => toWorld(loc(b.position))),
+  buttons: buttons.map(b => toWorld(loc(b.position))), plate: toWorld(loc(plate.position)), gates: { base: toWorld([...GATE_BASE, GATE_Z]), n: gi },
 }, null, 1));
 console.log(`bank.brz: 3 buttons + plate + ${gi} gates; ${made.length} displays\n  ${made.join('\n  ')}`);

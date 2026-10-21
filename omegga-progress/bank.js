@@ -23,7 +23,7 @@ const rank = id => { const e = CAT[id - 1], r = RANK.indexOf(e.item); return [r 
 const byOrder = (a, b) => { const [ra, pa] = rank(a), [rb, pb] = rank(b); return ra - rb || pa - pb || a - b; };
 const FREE = CAT.map((e, i) => [e, i + 1]).filter(([e]) => e.item === 'Weapon_Derringer'); // free stand: never named
 const [X0, Y0, Z0] = BANK.slots[2];
-const CLEAR = `br.World.ClearRegion ${X0} ${Y0} ${Z0} ${Math.abs(BANK.slots[4][0] - BANK.slots[0][0]) / 2 + 11} 11 4`;
+const CLEAR = `br.World.ClearRegion ${X0} ${Y0} ${Z0} ${Math.abs(BANK.slots[4][0] - BANK.slots[0][0]) / 2 + 11} ${Math.abs(BANK.slots[4][1] - BANK.slots[0][1]) / 2 + 11} 4`;
 
 class Bank {
   constructor(plugin) {
@@ -125,7 +125,7 @@ class Bank {
           await sleep(250);
           for (let k = 0; k < 5; k++) if (ids[k]) {
             const [x, y, z] = BANK.slots[k];
-            this.omegga.writeln(`br.Prefab.Load "bankd_${ids[k]}" ${x} ${y} ${z} 0 16`);
+            this.omegga.writeln(`br.Prefab.Load "bankd_${ids[k]}" ${x} ${y} ${z} 0 ${BANK.orient ?? 16}`);
             await sleep(120);
           }
           this.shown = ids;
