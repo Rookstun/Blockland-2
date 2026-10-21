@@ -87,7 +87,8 @@ on GlobalCustomEvent("bank.act") -> (who: character, op: int) {
   let r0 = ownedR.get(uid)
   let rev = if r0.Length() == ${N} then r0 else ${q(ZERO)}
   let first = bits.Find("1")
-  // nobody to show: the user left, or has nothing yet
+${process.env.BANK_DEBUG ? `  PrintToConsole("bankdbg|${I('op')}|${I('uid')}|${I('first')}")
+` : ''}  // nobody to show: the user left, or has nothing yet
   let none = (op == 4 && uid == viewer) || (op != 4 && first < 0)
   if none {
 ${[0, 1, 2, 3, 4].map(k => `    showSlot(${k}, -1, me)`).join('\n')}
@@ -111,7 +112,8 @@ ${[0, 1, 2, 3, 4].map(k => `    showSlot(${k}, -1, me)`).join('\n')}
     let lq2 = if l1 < 0 then -1 else rev.Find("1", false, ${N} - l1)
     let l2 = if lq2 < 0 then -1 else ${N - 1} - lq2
 ${BANK.slots.map((s, k) => `    showSlot(${k}, ${['l2', 'l1', 'cur', 'r1', 'r2'][k]}, Vec(${s.map(f).join(', ')}) - me)`).join('\n')}
-    let count = ${N} - bits.Replace("1", "").Length()
+${process.env.BANK_DEBUG ? `    PrintToConsole("bankdisp|${I('l2')},${I('l1')},${I('cur')},${I('r1')},${I('r2')}|${[0,1,2,3,4].map(k => I(`disp.get(${k})`)).join('|')}")
+` : ''}    let count = ${N} - bits.Replace("1", "").Length()
     let pos = bits.Substring(0, cur + 1).Replace("0", "").Length()
     let nm = names.get(cur)
     if op == 3 {

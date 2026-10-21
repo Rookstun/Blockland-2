@@ -212,6 +212,7 @@ on GlobalCustomEvent("bank.act") -> (who: character, op: int) {
   let r0 = ownedR.get(uid)
   let rev = if r0.Length() == 55 then r0 else "0000000000000000000000000000000000000000000000000000000"
   let first = bits.Find("1")
+  PrintToConsole("bankdbg|${op}|${uid}|${first}")
   // nobody to show: the user left, or has nothing yet
   let none = (op == 4 && uid == viewer) || (op != 4 && first < 0)
   if none {
@@ -244,6 +245,7 @@ on GlobalCustomEvent("bank.act") -> (who: character, op: int) {
     showSlot(2, cur, Vec(0.0, 310.0, 646.0) - me)
     showSlot(3, r1, Vec(-20.0, 310.0, 646.0) - me)
     showSlot(4, r2, Vec(-40.0, 310.0, 646.0) - me)
+    PrintToConsole("bankdisp|${l2},${l1},${cur},${r1},${r2}|${disp.get(0)}|${disp.get(1)}|${disp.get(2)}|${disp.get(3)}|${disp.get(4)}")
     let count = 55 - bits.Replace("1", "").Length()
     let pos = bits.Substring(0, cur + 1).Replace("0", "").Length()
     let nm = names.get(cur)

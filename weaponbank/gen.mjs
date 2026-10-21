@@ -6,8 +6,8 @@
 // Writes (run on the server, it reads the shop stand prefabs):
 //   OUT/bank.brz         the 3 buttons + the plate again (same look) + ONE hidden microchip on the counter's
 //                        back face holding every gate (owner 2026-10-21: "put your shit in microchips"; they floated 1600 up):
-//                        press / step on / off the plate -> global custom event bank.prev|take|next|enter|leave
-//                        (character); the bank chip (chip.mjs) does the rest. NO omegga (owner 2026-10-21: "dont use omegga").
+//                        press / step on / off the plate -> global custom event bank.act (character, op 0 enter
+//                        1 prev 2 next 3 take 4 leave); the bank chip (chip.mjs) does the rest. NO omegga (owner 2026-10-21: "dont use omegga").
 //                        + the 5 display panels, plain plates, pushed back PANEL_BACK (owner: "push the panels back 1").
 //   OUT/bankitem_<id>.brz  per catalog weapon (catalog id = itemcatalog.json index + 1) a hidden plate with
 //                        the ItemSpawn of its shop stand (class, name, damage, speed, colours), pickup off:
@@ -118,8 +118,9 @@ const wire = (a, ap, b, bp) => {
 const copyBrick = (b, comps) => w.addBrick({ ...brickOf(b, { position: loc(b.position) }), owner_index: oi, components: comps.map(c => ({ type: c.typeName, data: remap(c.data ?? {}, ownExt, EXT) })) });
 // -> global custom event bank.<act> (character), as the casino machines send casino.play
 const report = (exec, character, act) => {
-  const s = gate(C.Exec_SendCustomEventGlobal, { EventName: 'bank.' + act, DataIn1: { $variant: 'weak_object', value: null },
-    ...Object.fromEntries([2, 3, 4, 5, 6, 7, 8].map(k => [`DataIn${k}`, { $variant: 'f64', value: 0 }])) });
+  const op = { enter: 0, prev: 1, next: 2, take: 3, leave: 4 }[act];
+  const s = gate(C.Exec_SendCustomEventGlobal, { EventName: 'bank.act', DataIn1: { $variant: 'weak_object', value: null }, DataIn2: { $variant: 'i64', value: op },
+    ...Object.fromEntries([3, 4, 5, 6, 7, 8].map(k => [`DataIn${k}`, { $variant: 'f64', value: 0 }])) });
   wire(exec[0], exec[1], s, 'ExecIn'); wire(character[0], character[1], s, 'DataIn1');
 };
 ['prev', 'take', 'next'].forEach((act, i) => {
