@@ -27,7 +27,7 @@ import { castleStone, VX as CVX, VZ as CVZ } from './castle.mjs';
 import { floorPieces, cellsOfRect, STYLES as FLOOR_STYLES } from './floors.mjs';
 import { townCourses, pickRoof } from './roofs.mjs';
 import { plaque } from './ruins.mjs';
-import { weaponFacade, artRows, windowShield } from './shopfront.mjs';
+import { weaponFacade } from './shopfront.mjs';
 import { NOTICES, STATUES } from './notices.mjs';
 import SODAS from './sodas.json' with { type: 'json' };
 // the owner's hand-built props (2026-10-16: a market stall, a chest, a heart), captured from the
@@ -1044,59 +1044,45 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * across the sales floor, buttons toward the door; outside a paved forecourt
    * with training dummies / targets and the shop's name board over the door.
    */
-  function weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC, cloth, caseSegs = [] }) {
+  function weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC, cloth, caseSegs = [], sideWin = [] }) {
     const MB = 'PB_DefaultMicroBrick', guns = kind === 'gunsmith';
     const STEEL = c => ({ asset: MB, color: c, material: 'BMC_Metallic' });
     const DARK = { asset: MB, color: [40, 40, 44], material: 'BMC_Metallic' };
     const BRASS = { asset: MB, color: [184, 146, 66], material: 'BMC_Metallic' };
     const WOOD = { asset: MB, color: [110, 70, 40] }, GRIP = { asset: MB, color: [70, 46, 30] };
-    const felt = guns ? [34, 70, 52] : [96, 26, 36], SILL = 48;
+    const felt = guns ? [34, 70, 52] : [96, 26, 36];
     const tiers = [...new Set(wares.filter(w => !w.prefab).map(w => String(w.tier).split('_')[0]))];
-    const sword = (x, y, zb, L, c) => {
-      mput(x, y, zb + 2, [2, 1, 2], BRASS);         // pommel
-      mput(x, y, zb + 7, [1, 1, 3], GRIP);          // grip
-      mput(x, y, zb + 11, [5, 1, 1], BRASS);        // guard
-      mput(x, y, zb + 12 + L, [2, 1, L], STEEL(c)); // blade
+    // (2026-10-21, owner screenshot: "display case placed awkwardly"; was a felt plinth + back panel wider
+    // than the opening) a glass case under each front window, faire geometry (faire.mjs, player 60): metal
+    // base 20 with a felt top, glass walls to 30, rail to 32, inside the opening's width; decorative swords
+    // (armory, blade colour by tier) or guns (gunsmith) lying on the felt. wallgen openings sit one stud
+    // right of the plan positions: centre the cases in them
+    const MET = { asset: MB, color: [160, 160, 160], material: 'BMC_Metallic' }, CGLASS = { asset: MB, color: [255, 255, 255], material: 'BMC_Glass' };
+    const swordFlat = (x, y, z, L, c) => { // along +x from the pommel at x
+      mput(x, y, z, [2, 2, 1], BRASS); mput(x + 0.5, y, z, [3, 1, 1], GRIP); mput(x + 0.9, y, z, [1, 2, 1], BRASS);
+      mput(x + 1 + L / 10, y, z, [L, 1, 1], STEEL(c));
     };
-    const gun = (x, y, z, rifle, k) => {
-      if (!rifle) {
-        mput(x + 0.8, y, z + 3, [8, 1, 2], STEEL([150, 152, 160])); // barrel
-        mput(x - 0.3, y, z - 1, [3, 1, 2], DARK);                   // frame
-        mput(x - 0.6, y, z - 6, [2, 1, 3], k % 2 ? WOOD : DARK);    // grip
-        return;
-      }
-      mput(x - 2.8, y, z, [10, 1, 3], WOOD);       // stock
-      mput(x - 0.9, y, z + 1, [9, 1, 4], DARK);    // receiver
-      mput(x - 1.4, y, z - 6, [2, 1, 3], WOOD);    // grip
-      mput(x + 1.6, y, z, [16, 1, 2], WOOD);       // fore-end
-      mput(x + 3.6, y, z + 4, [4, 1, 1], STEEL([150, 152, 160])); // muzzle
-      if (k % 2) mput(x - 0.8, y, z + 8, [6, 1, 2], DARK); // scope
+    const gunFlat = (x, y, z, rifle, k) => { // muzzle toward +x
+      if (!rifle) { mput(x, y, z, [3, 2, 1], DARK); mput(x - 0.1, y - 0.5, z, [2, 3, 1], k % 2 ? WOOD : DARK); mput(x + 0.8, y + 0.1, z, [5, 1, 1], STEEL([150, 152, 160])); return; } // grip toward -y
+      mput(x, y, z, [10, 3, 1], WOOD); mput(x + 1.8, y, z, [8, 2, 1], DARK); mput(x + 3.8, y, z, [12, 1, 1], WOOD); mput(x + 5.4, y, z, [4, 1, 1], STEEL([150, 152, 160]));
     };
-    // wallgen openings sit one stud right of the plan positions: centre the displays in them
     for (const [k, c] of [lw + 1, rw + 1].entries()) {
-      const x0 = c - ww / 2 + 0.5, x1 = c + ww / 2 - 0.5;
-      if (guns) { piece(c - 2, 1, c + 2, 2, () => sbox(c - 2, 1, c + 2, 2, 144, 148, GLOW([255, 236, 200], 4))); continue; }
-      piece(x0, 1, x1, 5, () => {
-        // two steps of dark wood, felt-topped, a felt back panel framed in dark wood
-        sbox(x0, 1, x1, 3, f, SILL - 4, { color: PALETTE.timber[2] });
-        sbox(x0, 1, x1, 3, SILL - 4, SILL, { asset: 'PB_DefaultTile', color: felt });
-        sbox(x0, 3, x1, 4.6, f, SILL + 8, { asset: MB, color: PALETTE.timber[2] });
-        sbox(x0, 3, x1, 4.6, SILL + 8, SILL + 12, { asset: MB, color: felt });
-        sbox(x0, 4.6, x1, 5, SILL + 12, 128, { asset: MB, color: felt });
-        sbox(x0, 4.6, x1, 5, 128, 132, { asset: MB, color: PALETTE.timber[2] });
-        // spot light under the ceiling
-        sbox(c - 2, 1, c + 2, 2, 144, 148, GLOW([255, 236, 200], 4));
-        if (guns) {
-          // pistols on the front step, two long guns on the panel
-          for (const dx of [-2.5, 2.5]) gun(c + dx, 2, SILL + 10, false, k + (dx > 0 ? 1 : 0));
-          gun(c, 4.3, 76, true, k);
-          gun(c, 4.3, 98, true, k + 1);
-        } else {
-          // a dagger, sword and longsword either side of the middle, blade colour by tier
+      const x0 = c - ww / 2 + 0.6, x1 = c + ww / 2 - 0.6, y0 = 1, y1 = 3.6;
+      piece(x0, y0, x1, y1 + 0.4, () => {
+        sbox(x0, y0, x1, y1, f, f + 18, MET);                                   // base
+        sbox(x0 + 0.2, y0 + 0.2, x1 - 0.2, y1 - 0.2, f + 18, f + 20, { asset: MB, color: felt }); // felt bed
+        sbox(x0, y0, x1, y0 + 0.2, f + 18, f + 20, MET); sbox(x0, y1 - 0.2, x1, y1, f + 18, f + 20, MET);
+        sbox(x0, y0 + 0.2, x0 + 0.2, y1 - 0.2, f + 18, f + 20, MET); sbox(x1 - 0.2, y0 + 0.2, x1, y1 - 0.2, f + 18, f + 20, MET);
+        sbox(x0, y0, x1, y0 + 0.2, f + 20, f + 30, CGLASS); sbox(x0, y1 - 0.2, x1, y1, f + 20, f + 30, CGLASS);  // glass
+        sbox(x0, y0 + 0.2, x0 + 0.2, y1 - 0.2, f + 20, f + 30, CGLASS); sbox(x1 - 0.2, y0 + 0.2, x1, y1 - 0.2, f + 20, f + 30, CGLASS);
+        sbox(x0, y0, x1, y0 + 0.2, f + 30, f + 32, MET); sbox(x0, y1 - 0.2, x1, y1, f + 30, f + 32, MET);       // rails
+        sbox(x0, y0 + 0.2, x0 + 0.2, y1 - 0.2, f + 30, f + 32, MET); sbox(x1 - 0.2, y0 + 0.2, x1, y1 - 0.2, f + 30, f + 32, MET);
+        sbox(c - 2, 1, c + 2, 2, 144, 148, GLOW([255, 236, 200], 4));         // spot light under the ceiling
+        const xs = x0 + 0.6;
+        if (guns) { gunFlat(xs + 0.6, 1.7, f + 21, true, k); gunFlat(xs + 1, 2.9, f + 21, false, k); gunFlat(xs + 4.4, 2.9, f + 21, false, k + 1); } // a long gun, two pistols
+        else {
           const tc = TIER_STEEL[tiers[k % Math.max(1, tiers.length)]] ?? TIER_STEEL.iron;
-          // a heater shield on the felt panel behind the middle sword
-          artRows(mput, windowShield(pick, s, k), c - 1.8, 120, 4.4, 4.6, { S: { asset: MB, color: cloth }, G: BRASS, C: { asset: MB, color: [236, 228, 206] } });
-          [[-3.6, 8, 2], [-2.2, 16, 2], [0, 18, 4.3], [2.2, 16, 2], [3.6, 8, 2]].forEach(([dx, L, y]) => sword(c + dx, y, y > 3 ? SILL + 12 : SILL, L, tc));
+          [[1.7, 14], [2.3, 22], [2.9, 32]].forEach(([y, L]) => swordFlat(xs, y, f + 21, Math.min(L, (x1 - xs) * 5 - 8), tc));
         }
       });
     }
@@ -1136,22 +1122,48 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       }
       if (n < wares.length) count('gun case: stands short ' + (wares.length - n));
     }
-    const SY = Math.min(10, cy0 - 5); // table centre row: clear of the plinths (y < 5) and the counter
-    // table top over the floor (the stands' hidden bases sit on it): counter height (2026-10-16, owner on the
-    // low tables: "this looks very wrong"); the bare stands hang the weapon down onto the top (barestand.mjs)
-    const TOP = 44;
+    // (2026-10-21, owner screenshot: "buttons shouldnt be floating", the bare stands' daggers hung through
+    // 44-high tables) the blades hang in glass wall cabinets on the side walls of the sales floor, faire
+    // geometry (player 60): felt plinth, back board, glass front 24..26 off the wall, mullions between the
+    // stands, a cap; <prefab>_case stands (barestand.mjs CASE=1) loaded 14 off the wall = pedestal 12,
+    // price button 16 further out and 7 under the load point: flush on the glass (as the gun case)
+    const ORG = 66, CAP = ORG + 24; // load point / cabinet top over the floor: a longsword hangs to the plinth
+    // runs [line, dir, a0, a1, along]: two free-standing showcases either side of the door aisle (their
+    // back board on `line`, glass toward the street), then the side walls between their windows (a stud
+    // clear) in front of the counter
+    const runs = [[9.8, -1, fd - 4 - 9.4, fd - 4, 'x'], [9.8, -1, fd + 4, fd + 13.4, 'x']], gl = sideWin.filter(g => g.y0 < cy0);
+    for (const [wx, dir] of [[1, 1], [W, -1]]) {
+      const cuts = gl.filter(g => (dir > 0 ? g.x0 < 1 : g.x1 > W)).map(g => [g.y0 - 1, g.y1 + 1]).sort((p, q) => p[0] - q[0]);
+      let a = 1.4;
+      for (const [c0, c1] of [...cuts, [cy0 - 1, 1e9]]) { if (c0 - a >= 3.4) runs.push([wx, dir, a, c0, 'y']); a = Math.max(a, c1); }
+    }
     let n = 0;
-    for (const [sx, sy] of guns ? [] : [[fd - 12, SY], [fd + 12, SY], [fd - 12, SY + 6], [fd + 12, SY + 6]]) {
-      if (n >= wares.length) break;
-      if (!piece(sx - 6, sy - 2, sx + 6, sy + 2, () => {
-        sbox(sx - 5, sy - 2, sx + 5, sy + 2, f + TOP - 4, f + TOP, { color: PALETTE.timber[1] });  // top
-        sbox(sx - 4, sy - 2, sx + 4, sy - 1, f + TOP - 8, f + TOP - 4, { color: PALETTE.timber[0] }); // apron between the legs
-        for (const [lx, ly] of [[sx - 5, sy - 2], [sx + 4, sy - 2], [sx - 5, sy + 1], [sx + 4, sy + 1]]) sbox(lx, ly, lx + 1, ly + 1, f, f + TOP - 4, { color: PALETTE.timber[0] });
-      })) continue;
-      for (const dx of [-3.5, 0, 3.5]) {
-        if (n >= wares.length) break;
-        const [px, py] = at(sx + dx, sy), w = wares[n++];
-        stats.houseShops.push({ at: [px, py, f + TOP + 12 + (zCtx ?? 0)], orient, tier: w.tier, prefab: (w.prefab ?? 'shop_' + w.tier) + '_bare' });
+    const cab = WOOD.color, inner = felt, tone = (c, k) => c.map(v => Math.min(255, Math.round(v * k)));
+    for (const [line, dir, a0, a1, along] of guns ? [] : runs) {
+      const k = Math.min(Math.floor((a1 - a0 - 0.4) / 3 + 1e-6), wares.length - n);
+      if (k < 1) continue;
+      const len = k * 3 + 0.4, b0 = Math.round(((a0 + a1 - len) / 2) * 5) / 5, b1 = b0 + len;
+      const off = (u, v) => (dir > 0 ? [line + u, line + v] : [line - v, line - u]); // u..v out from the back line
+      const bx = (u, v, c0, c1, z0, z1, b) => { const [p, q] = off(u, v); along === 'y' ? sbox(p, c0, q, c1, z0, z1, b) : sbox(c0, p, c1, q, z0, z1, b); };
+      const [p0, p1] = off(0, 2.8);
+      if (!(along === 'y' ? piece(p0, b0 - 0.2, p1, b1 + 0.2, () => 0) : piece(b0 - 0.2, p0, b1 + 0.2, p1, () => 0))) continue;
+      bx(0, 0.2, b0, b1, f, f + CAP, { asset: MB, color: tone(cab, 0.8) });           // back board
+      bx(0.2, 2.6, b0, b0 + 0.2, f, f + CAP, { asset: MB, color: cab });              // ends
+      bx(0.2, 2.6, b1 - 0.2, b1, f, f + CAP, { asset: MB, color: cab });
+      bx(0.2, 2.6, b0 + 0.2, b1 - 0.2, f, f + 4, { asset: MB, color: cab });          // plinth
+      bx(0.2, 2.4, b0 + 0.2, b1 - 0.2, f + 4, f + 6, { asset: MB, color: inner }); // felt floor
+      bx(2.4, 2.6, b0 + 0.2, b1 - 0.2, f + 4, f + 6, { asset: MB, color: cab });
+      for (let i = 0; i < k; i++) bx(2.4, 2.6, b0 + 0.2 + i * 3 + (i ? 0.2 : 0), b0 + 0.2 + (i + 1) * 3 - (i < k - 1 ? 0.2 : 0), f + 6, f + CAP - 4, CGLASS); // glass panes
+      bx(2.4, 2.6, b0 + 0.2, b1 - 0.2, f + CAP - 4, f + CAP, { asset: MB, color: cab }); // head rail
+      for (let i = 1; i < k; i++) { const c = b0 + 0.2 + i * 3; bx(2.4, 2.6, c - 0.2, c + 0.2, f + 6, f + CAP - 4, { asset: MB, color: cab }); } // mullions
+      bx(0.2, 2.4, b0 + 0.2, b1 - 0.2, f + CAP - 2, f + CAP, { asset: MB, color: cab }); // ceiling of the cabinet
+      bx(0, 2.8, b0 - 0.2, b1 + 0.2, f + CAP, f + CAP + 4, { asset: MB, color: tone(cab, 1.1) }); // cap
+      // the button points out of the glass: local +-x on the side walls, toward the street from the showcases
+      const o = along === 'y' ? (dir > 0 ? (fx ? 18 : 17) : (fx ? 16 : 19)) : orient;
+      for (let i = 0; i < k; i++) {
+        const u = line + dir * 1.4, c = b0 + 0.2 + 1.5 + i * 3, w = wares[n++];
+        const [px, py] = along === 'y' ? at(u, c) : at(c, u);
+        stats.houseShops.push({ at: [px, py, f + ORG + (zCtx ?? 0)], orient: o, tier: w.tier, prefab: (w.prefab ?? 'shop_' + w.tier) + '_case' });
       }
     }
     if (!guns && n < wares.length) count('weapon shop: stands short ' + (wares.length - n));
@@ -1225,8 +1237,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       if (x1 - x0 < 2) continue;
       if (kind === 'gunsmith') { caseSegs.push([x0, x1]); continue; }
       piece(x0, cy0, x1, cy0 + 2, () => {
-        sbox(x0, cy0, x1, cy0 + 2, f, f + 32, { color: dark });
-        sbox(x0, cy0, x1, cy0 + 2, f + 32, f + 36, { asset: 'PB_DefaultTile', color: PALETTE.timber[1] });
+        // 2.5 bricks high like the faire counters (player 5 bricks; was 36)
+        sbox(x0, cy0, x1, cy0 + 2, f, f + 26, { asset: 'PB_DefaultMicroBrick', color: dark });
+        sbox(x0, cy0, x1, cy0 + 2, f + 26, f + 30, { asset: 'PB_DefaultTile', color: PALETTE.timber[1] });
       });
       // stock shelves against the back wall behind it
       piece(x0, s1 - 2, x1, s1, () => {
@@ -1242,7 +1255,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // wares on the counter top
     for (let x = 4; x < W - 4; x += 4) {
       if (Math.abs(x - hall) < 4 || !clear(x, cy0, x + 1, cy0 + 2)) continue;
-      const z = f + 36;
+      const z = f + 30;
       if (kind === 'bakery') mput(x + 0.5, cy0 + 1, z + 4, [8, 4, 4], { asset: 'PB_DefaultMicroBrick', color: [206, 150, 80] });
       else if (kind === 'apothecary') mput(x + 0.5, cy0 + 1, z + 10, [0, 0, 0], { asset: 'B_Chalice', color: [200, 160, 70], material: 'BMC_Metallic' });
       else if (kind === 'general') mput(x + 0.5, cy0 + 1, z + 8, [0, 0, 0], { asset: 'B_Pumpkin', color: [230, 120, 30] });
@@ -1292,7 +1305,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         mput(x + 2, back, f + 32 + 2, [0, 0, 0], { asset: 'B_Fern', color: [70, 130, 50] });
       });
     } else if (WEAPON_KINDS.includes(kind)) {
-      weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt, cloth, caseSegs });
+      weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt, cloth, caseSegs, sideWin: h.boxes.filter(b => b.kind === 'glass' && (b.x0 < 1 || b.x1 > W)) });
     } else {
       // general store: crates, barrels, sacks along the walls
       for (const [x, y] of [[sideL, back], [sideL + 2, back], [sideL, back - 2], [sideR + 2, back], [sideR + 2, back - 2]])
