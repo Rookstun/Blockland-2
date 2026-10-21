@@ -78,7 +78,7 @@ const ROOMS = [
     '...............................#',
     '.....=====..............=====..#',
     '..........b....................#',
-    '...............................#',
+    '..S............................#',
     '""""""""""""""""""""""""""""""""',
     '################################'] },
   { name: 'Spike Gallery', song: 0, exits: { D: 2, R: 4 }, msg: 'Admission is one (1) health.', map: [
@@ -117,7 +117,7 @@ const ROOMS = [
     '..............................|.',
     '..............................|.',
     '...................M..........|.',
-    '..............................|.',
+    '..S...........................|.',
     '""""""""""""""""""""""""""""""""'] },
   { name: 'The Surface', song: 2, exits: { L: 4 }, msg: 'Sunlight! It burns slightly less than expected.', map: [
     '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
@@ -162,8 +162,8 @@ const SN = Object.keys(SPRITES), S = Object.fromEntries(SN.map((k, i) => [k, i])
 
 // ---- entity kinds: size, hp, contact damage, shards dropped
 const KIND = { // index = kt value
-  1: { name: 'hopper', w: 2, h: 2, hp: 3, dmg: 1, drop: 2 }, 2: { name: 'bat', w: 3, h: 2, hp: 2, dmg: 1, drop: 1 },
-  3: { name: 'boss', w: 6, h: 5, hp: 40, dmg: 2, drop: 12 }, 4: { name: 'shard', w: 1, h: 1 }, 5: { name: 'heart', w: 3, h: 3 },
+  1: { name: 'hopper', w: 2, h: 2, hp: 2, dmg: 1, drop: 3 }, 2: { name: 'bat', w: 3, h: 2, hp: 2, dmg: 1, drop: 1 },
+  3: { name: 'boss', w: 6, h: 5, hp: 24, dmg: 1, drop: 12 }, 4: { name: 'shard', w: 1, h: 1 }, 5: { name: 'heart', w: 3, h: 3 },
   6: { name: 'capsule', w: 2, h: 2 }, 7: { name: 'rock', w: 2, h: 2, dmg: 1 }, 8: { name: 'puff', w: 2, h: 2 },
 };
 const MARK = { h: 1, b: 2, M: 3, L: 6 };
@@ -390,8 +390,8 @@ var vx: float = 0.0
 var vy: float = 0.0
 var face: int = 1
 var ground: bool = false
-var hp: int = 3
-var maxhp: int = 3
+var hp: int = 6
+var maxhp: int = 6
 var xp: int = 0
 var inv: int = 0
 var onSave: bool = false
@@ -665,11 +665,11 @@ mod gainXp(n: int) {
 mod hurt(d: int, dir: float) {
   if inv == 0 && state == 1 {
     hp -= d
-    inv = 40
+    inv = 60
     vy = -0.6
     vx = dir * 0.45
     let before = level()
-    xp = max(xp - 3 * d, 0)
+    xp = max(xp - d, 0)
     if level() < before { say("Weapon level down. The gun is disappointed in you.", 50) }
     sfx(${FX.hurt})
     if hp <= 0 {
@@ -720,8 +720,8 @@ mod respawn() {
   py = saveY
 }
 mod newGame() {
-  hp = 3
-  maxhp = 3
+  hp = 6
+  maxhp = 6
   xp = 0
   inv = 0
   capTaken = false
@@ -740,7 +740,7 @@ mod playerTick() {
     vx = vx * (if ground then 0.5 else 0.85)
   }
   if kJ && !pJ && ground {
-    vy = -1.05
+    vy = -1.15
     sfx(${FX.jump})
   }
   vy = min(vy + (if kJ && vy < 0.0 then 0.06 else 0.12), 1.0)
@@ -817,7 +817,7 @@ mod kill(k: int) {
   for j in 0..KDROP[ty] {
     spawn(4, cxk + Random(-1.0, 1.0), cyk, Random(-0.4, 0.4), Random(-1.0, -0.5))
   }
-  if Random(0, 3) == 0 { spawn(5, cxk - 1.0, cyk - 1.0, 0.0, -0.5) }
+  if Random(0, 1) == 0 { spawn(5, cxk - 1.0, cyk - 1.0, 0.0, -0.5) }
   if ty == 3 {
     bossDead = true
     for i in 0..576 {
@@ -843,8 +843,16 @@ mod bulletTick() {
       let cy: int = floor(by[i])
       let tl = tileAt(cx, cy)
       if tl == ${T.star} {
-        cur[floor(cy / 2.0) * 32 + floor(cx / 2.0)] = 0
-        tileCells(floor(cy / 2.0) * 32 + floor(cx / 2.0))
+        // one shot cracks the whole star column (2 tiles up and down), so a gap opens player-tall
+        let sx: int = floor(cx / 2.0)
+        let sy: int = floor(cy / 2.0)
+        for j in 0..5 {
+          let sty: int = sy - 2 + j
+          if sty >= 0 && sty < 18 && cur[sty * 32 + sx] == ${T.star} {
+            cur[sty * 32 + sx] = 0
+            tileCells(sty * 32 + sx)
+          }
+        }
         sfx(${FX.crack})
         bt[i] = 0
       } else if solid(cx, cy) > 0 || cx < -1 || cx > W || cy < -1 || cy > H {
@@ -853,7 +861,7 @@ mod bulletTick() {
         for k in 0..NK {
           let ty = kt[k]
           if bt[i] > 0 && (ty == 1 || ty == 2 || ty == 3) && overlap(bx[i], by[i], 1.0, 1.0, kx[k], ky[k], KW[ty], KH[ty]) {
-            khp[k] = khp[k] - bl[i]
+            khp[k] = khp[k] - bl[i] - 1
             kfl[k] = 3
             bt[i] = 0
             if khp[k] <= 0 { kill(k) } else { sfx(${FX.bump}) }
@@ -896,7 +904,7 @@ mod entityTick() {
         kvy[k] = min(kvy[k] + 0.08, 1.2)
         if kgr[k] > 0 {
           kvx[k] = sign(dxp) * 0.22
-          if ktm[k] > 45 {
+          if ktm[k] > 60 {
             kvy[k] = -1.25
             kvx[k] = sign(dxp) * 0.45
             ktm[k] = 0

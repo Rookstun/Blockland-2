@@ -62,7 +62,7 @@ function speakers(b, { inner = 300, range = 1600 } = {}) {
 
 // ---- 2. the cabinet. Prefab local: ground z 0, the screen faces -y, the player sits at -y.
 async function cabinet(refs) {
-  const b = await bundle(compiledB, { owner: OWNER, offset: [0, 110, 30], hide: true });
+  const b = await bundle(compiledB, { owner: OWNER, offset: [0, 40, 30], hide: true });
   const { w, C, O } = b;
   const extra = speakers(b);
   const assets = [...b.ext, ...extra];
@@ -86,7 +86,7 @@ async function cabinet(refs) {
   const wireTo = (src, port) => w.addWire(src, { brick: b.pin(port), component_type: 'Component_Internal_Rerouter', port: 'RER_Input' });
 
   // screen: 64 x 36 cells of 2 units
-  const CELL = 2, PW = gen.W * CELL, PH = gen.H * CELL, Z1 = 186, Z0 = Z1 - PH, HX = PW / 2;
+  const CELL = 2, PW = gen.W * CELL, PH = gen.H * CELL, Z1 = 106, Z0 = Z1 - PH, HX = PW / 2;
   const pixPos = i => [HX - CELL / 2 - (i % gen.W) * CELL, -CELL / 2, Z1 - CELL / 2 - Math.floor(i / gen.W) * CELL]; // seen from -y, +x is LEFT
   if (SCREEN === 'bricks') {
     // 1x1 micro bricks (2-unit pixels), recoloured by the chip through scr[i] (row-major, i = row * W + col)
@@ -113,29 +113,24 @@ async function cabinet(refs) {
   wireFrom('msg_', msg, C.TextDisplay.NAME, 'Text');
   const hud = textBrick(-HX, HX, Z0 - 20, Z0 - 12, { LineHeight: 2.6, Color: rgba([248, 208, 64]) });
   wireFrom('hud_', hud, C.TextDisplay.NAME, 'Text');
-  // body, bezel, marquee
-  const DARK = [20, 16, 28], RED = [180, 30, 40];
-  box(-HX - 12, 0, 0, HX + 12, 70, Z0 - 20, { color: DARK });                // lower body (the chip sits inside)
-  box(-HX - 12, 0, Z0 - 20, -HX, 70, Z1 + 24, { color: DARK });
-  box(HX, 0, Z0 - 20, HX + 12, 70, Z1 + 24, { color: DARK });
-  box(-HX, 0, Z1, HX, 70, Z1 + 24, { color: [10, 8, 16] });
-  box(-HX, 0, Z0 - 20, HX, 70, Z1, { color: [10, 8, 16] }, 0);
-  for (const s of [-1, 1]) box(s * (HX + 12), -4, 0, s * (HX + 14), 70, Z1 + 24, GLOW(RED, 2));
-  box(-HX - 14, -4, Z1 + 24, HX + 14, 72, Z1 + 28, { color: DARK });
-  const marquee = w.addBrick({ asset: MB, ...GLOW([40, 10, 16], 1), size: [HX, 2, 10], position: [0, -2, Z1 + 12], owner_index: O,
-    components: [{ type: C.TextDisplay.NAME, data: { ...TEXT, Font: font('PirataOne'), LineHeight: 13, Text: "MILDOR'S PLUME", Color: rgba([255, 220, 120]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba(RED) } }] });
-  void marquee;
-  box(-HX - 12, -30, 0, HX + 12, 0, 50, { color: DARK });                    // control desk
-  box(-HX - 12, -32, 50, HX + 12, 0, 54, GLOW(RED, 2));
-  w.addBrick({ asset: 'PB_DefaultPole', color: [220, 30, 40], size: [5, 5, 6], position: [-30, -16, 60], owner_index: O });
-  for (const [x, c] of [[24, [240, 200, 60]], [40, [60, 160, 240]]]) w.addBrick({ asset: 'PB_DefaultPole', color: c, size: [5, 5, 2], position: [x, -16, 56], owner_index: O });
+  // body (owner 2026-10-20: "very small"): a thin slab round the screen, 4-unit bezel, 8 deep, short marquee, no desk.
+  // The screen sits at seated eye height (centre z 70) so the stool stands just in front.
+  const DARK = [20, 16, 28], RED = [180, 30, 40], BZ = 4, D = 8, MQ = 14;
+  box(-HX - BZ, -4, 0, HX + BZ, D, Z0 - 20, { color: DARK });                   // plinth under the hud line
+  box(-HX - BZ, -4, Z0 - 20, -HX, D, Z1 + MQ, { color: DARK });               // side bezels
+  box(HX, -4, Z0 - 20, HX + BZ, D, Z1 + MQ, { color: DARK });
+  box(-HX, 0, Z0 - 20, HX, D, Z1 + MQ, { color: [10, 8, 16] });                 // back of the screen, text lines and marquee
+  for (const s of [-1, 1]) box(s * (HX + BZ), -4, 0, s * (HX + BZ + 2), D, Z1 + MQ, GLOW(RED, 2));
+  box(-HX - BZ - 2, -4, Z1 + MQ, HX + BZ + 2, D, Z1 + MQ + 2, { color: DARK });
+  w.addBrick({ asset: MB, ...GLOW([40, 10, 16], 1), size: [HX, 2, MQ / 2], position: [0, -2, Z1 + MQ / 2], owner_index: O,
+    components: [{ type: C.TextDisplay.NAME, data: { ...TEXT, Font: font('PirataOne'), LineHeight: 9, Text: "MILDOR'S PLUME", Color: rgba([255, 220, 120]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba(RED) } }] });
 
   // stool + seat -> input splitter -> bools for the chip's pins
-  w.addBrick({ asset: 'PB_DefaultPole', color: [150, 150, 160], material: 'BMC_Metallic', size: [5, 5, 6], position: [0, -80, 6], owner_index: O });
-  const seat = w.addBrick({ asset: 'B_Seat', position: [0, -80, 27], direction: 4, rotation: 0, color: [20, 20, 24], owner_index: O,
+  w.addBrick({ asset: 'PB_DefaultPole', color: [150, 150, 160], material: 'BMC_Metallic', size: [5, 5, 6], position: [0, -45, 6], owner_index: O });
+  const seat = w.addBrick({ asset: 'B_Seat', position: [0, -45, 27], direction: 4, rotation: 0, color: [20, 20, 24], owner_index: O,
     components: [{ type: C.Seat.NAME, data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: "Play MILDOR'S PLUME" } }] });
   let gi = 0;
-  const gate = (c, data = {}) => ({ h: w.addBrick({ asset: c.BRICK, position: [-50 + (gi % 10) * 10, 140, 10 + Math.floor(gi++ / 10) * 10], color: [200, 200, 200], owner_index: O,
+  const gate = (c, data = {}) => ({ h: w.addBrick({ asset: c.BRICK, position: [-50 + (gi % 10) * 10, 70, 10 + Math.floor(gi++ / 10) * 10], color: [200, 200, 200], owner_index: O,
     visibility: false, collision: false, components: [{ type: c.NAME, data }] }), c });
   const port = (g, p) => { if (!g.c.PORTS[p]) throw Error(`bad port ${g.c.NAME}.${p}`); return { brick: g.h, component_type: g.c.NAME, port: g.c.PORTS[p] }; };
   const num = v => ({ $variant: 'f64', value: v });
