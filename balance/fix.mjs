@@ -33,7 +33,7 @@ const DRY = mode === 'dry' || flag === 'dry';
 const DO_NPCS = ['all', 'dry', 'npcs', 'npc'].includes(mode), DO_SHOPS = ['all', 'dry', 'shops', 'shop'].includes(mode);
 
 async function job(ops, tag) {
-  const id = `${Date.now()}_fix_${tag}.json`;
+  const id = `${Date.now()}_${process.pid}_fix_${tag}.json`;
   fs.writeFileSync(path.join(BRIDGE, 'inbox', id + '.tmp'), JSON.stringify({ ops }));
   fs.renameSync(path.join(BRIDGE, 'inbox', id + '.tmp'), path.join(BRIDGE, 'inbox', id));
   const out = path.join(BRIDGE, 'outbox', id);

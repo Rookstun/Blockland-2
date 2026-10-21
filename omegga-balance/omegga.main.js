@@ -3,12 +3,16 @@
 // Progress lines ('# ...') are whispered to whoever typed it. Unsafe (plain node) plugin.
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 const DIR = path.join(process.env.HOME, 'omegga-server/bridge/balance');
+const LOCK = path.join(DIR, 'run.lock'); // one run at a time, also across leftover plugin instances
 
 module.exports = class Balance {
   constructor(omegga, config) { this.omegga = omegga; this.config = config; this.busy = null; }
 
   async init() {
+    global.__balancePlugin = this; // a reload can leave an old instance listening: only the newest answers
+    for (const e of ['cmd:reload', 'cmd:fix']) this.omegga.removeAllListeners(e); // and drop the old one's handlers
     this.omegga.on('cmd:reload', (name, ...args) => this.reload(name, args).catch(e => this.tell(name, 'reload failed: ' + e.message)));
     this.omegga.on('cmd:fix', (name, ...args) => this.fix(name, args).catch(e => this.tell(name, 'fix failed: ' + e.message)));
     return { registeredCommands: ['reload', 'fix'] };
@@ -40,8 +44,15 @@ module.exports = class Balance {
   }
 
   async run(name, script, argv, hello) {
+    if (global.__balancePlugin !== this) return;
     if (!this.allowed(name)) return this.tell(name, 'not allowed');
     if (this.busy) return this.tell(name, `already running (started by ${this.busy})`);
+    try { fs.writeFileSync(LOCK, JSON.stringify({ name, script, pid: process.pid, t: Date.now() }), { flag: 'wx' }); }
+    catch {
+      let l = {}; try { l = JSON.parse(fs.readFileSync(LOCK, 'utf8')); } catch { }
+      if (Date.now() - (l.t ?? 0) < 15 * 60e3) return this.tell(name, `already running (${l.script} started by ${l.name})`);
+      fs.writeFileSync(LOCK, JSON.stringify({ name, script, pid: process.pid, t: Date.now() })); // stale lock
+    }
     this.busy = name;
     this.tell(name, hello);
     const child = spawn(process.execPath, [path.join(DIR, script), ...argv], { cwd: DIR });
@@ -53,6 +64,7 @@ module.exports = class Balance {
     child.stdout.on('data', onData);
     child.stderr.on('data', d => console.error('[balance]', String(d).trim()));
     await new Promise(res => child.on('close', code => { if (code) this.tell(name, `stopped with an error (code ${code}), see the server log`); res(); }));
+    try { fs.rmSync(LOCK); } catch { }
     this.busy = null;
   }
 

@@ -166,7 +166,7 @@ function dump(worldFile) {
 
 // ---------- bridge jobs (inbox/outbox, like restands.mjs) ----------
 async function job(ops, tag) {
-  const id = `${Date.now()}_bal_${tag}.json`;
+  const id = `${Date.now()}_${process.pid}_bal_${tag}.json`;
   fs.writeFileSync(path.join(BRIDGE, 'inbox', id + '.tmp'), JSON.stringify({ ops }));
   fs.renameSync(path.join(BRIDGE, 'inbox', id + '.tmp'), path.join(BRIDGE, 'inbox', id));
   const out = path.join(BRIDGE, 'outbox', id);
