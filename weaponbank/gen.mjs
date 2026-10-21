@@ -1,0 +1,126 @@
+// WEAPON BANK (2026-10-21, owner: "this is a weapon bank. when a player unlocks a weapon from a shop
+// it should be here for them for free ... only things you buy show up here and you can only have
+// 1 copy of a weapon at a time"). The owner's hand-built bank at the spawn (clipboard
+// weaponbank/bank_owner.brz, live at -30,-1060): 3 B_Button (prev / take / next), a
+// BP_ZoneProjector plate in front, 5 B_2x2f_Plate_Center item displays on the counter.
+// Writes (run on the server, it reads the shop stand prefabs):
+//   OUT/bank.brz         the 3 buttons + the plate again (same look) + hidden gates 1600 over them:
+//                        press / step on the plate -> PrintToConsole "[bank] prev|take|next|enter|<uid>|<name>"
+//                        (the progress plugin's bank.js does the rest). Prefab.Load "bank" 0 0 0 0 16 (world coords).
+//   OUT/bankd_<id>.brz   one display plate per catalog weapon (catalog id = itemcatalog.json index + 1),
+//                        its ItemSpawn copied from the shop stand (class, name, damage, speed, colours),
+//                        pickup off. Prefab.Load "bankd_<id>" <slot x y z> 0 16.
+//   node gen.mjs <brs4 dist> <itemcatalog.json> <Prefabs dir> <bank_owner.brz> <out dir>
+import fs from 'node:fs';
+import path from 'node:path';
+
+const [DIST, CATF, PREFABS, OWNERF, OUT] = process.argv.slice(2);
+const lib = await import(new URL(`file://${path.resolve(DIST).replace(/\\/g, '/').replace(/^([A-Z]:)/, '/$1')}`).href);
+const { World, brdb, WorldReader } = lib;
+const C = brdb.COMPONENTS;
+const MAP_OWNER = { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'abysmal garbage', display_name: 'renderman' };
+const CAT = JSON.parse(fs.readFileSync(CATF, 'utf8'));
+const GATE_Z = 2200, GATE_BASE = [-250, -1300];
+const HIDE = { visibility: false, collision: { player: false, weapon: false, interaction: false, tool: true, physics: false } };
+fs.mkdirSync(OUT, { recursive: true });
+
+// ---- the owner's bricks
+const own = WorldReader.from(fs.readFileSync(OWNERF));
+const ownAssets = own.brickAssets(), ownExt = own.externalAssets();
+const ownBricks = [...own.bricks(1)];
+const ownComps = {};
+for (const ci of own.brickChunkIndex(1)) {
+  const bricks = [...WorldReader.prototype.bricks.call({ globalData: () => own.globalData(), brickChunkIndex: () => [ci], brickChunkSoa: (e, i) => own.brickChunkSoa(e, i) }, 1)];
+  let comps = []; try { comps = own.componentChunk(1, ci.index).components; } catch {}
+  for (const c of comps) (ownComps[bricks[c.brickIndex].position.join()] ??= []).push(c);
+}
+const assetOf = b => ownAssets[b.asset_name_index]?.name ?? ownAssets[b.asset_name_index];
+const buttons = ownBricks.filter(b => assetOf(b) === 'B_Button').sort((a, b) => a.position[0] - b.position[0]);
+const plate = ownBricks.find(b => assetOf(b) === 'BP_ZoneProjector');
+const displays = ownBricks.filter(b => assetOf(b) === 'B_2x2f_Plate_Center').sort((a, b) => a.position[0] - b.position[0]);
+if (buttons.length !== 3 || !plate || displays.length !== 5) throw Error(`bank_owner: ${buttons.length} buttons, plate ${!!plate}, ${displays.length} displays`);
+
+// asset-reference fields in component data are indexes into the prefab's externalAssets
+const REF = ['PressSound', 'ReleaseSound', 'Font', 'PickupClass', 'ProjectileOverride'];
+const remap = (data, fromExt, toExt) => {
+  const d = structuredClone(data);
+  for (const k of REF) if (typeof d[k] === 'number' || typeof d[k] === 'bigint') {
+    const a = fromExt[Number(d[k])]; if (!a) continue;
+    let i = toExt.findIndex(x => x.type === a.type && x.name === a.name);
+    if (i < 0) { toExt.push(a); i = toExt.length - 1; }
+    d[k] = i;
+  }
+  return d;
+};
+const brickOf = (b, extra = {}) => ({ asset: assetOf(b), size: b.size, position: b.position, direction: b.direction, rotation: b.rotation,
+  color: b.color, material_intensity: b.material_intensity, collision: b.collision, visibility: b.visibility, ...extra });
+
+// ---- display plates
+const tpl = displays[2], tplSpawn = ownComps[tpl.position.join()].find(c => c.typeName === 'Component_ItemSpawn').data;
+const made = [];
+CAT.forEach((e, i) => {
+  if (/^soda_/.test(e.prefab)) return;
+  const sr = WorldReader.from(fs.readFileSync(path.join(PREFABS, e.prefab + '.brz')));
+  let spawn = null;
+  for (const g of sr.gridIds()) for (const ci of sr.brickChunkIndex(g)) {
+    let cs = []; try { cs = sr.componentChunk(g, ci.index).components; } catch {}
+    spawn ??= cs.find(c => c.typeName === 'Component_ItemSpawn')?.data ?? null;
+  }
+  if (!spawn) throw Error(`${e.prefab}: no ItemSpawn`);
+  const ext = [];
+  const s = remap(spawn, sr.externalAssets(), ext);
+  const d = remap(tplSpawn, ownExt, []); // the owner's display settings (offset, bob, spin, rotation)
+  for (const k of Object.keys(s)) if (k === 'PickupClass' || k === 'ProjectileOverride' || /Name|Damage|Speed|Color|Colour|Projectile|Scale/.test(k) && !/^Pickup(Bob|Spin|Animation|Offset)/.test(k)) d[k] = s[k];
+  d.bPickupEnabled = false; d.bRenderTranslucentWhenDisabled = false;
+  if ('bShowPickupEnabled' in d) d.bShowPickupEnabled = true;
+  const w = new World(); const oi = w.addOwner(MAP_OWNER);
+  w.addBrick({ ...brickOf(tpl, { position: [0, 0, 0] }), owner_index: oi, components: [{ type: 'Component_ItemSpawn', data: d }] });
+  w.makePrefab({});
+  fs.writeFileSync(path.join(OUT, `bankd_${i + 1}.brz`), w.toBrz({ bundle: { description: `Weapon bank display: ${e.name}` }, externalAssets: ext }));
+  made.push(`${i + 1} ${e.name} (${ext.find(x => x.type === 'BRPickupBase')?.name})`);
+});
+
+// ---- the bank: buttons + plate + gates
+const w = new World(); const oi = w.addOwner(MAP_OWNER);
+const EXT = [];
+let gi = 0;
+const gate = (c, data = {}) => {
+  const i = gi++;
+  const h = w.addBrick({ asset: c.BRICK, position: [GATE_BASE[0] + (i % 12) * 40, GATE_BASE[1] + Math.floor(i / 12) * 40, GATE_Z], color: [200, 200, 200],
+    owner_index: oi, components: [{ type: c.NAME, data }], ...HIDE });
+  return { h, c };
+};
+const wire = (a, ap, b, bp) => {
+  if (!a.c.PORTS[ap] || !b.c.PORTS[bp]) throw Error(`bad port ${a.c.NAME}.${ap} -> ${b.c.NAME}.${bp}`);
+  w.addWire({ brick: a.h, component_type: a.c.NAME, port: a.c.PORTS[ap] }, { brick: b.h, component_type: b.c.NAME, port: b.c.PORTS[bp] });
+};
+const copyBrick = (b, comps) => w.addBrick({ ...brickOf(b), owner_index: oi, components: comps.map(c => ({ type: c.typeName, data: remap(c.data ?? {}, ownExt, EXT) })) });
+const report = (exec, character, act) => {
+  const ps = gate(C.Exec_PlayerState_GetFromEntity); wire(exec[0], exec[1], ps, 'Exec'); wire(character[0], character[1], ps, 'Entity');
+  const id = gate(C.Exec_PlayerState_GetUserId); wire(ps, 'ExecOut', id, 'Exec'); wire(ps, 'PlayerState', id, 'PlayerState');
+  const nm = gate(C.Exec_PlayerState_GetUserName); wire(id, 'ExecOut', nm, 'Exec'); wire(ps, 'PlayerState', nm, 'PlayerState');
+  const f = gate(C.Expr_String_FormatText, { FormatString: `[bank] ${act}|{A}|{B}` }); wire(id, 'UserId', f, 'InputA'); wire(nm, 'UserName', f, 'InputB');
+  const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(nm, 'ExecOut', p, 'Exec'); wire(f, 'Output', p, 'Text');
+};
+['prev', 'take', 'next'].forEach((act, i) => {
+  const b = buttons[i];
+  const h = copyBrick(b, ownComps[b.position.join()] ?? []);
+  const B = { h, c: C.AnimatedButton };
+  const edge = gate(C.Expr_EdgeDetectorExec); wire(B, 'bHeld', edge, 'Input');
+  report([edge, 'OnRisingEdge'], [B, 'Character'], act);
+});
+{
+  const zc = (ownComps[plate.position.join()] ?? []).map(c => c.typeName === 'Component_Internal_AttachedZone'
+    ? { ...c, data: { ...c.data, bDetectPlayers: true, bDetectPlayers1: true, bDetectPlayers2: true, bDetectPlayers3: true } } : c);
+  const Z = { h: copyBrick(plate, zc), c: C.AttachedZone };
+  const ent = gate(C.CharacterZoneEvent_Entered); wire(Z, 'ZoneRef', ent, 'Zone');
+  report([ent, 'Exec'], [ent, 'Character'], 'enter');
+}
+w.makePrefab({});
+fs.writeFileSync(path.join(OUT, 'bank.brz'), w.toBrz({ bundle: { description: 'Weapon bank: buttons + plate + gates' }, externalAssets: EXT }));
+// where things are, for the plugin + reloads
+fs.writeFileSync(path.join(OUT, 'bank.json'), JSON.stringify({
+  slots: displays.map(b => b.position),
+  buttons: buttons.map(b => b.position), plate: plate.position, gates: { base: GATE_BASE, z: GATE_Z, n: gi },
+}, null, 1));
+console.log(`bank.brz: 3 buttons + plate + ${gi} gates; ${made.length} displays\n  ${made.join('\n  ')}`);
