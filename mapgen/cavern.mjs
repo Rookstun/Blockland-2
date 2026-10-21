@@ -170,7 +170,7 @@ export function caveField(nodes, ctx) {
     let m = Infinity;
     for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) {
       const cx = cx0 + a, cy = cy0 + b;
-      if (ctx.openWall?.(cx, cy, cx0, cy0)) continue; // a lower shelf outside a sheer wall: the cave may break out there (a doorway)
+      if (ctx.openWall?.(cx, cy)) continue; // the shelf in front of a cave mouth (tiered mountains): the passage may break out there
       const dx = Math.max(0, cx * CELL - (x - X0), (x - X0) - (cx + 1) * CELL), dy = Math.max(0, cy * CELL - (y - Y0), (y - Y0) - (cy + 1) * CELL);
       m = Math.min(m, roofOf(cx, cy) + ROOF_SLOPE * Math.hypot(dx, dy));
     }
@@ -199,7 +199,7 @@ export function caveField(nodes, ctx) {
     const F = cs.map(c => c[0]), C = cs.map(c => Math.min(c[1], roof)); // a tile's ceiling never goes over its own cell's roof
     const air = Math.min(...C) - Math.max(...F) >= 30;
     if (!air) continue;
-    tiles.set(tk, { i, j, F, C, air: true, cell: cx * N + cy });
+    tiles.set(tk, { i, j, F, C, air: true, cell: cx * N + cy, door: cs.some(c => c[2]) });
   }
   // carve range per cell: just under the lowest floor .. just over the highest ceiling of its air tiles
   for (const t of tiles.values()) {
@@ -338,7 +338,7 @@ export function caveBricks(field, ctx) {
   // blocks of n x n tiles centred on tile t's low corner (an even grid point): all air and inside, or null
   const blockOf = (t, n) => {
     const out = [];
-    for (let p = -n / 2; p < n / 2; p++) for (let q = -n / 2; q < n / 2; q++) { const o = T(t.i + p, t.j + q); if (!o || used.has(o.i * TW + o.j)) return null; out.push(o); }
+    for (let p = -n / 2; p < n / 2; p++) for (let q = -n / 2; q < n / 2; q++) { const o = T(t.i + p, t.j + q); if (!o || o.door || used.has(o.i * TW + o.j)) return null; out.push(o); } // no formations in doorways
     return out;
   };
   const span = blk => [Math.max(...blk.flatMap(o => o.F)), Math.min(...blk.flatMap(o => o.C)), Math.min(...blk.flatMap(o => o.F))];

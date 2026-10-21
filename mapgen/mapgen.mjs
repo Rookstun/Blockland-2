@@ -2772,19 +2772,69 @@ let carved = 0;
   const roofCell = (cx, cy) => {
     if (!inMap(cx, cy) || !okCell(cx, cy)) return -Infinity;
     const c = cx * N + cy;
-    if (tierWallFace(cx, cy)) return H[c] * VZ; // tier wall: a 1-brick lintel over cave mouths (5 bricks clear on a 6-brick wall)
+    if (tierMtn.cells[c]) {
+      if (mouthCells.has(c)) return H[c] * VZ; // a cave mouth in a tier wall: 1-brick lintel (5 bricks clear on a 6-brick wall)
+      // any other wall face of a tier stays shut: no cave air above the shelf below it (those made 1-brick slits)
+      let m = Infinity;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const n = (cx + a) * N + cy + b;
+        if ((a || b) && inMap(cx + a, cy + b) && tierMtn.cells[n] && H[n] <= H[c] - 2) m = Math.min(m, (H[n] - CAVE.cover + 1) * VZ);
+      }
+      if (m < Infinity) return Math.min(m, (Math.min(H[c], H0[c]) - CAVE.cover + 1) * VZ);
+    }
     return facades.has(c) ? (H[c] - 2 + 1) * VZ : (Math.min(H[c], H0[c]) - CAVE.cover + 1) * VZ;
   };
-  // tiered mountains (2026-10-21, owner: "caves arent creating entrances": tunnels met the sheer tier walls as
-  // 1-brick slits because the ceiling sloped down to the shelf outside): the shelf below a wall does not pull
-  // the ceiling down, and the wall's cells keep only a 1-brick lintel, so a tunnel reaching a wall opens as a doorway
-  function tierWallFace(cx, cy) {
-    const c = cx * N + cy;
-    if (!tierMtn.cells[c]) return false;
-    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(cx + a, cy + b) && tierMtn.cells[(cx + a) * N + cy + b] && H[(cx + a) * N + cy + b] <= H[c] - TIER.h + 1) return true;
-    return false;
-  }
-  const openWall = (cx, cy, ox, oy) => inMap(cx, cy) && inMap(ox, oy) && tierMtn.cells[cx * N + cy] && tierMtn.cells[ox * N + oy] && H[cx * N + cy] <= H[ox * N + oy] - TIER.h + 1;
+  // tiered mountains (2026-10-21, owner: "caves arent creating entrances", then "the player cant get out ... should be
+  // procedurally generated"): where a tunnel passes near a tier wall at about the height of the shelf below it, a
+  // passage of door nodes (flat floor, no formations) runs from the tunnel out through the wall (mouthCells) with
+  // its floor flush with the shelf (tierMouths, before the field). The shelf in front of a mouth (mouthFront) does
+  // not pull the passage ceiling down; every other tier wall face stays solid.
+  const mouthCells = new Set(), mouthFront = new Set();
+  const openWall = (cx, cy) => inMap(cx, cy) && mouthFront.has(cx * N + cy);
+  const tierMouths = () => {
+    let made = 0;
+    for (const s of caves) {
+      const cand = [];
+      for (const nd of s.plan.nodes) {
+        if (nd.door) continue;
+        const ncx = Math.floor((nd.x - X0) / CELL), ncy = Math.floor((nd.y - Y0) / CELL);
+        for (let a = -6; a <= 6; a++) for (let b = -6; b <= 6; b++) {
+          const wx = ncx + a, wy = ncy + b, W = wx * N + wy;
+          if (!inMap(wx, wy) || !tierMtn.cells[W] || tierMtn.trail[W]) continue;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const lx = wx + dx, ly = wy + dy, L = lx * N + ly;
+            if (!inMap(lx, ly) || !tierMtn.cells[L] || H[L] !== H[W] - TIER.h || riverCell[L] || H[L] <= SEA) continue;
+            const top = (H[L] + 1) * VZ, mx = X0 + (wx + 0.5 + dx * 0.5) * CELL, my = Y0 + (wy + 0.5 + dy * 0.5) * CELL;
+            const dist = Math.hypot(mx - nd.x, my - nd.y);
+            if (dist > 280 || Math.abs(top - nd.zf) > dist * 0.4 + 12) continue;
+            // the passage stays under this tier (no other wall face on the way) with rock over it
+            let ok = true;
+            for (let t = 0.1; ok && t < 1; t += 0.1) {
+              const px = Math.floor((nd.x + (mx - nd.x) * t - X0) / CELL), py = Math.floor((nd.y + (my - nd.y) * t - Y0) / CELL), pc = px * N + py;
+              if (!inMap(px, py) || (pc !== W && H[pc] < H[W]) || !okCell(px, py)) ok = false;
+            }
+            if (ok) cand.push({ nd, W, L, mx, my, top, dist });
+          }
+        }
+      }
+      cand.sort((p, q) => p.dist - q.dist);
+      const picked = [];
+      for (const c of cand) {
+        if (picked.length >= 2) break;
+        if (picked.some(p => Math.hypot(p.mx - c.mx, p.my - c.my) < 600)) continue;
+        picked.push(c);
+        const n = Math.max(2, Math.ceil(c.dist / 36));
+        for (let t = 1; t <= n; t++) {
+          const q = t / n;
+          s.plan.nodes.push({ x: c.nd.x + (c.mx - c.nd.x) * q, y: c.nd.y + (c.my - c.nd.y) * q, zf: Math.round(c.nd.zf + (c.top - c.nd.zf) * q), r: 46, hu: 72, door: true });
+        }
+        mouthCells.add(c.W); mouthFront.add(c.L);
+        if (process.env.CAVE_DEBUG) console.error(`tier mouth at map ${Math.round(c.mx)},${Math.round(c.my)} z ${c.top}`);
+        made++;
+      }
+    }
+    if (tierMtn.peaks.length) console.error(`tier mouths: ${made} cave mouths in tier walls`);
+  };
   // planning sees the estate lots' old ground (lotPre); the field (carving) above still clamps to the lot
   const roofPlan = (cx, cy) => {
     if (!inMap(cx, cy) || !okCell(cx, cy)) return -Infinity;
@@ -2827,6 +2877,7 @@ let carved = 0;
       V[vi(cx, cy, s.h + raise)] = GRAVEL;
     }
   }
+  if (MC && caves.length) tierMouths();
   if (MC && caves.length) {
     const field = caveField(caves.flatMap(c => c.plan.nodes), { CELL, VZ, X0, Y0, N, roofCell, floorMin, noise: noise3, seed: caves[0].x * 7 + caves[0].y, openWall });
     for (const [c, [f, t]] of field.cells) {
