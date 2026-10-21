@@ -308,3 +308,71 @@ export function receiverBoxes(L) {
   out.push(cartridgeBox(L, 0), cartridgeBox(L, 1));
   return out;
 }
+
+// ---------- /stream tv (2026-10-20, owner: "a TV they can get as an entity, /stream plays onto it") ----------
+// The whole TV is ONE loose physics grid (gravity on): cabinet + tw x th tiles + the receiver gates hidden in
+// its hollow back. Tested 2026-10-20 in the sky: the receiver keeps drawing its tiles after the grid is moved
+// and turned (brick refs into the loose grid survive Prefab.Load and movement), so /stream play only has to
+// load cartridges (sky, static: global events reach the TV anywhere) and the soundtrack beside the TV.
+// Its own chat commands: /tvw<id> prints `tvpos|<id>|x|y|z|yaw` (grid origin + yaw; the plugin finds the TV),
+// /tvx<id> destroys it. Bricks.Clear does NOT remove a loose grid (ClearRegion round it does).
+// File coords: origin = floor under the screen centre, screen facing -y.
+const TV_B = 6, TV_D = 46, TV_LIFT = 30;
+export const TV_DUMP = [-9000, -20000, 20000];
+/** ClearRegion box (centre, half) that takes a TV parked at TV_DUMP (it falls a little before the clear lands). */
+export const tvDumpBox = () => [[TV_DUMP[0], TV_DUMP[1], TV_DUMP[2] - 100], [200, 200, 300]];
+export function tvLayout({ tw = 32, th = 18, k = 2, cell = 2 } = {}) {
+  // gates in the hollow back: rows at y 18 / 34, z mid-screen, 16 apart (inner half width >= 66)
+  const L0 = tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0] });
+  const inner = L0.width / 2 + TV_B - 4;
+  const gstep = Math.min(16, Math.floor((inner - 10) / 3.5 / 2) * 2);
+  if (gstep < 12) throw Error('tgrid: TV too narrow for its gates');
+  return tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0], gstep, gate: [0, 2, Math.round(L0.height / 2 / 2) * 2 - 6] });
+}
+
+export function buildTv(lib, L, { event, owner, id, debug = false } = {}) {
+  const W = L.width / 2, H = L.height, zs = L.z0 + 4, zb = zs - TV_B, zt = zs + H + TV_B, X = W + TV_B;
+  const extra = ({ w, C, O, wire, num, gate, G }) => {
+    const box = (c, h, color) => w.addBrick({ asset: 'PB_DefaultMicroBrick', size: h, position: c, color, owner_index: O }, G);
+    const BEZ = [14, 14, 16], CAB = [26, 26, 30], FOOT = [34, 34, 38];
+    // bezel, 2 proud of the tiles
+    box([0, -1, zt - TV_B / 2], [X, 3, TV_B / 2], BEZ);
+    box([0, -1, zb + TV_B / 2], [X, 3, TV_B / 2], BEZ);
+    for (const s of [1, -1]) box([s * (W + TV_B / 2), -1, zs + H / 2], [TV_B / 2, 3, H / 2], BEZ);
+    // back plate + hollow housing (gates inside) + back cover
+    box([0, 4, (zb + zt) / 2], [X, 2, (zt - zb) / 2], CAB);
+    const hy = (6 + TV_D - 4) / 2, hh = (TV_D - 4 - 6) / 2;
+    box([0, hy, zt - 2], [X, hh, 2], CAB);
+    box([0, hy, zb + 2], [X, hh, 2], CAB);
+    for (const s of [1, -1]) box([s * (X - 2), hy, (zb + zt) / 2], [2, hh, (zt - zb) / 2 - 4], CAB);
+    box([0, TV_D - 2, (zb + zt) / 2], [X, 2, (zt - zb) / 2], CAB);
+    // stand + foot (deep, so it doesn't tip)
+    box([0, 20, (4 + zb) / 2], [12, 10, (zb - 4) / 2], FOOT);
+    box([0, 20, 2], [Math.min(X, 60), 36, 2], FOOT);
+    // power light
+    box([X - 10, -5, zb + TV_B / 2], [2, 1, 1], [40, 255, 60]);
+    const RG = { BRICK: 'B_1x1_Gate_Internal_ReadBrickGrid', NAME: 'BrickComponentType_Internal_ReadBrickGrid', PORTS: { BrickGrid: 'BrickGrid' } };
+    const rg = gate(RG);
+    // /tvw<id>: where am I
+    const cmd = gate(C.Event_ChatCommand, { CommandName: `tvw${id}`, HelpText: 'server only' });
+    const lr = gate(C.Exec_Entity_GetLocationRotation); wire(rg, 'BrickGrid', lr, 'Entity'); wire(cmd, 'ExecOut', lr, 'Exec');
+    const sv = gate(C.Expr_SplitVector); wire(lr, 'Vector', sv, 'Input');
+    const sr = gate(C.Expr_SplitRotation); wire(lr, 'Rotation', sr, 'Input');
+    const f = gate(C.Expr_String_FormatText, { FormatString: `tvpos|${id}|{A}|{B}|{C}|{D}` });
+    wire(sv, 'X', f, 'InputA'); wire(sv, 'Y', f, 'InputB'); wire(sv, 'Z', f, 'InputC'); wire(sr, 'Yaw', f, 'InputD');
+    const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(lr, 'ExecOut', p, 'Exec');
+    // /tvx<id>: jump to the dump spot high in the sky, where the plugin's ClearRegion takes it (DestroySpawned
+    // does nothing to a Prefab.Loaded grid, and a box round the TV where it stands would take furniture with it)
+    const xc = gate(C.Event_ChatCommand, { CommandName: `tvx${id}`, HelpText: 'server only' });
+    const mv = gate(C.Exec_Entity_SetLocationRotation, { Vector: { X: TV_DUMP[0], Y: TV_DUMP[1], Z: TV_DUMP[2] }, Rotation: { Pitch: 0, Yaw: 0, Roll: 0 } });
+    wire(rg, 'BrickGrid', mv, 'Entity'); wire(xc, 'ExecOut', mv, 'Exec');
+  };
+  return buildReceiver(lib, L, { event, owner, debug, paint: false, physics: true, extra });
+}
+
+/** One cartridge that blanks every tile (black), for when a stream ends. */
+export function blankCartridge(lib, L, { event, owner, slot = 0 }) {
+  const enc = encodeTiles([Buffer.alloc(L.cols * L.rows * 3)], L, newState(L), { fps: 1, per: 288, perSec: 1, full: [0] });
+  enc.due = enc.due.map(() => 0);
+  return buildCartridge(lib, L, enc, { event, fps: 1, dur: 2, slot, owner });
+}

@@ -1151,11 +1151,38 @@ module.exports = class Media {
    * in the sky over it, the soundtrack sits over the roof; when it ends the
    * black idle panel comes back (owned by the map owner, like the original).
    */
+  /**
+   * /stream tv              a TV of your own (loose physics grid, tgrid.mjs buildTv) in front of you; again = a new one
+   * /stream tv remove       takes it away
+   * /stream play <link|search> [fps=N] [mute] [start=S] [len=S]   plays on YOUR TV wherever it is now
+   * /stream panel <...>     the owner's fixed wall panel (the old /stream)
+   * /stream <link|search>   your TV if you have one, else the panel
+   * /stream stop            stops your TV's stream, else the panel's
+   */
   async streamCommand(name, args) {
+    const sub = String(args[0] ?? '').toLowerCase();
+    const tv = await this.tvMeta(name);
+    if (sub === 'tv') return this.tvGive(name, args.slice(1));
+    if (sub === 'panel') return this.streamPanelCommand(name, args.slice(1));
+    if (sub === 'play') {
+      if (!tv) return this.whisper(name, 'You have no TV yet: /stream tv gets you one.');
+      if (args.length < 2) return this.whisper(name, 'Usage: /stream play <link or search words> [fps=N] [mute] [start=S] [len=S]');
+      return this.oGridCommand(name, args.slice(1), null, tv);
+    }
+    if (sub === 'stop' || sub === 'off') {
+      if (tv && this.sessions.has(`stream:tv:${name}`)) return this.oGridCommand(name, ['stop'], null, tv);
+      return this.streamPanelCommand(name, ['stop']);
+    }
+    if (!args.length) return this.whisper(name, 'Usage: /stream tv (get a TV)   /stream play <link or search words> [fps=N] [mute] [start=S] [len=S]   /stream panel <link>   /stream stop');
+    if (tv && !args.includes('pixels')) return this.oGridCommand(name, args, null, tv);
+    return this.streamPanelCommand(name, args);
+  }
+
+  async streamPanelCommand(name, args) {
     // owner 2026-10-18 "use the O grid method": the panel's bricks become /ogrid text tiles (k x k blocks each)
     if (!args.includes('pixels')) {
       if (args[0] === 'stop' || args[0] === 'off') return this.oGridCommand(name, ['stop'], this.streamPanel());
-      if (!args.length) return this.whisper(name, 'Usage: /stream <link or search words> [fps=N] [mute] [start=S] [len=S]   /stream stop   (pixels = the plain pixel player)');
+      if (!args.length) return this.whisper(name, 'Usage: /stream panel <link or search words> [fps=N] [mute] [start=S] [len=S]   /stream stop   (pixels = the plain pixel player)');
       return this.oGridCommand(name, args, this.streamPanel());
     }
     args = args.filter(a => a !== 'pixels');
@@ -1291,6 +1318,88 @@ module.exports = class Media {
   /** The owner's wall panel (config stream-panel overrides): pixel plane centre x/y, z under the bottom row, w x h bricks of p units, k x k O-grid cells per brick. */
   streamPanel() {
     return { x: 3956, y: 374, z: 982, w: 32, h: 18, p: 2, k: 2, ...(this.config['stream-panel'] ?? {}) };
+  }
+
+  // ---------- /stream tv ----------
+
+  /** Next log line matching re within ms (null on timeout). */
+  waitLine(re, ms) {
+    return new Promise(resolve => {
+      const done = v => { clearTimeout(timer); this.omegga.off('line', onLine); resolve(v); };
+      const onLine = line => { const m = re.exec(line); if (m) done(m); };
+      const timer = setTimeout(() => done(null), ms);
+      this.omegga.on('line', onLine);
+    });
+  }
+
+  /** Where the player looks (yaw, degrees) from their controller's ControlRotation; null if unknown. */
+  async playerYaw(name) {
+    const ctl = this.omegga.getPlayer(name)?.controller;
+    if (!ctl) return null;
+    const got = this.waitLine(new RegExp(`${ctl}\\.ControlRotation = \\(Pitch=[-\\d.]+,Yaw=([-\\d.]+)`), 2000);
+    this.omegga.writeln(`GetAll BP_PlayerController_C ControlRotation Name=${ctl}`);
+    const m = await got;
+    return m ? Number(m[1]) : null;
+  }
+
+  async tvMeta(name) {
+    return (await this.store.get(`tv:${String(name).toLowerCase()}`).catch(() => null)) || null;
+  }
+
+  /** The TV's grid origin + yaw, asked from the TV itself (/tvw<id> -> `tvpos|id|x|y|z|yaw`); null = gone. */
+  async tvPos(tv) {
+    const got = this.waitLine(new RegExp(`tvpos\\|${tv.id}\\|([-\\d.]+)\\|([-\\d.]+)\\|([-\\d.]+)\\|([-\\d.]+)`), 2500);
+    this.omegga.writeln(`br.Chat.Command /tvw${tv.id}`);
+    const m = await got;
+    return m ? m.slice(1, 5).map(Number) : null;
+  }
+
+  /** Send a TV to the dump spot in the sky and clear it there (Bricks.Clear can't touch a loose grid). */
+  async tvRemove(tv) {
+    this.omegga.writeln(`br.Chat.Command /tvx${tv.id}`);
+    await sleep(200);
+    const [c, h] = this.tg.tvDumpBox();
+    this.clearBox(c, h);
+  }
+
+  async tvGive(name, args) {
+    if (!this.tg?.buildTv || !this.brs4) return this.whisper(name, '<color="f55">/stream tv is not installed.</>');
+    const old = await this.tvMeta(name);
+    if (old) {
+      this.stopSession(name, `stream:tv:${name}`);
+      await this.tvRemove(old);
+    }
+    if (/^(remove|delete|off|gone)$/i.test(args[0] ?? '')) {
+      await this.store.delete(`tv:${String(name).toLowerCase()}`).catch(() => {});
+      return this.whisper(name, old ? 'TV removed.' : 'You have no TV.');
+    }
+    const crypto = require('crypto');
+    // `at X Y Z [YAW]` (host, or the server for tests): put it there, floor at Z
+    const atM = args[0] === 'at' && args.slice(1, 4).map(Number);
+    const host = this.omegga.getPlayer(name);
+    if (atM && (atM.some(v => !Number.isFinite(v)) || (host && !host.isHost()))) return this.whisper(name, 'Usage (host): /stream tv at X Y Z [yaw]');
+    const pos = atM ? [atM[0], atM[1], atM[2] + FEET] : await this.playerSpot(name).catch(e => (this.whisper(name, `<color="f55">${sanitize(e.message)}</>`), null));
+    if (!pos) return;
+    const yaw = atM ? Number(args[4] ?? 0) : await this.playerYaw(name);
+    // the TV stands in front of you, screen facing you (facing = where the screen's normal points)
+    const facing = yaw == null ? '-x' : ['-x', '-y', '+x', '+y'][((Math.round(yaw / 90) % 4) + 4) % 4];
+    const nv = NORMAL[facing], dist = this.config['stream-tv-distance'] ?? 90;
+    const at = [Math.round(pos[0] - nv[0] * dist), Math.round(pos[1] - nv[1] * dist), Math.round(pos[2] - FEET + 6)];
+    const orient = 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing];
+    const id = crypto.randomBytes(3).toString('hex');
+    const cfg = { tw: 32, th: 18, k: 2, cell: 2, ...(this.config['stream-tv'] ?? {}) };
+    const tv = { id, event: `og.tv.${id}`, owner: { id: `7e1e0715-0000-4b0b-9a11-${crypto.randomBytes(6).toString('hex')}`, name: `${name}'s TV`, display_name: `${name}'s TV` }, cfg, player: name, made: Date.now() };
+    const L = this.tg.tvLayout(cfg);
+    const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.tg.buildTv(this.brs4, L, { event: tv.event, owner: tv.owner, id, debug: args.includes('debug') }));
+    this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
+    setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
+    await this.store.set(`tv:${String(name).toLowerCase()}`, tv);
+    await sleep(2000);
+    const p = await this.tvPos(tv);
+    console.log(`[media] stream tv for ${name}: ${id} at ${at.join(',')} orient ${orient} (yaw ${yaw})${p ? `, answers from ${p.map(v => Math.round(v)).join(',')}` : ', NOT answering'}`);
+    if (!p) return this.whisper(name, '<color="f55">The TV did not appear (blocked here?). Try somewhere with more room.</>');
+    this.whisper(name, '<color="9cf">Here is your TV. /stream play <link or search words> plays on it, wherever you put it. /stream tv again gives you a new one.</>');
   }
 
   // ---------- !tv ----------
@@ -1462,10 +1571,13 @@ module.exports = class Media {
    * (2026-10-17: was ~24 x 500-char `br.Chat.Command` lines a second: 3
    * server crashes. Now 2 console lines a chunk.)
    */
-  async oGridCommand(name, args, panel = null) {
-    // panel = /stream: tiles on the owner's fixed wall panel (one shared session), black idle panel back after
-    const key = panel ? 'stream' : `ogrid:${name}`;
-    const ownerKey = panel ? '\u0000stream' : name;
+  async oGridCommand(name, args, panel = null, tv = null) {
+    // panel = /stream panel: tiles on the owner's fixed wall panel (one shared session), black idle panel back after
+    // tv = /stream play: the player's TV (a loose grid with its receiver on board, tvGive): only cartridges (sky over
+    // the TV) + the soundtrack (beside the TV, re-found every chunk) are loaded; the TV goes black after
+    const key = tv ? `stream:tv:${name}` : panel ? 'stream' : `ogrid:${name}`;
+    const ownerKey = tv ? `\u0000tv:${name}` : panel ? '\u0000stream' : name;
+    const screen = panel || tv; // fixed-size tile screens: /stream packet settings
     if (!this.og || !this.brs4) return this.whisper(name, '<color="f55">/ogrid is not installed (lib/brs4.mjs missing).</>');
     if (this.config['ogrid-enabled'] === false) return this.whisper(name, '<color="f55">/ogrid is switched off for now.</>');
     if (!args.length) return this.whisper(name, 'Usage: /ogrid <link or search words> [size 32] [fps=N] [-x|+x|-y|+y] [mute] [letters] [start=S] [len=S]   /ogrid stop');
@@ -1474,7 +1586,7 @@ module.exports = class Media {
       // also the screen left standing after a finished video
       for (const id of global.__ogOwners?.get(ownerKey) ?? []) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
       global.__ogOwners?.delete(ownerKey);
-      return hadOne || this.whisper(name, panel ? 'Nothing is streaming.' : 'Screen removed.');
+      return hadOne || this.whisper(name, screen ? 'Nothing is streaming.' : 'Screen removed.');
     }
     const opts = [], words = [];
     for (const a of args) (/^([+-][xy]|mute|letters|strips|debug|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
@@ -1486,9 +1598,9 @@ module.exports = class Media {
     const n = Math.max(8, Math.min(this.config['ogrid-max-size'] ?? 256, Number(opts.find(a => /^\d+$/.test(a)) ?? this.config['ogrid-size'] ?? 256)));
     // TILES (default, 2026-10-18): a 16:9 wall of micro-brick tiles, k x k blocks each, only changed tiles
     // rewritten (tgrid.mjs). `strips` = the older square screen of stacked text strips (ogrid.mjs).
-    const tiles = (panel || !opts.includes('strips')) && !!this.tg;
-    if (panel && !tiles) return this.whisper(name, '<color="f55">/stream needs tgrid.mjs.</>');
-    const fps = Math.max(1, Math.min(15, opt('fps') || (panel ? this.config['stream-fps'] ?? 8 : null) || (tiles ? this.config['ogrid-tile-fps'] ?? 4 : this.config['ogrid-fps'] || 2)));
+    const tiles = (screen || !opts.includes('strips')) && !!this.tg;
+    if (screen && !tiles) return this.whisper(name, '<color="f55">/stream needs tgrid.mjs.</>');
+    const fps = Math.max(1, Math.min(15, opt('fps') || (screen ? this.config['stream-fps'] ?? 8 : null) || (tiles ? this.config['ogrid-tile-fps'] ?? 4 : this.config['ogrid-fps'] || 2)));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
     const chunkSec = Math.max(5, tiles ? this.config['ogrid-tile-chunk-seconds'] ?? 10 : this.config['ogrid-chunk-seconds'] ?? 20);
@@ -1497,27 +1609,41 @@ module.exports = class Media {
     // (4 loops share the owner's 10 ms wire budget a tick; 1416 runs at 2 fps ran live)
     const maxRuns = this.config['ogrid-max-runs'] ?? Math.min(this.og.stripRunCap(n, strips) * strips, Math.floor((this.config['ogrid-runs-per-sec'] ?? 6000) / fps));
     const crypto = require('crypto');
-    const hash = crypto.createHash('sha1').update(panel ? 'stream' : 'ogrid:' + name).digest('hex');
+    const hash = crypto.createHash('sha1').update(tv ? 'tv:' + name : panel ? 'stream' : 'ogrid:' + name).digest('hex');
     // a NEW owner every run: a late Bricks.Clear from a stopped run (restart within a few s) cut 90 bricks out of the next screen
     const owner = this.og.ownerFor(hash.slice(0, 6) + crypto.randomBytes(3).toString('hex'));
     // kept on global: a plugin reload must not forget a screen that is still standing
     this.ogOwners = global.__ogOwners ??= new Map();
     const olds = this.ogOwners.get(ownerKey) ?? [];
     this.ogOwners.set(ownerKey, [owner.id]);
-    const event = `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`; // new name a session: an old cartridge never feeds a new screen
+    // new name a session: an old cartridge never feeds a new screen (a TV listens on its own fixed name)
+    const event = tv ? tv.event : `og.${hash.slice(0, 6)}.${crypto.randomBytes(3).toString('hex')}`;
     const M = tiles ? this.tg : this.og;
-    const L = panel ? this.tg.tLayout({ tw: panel.w, th: panel.h, k: panel.k, cell: panel.p / panel.k, lift: -4, depth: panel.p / 2, frame: false, gate: [0, 0, 6000], colour: [0, 0, 0] })
+    const L = tv ? this.tg.tvLayout(tv.cfg) : panel ? this.tg.tLayout({ tw: panel.w, th: panel.h, k: panel.k, cell: panel.p / panel.k, lift: -4, depth: panel.p / 2, frame: false, gate: [0, 0, 6000], colour: [0, 0, 0] })
       : tiles ? this.tg.tLayout({ tw: this.config['ogrid-tiles-wide'] ?? 64, th: this.config['ogrid-tiles-high'] ?? 36, k: this.config['ogrid-tile-cells'] ?? 4, cell: this.config['ogrid-tile-cell'] ?? 2 })
       : this.og.oLayout(n, { lh: this.config['ogrid-line-height'] ?? 1.6, charW: this.config['ogrid-char-width'] ?? 0.5, ws: this.config['ogrid-width-scale'] ?? 2, strips, textOff: this.config['ogrid-text-offset'] ?? 1, textScale: this.config['ogrid-text-scale'] ?? 0.645 });
 
     this.stopSession(name, key);
-    const session = { stopped: false, kind: panel ? 'the stream' : 'O grid' };
+    const session = { stopped: false, kind: screen ? 'the stream' : 'O grid' };
     session.stop = () => (session.stopped = true);
     const audioClears = [];
-    let idleTimer = null;
+    let idleTimer = null, cartAt = null;
     session.clear = () => {
       this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`);
       audioClears.splice(0).forEach(c => c());
+      if (tv && cartAt) {
+        // the TV goes black: one cartridge that blanks every tile, then it goes too
+        const at0 = cartAt;
+        setTimeout(() => {
+          const [c, h] = this.tg.cartridgeBox(L, 0);
+          this.clearBox(c.map((v, i) => v + at0[i]), h);
+          const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+          fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), this.tg.blankCartridge(this.brs4, L, { event, owner, slot: 0 }));
+          this.omegga.writeln(`br.Prefab.Load "${ref}" ${at0.join(' ')} 0 16`);
+          setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
+          setTimeout(() => this.omegga.writeln(`br.Bricks.Clear ${owner.id} 1`), 5000);
+        }, 1500);
+      }
       if (panel) {
         // the owner's black panel comes back (map owner, plain bricks) once our tiles are gone
         clearTimeout(idleTimer);
@@ -1534,7 +1660,8 @@ module.exports = class Media {
     this.sessions.set(key, session);
     let file, fileP = null;
     try {
-      const pos = panel ? null : await this.playerSpot(name);
+      const pos = tv ? await this.tvPos(tv) : panel ? null : await this.playerSpot(name);
+      if (tv && !pos) throw new Error('your TV is gone (/stream tv gets a new one)');
       this.whisper(name, `<color="999">${loading()}...</>`);
       const maxMin = this.config['video-max-minutes'] ?? 240;
       // fast start: chunks come straight off the stream URLs until the whole file is here (quickSource)
@@ -1561,10 +1688,13 @@ module.exports = class Media {
 
       // the screen stands in front of the player, facing them
       const nv = NORMAL[facing];
-      const orient = panel ? 16 : 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing], T = ORIENT[orient];
+      const orient = screen ? 16 : 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing], T = ORIENT[orient];
       const dist = Math.max(10, Math.round((Math.max(L.side, L.width * 0.8) * 0.9) / STUD)) * STUD;
       const snap = v => Math.round(v / STUD) * STUD;
-      const at = panel ? [panel.x, panel.y, panel.z] : [snap(pos[0] - nv[0] * dist), snap(pos[1] - nv[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
+      // tv: `at` = the cartridges' spot, high over the TV (L.gate puts the TV's own gates in its back, not here)
+      const at = tv ? [snap(pos[0]), snap(pos[1]), Math.round(pos[2] / 2) * 2 + (this.config['stream-tv-sky'] ?? 5000)]
+        : panel ? [panel.x, panel.y, panel.z] : [snap(pos[0] - nv[0] * dist), snap(pos[1] - nv[1] * dist), Math.round((pos[2] - FEET) / 4) * 4 + 2];
+      if (tv) cartAt = at;
       const world = p => T(p).map((v, i) => v + at[i]);
       const [fw, fh] = tiles ? [L.cols, L.rows] : [n, n];
       const tgState = tiles ? this.tg.newState(L) : null; // what every tile shows (chunks build in order)
@@ -1590,7 +1720,7 @@ module.exports = class Media {
         for (let o = 0; o + fb <= raw.length; o += fb) rawFrames.push(raw.subarray(o, o + fb));
         if (!rawFrames.length) throw new Error('no frames decoded');
         // tiles: packets of tile updates (16 of the 20 packet slots a second, the rest lets a backlog catch up)
-        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (panel ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (panel ? this.config['stream-thresh'] ?? 32 : 28), refresh: panel ? (this.config['stream-refresh'] ?? 24) : 0, per: panel ? (this.config['stream-per'] ?? 288) : 120, full: [0, 2 * fps] })
+        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (screen ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (screen ? this.config['stream-thresh'] ?? 32 : 28), refresh: screen ? (this.config['stream-refresh'] ?? 24) : 0, per: screen ? (this.config['stream-per'] ?? 288) : 120, full: [0, 2 * fps] })
           : rawFrames.map(fr => this.og.encodeFrame(fr, n, { maxRuns, strips }));
         const nFrames = rawFrames.length;
         let audio = null;
@@ -1607,9 +1737,12 @@ module.exports = class Media {
         return { frames, audio, dur, nFrames };
       };
       // the soundtrack chip stands beside the screen (in speaker range of whoever watches it), chunks alternate sides so a swap never clears the playing one
+      let tvAt = tv ? pos : null; // where the TV stood when last asked
       const loadAudio = (d, k) => {
         if (!d) return null;
-        const c = panel ? world([(k % 2 ? 1 : -1) * 60, 0, L.height + 260]) : world([(k % 2 ? 1 : -1) * (L.hw + 60), 0, 28]);
+        // tv: over the TV, wherever it is now (40-stud speaker range), chunks alternate sides
+        const c = tv ? [tvAt[0] + (k % 2 ? 1 : -1) * 60, tvAt[1], tvAt[2] + (this.config['stream-tv-audio-z'] ?? 180)]
+          : panel ? world([(k % 2 ? 1 : -1) * 60, 0, L.height + 260]) : world([(k % 2 ? 1 : -1) * (L.hw + 60), 0, 28]);
         const spot = [0, 1, 2].map(i => Math.round((c[i] - (d.lo[i] + d.hi[i]) / 2) / 2) * 2);
         const clr = this.loadDevice(d, {}, spot);
         audioClears.push(clr);
@@ -1622,16 +1755,19 @@ module.exports = class Media {
       // the receiver: loaded once, then only cartridges; earlier runs' screens go first
       for (const id of olds) this.omegga.writeln(`br.Bricks.Clear ${id} 1`);
       if (panel) this.omegga.writeln(`br.Bricks.Clear ${this.tv.ownerFor('57e2ea000001').id} 1`); // the pixel player's
-      for (const [c, h] of M.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
+      if (tv) for (const slot of [0, 1]) { const [c, h] = M.cartridgeBox(L, slot); this.clearBox(world(c), h); }
+      else for (const [c, h] of M.receiverBoxes(L)) this.clearBox(world(c), T(h).map(Math.abs));
       const loadAt = buf => {
         const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
         fs.writeFileSync(path.join(this.prefabDir, ref + '.brz'), buf);
         this.omegga.writeln(`br.Prefab.Load "${ref}" ${at.join(' ')} 0 ${orient}`);
         setTimeout(() => fs.rmSync(path.join(this.prefabDir, ref + '.brz'), { force: true }), 15_000);
       };
-      loadAt(tiles ? this.tg.buildReceiver(this.brs4, L, { event, owner, debug: opts.includes('debug'), paint: !panel }) : this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
-      await sleep(1500);
-      this.whisper(name, `<color="9cf">Showing ${fw}x${fh} ${glyph === 'O' ? "O's" : 'blocks'} at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}). ${panel ? "/stream" : "/ogrid"} stop ends it.</>`);
+      if (!tv) {
+        loadAt(tiles ? this.tg.buildReceiver(this.brs4, L, { event, owner, debug: opts.includes('debug'), paint: !panel }) : this.og.buildReceiver(this.brs4, L, { event, owner, glyph, strips }));
+        await sleep(1500);
+      }
+      this.whisper(name, `<color="9cf">Showing ${fw}x${fh} ${glyph === 'O' ? "O's" : 'blocks'} at ${fps} fps (${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')})${tv ? ' on your TV' : ''}. ${screen ? "/stream" : "/ogrid"} stop ends it.</>`);
       let sent = 0, prevAudio = null, set = first;
       for (let k = 0; k < chunks && !session.stopped; k++) {
         if (k > 0) set = await next.catch(e => (console.error(`[media] ogrid chunk ${k}`, e), null));
@@ -1643,6 +1779,11 @@ module.exports = class Media {
         loadAt(M.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner, debug: opts.includes('debug') }));
         if (k === 0) console.log(`[media] ogrid ${name}: first cartridge loaded ${Date.now() - t0ms} ms after the command`);
         const old = prevAudio;
+        if (tv && k > 0) {
+          const p = await this.tvPos(tv);
+          if (!p) { console.log(`[media] stream tv ${name}: the TV stopped answering, stopping`); session.clear(); session.stopped = true; break; }
+          tvAt = p;
+        }
         prevAudio = loadAudio(set.audio, k);
         if (old) setTimeout(old, 1500);
         sent += set.nFrames;
@@ -2142,7 +2283,8 @@ module.exports = class Media {
     const b = this.stopSession(name, `audio:${name}`);
     const c = this.stopSession(name, `tv:${name}`);
     const d = this.stopSession(name, 'stream');
-    if (a || b || c || d) return;
+    const e = this.stopSession(name, `stream:tv:${name}`);
+    if (a || b || c || d || e) return;
     if (!this.sessions.size) {
       // nothing playing anywhere: clear leftovers (frames/speakers from a reload or crash)
       this.omegga.writeln(`br.Bricks.Clear ${OWNER.id} 1`);
