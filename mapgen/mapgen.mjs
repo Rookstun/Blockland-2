@@ -1129,9 +1129,158 @@ const snowW = (x, y) => {
 const NORDIC_R = 22; // = VILLAGE.r (declared further down)
 const nordicSpot = null;
 const nordicCalm = (x, y) => (nordicSpot ? smooth(NORDIC_R + 4, NORDIC_R + 34, Math.hypot(x - nordicSpot.x, y - nordicSpot.y)) : 1);
+// TIERED MOUNTAINS (2026-10-20, owner's tiny model on the plaza + "mountains cut up into sections of circle with
+// circles growing out of the edges", "a trail ... dirt steps and flat ground", "90 degree vertical drop",
+// "kind of like a puzzle"): snow.style tiers = each mountain is stacked flat shelves snow.tierH apart with
+// sheer walls. Outline of a tier = the tier above grown 1-2 cells plus circle lobes sprouting from its edge.
+// Wall corners get 45 degree upright wedges (convex corners cut, concave filled). A dirt stair (2-stud
+// treads) climbs along a wall onto every next shelf; each flight starts round the far side of the
+// mountain from where the last one arrived, so the shelf walk between them is the puzzle.
+const SNOW_STYLE = tune('snow.style', 'tiers', 'tiers = flat shelves, sheer walls, circle-lobed tiers, dirt stair trail; ridge = old ridged peaks');
+const TIER = { h: tune('snow.tierH', 6, 'tier wall height, voxels'), peaks: tune('snow.peaks', 4, 'tiered mountains in the range'),
+  levels: tune('snow.levels', 12, 'most tiers per mountain'), lobes: tune('snow.lobes', 3, 'circle lobes grown out of each tier edge') };
+const tierMtn = { cells: new Uint8Array(N * N), trail: new Uint8Array(N * N), chamfer: [], stairs: [], peaks: [] };
+function buildTiers(capM, floor) {
+  const T = TIER.h, R = SNOWB.r, PAD = 60;
+  const x0 = snowSite.x - R - PAD, y0 = snowSite.y - R - PAD, W = 2 * (R + PAD) + 1;
+  const loc = (x, y) => (x - x0) * W + (y - y0);
+  const inW = (x, y) => x >= x0 && y >= y0 && x < x0 + W && y < y0 + W && inBounds(x, y);
+  const Hpre = new Int16Array(W * W);
+  for (let i = 0; i < W; i++) for (let j = 0; j < W; j++) if (inBounds(x0 + i, y0 + j)) Hpre[i * W + j] = H[(x0 + i) * N + y0 + j];
+  const target = new Int16Array(W * W).fill(-1);
+  const disc = (m, cx, cy, r) => { for (let x = Math.floor(cx - r); x <= cx + r; x++) for (let y = Math.floor(cy - r); y <= cy + r; y++) if (inW(x, y) && Math.hypot(x - cx, y - cy) <= r) m[loc(x, y)] = 1; };
+  // 2-pass chamfer distance (1, 1.414) from the mask
+  const dist = new Float32Array(W * W);
+  const distFrom = m => {
+    for (let k = 0; k < W * W; k++) dist[k] = m[k] ? 0 : 1e9;
+    for (let i = 0; i < W; i++) for (let j = 0; j < W; j++) { const k = i * W + j; let d = dist[k];
+      if (i) { d = Math.min(d, dist[k - W] + 1); if (j) d = Math.min(d, dist[k - W - 1] + 1.414); if (j < W - 1) d = Math.min(d, dist[k - W + 1] + 1.414); }
+      if (j) d = Math.min(d, dist[k - 1] + 1); dist[k] = d; }
+    for (let i = W - 1; i >= 0; i--) for (let j = W - 1; j >= 0; j--) { const k = i * W + j; let d = dist[k];
+      if (i < W - 1) { d = Math.min(d, dist[k + W] + 1); if (j < W - 1) d = Math.min(d, dist[k + W + 1] + 1.414); if (j) d = Math.min(d, dist[k + W - 1] + 1.414); }
+      if (j < W - 1) d = Math.min(d, dist[k + 1] + 1); dist[k] = d; }
+  };
+  const peaks = [];
+  for (let t = 0; peaks.length < TIER.peaks && t < 600; t++) {
+    const a = hash(t, 7, 4201) * Math.PI * 2, d = Math.sqrt(hash(t, 9, 4202)) * R * 0.6;
+    const px = Math.round(snowSite.x + Math.cos(a) * d), py = Math.round(snowSite.y + Math.sin(a) * d);
+    if ((capM.get(px * N + py) ?? 0) < T * 5) continue;
+    if (peaks.some(p => Math.hypot(p.x - px, p.y - py) < R * 0.42)) continue;
+    peaks.push({ x: px, y: py, L: TIER.levels - (peaks.length ? Math.floor(hash(t, 3, 4203) * 4) : 0), s: t });
+  }
+  for (const p of peaks) {
+    const lev = new Uint8Array(W * W);
+    let mask = new Uint8Array(W * W);
+    disc(mask, p.x, p.y, 2 + hash(p.s, 1, 4204) * 2.5);
+    for (let k = 0; k < W * W; k++) if (mask[k]) lev[k] = p.L;
+    for (let l = p.L - 1; l >= 1; l--) {
+      distFrom(mask);
+      const grow = 1.5 + (hash(l, p.s, 4205) < 0.5 ? 1 : 0) + hash(l, p.s, 4206) * 0.6; // >= 1.5: every shelf a connected ring
+      const edge = [];
+      for (let i = 1; i < W - 1; i++) for (let j = 1; j < W - 1; j++) { const k = i * W + j; if (mask[k] && (!mask[k - 1] || !mask[k + 1] || !mask[k - W] || !mask[k + W])) edge.push(k); }
+      const next = new Uint8Array(W * W);
+      for (let k = 0; k < W * W; k++) if (dist[k] <= grow) next[k] = 1;
+      for (let n = 0; n < TIER.lobes && edge.length; n++) {
+        const k = edge[Math.floor(hash(l * 31 + n, p.s, 4207) * edge.length)], ex = x0 + Math.floor(k / W), ey = y0 + (k % W);
+        const ox = ex - p.x, oy = ey - p.y, ol = Math.hypot(ox, oy) || 1, rr = 1.5 + hash(l * 31 + n, p.s, 4208) * 4.5;
+        disc(next, ex + (ox / ol) * rr * 0.5, ey + (oy / ol) * rr * 0.5, rr); // a circle bulging out of the tier edge
+      }
+      for (let k = 0; k < W * W; k++) if (next[k] && !lev[k]) lev[k] = l;
+      mask = next;
+    }
+    // base = the ground under the first tier's ring, on the tier grid
+    const ring = [];
+    for (let k = 0; k < W * W; k++) if (lev[k] === 1) ring.push(Hpre[k]);
+    ring.sort((a, b) => a - b);
+    const B = T * Math.round((ring[ring.length >> 1] ?? 0) / T);
+    p.B = B; p.lev = lev;
+    for (let k = 0; k < W * W; k++) {
+      if (!lev[k]) continue;
+      const x = x0 + Math.floor(k / W), y = y0 + (k % W), c = x * N + y;
+      if (!capM.has(c)) continue; // rivers, trenches, dungeon hills, the town: untouched
+      const l = Math.min(lev[k], Math.floor((Hpre[k] + capM.get(c) - B) / T));
+      if (l >= 1) target[k] = Math.max(target[k], Math.min(NZ - 10, B + l * T));
+    }
+  }
+  for (let k = 0; k < W * W; k++) {
+    if (target[k] < 0) continue;
+    const x = x0 + Math.floor(k / W), y = y0 + (k % W), c = x * N + y;
+    if (target[k] !== H[c]) { floor.set(c, H[c]); H[c] = target[k]; } // flat shelves: bumps under a tier are cut down too
+  }
+  for (const c of floor.keys()) { const x = (c / N) | 0, y = c % N; for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (inBounds(x + a, y + b)) tierMtn.cells[(x + a) * N + y + b] = 1; }
+  const hN = (x, y) => (inBounds(x, y) ? H[x * N + y] : -1);
+  const busy = c => riverCell[c] || trenchCell[c] || volcanoCell[c] || H[c] <= SEA;
+  // 45 degree corners: cut convex corners down a tier, then every cell with two perpendicular walls exactly one
+  // tier up (and open on the other two sides) gets an upright wedge filling the half toward them
+  const DG = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+  for (const c of floor.keys()) {
+    const x = (c / N) | 0, y = c % N, h = H[c];
+    for (const [sx, sy] of DG)
+      if (hN(x + sx, y) === h - T && hN(x, y + sy) === h - T && hN(x + sx, y + sy) <= h - T && hN(x - sx, y) === h && hN(x, y - sy) === h && hN(x - sx, y - sy) >= h) { H[c] = h - T; break; }
+  }
+  const chamferAt = new Uint8Array(N * N);
+  for (let i = 1; i < W - 1; i++) for (let j = 1; j < W - 1; j++) {
+    const x = x0 + i, y = y0 + j, c = x * N + y;
+    if (!inBounds(x, y) || !tierMtn.cells[c] || busy(c)) continue;
+    const h = H[c];
+    for (const [sx, sy] of DG)
+      if (hN(x + sx, y) === h + T && hN(x, y + sy) === h + T && hN(x + sx, y + sy) >= h + T && hN(x - sx, y) <= h && hN(x, y - sy) <= h) {
+        tierMtn.chamfer.push({ x, y, h, sx, sy }); chamferAt[c] = 1; keepOut[c] = 1; break;
+      }
+  }
+  // the trail: per mountain, a stair onto every tier
+  const ORTH = [[1, 0], [0, 1], [-1, 0], [0, -1]], DIR8 = [...ORTH, [1, 1], [-1, 1], [-1, -1], [1, -1]];
+  let flights = 0;
+  for (const p of peaks) {
+    let from = -1;
+    for (let k = 0; k < p.L; k++) {
+      const hi = from >= 0 ? H[from] + T : -1; // the first flight: onto whichever of this mountain's tiers the foot meets
+      // the shelf you stand on (from the last exit), 4-connected cells at that height
+      let reach = null;
+      if (from >= 0) {
+        reach = new Map([[from, -1]]); const q = [from], h0 = H[from];
+        for (let qi = 0; qi < q.length; qi++) { const c = q[qi], x = (c / N) | 0, y = c % N;
+          for (const [a, b] of DIR8) { const n = (x + a) * N + y + b; if (inW(x + a, y + b) && !reach.has(n) && H[n] === h0 && !busy(n)) { reach.set(n, c); q.push(n); } } }
+      }
+      const fa = from >= 0 ? Math.atan2(from % N - p.y, ((from / N) | 0) - p.x) : 0;
+      let best = null; const why = { lev: 0, flat: 0, rise: 0, side: 0, open: 0, reach: 0 };
+      for (let i = 1; i < W - 1; i++) for (let j = 1; j < W - 1; j++) {
+        const x = x0 + i, y = y0 + j;
+        if (!inBounds(x, y) || (from >= 0 && !reach.has(x * N + y))) continue;
+        for (const [dx, dy] of ORTH) for (const [ax, ay] of [[-dy, dx], [dy, -dx]]) {
+          const run = [-1, 0, 1, 2].map(t => [x + dx * t, y + dy * t]);
+          if (!run.every(([u, v]) => inBounds(u, v))) continue;
+          const cs = run.map(([u, v]) => u * N + v), h0 = H[cs[0]];
+          if (cs.some(c => H[c] !== h0 || chamferAt[c] || busy(c) || tierMtn.trail[c])) { why.flat++; continue; }
+          const up = H[(run[1][0] + ax) * N + run[1][1] + ay], r = up - h0;
+          if (from >= 0 ? up !== hi : r < 2 || r > T || (up - p.B) % T) { why.rise++; continue; }
+          const side = run.slice(1).map(([u, v]) => (u + ax) * N + v + ay);
+          if (side.some(c => H[c] !== up || chamferAt[c] || busy(c) || !p.lev[loc((c / N) | 0, c % N)])) { why.side++; continue; }
+          if (run.slice(1).some(([u, v]) => hN(u - ax, v - ay) > h0)) { why.open++; continue; } // open on the outer side
+          if (reach && !reach.has(cs[0])) { why.reach++; continue; }
+          const ang = Math.atan2(y - p.y, x - p.x);
+          const score = (from >= 0 ? Math.abs(Math.atan2(Math.sin(ang - fa), Math.cos(ang - fa))) : 0) + hash(x * 7 + dx, y * 7 + dy, 4209 + k) * 0.7;
+          if (!best || score > best.score) best = { score, cs, side, dx, dy, ax, ay, h0, r };
+        }
+      }
+      if (!best) { console.error(`snow tiers: mountain ${p.x},${p.y} trail stops at tier ${k} of ${p.L} ${JSON.stringify(why)} reach ${reach?.size} from h ${from >= 0 ? H[from] : '-'} B ${p.B}`); break; }
+      if (reach) for (let c = best.cs[0]; c >= 0; c = reach.get(c)) tierMtn.trail[c] = 1;
+      for (const c of best.cs) { tierMtn.trail[c] = 1; keepOut[c] = 1; }
+      for (const c of best.side) keepOut[c] = 1;
+      tierMtn.stairs.push(best); flights++;
+      from = best.side[2]; tierMtn.trail[from] = 1;
+      if (H[from] >= p.B + p.L * T) break; // the summit
+    }
+  }
+  tierMtn.peaks = peaks.map(p => ({ x: p.x, y: p.y, L: p.L, B: p.B }));
+  if (process.env.TIER_DUMP) { const p = peaks[0], o = []; for (let x = p.x - 40; x <= p.x + 40; x++) { let r = ''; for (let y = p.y - 40; y <= p.y + 40; y++) { const c = x * N + y, d = H[c] - p.B; r += tierMtn.trail[c] ? '*' : chamferAt[c] ? '/' : !capM.has(c) ? '#' : d % T ? '?' : d < 0 ? '-' : '0123456789ABCDEF'[d / T] ?? '+'; } o.push(r); } fs.writeFileSync(process.env.TIER_DUMP, o.join(String.fromCharCode(10))); }
+  console.error(`snow tiers: ${peaks.length} mountains (${peaks.map(p => p.L).join(' ')} tiers), ${tierMtn.chamfer.length} corner wedges, ${flights} stair flights`);
+}
 {
   const R = SNOWB.r + SNOWB.blend;
   let top = 0;
+  const floor = new Map(); // raised cell -> its ground before the raise
+  const capM = new Map(); // tiers: cell -> most it may rise
   for (let x = snowSite.x - R - 20; x <= snowSite.x + R + 20; x++)
     for (let y = snowSite.y - R - 20; y <= snowSite.y + R + 20; y++) {
       if (!inBounds(x, y)) continue;
@@ -1144,10 +1293,14 @@ const nordicCalm = (x, y) => (nordicSpot ? smooth(NORDIC_R + 4, NORDIC_R + 34, M
       if (riverBankL[c] > -999) w *= 0.3;
       const calm = nordicCalm(x, y); // the hamlet's hollow: a little lift for the snow, no peaks
       const ridge = Math.pow(ridged2(wx / SNOWB.scale + 31, wy / SNOWB.scale - 17, 5), 1.35) * calm;
+      if (SNOW_STYLE === 'tiers') { capM.set(c, (SNOWB.lift + SNOWB.amp) * w * smooth(0, 0.6, w) * calm); continue; }
       const up = (SNOWB.lift + ridge * SNOWB.amp) * w * smooth(0, 0.6, w);
+      const h0 = H[c];
       H[c] = Math.min(NZ - 10, Math.round(H[c] + up));
-      if (H[c] > top) top = H[c];
+      if (H[c] > h0) floor.set(c, h0);
     }
+  if (SNOW_STYLE === 'tiers') buildTiers(capM, floor);
+  for (const c of floor.keys()) if (H[c] > top) top = H[c];
   console.error(`snow: cells ${snowSite.x},${snowSite.y}, r ${SNOWB.r}, highest peak ${top}`);
 }
 
@@ -2404,6 +2557,7 @@ for (let x = 0; x < N; x++)
     else if (keepOut[x * N + y] && !pathCell[x * N + y] && h <= riverLevelNear(x, y) + 1) [top, sub] = [SAND, DIRT];
     else if (hengeDist(x, y) <= 0) [top, sub] = [Math.hypot(x - henge.x0 - (henge.n >> 1), y - henge.y0 - (henge.n >> 1)) < 6.5 ? DIRT : GRASS[shade], DIRT];
     else if (pathCell[x * N + y] && h > SEA + 1 && (slope < 4 || roadGraded[x * N + y])) [top, sub] = [volcanoCell[x * N + y] === 2 ? GRAVEL : PATH, DIRT];
+    else if (tierMtn.trail[x * N + y] && !pathCell[x * N + y]) [top, sub] = [PATH, DIRT]; // the tiered mountains' trail
     else if (volcanoCell[x * N + y] === 3) [top, sub] = [LAVA, BASALT[1]];
     else if (volcanoCell[x * N + y]) [top, sub] = [slope < 3 && fbm2(wx / 500 + 3, wy / 500 + 8, 2) > 0.05 ? ASH : BASALT[shade & 1], BASALT[1]];
     else if (h < SEA - 1) [top, sub] = [h < SEA - 6 ? GRAVEL : SAND, SAND];
@@ -2940,6 +3094,33 @@ stage('smoothing');
 // Orientation: see orient.mjs (ORIENT, orientFor).
 const MAX_RISE = tune('smooth.maxRise', 6, 'tallest step that gets a wedge, bricks');
 const SEABED_SMOOTH = tune('smooth.seabed', 10, 'seabed smoothed this many bricks under the sea plane');
+// tiered mountains (snow.style tiers): upright 45 degree wedges in the wall corners, dirt stair treads
+// (2 studs deep, a brick each) along the walls; each only where the ground still matches the plan
+{
+  const T = TIER.h, WALL = MATS[ROCK[0]], STEP = MATS[PATH];
+  const ROT = { '-1,-1': 0, '1,-1': 1, '1,1': 2, '-1,1': 3 };
+  const at = (x, y) => (inMap(x, y) ? H[x * N + y] : -1);
+  let nc = 0, ns = 0;
+  for (const { x, y, h, sx, sy } of tierMtn.chamfer) {
+    if (at(x, y) !== h || at(x + sx, y) !== h + T || at(x, y + sy) !== h + T || V[vi(x, y, h + 1)] !== 0) continue;
+    bricks.push({ asset: 'PB_DefaultMicroWedge', direction: 4, rotation: ROT[sx + ',' + sy], size: [CELL / 2, CELL / 2, (T * VZ) / 2],
+      position: [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, (h + 1) * VZ + (T * VZ) / 2], color: WALL.color, ...(WALL.material ? { material: WALL.material } : {}) });
+    nc++;
+  }
+  for (const s of tierMtn.stairs) {
+    if (s.cs.some(c => H[c] !== s.h0) || s.side.some(c => H[c] !== s.h0 + s.r)) continue;
+    // the run = cells cs[1..3] (120 units along d); treads j = 1..r-1 fill its last (r-1) x 20 units
+    const c1 = s.cs[1], x1 = (c1 / N) | 0, y1 = c1 % N;
+    const back = [X0 + (x1 + 0.5) * CELL - s.dx * CELL / 2, Y0 + (y1 + 0.5) * CELL - s.dy * CELL / 2]; // run start edge, cell middle across
+    for (let j = 1; j < s.r; j++) {
+      const along = 3 * CELL - (s.r - j) * 20 + 10; // tread centre from the run start
+      bricks.push({ size: s.dx ? [10, CELL / 2, (j * VZ) / 2] : [CELL / 2, 10, (j * VZ) / 2],
+        position: [back[0] + s.dx * along, back[1] + s.dy * along, (s.h0 + 1) * VZ + (j * VZ) / 2], color: STEP.color });
+    }
+    ns++;
+  }
+  if (tierMtn.peaks.length) console.error(`snow tiers: ${nc} corner wedges, ${ns} stair flights built`);
+}
 riverDiag('before smoothing');
 if (process.env.MAPGEN_RIVERBED) { const sx = -(X0 + (town.fx + TOWN.cells / 2) * CELL), sy = -(Y0 + (town.fy + TOWN.cells / 2) * CELL); const out = []; for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) { const c = x * N + y; if (riverCell[c] || riverBankL[c] > -999) out.push([x, y, H[c], riverCell[c], riverLevel[c], riverBankL[c], Math.round(X0 + x * CELL + sx), Math.round(Y0 + y * CELL + sy)]); } fs.writeFileSync(process.env.MAPGEN_RIVERBED, JSON.stringify({ SEA, out })); }
 if (process.env.MAPGEN_RIVERDIAG) {
@@ -2988,7 +3169,7 @@ for (let x = 0; x < N; x++)
     // under the sea too, down to SEABED_SMOOTH (owner 2026-10-13: the shallows showed raw
     // voxel steps through the water), and the river's mouth where it has no water plates
     if (h + 1 <= SEA - SEABED_SMOOTH || V[vi(x, y, h)] === 0) continue;
-    if (townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || weirCell[x * N + y] || roadSurf[x * N + y] || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA && !deck[x * N + y] && !pathCell[x * N + y]))) continue;
+    if (tierMtn.cells[x * N + y] || townKind[x * N + y] || villageDist(x, y) <= VILLAGE.r || weirCell[x * N + y] || roadSurf[x * N + y] || (noSmooth[x * N + y] && !(riverCell[x * N + y] && riverLevel[x * N + y] <= SEA && !deck[x * N + y] && !pathCell[x * N + y]))) continue;
     // the foot of a terrace retaining wall: its brick veneer stands here (terraceDressing)
     if ([[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => inMap(x + dx, y + dy) && terraceCell[(x + dx) * N + y + dy] && H[(x + dx) * N + y + dy] - h >= 2)) continue;
     const hN = (dx, dy) => (inMap(x + dx, y + dy) ? H[(x + dx) * N + y + dy] : h);
@@ -3349,7 +3530,7 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
       for (const sf of st.casino.staff) spawners.push({ at: [ox + sf.at[0], oy + sf.at[1], oz + sf.at[2]], prefab: sf.prefab, dungeon: 'Casino', level: 0 });
       console.error(`casino: cells ${v.x},${v.y}, ${Math.round(townDist(v.x, v.y))} cells from the town, ${st.casino.games.length} games, ${st.casino.staff.length} staff`);
     }
-    if (w.b.dropped.length) throw new Error(`${v.kind} at ${v.x},${v.y}: ${w.b.dropped.length} bricks overlap, e.g. ${w.b.dropped[0]}`);
+    if (w.b.dropped.length && !process.env.MAPGEN_LENIENT) throw new Error(`${v.kind} at ${v.x},${v.y}: ${w.b.dropped.length} bricks overlap, e.g. ${w.b.dropped[0]}`);
     for (const { label, ...b } of w.b.bricks) if (keep(b)) bricks.push(b);
   }
   console.error(`gods: ${holy.filter(v => v.god).map(v => `${v.kind} of ${v.god.name} ${v.god.epithet}`).join('; ')}`);
@@ -4665,7 +4846,8 @@ console.error(JSON.stringify({
 const offGrid = bricks.filter(b => b.size[0] && !b.gameSize && (/^PB_DefaultMicro/.test(b.asset ?? '')
   ? b.size.some(v => !Number.isInteger(v))
   : b.size[0] % 5 || b.size[1] % 5 || b.size[2] % 2));
-if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid, e.g. ${JSON.stringify(offGrid[0])}`);
+if (offGrid.length && process.env.MAPGEN_LENIENT) { const og = new Set(offGrid); for (let i = bricks.length - 1; i >= 0; i--) if (og.has(bricks[i])) bricks.splice(i, 1); console.error(`lenient: dropped ${og.size} off-grid bricks`); }
+else if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud grid, e.g. ${JSON.stringify(offGrid[0])}`);
 // ride surface pieces (ride: 1) give way to anything placed on the road after them (roadside stones,
 // tunnel trim, walkway flags): the game would reject one of each overlapping pair anyway
 {
