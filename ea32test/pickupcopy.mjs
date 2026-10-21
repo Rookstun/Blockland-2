@@ -32,19 +32,17 @@ async function build(refs) {
   for (const prop of PROPS) {
     const g = gate(C.Exec_GetComponentProperty, { Component: { Brick: r0, ComponentTypeIndex: 0 }, PropertyName: prop, ComponentType: IS });
     wire(gt, 'Component', g, 'Component'); wire(ex[0], ex[1], g, 'Exec');
-    const pg = print(`pc|got ${prop}|{A}`); wire(g, 'Value', pg.f, 'InputA'); wire(g, 'ExecOut', pg.p, 'Exec');
+    const pg = print(`pc|got ${prop}`); wire(g, 'ExecOut', pg.p, 'Exec');
     const s = gate(C.Exec_SetComponentProperty, { Value: { $variant: 'f64', value: 0 }, Component: { Brick: r0, ComponentTypeIndex: 0 }, PropertyName: prop, ComponentType: IS });
     wire(gp, 'Component', s, 'Component'); wire(g, 'Value', s, 'Value'); wire(pg.p, 'ExecOut', s, 'Exec');
-    const p = print(`pc|${prop}|{A}`); wire(g, 'Value', p.f, 'InputA'); wire(s, 'ExecOut', p.p, 'Exec');
+    const p = print(`pc|set ${prop}`); wire(s, 'ExecOut', p.p, 'Exec');
     ex = [p.p, 'ExecOut'];
   }
-  // colour slot probes: MakeColorSRGB(255, 0, 255) -> property names below (pc|col|<name> printed after each)
-  const mc = gate(C.Expr_MakeColorSRGB, { R: 255, G: 0, B: 255, A: 255 });
-  for (const name of ['PickupMeshColors[0]', 'PickupMeshColors.0', 'PickupMeshColors_0']) {
-    const s = gate(C.Exec_SetComponentProperty, { Value: { $variant: 'f64', value: 0 }, Component: { Brick: r0, ComponentTypeIndex: 0 }, PropertyName: name, ComponentType: IS });
-    wire(gp, 'Component', s, 'Component'); wire(mc, 'Output', s, 'Value'); wire(ex[0], ex[1], s, 'Exec');
-    const p = print(`pc|col|${name}`); wire(s, 'ExecOut', p.p, 'Exec'); ex = [p.p, 'ExecOut'];
-  }
+  // colours: Set PickupMeshColors <- an ArrayVar of LinearColor (magenta x8)
+  const cols = gate(C.ArrayVar, { Value: { $elementType: 'LinearColor', $array: Array.from({ length: 8 }, () => ({ R: 1, G: 0, B: 1, A: 1 })) } });
+  const sc = gate(C.Exec_SetComponentProperty, { Value: { $variant: 'f64', value: 0 }, Component: { Brick: r0, ComponentTypeIndex: 0 }, PropertyName: 'PickupMeshColors', ComponentType: IS });
+  wire(gp, 'Component', sc, 'Component'); wire(cols, 'ArrayVarRef', sc, 'Value'); wire(ex[0], ex[1], sc, 'Exec');
+  const pc = print('pc|set colours'); wire(sc, 'ExecOut', pc.p, 'Exec');
   w.makePrefab({});
   return w.toBrz({ bundle: { description: 'pickup copy probe' }, externalAssets: EXT });
 }
