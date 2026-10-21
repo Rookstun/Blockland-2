@@ -1387,7 +1387,8 @@ module.exports = class Media {
     const at = [Math.round(pos[0] - nv[0] * dist), Math.round(pos[1] - nv[1] * dist), Math.round(pos[2] - FEET + 6)];
     const orient = 16 + { '-y': 0, '+x': 1, '+y': 2, '-x': 3 }[facing];
     const id = crypto.randomBytes(3).toString('hex');
-    const cfg = { tw: 32, th: 18, k: 2, cell: 2, ...(this.config['stream-tv'] ?? {}) };
+    // owner 2026-10-20 "1x1 pixel, 3x3 colors": every tile one 1x1 micro brick (2 units) showing 3x3 blocks (96x54 picture)
+    const cfg = { tw: 32, th: 18, k: 3, cell: 2 / 3, ...(this.config['stream-tv'] ?? {}) };
     const tv = { id, event: `og.tv.${id}`, owner: { id: `7e1e0715-0000-4b0b-9a11-${crypto.randomBytes(6).toString('hex')}`, name: `${name}'s TV`, display_name: `${name}'s TV` }, cfg, player: name, made: Date.now() };
     const L = this.tg.tvLayout(cfg);
     const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
@@ -1720,7 +1721,7 @@ module.exports = class Media {
         for (let o = 0; o + fb <= raw.length; o += fb) rawFrames.push(raw.subarray(o, o + fb));
         if (!rawFrames.length) throw new Error('no frames decoded');
         // tiles: packets of tile updates (16 of the 20 packet slots a second, the rest lets a backlog catch up)
-        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (screen ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (screen ? this.config['stream-thresh'] ?? 32 : 28), refresh: screen ? (this.config['stream-refresh'] ?? 24) : 0, per: screen ? (this.config['stream-per'] ?? 288) : 120, full: [0, 2 * fps] })
+        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (screen ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (screen ? this.config['stream-thresh'] ?? 32 : 28), refresh: screen ? (this.config['stream-refresh'] ?? 24) : 0, per: screen ? (this.config['stream-per'] ?? Math.floor(1152 / (L.k * L.k))) : 120, full: [0, 2 * fps] })
           : rawFrames.map(fr => this.og.encodeFrame(fr, n, { maxRuns, strips }));
         const nFrames = rawFrames.length;
         let audio = null;

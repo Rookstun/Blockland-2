@@ -321,24 +321,26 @@ const TV_B = 6, TV_D = 46, TV_LIFT = 30;
 export const TV_DUMP = [-9000, -20000, 20000];
 /** ClearRegion box (centre, half) that takes a TV parked at TV_DUMP (it falls a little before the clear lands). */
 export const tvDumpBox = () => [[TV_DUMP[0], TV_DUMP[1], TV_DUMP[2] - 100], [200, 200, 300]];
+// cabinet half width: at least 76 so the gates fit in its back (a small 1x1-tile screen gets a wide bezel)
+const tvHalf = L => Math.max(L.width / 2 + TV_B, 76);
 export function tvLayout({ tw = 32, th = 18, k = 2, cell = 2 } = {}) {
   // gates in the hollow back: rows at y 18 / 34, z mid-screen, 16 apart (inner half width >= 66)
   const L0 = tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0] });
-  const inner = L0.width / 2 + TV_B - 4;
+  const inner = tvHalf(L0) - 4;
   const gstep = Math.min(16, Math.floor((inner - 10) / 3.5 / 2) * 2);
   if (gstep < 12) throw Error('tgrid: TV too narrow for its gates');
   return tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0], gstep, gate: [0, 2, Math.round(L0.height / 2 / 2) * 2 - 6] });
 }
 
 export function buildTv(lib, L, { event, owner, id, debug = false } = {}) {
-  const W = L.width / 2, H = L.height, zs = L.z0 + 4, zb = zs - TV_B, zt = zs + H + TV_B, X = W + TV_B;
+  const W = L.width / 2, H = L.height, zs = L.z0 + 4, zb = zs - TV_B, zt = zs + H + TV_B, X = tvHalf(L);
   const extra = ({ w, C, O, wire, num, gate, G }) => {
     const box = (c, h, color) => w.addBrick({ asset: 'PB_DefaultMicroBrick', size: h, position: c, color, owner_index: O }, G);
     const BEZ = [14, 14, 16], CAB = [26, 26, 30], FOOT = [34, 34, 38];
     // bezel, 2 proud of the tiles
     box([0, -1, zt - TV_B / 2], [X, 3, TV_B / 2], BEZ);
     box([0, -1, zb + TV_B / 2], [X, 3, TV_B / 2], BEZ);
-    for (const s of [1, -1]) box([s * (W + TV_B / 2), -1, zs + H / 2], [TV_B / 2, 3, H / 2], BEZ);
+    for (const s of [1, -1]) box([s * (W + X) / 2, -1, zs + H / 2], [(X - W) / 2, 3, H / 2], BEZ);
     // back plate + hollow housing (gates inside) + back cover
     box([0, 4, (zb + zt) / 2], [X, 2, (zt - zb) / 2], CAB);
     const hy = (6 + TV_D - 4) / 2, hh = (TV_D - 4 - 6) / 2;
@@ -372,7 +374,7 @@ export function buildTv(lib, L, { event, owner, id, debug = false } = {}) {
 
 /** One cartridge that blanks every tile (black), for when a stream ends. */
 export function blankCartridge(lib, L, { event, owner, slot = 0 }) {
-  const enc = encodeTiles([Buffer.alloc(L.cols * L.rows * 3)], L, newState(L), { fps: 1, per: 288, perSec: 1, full: [0] });
+  const enc = encodeTiles([Buffer.alloc(L.cols * L.rows * 3)], L, newState(L), { fps: 1, per: Math.min(288, Math.floor(16200 / entryLen(L))), perSec: 1, full: [0] });
   enc.due = enc.due.map(() => 0);
   return buildCartridge(lib, L, enc, { event, fps: 1, dur: 2, slot, owner });
 }
