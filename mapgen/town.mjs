@@ -368,7 +368,8 @@ const WEAPON_NAMES = {
 // nothing keeps them: they are still planned and built exactly as before (lots, levelling, the shared townRnd and
 // every brick's space stay the same, or road routing and every later site drift map-wide) but as GHOST bricks
 // (dropped at output, like vending boxes) and without their stands, so their lots stand empty.
-export const LEGACY = new Set(['tavern', 'warehouse', 'temple']);
+// + the spawn bank (2026-10-21, owner screenshot: "remove this").
+export const LEGACY = new Set(['tavern', 'warehouse', 'temple', 'bank']);
 export const WEAPON_SHOP = { W: 52, D: 40, FC: 12 }; // studs: building W x D, forecourt FC deep
 // Houses (2026-10-03, owner): shapedhouse.mjs rect / L / T houses with rounded
 // roofs and attics; the blacksmith houses (HOUSE_SHOP_CHANCE) stay wallgen
@@ -3181,7 +3182,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   taken.push([CX - PARK_H - 20, CY - PARK_H - 20, CX + PARK_H + 20, CY + PARK_H + 20]);
   onSite([HX - 1, HY - 1, HX + 1, HY + 1], () => church(HX, HY));
   taken.push([HX - 640, HY - 560, HX + 280, HY + 380]);
-  onSite([-541, -201, -539, -199], () => TYPES.bank(-540, -200, 1, 0, 7001));
+  onSite([-541, -201, -539, -199], () => legacyBuild('bank', () => TYPES.bank(-540, -200, 1, 0, 7001)));
   taken.push([-680, -380, -370, -20]);
   placeStands();
   onSite([559, -761, 561, -759], () => TYPES.tavern(560, -760, -1, 0, 7002));
