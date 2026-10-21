@@ -1,6 +1,8 @@
 // Builds the DDR cabinet prefab:  node build.mjs [--level easy|normal|hard] [songs dir] -> ddr.brz
 // Every songs/*.mid becomes a song on the select screen (file name = title,
-// optional songs/<name>.json { "title", "level", "track", "bpm" } overrides).
+// optional songs/<name>.json { "title", "level", "track", "bpm", "click", "groups", "steps",
+// "transpose", "vol" } overrides; the editor (node ddr/editor/server.mjs) writes them).
+// Speakers = ddr/soundset.json [[synth, group], ...] if present, else chart.mjs VOICES.
 // Load it in game with br.Prefab.Load "ddr" x y z 0 16 (owned by renderman so
 // it can pay coins).
 import fs from 'node:fs';
@@ -16,19 +18,22 @@ const args = process.argv.slice(2);
 const level = args.includes('--level') ? args[args.indexOf('--level') + 1] : 'normal';
 const songDir = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--level') ?? join(here, 'songs');
 
+const ssFile = join(here, 'soundset.json');
+const VDEF = fs.existsSync(ssFile) ? JSON.parse(fs.readFileSync(ssFile, 'utf8')).voices : VOICES;
 const songs = fs.readdirSync(songDir).filter(f => /\.midi?$/i.test(f)).sort().map(f => {
   const base = f.replace(/\.midi?$/i, ''), cfgFile = join(songDir, base + '.json');
   const cfg = fs.existsSync(cfgFile) ? JSON.parse(fs.readFileSync(cfgFile, 'utf8')) : {};
   const title = cfg.title ?? base.replace(/\s*\([^)]*\)?/g, '').replace(/^Cave Story - /, '').replace(/[_-]+/g, ' ').trim().toUpperCase();
-  const s = makeSong(readMidi(fs.readFileSync(join(songDir, f))), { name: title, level: cfg.level ?? level, track: cfg.track, bpm: cfg.bpm, click: cfg.click });
+  const s = makeSong(readMidi(fs.readFileSync(join(songDir, f))), { name: title, level: cfg.level ?? level, track: cfg.track, bpm: cfg.bpm, click: cfg.click,
+    groups: cfg.groups, steps: cfg.steps, transpose: cfg.transpose, vol: cfg.vol }, VDEF);
   console.log(`${title}: ${s.bpm} bpm, ${s.length}s, ${s.steps} steps, voices ${s.voices.map(v => v.notes.length).join('/')}`);
   return s;
 });
 if (!songs.length) throw new Error(`no .mid files in ${songDir}`);
 // keep only voices some song uses
-const used = VOICES.map((_, v) => songs.some(s => s.voices[v].notes.length));
+const used = VDEF.map((_, v) => songs.some(s => s.voices[v].notes.length));
 for (const s of songs) s.voices = s.voices.filter((_, v) => used[v]);
-const voiceDefs = VOICES.filter((_, v) => used[v]);
+const voiceDefs = VDEF.filter((_, v) => used[v]);
 const synths = voiceDefs.map(([synth]) => synth);
 
 const src = generate(songs, voiceDefs);

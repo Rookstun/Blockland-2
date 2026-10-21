@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DDR Cabinet Studio</title>
+<style>
+:root { --bg: #0d0a12; --panel: #17121f; --panel2: #201a2b; --line: #352c44; --text: #e9e4f0; --dim: #9a90aa; --pink: #ff46d2; --cyan: #3cd2ff; --green: #5aff78; --orange: #ffaa28; --red: #ff4a4a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, sans-serif; }
+button, select, input { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; }
+button { cursor: pointer; } button:hover { border-color: var(--pink); } button.on { background: var(--pink); color: #000; border-color: var(--pink); }
+button.primary { background: var(--pink); color: #000; font-weight: 600; } button:disabled { opacity: .5; cursor: default; }
+input[type=number] { width: 70px; } input[type=range] { padding: 0; }
+#app { display: grid; grid-template-columns: 250px 1fr; height: 100%; }
+#side { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+#side h1 { margin: 0; padding: 12px 14px 4px; font-size: 16px; letter-spacing: 1px; color: var(--pink); }
+#side .sub { padding: 0 14px 10px; color: var(--dim); font-size: 12px; }
+#songs { flex: 1; overflow: auto; }
+.song { padding: 7px 14px; cursor: pointer; border-left: 3px solid transparent; }
+.song:hover { background: var(--panel2); } .song.sel { background: var(--panel2); border-left-color: var(--pink); }
+.song b { display: block; font-size: 12px; } .song span { color: var(--dim); font-size: 11px; }
+#drop { margin: 10px; padding: 14px; border: 2px dashed var(--line); border-radius: 8px; text-align: center; color: var(--dim); cursor: pointer; }
+#drop.over { border-color: var(--pink); color: var(--text); }
+#main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#tabs { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); align-items: center; }
+#tabs .status { margin-left: auto; color: var(--dim); font-size: 12px; }
+.view { display: none; flex: 1; min-height: 0; } .view.show { display: flex; }
+.col { display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow: auto; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.card h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+label { color: var(--dim); } label input, label select { margin-left: 4px; }
+table { border-collapse: collapse; width: 100%; } td, th { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { color: var(--dim); font-weight: 500; font-size: 11px; }
+.pill { display: inline-block; padding: 1px 6px; border-radius: 9px; font-size: 11px; background: var(--panel2); }
+#chartView { gap: 0; }
+#chartSide { width: 430px; flex: none; border-right: 1px solid var(--line); }
+#chartWrap { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; }
+#chartCanvas { position: sticky; top: 0; display: block; }
+#playView { justify-content: center; gap: 16px; padding: 12px; overflow: auto; }
+#simCanvas { background: #000; border-radius: 10px; border: 6px solid #2a1f36; height: min(78vh, 760px); aspect-ratio: 3/4; }
+.keys kbd { display: inline-block; min-width: 22px; text-align: center; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel2); }
+pre { margin: 0; white-space: pre-wrap; font: 11px/1.35 ui-monospace, monospace; max-height: 340px; overflow: auto; color: var(--dim); }
+.warn { color: var(--orange); } .bad { color: var(--red); } .good { color: var(--green); }
+.bars { display: flex; gap: 2px; align-items: flex-end; height: 40px; }
+.bars div { width: 14px; background: var(--cyan); border-radius: 2px 2px 0 0; min-height: 1px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h1>DDR CABINET STUDIO</h1>
+    <div class="sub">songs on the cabinet (ddr/songs)</div>
+    <div id="songs"></div>
+    <div id="drop">Drop .mid files here<br>or click to upload<input id="file" type="file" accept=".mid,.midi" multiple hidden></div>
+  </div>
+  <div id="main">
+    <div id="tabs">
+      <button data-tab="chartView" class="on">Chart editor</button>
+      <button data-tab="playView">Simulator</button>
+      <button data-tab="soundView">Sound set</button>
+      <button data-tab="buildView">Build / deploy</button>
+      <span class="status" id="status"></span>
+    </div>
+
+    <div class="view show" id="chartView">
+      <div class="col" id="chartSide">
+        <div class="card">
+          <h3>Song</h3>
+          <div class="row">
+            <label>Title <input id="fTitle" style="width:220px"></label>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <label>Level <select id="fLevel"><option>easy</option><option selected>normal</option><option>hard</option></select></label>
+            <label>BPM <input id="fBpm" type="number" min="30" max="400" placeholder="file"></label>
+            <label>Transpose <input id="fTrans" type="number" min="-24" max="24" value="0"></label>
+          </div>
+          <div class="row" style="margin-top:6px" id="songInfo"></div>
+          <div class="row" style="margin-top:6px"><button id="removeSong">Remove song</button><span style="color:var(--dim);font-size:11px">(moved to ddr/songs_off)</span></div>
+        </div>
+        <div class="card">
+          <h3>Tracks → instruments</h3>
+          <table id="tracks"></table>
+          <div class="row" style="margin-top:8px" id="volRow"></div>
+        </div>
+        <div class="card">
+          <h3>Chart</h3>
+          <div class="row" id="chartMode"></div>
+          <div class="row" style="margin-top:6px">
+            <label>Snap <select id="snap"><option value="4">1/4</option><option value="2">1/8</option><option value="1" selected>1/16</option></select></label>
+            <label>Zoom <input id="zoom" type="range" min="4" max="40" value="14"></label>
+            <button id="recBtn" title="while playing, W A S D / arrows place steps at the playhead">● Record</button>
+          </div>
+          <div class="row" style="margin-top:6px">
+            <button id="edPlay">▶ Play (Space)</button>
+            <label><input type="checkbox" id="edClap" checked> clap on steps</label>
+            <label>Vol <input id="edVol" type="range" min="0" max="100" value="60"></label>
+          </div>
+          <p style="color:var(--dim);font-size:11px;margin:8px 0 0">Click a lane to add / remove a step (an auto chart turns into an edited copy). Click the ruler to move the playhead. Backspace = clear the playhead row. Ctrl+Z undo.</p>
+        </div>
+      </div>
+      <div id="chartWrap"><canvas id="chartCanvas"></canvas><div id="chartSpacer"></div></div>
+    </div>
+
+    <div class="view" id="playView">
+      <canvas id="simCanvas" width="600" height="800"></canvas>
+      <div class="col" style="width:320px;padding:0">
+        <div class="card">
+          <h3>Simulator</h3>
+          <div class="row"><button class="primary" id="simStart">▶ Start song</button><button id="simStop">■ Stop (Q)</button></div>
+          <div class="row" style="margin-top:8px">
+            <label><input type="checkbox" id="simAuto"> autoplay</label>
+            <label><input type="checkbox" id="simPractice"> start at playhead</label>
+          </div>
+          <div class="row" style="margin-top:8px"><label>Sync (ms, /ddrsync) <input id="simSync" type="number" value="0" step="10"></label></div>
+          <div class="row" style="margin-top:8px"><label>Volume <input id="simVol" type="range" min="0" max="100" value="60"></label>
+            <label><input type="checkbox" id="simClap"> assist clap</label></div>
+          <p class="keys" style="margin:10px 0 0">Seat keys: <kbd>A</kbd> ← <kbd>S</kbd> ↓ <kbd>W</kbd> ↑ <kbd>D</kbd> → (arrow keys too), <kbd>Q</kbd>/<kbd>E</kbd> stop.</p>
+          <p style="color:var(--dim);font-size:11px">Same chart, windows (perfect 50 / great 100 / good 160 ms), scoring, coins (25 × pct²), 6 arrows per lane on screen and voice envelopes as the chip. Audio is a WebAudio stand-in for the game's synth speakers (440 Hz × pitch).</p>
+        </div>
+        <div class="card"><h3>Last result</h3><div id="simResult" style="color:var(--dim)">—</div></div>
+      </div>
+    </div>
+
+    <div class="view" id="soundView">
+      <div class="col" style="flex:1;max-width:900px">
+        <div class="card">
+          <h3>Speakers on the cabinet (shared by every song)</h3>
+          <p style="color:var(--dim);font-size:12px;margin:0 0 8px">Each speaker is one synth voice on the chip. Notes go to speakers of their track's role (melody / bass / other / click); a role without speakers borrows any free one. Click speakers snap their volume and decay fast; others glide and sustain. Unused speakers are dropped at build. More speakers = bigger chip.</p>
+          <table id="voiceTable"></table>
+          <div class="row" style="margin-top:8px">
+            <button id="addVoice">+ speaker</button>
+            <label>Preset <select id="preset"><option value="">—</option></select></label>
+            <button id="saveSS" class="primary">Save sound set</button>
+            <span id="ssState" style="color:var(--dim)"></span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Notes per speaker (current song)</h3>
+          <div class="bars" id="voiceBars"></div>
+          <div id="voiceInfo" style="color:var(--dim);font-size:11px;margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="view" id="buildView">
+      <div class="col" style="flex:1;max-width:1000px">
+        <div class="card">
+          <h3>Convert → cabinet prefab</h3>
+          <div class="row">
+            <button id="checkAll">Check all songs</button>
+            <button id="build" class="primary">Build ddr.brz</button>
+            <button id="deploy">Build + deploy to the live cabinet</button>
+            <a href="/out/ddr.latest.brz">ddr.latest.brz</a> · <a href="/out/ddr.brz">ddr.brz</a> · <a href="/out/ddr.gen.ws">ddr.gen.ws</a>
+          </div>
+          <p style="color:var(--dim);font-size:11px;margin:8px 0 0">Build = node ddr/build.mjs (every song + soundset.json → wirescript chip → cabinet) then tools/to_latest.mjs (EA3.2 format). Deploy = scp to Prefabs/ddr.brz, ClearRegion the old cabinet, br.Prefab.Load "ddr" at the sky spot, World.Save (in whatever world is active).</p>
+        </div>
+        <div class="card"><h3>Songs</h3><div id="checkOut" style="color:var(--dim)">press Check all songs</div></div>
+        <div class="card"><h3>Log</h3><pre id="buildLog"></pre></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { readMidi } from '/lib/midi.mjs';
+import { makeSong, LANES } from '/lib/chart.mjs';
+import { generate, LOOK, LEAD_SEC, GAIN, W, K, LANE_ON, RAINBOW_COMBO } from '/lib/wsgen.mjs';
+
+const $ = id => document.getElementById(id);
+const api = async (url, opt) => { const r = await fetch(url, opt); const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || r.statusText), { data: j }); return j; };
+const status = s => { $('status').textContent = s; };
+const GROUPS = ['melody', 'bass', 'other', 'click'];
+const SYNTHS = ['Sine', 'Triangle', 'Square', 'Sawtooth'];
+const ROLE_COL = { melody: '#ff46d2', bass: '#3cd2ff', other: '#a58cff', click: '#ffaa28', mute: '#444' };
+const GM = ['Piano', 'Chrom. perc', 'Organ', 'Guitar', 'Bass', 'Strings', 'Ensemble', 'Brass', 'Reed', 'Pipe', 'Synth lead', 'Synth pad', 'Synth FX', 'Ethnic', 'Percussive', 'SFX'];
+const titleOf = (base, cfg) => cfg.title ?? base.replace(/\s*\([^)]*\)?/g, '').replace(/^Cave Story - /, '').replace(/[_-]+/g, ' ').trim().toUpperCase();
+
+let songs = [], cur = null, voices = [], defaults = null, undo = [];
+const midiCache = new Map();
+async function loadMidi(file) {
+  if (!midiCache.has(file)) midiCache.set(file, readMidi(new Uint8Array(await (await fetch('/api/midi/' + encodeURIComponent(file))).arrayBuffer())));
+  return midiCache.get(file);
+}
+const optsOf = (s) => ({ name: titleOf(s.base, s.cfg), level: s.cfg.level ?? 'normal', track: s.cfg.track, bpm: s.cfg.bpm, click: s.cfg.click,
+  groups: s.cfg.groups, steps: s.cfg.steps, transpose: s.cfg.transpose, vol: s.cfg.vol });
+
+// ---------------------------------------------------------------- songs
+async function refreshSongs(select) {
+  songs = await api('/api/songs');
+  const box = $('songs'); box.innerHTML = '';
+  for (const s of songs) {
+    const d = document.createElement('div'); d.className = 'song' + (cur && cur.base === s.base ? ' sel' : '');
+    d.innerHTML = `<b></b><span>${s.cfg.level ?? 'normal'}${s.cfg.steps ? ' · edited chart' : ''}${s.cfg.groups ? ' · custom roles' : ''}</span>`;
+    d.querySelector('b').textContent = titleOf(s.base, s.cfg);
+    d.onclick = () => openSong(s.base);
+    box.appendChild(d);
+  }
+  if (select) await openSong(select);
+  else if (!cur && songs.length) await openSong(songs[0].base);
+}
+async function openSong(base) {
+  stopAll();
+  const s = songs.find(x => x.base === base); if (!s) return;
+  cur = { ...s, cfg: structuredClone(s.cfg) }; undo = [];
+  cur.midi = await loadMidi(s.file);
+  playhead = 0; $('chartWrap').scrollTop = 0;
+  for (const el of $('songs').children) el.classList.toggle('sel', el.querySelector('b').textContent === titleOf(s.base, s.cfg));
+  recompute(); fillSongForm();
+}
+function recompute() {
+  if (!cur) return;
+  cur.song = makeSong(cur.midi, optsOf(cur), voices);
+  // per-track info
+  const tr = new Map();
+  for (const n of cur.midi.notes) {
+    if (n.ch === 9) continue;
+    const t = tr.get(n.track) ?? tr.set(n.track, { n: 0, lo: 127, hi: 0, prog: n.prog, sum: 0 }).get(n.track);
+    t.n++; t.lo = Math.min(t.lo, n.key); t.hi = Math.max(t.hi, n.key); t.sum += n.key;
+  }
+  cur.tracks = tr;
+  const sg = cur.song;
+  $('songInfo').innerHTML = `<span class="pill">${sg.bpm} bpm</span><span class="pill">${sg.length.toFixed(1)} s</span><span class="pill">${sg.steps} steps</span><span class="pill">${(sg.steps / Math.max(1, sg.length)).toFixed(2)} steps/s</span>` +
+    (cur.midi.notes.some(n => n.ch === 9) ? '<span class="pill" title="channel 10 is never played on the cabinet">drums dropped</span>' : '');
+  drawTracks(); drawChartMode(); drawVoiceBars(); drawChart();
+}
+let saveT = 0;
+function changed(pushUndo = true) {
+  if (pushUndo) { /* snapshot taken by the caller via snap() */ }
+  recompute();
+  clearTimeout(saveT); status('saving…');
+  saveT = setTimeout(async () => {
+    try { await api('/api/cfg/' + encodeURIComponent(cur.base), { method: 'PUT', body: JSON.stringify(cur.cfg) });
+      const s = songs.find(x => x.base === cur.base); if (s) s.cfg = structuredClone(cur.cfg);
+      status('saved ' + new Date().toLocaleTimeString()); refreshSongList(); }
+    catch (e) { status('save failed: ' + e.message); }
+  }, 400);
+}
+function refreshSongList() { const i = songs.findIndex(x => x.base === cur.base), el = $('songs').children[i]; if (el) { el.querySelector('b').textContent = titleOf(cur.base, cur.cfg); el.querySelector('span').textContent = `${cur.cfg.level ?? 'normal'}${cur.cfg.steps ? ' · edited chart' : ''}${cur.cfg.groups ? ' · custom roles' : ''}`; } }
+const snap = () => { undo.push(JSON.stringify(cur.cfg)); if (undo.length > 200) undo.shift(); };
+
+function fillSongForm() {
+  $('fTitle').value = titleOf(cur.base, cur.cfg);
+  $('fLevel').value = cur.cfg.level ?? 'normal';
+  $('fBpm').value = cur.cfg.bpm ?? ''; $('fBpm').placeholder = Math.round(cur.midi.bpm);
+  $('fTrans').value = cur.cfg.transpose ?? 0;
+}
+$('fTitle').onchange = e => { snap(); const v = e.target.value.trim().toUpperCase(); cur.cfg.title = v && v !== titleOf(cur.base, {}) ? v : undefined; changed(); };
+$('fLevel').onchange = e => { snap(); cur.cfg.level = e.target.value === 'normal' ? undefined : e.target.value; changed(); };
+$('fBpm').onchange = e => { snap(); const v = +e.target.value; cur.cfg.bpm = v > 0 ? v : undefined; changed(); };
+$('fTrans').onchange = e => { snap(); const v = Math.round(+e.target.value); cur.cfg.transpose = v || undefined; changed(); };
+$('removeSong').onclick = async () => {
+  if (!cur || !confirm(`Remove "${titleOf(cur.base, cur.cfg)}" from the cabinet? (moved to ddr/songs_off)`)) return;
+  await api('/api/song/' + encodeURIComponent(cur.base), { method: 'DELETE' }); cur = null; await refreshSongs();
+};
+
+function drawTracks() {
+  const t = $('tracks'), roles = cur.song.roles;
+  t.innerHTML = '<tr><th>#</th><th>name</th><th>notes</th><th>range</th><th>patch</th><th>role</th></tr>';
+  for (const [tr, info] of [...cur.tracks.entries()].sort((a, b) => a[0] - b[0])) {
+    const row = document.createElement('tr');
+    const name = cur.midi.trackNames[tr] ?? '';
+    const manual = cur.cfg.groups?.[tr];
+    row.innerHTML = `<td>${tr}</td><td style="max-width:90px;overflow:hidden;text-overflow:ellipsis" title=""></td><td>${info.n}</td><td>${noteName(info.lo)}–${noteName(info.hi)}</td><td title="GM program ${info.prog}">${GM[info.prog >> 3]}</td><td></td>`;
+    row.children[1].textContent = name; row.children[1].title = name;
+    const sel = document.createElement('select');
+    const autoRole = manual ? null : roles[tr];
+    sel.innerHTML = `<option value="">auto${autoRole ? ' (' + autoRole + ')' : ''}</option>` + [...GROUPS, 'mute'].map(g => `<option>${g}</option>`).join('');
+    sel.value = manual ?? ''; sel.style.borderColor = ROLE_COL[roles[tr] ?? 'mute'];
+    sel.onchange = () => { snap(); const g = { ...(cur.cfg.groups ?? {}) }; if (sel.value) g[tr] = sel.value; else delete g[tr];
+      if (sel.value === 'melody') for (const k of Object.keys(g)) if (+k !== tr && g[k] === 'melody') delete g[k];
+      cur.cfg.groups = Object.keys(g).length ? g : undefined;
+      if (sel.value === 'melody') cur.cfg.track = undefined;
+      changed(); };
+    row.children[5].appendChild(sel);
+    t.appendChild(row);
+  }
+  const vr = $('volRow'); vr.innerHTML = '';
+  for (const g of GROUPS) {
+    const l = document.createElement('label'); l.innerHTML = `${g} <input type="range" min="0" max="200" step="5" style="width:70px">`;
+    const i = l.querySelector('input'); i.value = Math.round((cur.cfg.vol?.[g] ?? 1) * 100); i.title = i.value + '%';
+    i.onchange = () => { snap(); const v = { ...(cur.cfg.vol ?? {}) }; if (+i.value === 100) delete v[g]; else v[g] = +i.value / 100; cur.cfg.vol = Object.keys(v).length ? v : undefined; i.title = i.value + '%'; changed(); };
+    vr.appendChild(l);
+  }
+}
+const noteName = k => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][k % 12] + (Math.floor(k / 12) - 1);
+
+function drawChartMode() {
+  const m = $('chartMode'); m.innerHTML = '';
+  const edited = !!cur.cfg.steps;
+  const tag = document.createElement('span'); tag.className = 'pill'; tag.textContent = edited ? `edited chart · ${cur.cfg.steps.length} steps` : `auto chart from track ${cur.song.melTrack ?? '-'} (${cur.cfg.level ?? 'normal'})`;
+  tag.style.background = edited ? 'var(--pink)' : ''; tag.style.color = edited ? '#000' : '';
+  m.appendChild(tag);
+  if (edited) { const b = document.createElement('button'); b.textContent = 'Reset to auto'; b.onclick = () => { if (!confirm('Drop the edited chart and go back to the generated one?')) return; snap(); cur.cfg.steps = undefined; changed(); }; m.appendChild(b); }
+  else { const b = document.createElement('button'); b.textContent = 'Clear chart'; b.onclick = () => { snap(); cur.cfg.steps = []; changed(); }; m.appendChild(b); }
+}
+const ensureEdited = () => { if (!cur.cfg.steps) cur.cfg.steps = cur.song.chart.map(s => ({ row: s.row, lane: s.lane })); };
+function toggleStep(row, lane, force) {
+  ensureEdited();
+  const st = cur.cfg.steps, i = st.findIndex(s => s.row === row && s.lane === lane);
+  if (i >= 0 && force !== true) st.splice(i, 1); else if (i < 0 && force !== false) st.push({ row, lane });
+  st.sort((a, b) => a.row - b.row || a.lane - b.lane);
+}
+
+// ---------------------------------------------------------------- upload
+const drop = $('drop');
+drop.onclick = () => $('file').click();
+$('file').onchange = e => upload([...e.target.files]);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); upload([...e.dataTransfer.files]); };
+async function upload(files) {
+  let last;
+  for (const f of files) {
+    if (!/\.midi?$/i.test(f.name)) { status(`${f.name}: not a .mid`); continue; }
+    try { readMidi(new Uint8Array(await f.arrayBuffer())); } catch (e) { status(`${f.name}: ${e.message}`); continue; }
+    const r = await api('/api/upload?name=' + encodeURIComponent(f.name), { method: 'POST', body: f });
+    midiCache.delete(r.file); last = r.file.replace(/\.mid$/i, ''); status('uploaded ' + r.file);
+  }
+  $('file').value = '';
+  if (last) await refreshSongs(last);
+}
+
+// ---------------------------------------------------------------- audio engine (the chip's voices, ported from wsgen voiceStep)
+let actx = null, masterGain = null;
+function audio() {
+  if (!actx) { actx = new AudioContext(); const comp = actx.createDynamicsCompressor(); masterGain = actx.createGain(); masterGain.connect(comp); comp.connect(actx.destination); }
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+const OSC = { Sine: 'sine', Triangle: 'triangle', Square: 'square', Sawtooth: 'sawtooth' };
+const LOUD = { Sine: 1, Triangle: 1, Square: 0.5, Sawtooth: 0.55 };
+class Engine {
+  // song = makeSong output; from = song time to start at (may be negative = lead in)
+  constructor(song, from, { vol = 0.6, onTick, clap } = {}) {
+    const c = audio(); this.song = song; this.onTick = onTick; this.clap = clap;
+    masterGain.gain.value = vol * 0.25;
+    this.v = song.voices.map(vd => {
+      const o = c.createOscillator(), g = c.createGain(); o.type = OSC[vd.synth] ?? 'sine'; g.gain.value = 0; o.connect(g); g.connect(masterGain); o.start();
+      let i = vd.notes.findIndex(n => n.t >= from); if (i < 0) i = vd.notes.length;
+      return { o, g, notes: vd.notes, click: vd.group === 'click', loud: LOUD[vd.synth] ?? 1, vi: i, vp: 1, vv: 0, vo: -9999, va: 0, vs: 0, last: 0 };
+    });
+    this.clapIdx = song.lanes.map(l => { let i = l.findIndex(n => n.t >= from); return i < 0 ? l.length : i; });
+    this.lat = (c.outputLatency || 0) + (c.baseLatency || 0);
+    this.t0 = c.currentTime - from + 0.05;
+    this.timer = setInterval(() => this.tick(), 20);
+  }
+  now() { return actx.currentTime - this.t0; }             // song time being scheduled
+  heard() { return this.now() - this.lat; }                // song time reaching the ears
+  tick() {
+    const t = this.now(), at = actx.currentTime;
+    if (t < -0.05) { this.onTick?.(this.heard()); return; }
+    for (const v of this.v) {
+      const n = v.notes[v.vi];
+      if (n && t >= n.t) { v.vp = n.pitch; v.vo = n.end; v.va = n.vol * GAIN; v.vs = t; v.vv = v.va; v.vi++; }
+      else if (t >= v.vo) v.vv = 0;
+      else v.vv = v.va * (v.click ? Math.max(0.3, 1 - (t - v.vs) * 5) : Math.max(0.7, 1 - (t - v.vs)));
+      v.o.frequency.setValueAtTime(440 * v.vp, at);
+      const target = v.vv * v.loud * 0.18;
+      v.g.gain.cancelScheduledValues(at);
+      if (v.click || target <= v.last) v.g.gain.setValueAtTime(target, at); else v.g.gain.setTargetAtTime(target, at, 0.025);
+      v.last = target;
+    }
+    if (this.clap) this.song.lanes.forEach((l, k) => { while (this.clapIdx[k] < l.length && l[this.clapIdx[k]].t <= t) { this.clapIdx[k]++; clapAt(at, k); } });
+    this.onTick?.(this.heard());
+  }
+  stop() { clearInterval(this.timer); const at = actx.currentTime; for (const v of this.v) { v.g.gain.cancelScheduledValues(at); v.g.gain.setValueAtTime(0, at); v.o.stop(at + 0.05); } }
+}
+let lastClap = 0;
+function clapAt(at, k) {
+  if (at - lastClap < 0.01) return; lastClap = at;
+  const c = actx, len = 0.04, buf = c.createBuffer(1, c.sampleRate * len, c.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+  const s = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+  f.type = 'bandpass'; f.frequency.value = 1800 + k * 400; g.gain.value = 0.9;
+  s.buffer = buf; s.connect(f); f.connect(g); g.connect(masterGain); s.start(at);
+}
+
+// ---------------------------------------------------------------- chart editor
+const cv = $('chartCanvas'), wrap = $('chartWrap'), cx = cv.getContext('2d');
+let playhead = 0, edEngine = null, recording = false;
+const LW = 56, RULER = 64;
+const rowPx = () => +$('zoom').value;
+function layout() {
+  const w = wrap.clientWidth, h = wrap.clientHeight, dpr = devicePixelRatio || 1;
+  cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const total = cur ? (cur.song.rowsTotal + 32) * rowPx() : h;
+  $('chartSpacer').style.height = Math.max(0, total - h) + 'px';
+}
+function geo() {
+  const w = wrap.clientWidth, rollW = Math.max(120, w - RULER - LW * 4 - 30);
+  return { w, h: wrap.clientHeight, rollX: RULER, rollW, laneX: RULER + rollW + 20 };
+}
+const TOP = 40; // playhead row sits this far below the view top while playing
+function drawChart() {
+  if (!cur) return;
+  layout();
+  const { w, h, rollX, rollW, laneX } = geo(), rp = rowPx(), sg = cur.song, rd = sg.rowDur, top = wrap.scrollTop;
+  const r0 = Math.floor(top / rp) - 1, r1 = Math.ceil((top + h) / rp) + 1, y = r => r * rp - top + TOP;
+  cx.fillStyle = '#0d0a12'; cx.fillRect(0, 0, w, h);
+  // grid
+  for (let r = Math.max(0, r0 - 2); r <= r1; r++) {
+    const yy = y(r);
+    cx.fillStyle = r % 16 === 0 ? '#4a3d5e' : r % 4 === 0 ? '#2b2338' : '#18131f';
+    cx.fillRect(rollX, yy, w - rollX, 1);
+    if (r % 16 === 0) { cx.fillStyle = '#9a90aa'; cx.font = '11px system-ui'; cx.fillText(`${r / 16 + 1}`, 6, yy + 4); cx.fillStyle = '#6d6380'; cx.fillText(fmtT(r * rd), 26, yy + 4); }
+  }
+  // piano roll: every tonal note, coloured by role
+  let lo = 127, hi = 0; for (const n of cur.midi.notes) if (n.ch !== 9) { lo = Math.min(lo, n.key); hi = Math.max(hi, n.key); }
+  const tr = cur.cfg.transpose ?? 0, kw = rollW / Math.max(12, hi - lo + 1);
+  for (const n of cur.midi.notes) {
+    if (n.ch === 9) continue;
+    const a = n.t / rd, b = (n.t + n.dur) / rd; if (b < r0 || a > r1) continue;
+    const role = sg.roles[n.track] ?? 'other';
+    cx.fillStyle = ROLE_COL[role]; cx.globalAlpha = role === 'melody' ? 0.9 : role === 'mute' ? 0.25 : 0.45;
+    cx.fillRect(rollX + (n.key - lo) * kw, y(a), Math.max(2, kw - 1), Math.max(2, (b - a) * rp - 1));
+  }
+  cx.globalAlpha = 1;
+  cx.fillStyle = '#6d6380'; cx.font = '10px system-ui'; cx.fillText(`${noteName(lo + tr)} … ${noteName(hi + tr)}`, rollX + 4, 12);
+  // lanes
+  for (let k = 0; k < 4; k++) {
+    const x = laneX + k * LW;
+    cx.fillStyle = k % 2 ? '#130f19' : '#16111d'; cx.fillRect(x, 0, LW, h);
+    cx.fillStyle = `rgb(${LANE_ON[k]})`; cx.font = 'bold 15px system-ui'; cx.textAlign = 'center'; cx.fillText(LANES[k], x + LW / 2, 15); cx.textAlign = 'left';
+  }
+  for (let r = Math.max(0, r0); r <= r1; r++) { if (r % 4) continue; cx.fillStyle = r % 16 === 0 ? '#4a3d5e' : '#2b2338'; cx.fillRect(laneX, y(r), LW * 4, 1); }
+  // steps
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  for (const s of sg.chart) {
+    if (s.row < r0 || s.row > r1) continue;
+    const x = laneX + s.lane * LW + LW / 2, yy = y(s.row), c = LANE_ON[s.lane];
+    const sz = Math.min(LW - 10, Math.max(12, rp * 1.6));
+    cx.fillStyle = `rgba(${c},0.18)`; cx.fillRect(x - LW / 2 + 3, yy - sz / 2, LW - 6, sz);
+    cx.fillStyle = `rgb(${c})`; cx.font = `bold ${Math.round(sz * 0.9)}px system-ui`; cx.fillText(LANES[s.lane], x, yy + 1);
+    if (s.row % 4) { cx.fillStyle = s.row % 2 ? '#ffaa28' : '#3cd2ff'; cx.fillRect(x - LW / 2 + 3, yy - sz / 2, 3, sz); } // off-beat tint
+  }
+  cx.textAlign = 'left'; cx.textBaseline = 'alphabetic';
+  // hover
+  if (hover) { cx.strokeStyle = '#ffffff55'; cx.strokeRect(laneX + hover.lane * LW + 2, y(hover.row) - rp / 2, LW - 4, rp); }
+  // playhead
+  const py = y(playhead / rd);
+  cx.fillStyle = '#ff46d2'; cx.fillRect(rollX - 10, py, w, 2);
+  cx.font = '11px system-ui'; cx.fillText(fmtT(playhead), 6, py - 4);
+  // end
+  cx.fillStyle = '#ff4a4a55'; cx.fillRect(rollX, y(sg.length / rd), w, 2);
+}
+const fmtT = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+let hover = null;
+function cellAt(e) {
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, yy = e.clientY - r.top + wrap.scrollTop - TOP;
+  const { laneX } = geo(), lane = Math.floor((x - laneX) / LW), snapR = +$('snap').value;
+  const row = Math.max(0, Math.round(yy / rowPx() / snapR) * snapR);
+  return { x, row, lane: lane >= 0 && lane < 4 ? lane : -1, t: Math.max(0, yy / rowPx() * cur.song.rowDur) };
+}
+cv.onmousemove = e => { if (!cur) return; const c = cellAt(e); const h = c.lane >= 0 ? c : null; if (JSON.stringify(h) !== JSON.stringify(hover)) { hover = h; drawChart(); } };
+cv.onmouseleave = () => { hover = null; drawChart(); };
+cv.onmousedown = e => {
+  if (!cur) return; const c = cellAt(e);
+  if (c.lane < 0) { if (c.x < geo().laneX) { playhead = c.t; if (edEngine) { edStop(); edPlay(); } else drawChart(); } return; }
+  snap(); toggleStep(c.row, c.lane, e.button === 2 ? false : undefined); changed();
+};
+cv.oncontextmenu = e => e.preventDefault();
+wrap.onscroll = () => drawChart();
+$('zoom').oninput = () => { const t = playhead / cur.song.rowDur; drawChart(); wrap.scrollTop = Math.max(0, t * rowPx() - 200); };
+addEventListener('resize', () => { drawChart(); });
+
+function edPlay() {
+  if (!cur) return; stopSim();
+  edEngine = new Engine(cur.song, playhead, { vol: $('edVol').value / 100, clap: $('edClap').checked, onTick: t => {
+    playhead = Math.max(0, t);
+    wrap.scrollTop = Math.max(0, playhead / cur.song.rowDur * rowPx() - 0);
+    if (t > cur.song.length) edStop();
+    drawChart();
+  } });
+  $('edPlay').textContent = '■ Stop (Space)';
+}
+function edStop() { edEngine?.stop(); edEngine = null; $('edPlay').textContent = '▶ Play (Space)'; drawChart(); }
+$('edPlay').onclick = () => edEngine ? edStop() : edPlay();
+$('recBtn').onclick = () => { recording = !recording; $('recBtn').classList.toggle('on', recording); };
+$('snap').onchange = () => drawChart();
+
+// ---------------------------------------------------------------- simulator (the chip's state 2 logic)
+const sc = $('simCanvas'), sx = sc.getContext('2d');
+let sim = null;
+const KEYMAP = { KeyA: 0, ArrowLeft: 0, KeyS: 1, ArrowDown: 1, KeyW: 2, ArrowUp: 2, KeyD: 3, ArrowRight: 3 };
+function startSim() {
+  if (!cur) return; edStop(); stopSim();
+  const sg = cur.song, practice = $('simPractice').checked;
+  const from = practice ? Math.max(0, playhead - 0.5) : 0;
+  const nt = sg.lanes.map(l => l.map(n => n.t));
+  sim = { sg, nt, from, practice, auto: $('simAuto').checked, sync: (+$('simSync').value || 0) / 1000,
+    ni: nt.map(l => { const i = l.findIndex(t => t >= from); return i < 0 ? l.length : i; }),
+    flash: [-9, -9, -9, -9], pad: [false, false, false, false],
+    score: 0, combo: 0, maxCombo: 0, nP: 0, nG: 0, nO: 0, nM: 0, judge: 'READY', jcol: '#fff', state: 2, t: -LEAD_SEC };
+  sim.engine = new Engine(sg, from - (practice ? 2 : LEAD_SEC), { vol: $('simVol').value / 100, clap: $('simClap').checked, onTick: t => simTick(t) });
+  requestAnimationFrame(simDraw);
+}
+function stopSim() { if (sim) { sim.engine?.stop(); sim.engine = null; if (sim.state === 2) sim.state = 0; } }
+function points() { sim.info = `${Math.floor(sim.score * 1e6 / Math.max(1, 3 * sim.sg.steps))}`; }
+function judgeHit(dt) {
+  if (dt <= W.perfect) { sim.nP++; sim.score += 3; sim.judge = 'PERFECT'; sim.jcol = 'rgb(255,225,60)'; }
+  else if (dt <= W.great) { sim.nG++; sim.score += 2; sim.judge = 'GREAT'; sim.jcol = 'rgb(90,255,120)'; }
+  else { sim.nO++; sim.score += 1; sim.judge = 'GOOD'; sim.jcol = 'rgb(80,180,255)'; }
+  sim.combo++; sim.maxCombo = Math.max(sim.maxCombo, sim.combo); sim.judgeAt = performance.now(); points();
+}
+function press(k) {
+  if (!sim || sim.state !== 2) return;
+  const t = sim.engine.heard() - sim.sync;
+  if (sim.ni[k] < sim.nt[k].length) {
+    const dt = Math.abs(t - sim.nt[k][sim.ni[k]]);
+    if (dt <= W.good) { judgeHit(dt); sim.flash[k] = t; sim.ni[k]++; }
+  }
+}
+function simTick(t) {
+  if (!sim || sim.state !== 2) return;
+  sim.t = t; const tc = t - sim.sync;
+  if (t > sim.sg.length + 1.5) return finish();
+  for (let k = 0; k < 4; k++) {
+    if (sim.auto) while (sim.ni[k] < sim.nt[k].length && tc >= sim.nt[k][sim.ni[k]]) { judgeHit(0); sim.flash[k] = tc; sim.ni[k]++; }
+    if (sim.ni[k] < sim.nt[k].length && tc > sim.nt[k][sim.ni[k]] + W.good) { sim.nM++; sim.combo = 0; sim.judge = 'MISS'; sim.jcol = 'rgb(255,50,50)'; sim.judgeAt = performance.now(); points(); sim.ni[k]++; }
+  }
+}
+function finish() {
+  sim.state = 3; sim.engine.stop(); sim.engine = null;
+  const pct = sim.score / Math.max(1, 3 * sim.sg.steps), pts = Math.floor(pct * 1e6);
+  const grade = sim.nG + sim.nO + sim.nM === 0 ? 'AAA' : pct >= 0.93 ? 'AA' : pct >= 0.8 ? 'A' : pct >= 0.65 ? 'B' : pct >= 0.45 ? 'C' : 'D';
+  const coins = Math.floor(25 * pct * pct);
+  Object.assign(sim, { grade, pts, coins });
+  $('simResult').innerHTML = `<b style="color:var(--text);font-size:18px">${grade}</b> ${pts}${sim.practice ? ' <span class="warn">(practice)</span>' : ''}${sim.auto ? ' <span class="warn">(autoplay)</span>' : ''}<br>P${sim.nP} G${sim.nG} OK${sim.nO} X${sim.nM} · max combo ${sim.maxCombo} · +${coins} coins`;
+}
+function simDraw() {
+  if (!sim) return;
+  const W_ = sc.width, H_ = sc.height, sg = sim.sg, t = sim.state === 2 && sim.engine ? sim.engine.heard() : sim.t, tc = t - sim.sync;
+  // cabinet screen: z 18 (bottom strip) .. 94 (receptors); map z -> y
+  const Z = z => H_ - 70 - (z - 10) * ((H_ - 230) / 90);
+  const rainbow = sim.combo >= RAINBOW_COMBO ? `hsl(${(t * 5 * 57.3) % 360},100%,60%)` : null;
+  sx.fillStyle = '#000'; sx.fillRect(0, 0, W_, H_);
+  // BPM light
+  const beats = tc * sg.bpm / 60, ph = beats - Math.floor(beats);
+  sx.fillStyle = ph < 0.25 && sim.state === 2 ? `rgba(255,90,220,${0.35 * (1 - ph * 4)})` : 'rgba(60,20,50,0.5)';
+  sx.fillRect(0, 0, W_, 8); sx.fillRect(0, H_ - 8, W_, 8);
+  // title
+  sx.textAlign = 'center'; sx.fillStyle = '#fff'; sx.font = 'bold 26px system-ui';
+  const title = sim.state === 3 ? 'CLEARED!' : t < 0 ? `GET READY  ${Math.ceil(-t)}` : t < 1 ? 'GO!' : '';
+  sx.fillText(sg.name, W_ / 2, 44); if (title) { sx.font = 'bold 22px system-ui'; sx.fillStyle = '#ff46d2'; sx.fillText(title, W_ / 2, 74); }
+  const lx = k => W_ / 2 + (k - 1.5) * 96;
+  if (sim.state === 2) {
+    // receptors
+    for (let k = 0; k < 4; k++) {
+      const on = tc - sim.flash[k] < 0.12;
+      sx.font = 'bold 64px system-ui'; sx.lineWidth = 3;
+      sx.strokeStyle = on ? `rgb(${LANE_ON[k]})` : rainbow ?? 'rgb(70,70,80)';
+      sx.strokeText(LANES[k], lx(k), Z(94) + 22);
+      if (on) { sx.fillStyle = `rgba(${LANE_ON[k]},0.5)`; sx.fillText(LANES[k], lx(k), Z(94) + 22); }
+    }
+    // arrows: the next K notes of each lane inside LOOK seconds (the cabinet's 6 sprites per lane)
+    const SPEED = (94 - 18) / LOOK;
+    for (let k = 0; k < 4; k++) {
+      for (let j = 0; j < K; j++) {
+        const i = sim.ni[k] + j; if (i >= sim.nt[k].length) break;
+        const d = sim.nt[k][i] - tc; if (d >= LOOK) break;
+        const z = 94 - d * SPEED;
+        sx.font = 'bold 60px system-ui'; sx.fillStyle = `rgb(${LANE_ON[k]})`; sx.fillText(LANES[k], lx(k), Z(z) + 20);
+        if (rainbow) { sx.lineWidth = 2; sx.strokeStyle = rainbow; sx.strokeText(LANES[k], lx(k), Z(z) + 20); }
+      }
+    }
+    // pads
+    for (let k = 0; k < 4; k++) { sx.fillStyle = sim.pad[k] ? `rgb(${LANE_ON[k]})` : 'rgb(40,40,50)'; sx.fillRect(lx(k) - 34, H_ - 52, 68, 30); }
+    // judge, combo, score
+    const age = (performance.now() - (sim.judgeAt ?? 0)) / 1000;
+    sx.font = `bold ${age < 0.08 ? 42 : 38}px system-ui`; sx.fillStyle = sim.jcol; sx.fillText(sim.judge, W_ / 2, Z(55));
+    if (sim.combo >= 4) { sx.font = 'bold 26px system-ui'; sx.fillStyle = rainbow ?? '#fff'; sx.fillText(`${sim.combo} COMBO`, W_ / 2, Z(55) + 36); }
+    sx.textAlign = 'right'; sx.font = 'bold 20px ui-monospace, monospace'; sx.fillStyle = '#fff'; sx.fillText(sim.info ?? '0', W_ - 16, 106);
+    sx.textAlign = 'left'; sx.font = '14px system-ui'; sx.fillStyle = '#9a90aa'; sx.fillText(`${sg.bpm} BPM  ${fmtT(Math.max(0, t))} / ${fmtT(sg.length)}`, 16, 106);
+    requestAnimationFrame(simDraw);
+  } else if (sim.state === 3) {
+    sx.font = 'bold 90px system-ui'; sx.fillStyle = 'rgb(255,225,60)'; sx.fillText(sim.grade, W_ / 2, H_ / 2 - 40);
+    sx.font = 'bold 32px ui-monospace, monospace'; sx.fillText(`${sim.pts}`, W_ / 2, H_ / 2 + 10);
+    sx.font = '22px system-ui'; sx.fillStyle = '#fff'; sx.fillText(`P${sim.nP} G${sim.nG} OK${sim.nO} X${sim.nM}`, W_ / 2, H_ / 2 + 60);
+    sx.fillText(`MAX ${sim.maxCombo}  +${sim.coins}c`, W_ / 2, H_ / 2 + 95);
+  } else { sx.font = '20px system-ui'; sx.fillStyle = '#9a90aa'; sx.fillText('stopped', W_ / 2, H_ / 2); }
+  sx.textAlign = 'left';
+}
+function idleScreen() {
+  sx.fillStyle = '#000'; sx.fillRect(0, 0, sc.width, sc.height); sx.textAlign = 'center';
+  sx.fillStyle = '#ff46d2'; sx.font = 'bold 30px system-ui'; sx.fillText(cur ? `◄ ${cur.song.name} ►` : 'DDR', sc.width / 2, sc.height / 2 - 40);
+  if (cur) { sx.fillStyle = '#fff'; sx.font = '20px system-ui'; sx.fillText(`${cur.song.bpm} BPM  ${cur.song.steps} STEPS`, sc.width / 2, sc.height / 2); sx.fillText('↑ / Start to dance', sc.width / 2, sc.height / 2 + 40); }
+  sx.textAlign = 'left';
+}
+$('simStart').onclick = startSim;
+$('simStop').onclick = () => { stopSim(); simDraw(); };
+
+// ---------------------------------------------------------------- keys
+const activeTab = () => document.querySelector('.view.show').id;
+addEventListener('keydown', e => {
+  if (e.target.matches('input, select, textarea')) return;
+  if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { if (cur && undo.length) { cur.cfg = JSON.parse(undo.pop()); fillSongForm(); changed(); } e.preventDefault(); return; }
+  const tab = activeTab();
+  if (tab === 'chartView' && cur) {
+    if (e.code === 'Space') { e.preventDefault(); edEngine ? edStop() : edPlay(); return; }
+    if (e.code === 'Backspace' || e.code === 'Delete') { const r = Math.round(playhead / cur.song.rowDur); snap(); ensureEdited(); cur.cfg.steps = cur.cfg.steps.filter(s => s.row !== r); changed(); e.preventDefault(); return; }
+    if (e.code in KEYMAP && !e.repeat) {
+      e.preventDefault();
+      const snapR = +$('snap').value, t = edEngine ? edEngine.heard() : playhead, row = Math.max(0, Math.round(t / cur.song.rowDur / snapR) * snapR);
+      if (recording && edEngine) { snap(); toggleStep(row, KEYMAP[e.code], true); changed(); }
+      else if (!edEngine) { snap(); toggleStep(row, KEYMAP[e.code]); changed(); }
+    }
+    if (e.code === 'PageDown' || e.code === 'PageUp') { /* native scroll */ }
+  }
+  if (tab === 'playView') {
+    if (e.code in KEYMAP) { e.preventDefault(); const k = KEYMAP[e.code]; if (sim) sim.pad[k] = true; if (!e.repeat) { if (!sim || sim.state !== 2) { if (k === 2) startSim(); } else press(k); } }
+    if (e.code === 'KeyQ' || e.code === 'KeyE') { stopSim(); simDraw(); }
+  }
+});
+addEventListener('keyup', e => { if (sim && e.code in KEYMAP) sim.pad[KEYMAP[e.code]] = false; });
+
+// ---------------------------------------------------------------- sound set
+const PRESETS = {
+  'Cabinet default (soft)': null,
+  'Chiptune': [['Square', 'melody'], ['Square', 'melody'], ['Triangle', 'bass'], ['Triangle', 'bass'], ['Square', 'other'], ['Square', 'other'], ['Square', 'other'], ['Square', 'click'], ['Square', 'click']],
+  'Pure sine': [['Sine', 'melody'], ['Sine', 'melody'], ['Sine', 'bass'], ['Sine', 'bass'], ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'other'], ['Sine', 'click'], ['Sine', 'click']],
+  'Saw lead': [['Sawtooth', 'melody'], ['Sawtooth', 'melody'], ['Square', 'bass'], ['Triangle', 'bass'], ['Triangle', 'other'], ['Triangle', 'other'], ['Sine', 'other'], ['Square', 'click'], ['Square', 'click']],
+  'Small (6 speakers)': [['Triangle', 'melody'], ['Triangle', 'bass'], ['Sine', 'other'], ['Sine', 'other'], ['Square', 'click'], ['Square', 'click']],
+};
+for (const k of Object.keys(PRESETS)) $('preset').insertAdjacentHTML('beforeend', `<option>${k}</option>`);
+$('preset').onchange = e => { const p = PRESETS[e.target.value] ?? (e.target.value ? defaults.voices : null); if (!p) return; voices = structuredClone(p); ssDirty(); e.target.value = ''; };
+function drawVoices() {
+  const t = $('voiceTable'); t.innerHTML = '<tr><th>#</th><th>synth</th><th>role</th><th></th><th></th></tr>';
+  voices.forEach((v, i) => {
+    const r = document.createElement('tr');
+    r.innerHTML = `<td>${i}</td><td><select>${SYNTHS.map(s => `<option>${s}</option>`).join('')}</select></td><td><select>${GROUPS.map(g => `<option>${g}</option>`).join('')}</select></td><td><button>▶ hear</button></td><td><button>✕</button></td>`;
+    const [s1, s2] = r.querySelectorAll('select'), [b1, b2] = r.querySelectorAll('button');
+    s1.value = v[0]; s2.value = v[1]; s2.style.borderColor = ROLE_COL[v[1]];
+    s1.onchange = () => { v[0] = s1.value; ssDirty(); }; s2.onchange = () => { v[1] = s2.value; ssDirty(); };
+    b1.onclick = () => hear(v); b2.onclick = () => { voices.splice(i, 1); ssDirty(); };
+    t.appendChild(r);
+  });
+}
+function hear([synth, group]) {
+  const c = audio(); masterGain.gain.value = 0.15;
+  const o = c.createOscillator(), g = c.createGain(); o.type = OSC[synth]; o.connect(g); g.connect(masterGain);
+  const base = group === 'bass' ? 110 : 330, at = c.currentTime + 0.02;
+  [0, 4, 7, 12].forEach((s, i) => { const t = at + i * 0.22; o.frequency.setValueAtTime(base * 2 ** (s / 12), t);
+    g.gain.setValueAtTime(0.4 * (LOUD[synth] ?? 1), t);
+    if (group === 'click') g.gain.linearRampToValueAtTime(0.12, t + 0.14); else g.gain.linearRampToValueAtTime(0.3 * (LOUD[synth] ?? 1), t + 0.2); });
+  g.gain.setValueAtTime(0, at + 0.9); o.start(at); o.stop(at + 1);
+}
+function ssDirty() { $('ssState').textContent = 'unsaved'; drawVoices(); recompute(); }
+$('addVoice').onclick = () => { voices.push(['Sine', 'other']); ssDirty(); };
+$('saveSS').onclick = async () => { await api('/api/soundset', { method: 'PUT', body: JSON.stringify({ voices }) }); $('ssState').textContent = 'saved'; };
+function drawVoiceBars() {
+  if (!cur) return;
+  const vs = cur.song.voices, max = Math.max(1, ...vs.map(v => v.notes.length));
+  $('voiceBars').innerHTML = vs.map((v, i) => `<div title="#${i} ${v.synth} ${v.group}: ${v.notes.length} notes" style="height:${Math.max(2, 40 * v.notes.length / max)}px;background:${ROLE_COL[v.group]}"></div>`).join('');
+  const total = cur.midi.notes.filter(n => n.ch !== 9 && cur.song.roles[n.track] !== 'mute').length, played = vs.reduce((s, v) => s + v.notes.length, 0);
+  $('voiceInfo').innerHTML = `${played} of ${total} notes kept${total - played ? ` <span class="warn">(${total - played} cut by voice stealing / overlaps: add speakers to the busy role)</span>` : ''}`;
+}
+
+// ---------------------------------------------------------------- build
+$('checkAll').onclick = async () => {
+  status('checking…');
+  const out = [];
+  for (const s of songs) out.push(makeSong(await loadMidi(s.file), optsOf(s), voices));
+  const used = voices.map((_, v) => out.some(s => s.voices[v].notes.length));
+  const vd = voices.filter((_, v) => used[v]), trimmed = out.map(s => ({ ...s, voices: s.voices.filter((_, v) => used[v]) }));
+  const src = generate(trimmed, vd);
+  $('checkOut').innerHTML = `<table><tr><th>title</th><th>bpm</th><th>length</th><th>steps</th><th>steps/s</th><th>notes</th></tr>` +
+    out.map(s => `<tr><td>${s.name}</td><td>${s.bpm}</td><td>${s.length.toFixed(1)} s</td><td>${s.steps}</td><td>${(s.steps / s.length).toFixed(2)}</td><td>${s.voices.reduce((a, v) => a + v.notes.length, 0)}</td></tr>`).join('') +
+    `</table><p>${songs.length} songs · ${vd.length} speakers used (${vd.map(v => v[0][0] + v[0].slice(1, 3) + '/' + v[1]).join(', ')}) · chip source ${(src.length / 1024).toFixed(0)} KB ${src.length > 1.6e6 ? '<span class="warn">(bigger than the live 1.25 MB chip: check it loads)</span>' : ''}</p>`;
+  status('checked');
+};
+async function doBuild(deploy) {
+  if (deploy && !confirm('Build and REPLACE the live DDR cabinet?\n\nscp ddr.latest.brz → Prefabs/ddr.brz, ClearRegion the cabinet box at -7200 -8400 8000, Prefab.Load it there, World.Save — in whatever world is active on the server.')) return;
+  for (const b of ['build', 'deploy', 'checkAll']) $(b).disabled = true;
+  $('buildLog').textContent = deploy ? 'building + deploying…' : 'building…'; status('building…');
+  try {
+    const r = await api(deploy ? '/api/deploy' : '/api/build', { method: 'POST' });
+    $('buildLog').textContent = r.log + `\n\nddr.brz ${r.sizes.brz} bytes · ddr.latest.brz ${r.sizes.latest} bytes · chip ${r.sizes.chip} bytes`;
+    status(deploy ? 'deployed' : 'built');
+  } catch (e) { $('buildLog').textContent = (e.data?.log ?? '') + '\n\nERROR: ' + e.message; status('build failed'); }
+  for (const b of ['build', 'deploy', 'checkAll']) $(b).disabled = false;
+}
+$('build').onclick = () => doBuild(false);
+$('deploy').onclick = () => doBuild(true);
+
+// ---------------------------------------------------------------- tabs + boot
+for (const b of document.querySelectorAll('#tabs button')) b.onclick = () => {
+  for (const x of document.querySelectorAll('#tabs button')) x.classList.toggle('on', x === b);
+  for (const v of document.querySelectorAll('.view')) v.classList.toggle('show', v.id === b.dataset.tab);
+  if (b.dataset.tab === 'chartView') drawChart();
+  if (b.dataset.tab === 'playView' && (!sim || sim.state === 0)) idleScreen();
+};
+function stopAll() { edStop(); stopSim(); sim = null; }
+defaults = await api('/api/defaults');
+voices = (await api('/api/soundset')).voices;
+drawVoices();
+await refreshSongs();
+</script>
+</body>
+</html>

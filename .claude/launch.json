@@ -4,8 +4,18 @@
     {
       "name": "brickgen",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["mapgen/wgsite/server.mjs"],
+      "runtimeArgs": [
+        "mapgen/wgsite/server.mjs"
+      ],
       "port": 8788
+    },
+    {
+      "name": "ddr",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "ddr/editor/server.mjs"
+      ],
+      "port": 8792
     }
   ]
 }

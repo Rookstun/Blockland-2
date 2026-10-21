@@ -11,15 +11,15 @@ import { LANES } from './chart.mjs';
 const NL = String.fromCharCode(10);
 export const K = 6;             // arrow sprites per lane (strips)
 export const STRIP_Z0 = 18, STRIP_H = 12;   // strips at z 18..90 (cabinet.mjs builds them from these)
-const RECEPTOR_Z = 94, LOOK = 1.6;          // receptor centre; seconds of lookahead on screen
+export const RECEPTOR_Z = 94, LOOK = 1.6;          // receptor centre; seconds of lookahead on screen
 const SPEED = (RECEPTOR_Z - STRIP_Z0) / LOOK;
 const NBSP = ' ';
 export const LEAD_SEC = 4;      // countdown before the first row
-const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
-const PREVIEW = 12;            // song select: seconds of music previewed (looped), from the busiest stretch
-const RAINBOW_COMBO = 10;      // combo that turns the arrow outlines rainbow
+export const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
+export const PREVIEW = 12;            // song select: seconds of music previewed (looped), from the busiest stretch
+export const RAINBOW_COMBO = 10;      // combo that turns the arrow outlines rainbow
 const DEBUG = false;            // [ddr] lines in chat (owner: use chat for logs)
-const W = { perfect: 0.05, great: 0.1, good: 0.16 };
+export const W = { perfect: 0.05, great: 0.1, good: 0.16 };
 export const LANE_ON = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]];
 const DIM_REC = 'ColorSRGB(70, 70, 80, 255)', DIM_PAD = 'ColorSRGB(40, 40, 50, 255)';
 // W/A/S/D through the input splitter: [axis, op, threshold] per lane (LEFT, DOWN, UP, RIGHT)
