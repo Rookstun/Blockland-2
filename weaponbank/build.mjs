@@ -43,12 +43,12 @@ const C = brdb.COMPONENTS;
 // ---- catalog order (display order)
 const RANK = ['Weapon_Knife', 'Weapon_ArmingSword', 'Weapon_Sabre', 'Weapon_Spatha', 'Weapon_Longsword', 'Weapon_Zweihander', 'Weapon_Bow'];
 const rank = id => { const r = RANK.indexOf(CAT[id - 1].item); return r < 0 ? RANK.length : r; };
-const ORDER = CAT.map((e, i) => i + 1).filter(id => !/^soda_/.test(CAT[id - 1].prefab))
+const ORDER = CAT.map((e, i) => i + 1) // every shop item, sodas too (owner: "no item should be left out")
   .sort((a, b) => rank(a) - rank(b) || CAT[a - 1].price - CAT[b - 1].price || a - b);
 const N = ORDER.length, ZERO = '0'.repeat(N);
 
 // ---- the owner's bricks
-const own = WorldReader.from(fs.readFileSync(path.join(here, process.env.BANK_GEOM ?? 'bank_live.brz')));
+const own = WorldReader.from(fs.readFileSync(path.join(here, process.env.BANK_GEOM ?? 'bank_owner2.brz')));
 const first0 = WorldReader.from(fs.readFileSync(path.join(here, 'bank_owner.brz')));
 const ownAssets = own.brickAssets().map(a => a.name ?? a), ownExt = own.externalAssets();
 const ownBricks = [...own.bricks(1)];
@@ -227,7 +227,7 @@ async function build(refs) {
   const btn = buttons.map(bk => w.addBrick(brickOf(bk, { components: (ownComps[bk.position.join()] ?? []).map(c => ({ type: c.typeName, data: remap(c.data ?? {}) })) })));
   const zone = w.addBrick(brickOf(plate, { components: (ownComps[plate.position.join()] ?? []).map(c => ({ type: c.typeName,
     data: c.typeName === 'Component_Internal_AttachedZone' ? { ...c.data, bDetectPlayers: true, bDetectPlayers1: true, bDetectPlayers2: true, bDetectPlayers3: true } : c.data })) }));
-  const panelData = { ...ownSpawn, PickupClass: extIdx(item[ORDER[0]].pickup), ProjectileOverride: null, bPickupEnabled: false, bRenderTranslucentWhenDisabled: false, bOverridePickupColors: false };
+  const panelData = { ...ownSpawn, PickupClass: extIdx(item[ORDER[0]].pickup), ProjectileOverride: null, bPickupEnabled: false, bRenderTranslucentWhenDisabled: true, bOverridePickupColors: false, ItemNameOverride: '', DamageMultiplier: 1, WeaponSpeedMultiplier: 1 };
   // panels: the owner's world-grid plates, each with an ItemSpawn (owner: "no entities or prefab spawning just change
   // the fucking item spawn or use add set get component")
   displays.forEach((bk, k) => w.addBrick(brickOf(bk, { components: [{ type: 'Component_ItemSpawn', data: panelData }] })));
@@ -260,19 +260,19 @@ async function build(refs) {
     send({ brick: e.h, component_type: e.c.NAME, port: 'Exec' }, { brick: e.h, component_type: e.c.NAME, port: 'Character' }, op);
   }
   // templates: hidden world-grid micro bricks SKY_Z up over the bank (an ItemSpawn always draws its item: hidden brick,
-  // PickupScale 0 and pickup off all still showed), one per weapon with its shop ItemSpawn
-  const tplPos = ORDER.map((_, p) => [counter.position[0] - 40 + (p % 11) * 8, counter.position[1], SKY_Z + Math.floor(p / 11) * 4]);
-  ORDER.forEach((id, p) => w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [1, 1, 1], position: tplPos[p], color: [96, 109, 112], owner_index: O, ...HID,
-    components: [{ type: 'Component_ItemSpawn', data: { ...item[id].data, PickupClass: extIdx(item[id].pickup), bPickupEnabled: false, bOverridePickupColors: false } }] }));
+  // PickupScale 0 and pickup off all still showed): one per shop item with its stand's ItemSpawn, plus EMPTY = a plain
+  // knife (owner: "when not using an item slot make it a knife thats pickup is disabled with the display if pickup unavailable")
+  const tplPos = [...ORDER, 0].map((_, p) => [counter.position[0] - 40 + (p % 11) * 8, counter.position[1], SKY_Z + Math.floor(p / 11) * 4]);
+  const knife = Object.values(item).find(x => x.pickup.name === 'BP_ItemPickup_Knife');
+  [...ORDER.map(id => ({ ...item[id].data, PickupClass: extIdx(item[id].pickup) })),
+   { ...knife.data, PickupClass: extIdx(knife.pickup), ItemNameOverride: '', DamageMultiplier: 1, WeaponSpeedMultiplier: 1 }]
+    .forEach((data, p) => w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [1, 1, 1], position: tplPos[p], color: [96, 109, 112], owner_index: O, ...HID,
+      components: [{ type: 'Component_ItemSpawn', data: { ...data, bPickupEnabled: false, bOverridePickupColors: false } }] }));
   const tpls = gate(C.ArrayVar, { Value: { $elementType: 'WireValue', $array: ORDER.map((_, p) => ({ $variant: 'BRSavedBrickRef', value: refs?.tpl[p] ?? NOREF })) } });
-  // per panel: show (copy from the template, scale 1) / hide (scale 0)
-  K.forEach(k => {
-    const pref = refs?.panel[k] ?? NOREF;
-    const get = gate(C.Exec_ArrayVar_Get); wire(tpls, 'ArrayVarRef', get, 'ArrayVarRef'); wire(b.outSource('tp' + k), null, get, 'Index');
-    wire(b.outSource('show' + k), null, get, 'Exec');
-    const gt = gate(C.Exec_GetComponent, { Brick: R0, ComponentType: IS }); wire(get, 'Value', gt, 'Brick'); wire(get, 'ExecOut', gt, 'Exec');
-    const gp = gate(C.Exec_GetComponent, { Brick: pref, ComponentType: IS }); wire(gt, 'ExecOut', gp, 'Exec');
-    let ex = [gp, 'ExecOut'];
+  const EMPTY = refs?.tpl[N] ?? NOREF;
+  // copy the template's item onto the panel, then the display flags
+  const copyItem = (gt, gp, exec, translucent) => {
+    let ex = exec;
     for (const prop of COPY) {
       const g = gate(C.Exec_GetComponentProperty, { Component: { Brick: R0, ComponentTypeIndex: 0 }, PropertyName: prop, ComponentType: IS });
       wire(gt, 'Component', g, 'Component'); wire(ex[0], ex[1], g, 'Exec');
@@ -280,18 +280,32 @@ async function build(refs) {
       wire(gp, 'Component', s, 'Component'); wire(g, 'Value', s, 'Value'); wire(g, 'ExecOut', s, 'Exec');
       ex = [s, 'ExecOut'];
     }
+    for (const [prop, v] of [['bPickupEnabled', false], ['bRenderTranslucentWhenDisabled', translucent]]) {
+      const s = gate(C.Exec_SetComponentProperty, { Value: { $variant: 'bool', value: v }, Component: { Brick: R0, ComponentTypeIndex: 0 }, PropertyName: prop, ComponentType: IS });
+      wire(gp, 'Component', s, 'Component'); wire(ex[0], ex[1], s, 'Exec');
+      ex = [s, 'ExecOut'];
+    }
+    return ex;
+  };
+  // per panel: show = the item's template, solid; hide = the EMPTY knife, translucent
+  K.forEach(k => {
+    const pref = refs?.panel[k] ?? NOREF;
+    const get = gate(C.Exec_ArrayVar_Get); wire(tpls, 'ArrayVarRef', get, 'ArrayVarRef'); wire(b.outSource('tp' + k), null, get, 'Index');
+    wire(b.outSource('show' + k), null, get, 'Exec');
+    const gt = gate(C.Exec_GetComponent, { Brick: R0, ComponentType: IS }); wire(get, 'Value', gt, 'Brick'); wire(get, 'ExecOut', gt, 'Exec');
+    const gp = gate(C.Exec_GetComponent, { Brick: pref, ComponentType: IS }); wire(gt, 'ExecOut', gp, 'Exec');
+    const ex = copyItem(gt, gp, [gp, 'ExecOut'], false);
+    const ht = gate(C.Exec_GetComponent, { Brick: EMPTY, ComponentType: IS }); wire(b.outSource('hide' + k), null, ht, 'Exec');
+    const hp = gate(C.Exec_GetComponent, { Brick: pref, ComponentType: IS }); wire(ht, 'ExecOut', hp, 'Exec');
+    const hx = copyItem(ht, hp, [hp, 'ExecOut'], true);
     if (DEBUG) {
-      const dbg = (fmt, A, B, exec) => {
-        const f = gate(C.Expr_String_FormatText, { FormatString: fmt }); if (A) wire(A[0], A[1], f, 'InputA'); if (B) wire(B[0], B[1], f, 'InputB');
+      const dbg = (fmt, A, exec) => {
+        const f = gate(C.Expr_String_FormatText, { FormatString: fmt }); if (A) wire(A[0], A[1], f, 'InputA');
         const pr = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', pr, 'Text'); wire(exec[0], exec[1], pr, 'Exec');
       };
-      dbg(`bankshow|${k}|{A}|{B}`, [b.outSource('tp' + k), null], [get, 'Value'], [b.outSource('show' + k), null]);
-      dbg(`bankcomp|${k}|{A}|{B}`, [gt, 'Component'], [gp, 'Component'], [gp, 'ExecOut']);
-      dbg(`bankcopied|${k}`, null, null, ex);
+      dbg(`bankshow|${k}|{A}`, [b.outSource('tp' + k), null], ex);
+      dbg(`bankhide|${k}`, null, hx);
     }
-    const hp =gate(C.Exec_GetComponent, { Brick: pref, ComponentType: IS }); wire(b.outSource('hide' + k), null, hp, 'Exec');
-    const off = gate(C.Exec_SetComponentProperty, { Value: { $variant: 'bool', value: false }, Component: { Brick: R0, ComponentTypeIndex: 0 }, PropertyName: 'bPickupEnabled', ComponentType: IS });
-    wire(hp, 'Component', off, 'Component'); wire(hp, 'ExecOut', off, 'Exec');
   });
   return { bytes: b.finish({ extraAssets: extra, description: 'Weapon bank (all wires)' }), tplPos };
 }
@@ -321,7 +335,7 @@ function readRefs(bytes) {
 const first = await build(null);
 const r1 = readRefs(first.bytes);
 const tpl = first.tplPos.map(q => r1.inner.find(x => x.pos.join() === q.join())?.ref);
-if (r1.inner.length !== N || tpl.some(x => !x)) throw Error(`template refs: ${r1.inner.length} inner plates, ${tpl.filter(Boolean).length} matched`);
+if (r1.inner.length !== N + 1 || tpl.some(x => !x)) throw Error(`template refs: ${r1.inner.length} inner plates, ${tpl.filter(Boolean).length} matched`);
 const second = await build({ panel: r1.panel, tpl });
 // the refs must point at the same bricks after the second write
 const r2 = readRefs(second.bytes);

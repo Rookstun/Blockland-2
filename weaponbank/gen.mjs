@@ -71,7 +71,7 @@ const brickOf = (b, extra = {}) => ({ asset: assetOf(b), size: b.size, position:
 const tpl = displays[2], tplSpawn = ownComps[tpl.position.join()].find(c => c.typeName === 'Component_ItemSpawn').data;
 const made = [];
 CAT.forEach((e, i) => {
-  if (/^soda_/.test(e.prefab)) return;
+  // every shop item, sodas too (owner 2026-10-21: "no item should be left out")
   const sr = WorldReader.from(fs.readFileSync(path.join(PREFABS, e.prefab + '.brz')));
   let spawn = null;
   for (const g of sr.gridIds()) for (const ci of sr.brickChunkIndex(g)) {
