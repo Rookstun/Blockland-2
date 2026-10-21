@@ -31,7 +31,7 @@ const shapes = require('./lib/shapes');
 
 const EVENTS = ['chatcmd:ai', 'cmd:ai']; // "!ai" and "/ai"
 // (owner 2026-10-15: "hide !ai for now") true = !ai is ignored silently and left out of help
-const AI_HIDDEN = true;
+const AI_HIDDEN = false;
 const AGENT_EVENTS = ['chatcmd:agent', 'cmd:agent']; // "!agent" and "/agent"
 const IMAGE_EVENTS = ['chatcmd:img', 'cmd:img', 'chatcmd:image', 'cmd:image']; // "!img"/"!image" and "/img"/"/image"
 const HEIGHTMAP = path.join(__dirname, 'bin', 'heightmap');
