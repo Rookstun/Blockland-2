@@ -1176,6 +1176,9 @@ stage('snow');
 const SNOWB = { r: Math.round(tune('snow.r', 50, 'radius, cells (x K)') * K), blend: Math.round(tune('snow.blend', 26, 'blend, cells (x K)') * K),
   amp: tune('snow.amp', 78, 'mountain height over the ground, voxels'), scale: tune('snow.scale', 1700, 'ridge noise size, units'), lift: tune('snow.lift', 10, 'base lift, voxels') };
 const snowSite = (() => {
+  // (2026-10-21) snow.at [cx, cy] pins the site: a river change moved the site search off the live tiered mountains
+  const pin = tune('snow.at', null, 'pin the snow site to these cells [x, y] (null = search)');
+  if (pin) return { x: pin[0], y: pin[1], score: 0 };
   const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2, R = SNOWB.r;
   let best = null, why;
   // the blend may run over the neighbours' fringes (the raise fades out there); the core may not
