@@ -363,6 +363,11 @@ const WEAPON_NAMES = {
   armory: ['STABBINGTON & SONS\nFINE POINTY THINGS', 'YE OLDE\nSHARP END', 'BLADES 4 LESS\nNO REFUNDS', 'THE HONEST EDGE\nMOSTLY HONEST', 'SWORDS\nWE HAVE THEM', 'GRIM & DAUGHTER\nCUTLERY (LARGE)'],
   gunsmith: ['BANG BROS\nFIREARMS', 'GUNS GUNS GUNS\nALSO GUNS', 'THE LOUD SHOP\nEAR PLUGS EXTRA', 'TRIGGER HAPPY\nTRADING CO', 'PEW SUPPLY\nEST. RECENTLY', 'BOOMSTICK\nBARN'],
 };
+// LEGACY (2026-10-21, owner screenshots: "mark these as legacy and archive them and keep them out of the world"):
+// the old building() tavern, the warehouse and the colonnade temple. Their TYPES code stays here archived, but
+// nothing builds them: a wild/roadside site of these kinds keeps its levelled lot (so no later site moves) and
+// stays empty; hamlets build a house instead.
+export const LEGACY = new Set(['tavern', 'warehouse', 'temple']);
 export const WEAPON_SHOP = { W: 52, D: 40, FC: 12 }; // studs: building W x D, forecourt FC deep
 // Houses (2026-10-03, owner): shapedhouse.mjs rect / L / T houses with rounded
 // roofs and attics; the blacksmith houses (HOUSE_SHOP_CHANCE) stay wallgen
@@ -2552,6 +2557,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (!TYPES[single.type]) throw new Error(`town: no building type ${single.type}`);
     const [sfx, sfy] = single.facing ?? [0, -1];
     lastDoor = null;
+    if (LEGACY.has(single.type)) return stats;
     TYPES[single.type](0, 0, sfx, sfy, single.seed, false, single.wares ?? single.god);
     vending(null, single.type, sfx, sfy, lastDoor, single.seed);
     return stats;
@@ -2574,7 +2580,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       if (Math.hypot(x, y) < 260) return null;
       if (village.nordic) return stats.buildings['mead hall'] ? 'longhouse' : 'meadhall';
       if (village.desert) return stats.buildings['gun store'] ? 'western' : 'gunstore';
-      const want = specials.find(([, label]) => !stats.buildings[label]);
+      const want = specials.find(([t, label]) => !LEGACY.has(t) && !stats.buildings[label]);
       if (want && rnd(s, 9) < 0.85) return want[0];
       return rnd(s, 4) < 0.6 ? 'cottage' : 'townhouse';
     };
