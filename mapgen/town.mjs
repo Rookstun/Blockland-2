@@ -365,8 +365,8 @@ const WEAPON_NAMES = {
 };
 // LEGACY (2026-10-21, owner screenshots: "mark these as legacy and archive them and keep them out of the world"):
 // the old building() tavern, the warehouse and the colonnade temple. Their TYPES code stays here archived, but
-// nothing builds them: a wild/roadside site of these kinds keeps its levelled lot (so no later site moves) and
-// stays empty; hamlets build a house instead.
+// nothing keeps them: mapgen still runs a wild/roadside site's build (the shared townRnd must advance the same, or
+// every later site's build changes) and drops its bricks, so the levelled lot stays empty; hamlets build a house instead.
 export const LEGACY = new Set(['tavern', 'warehouse', 'temple']);
 export const WEAPON_SHOP = { W: 52, D: 40, FC: 12 }; // studs: building W x D, forecourt FC deep
 // Houses (2026-10-03, owner): shapedhouse.mjs rect / L / T houses with rounded
@@ -2557,7 +2557,6 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (!TYPES[single.type]) throw new Error(`town: no building type ${single.type}`);
     const [sfx, sfy] = single.facing ?? [0, -1];
     lastDoor = null;
-    if (LEGACY.has(single.type)) return stats;
     TYPES[single.type](0, 0, sfx, sfy, single.seed, false, single.wares ?? single.god);
     vending(null, single.type, sfx, sfy, lastDoor, single.seed);
     return stats;
