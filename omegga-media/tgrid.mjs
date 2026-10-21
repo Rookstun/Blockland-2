@@ -134,7 +134,16 @@ function kit(lib, owner) {
     if (!a.c.PORTS[ap] || !b.c.PORTS[bp]) throw Error(`bad port ${a.c.NAME}.${ap} -> ${b.c.NAME}.${bp}`);
     w.addWire({ brick: a.h, component_type: a.c.NAME, port: a.c.PORTS[ap] }, { brick: b.h, component_type: b.c.NAME, port: b.c.PORTS[bp] });
   };
-  return { w, C, O, wire, num: v => ({ $variant: 'f64', value: v }), str: v => ({ $variant: 'Str', value: v }) };
+  // a hidden microchip (house rule: invisible, no collision; addMicrochip can't, so by hand) whose inner grid
+  // holds gates: gate bricks inside it don't need room in the build (owner 2026-10-20: "put your shit in a microchip")
+  const chip = (position, parent) => {
+    const brick = w.addBrick({ asset: 'B_1x1_Microchip', position, owner_index: O, visibility: false, collision: false, components: [{ type: 'Component_Internal_Microchip' }] }, parent);
+    const grid = w.addBrickGrid({ type: 'Entity_MicrochipDynamicBrickGrid', location: { X: 0, Y: 0, Z: 40 },
+      data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 100, Y: 60, Z: 2 } } });
+    w.registerMicrochipLink(brick, grid);
+    return grid;
+  };
+  return { w, C, O, wire, chip, num: v => ({ $variant: 'f64', value: v }), str: v => ({ $variant: 'Str', value: v }) };
 }
 
 const REF0 = { GridPersistentIndex: 0, ChunkIndex: { X: 0, Y: 0, Z: 0 }, BrickIndexInChunk: 4294967295 };
@@ -142,8 +151,9 @@ const REF0 = { GridPersistentIndex: 0, ChunkIndex: { X: 0, Y: 0, Z: 0 }, BrickIn
 // paint false = no brick colour write per tile (/stream: halves what goes to clients; owner saw tearing)
 // /stream tv: physics = the whole prefab is one loose physics grid (tiles, gates, cabinet move together),
 // extra(kit) adds the TV body and its own gates; it runs after the tiles so their brick refs stay put
-function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, paint: doPaint = true, physics = false, extra = null }) {
-  const { w, C, O, wire, num, str } = kit(lib, owner);
+// inChip = every gate inside one hidden microchip at the gate spot (the TV: one chip in its hollow back)
+function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, paint: doPaint = true, physics = false, extra = null, inChip = false }) {
+  const { w, C, O, wire, num, str, chip } = kit(lib, owner);
   // physics: everything on ONE loose grid (gravity on: the writer's default grid data floats away)
   const G = physics ? w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, frozen: false, owner_index: O,
     data: { BouyancyScale: 0.2, MassScale: 1, bEnableGravity: true, bUseNewMassCalculation: true, bReceivesDecals: true, EntityTag: '' } }) : undefined;
@@ -154,7 +164,13 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
   if (L.frame) for (const zc of [L.z0 + 2, L.z0 + L.side - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.hw, 2, 2], position: [0, 0, zc], color: [6, 6, 8], owner_index: O });
   if (L.frame) for (const xc of [L.width / 2 + 2, -L.width / 2 - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [2, 2, L.height / 2], position: [xc, 0, L.z0 + 4 + L.height / 2], color: [6, 6, 8], owner_index: O });
   let i = 0;
+  const CG = inChip ? chip([L.gate[0], L.gate[1] + 22, L.gate[2] + L.z0 + 10], G) : null;
   const gate = (c, data = {}, extra = {}) => {
+    if (CG) {
+      const h = w.addBrick({ asset: c.BRICK, position: [(i % 8) * 20, Math.floor(i / 8) * 20, 2], color: [200, 200, 200], owner_index: O, components: [{ type: c.NAME, data }], ...extra }, CG);
+      i++;
+      return { h, c };
+    }
     const g = L.gstep ?? 40;
     const h = w.addBrick({ asset: c.BRICK, position: [L.gate[0] - 3.5 * g + (i % 8) * g, L.gate[1] + g + Math.floor(i / 8) * g, L.gate[2] + L.z0 + 10], color: [200, 200, 200], owner_index: O,
       visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra }, G);
@@ -249,10 +265,16 @@ export function buildReceiver(lib, L, opts) {
 const RECV_ROWS = 2; // receiver gate rows (8 a row from y 40)
 const cartY = slot => 40 + RECV_ROWS * 40 + 40 + slot * 80;
 
-export function buildCartridge(lib, L, enc, { event, fps, dur, slot = 0, owner, debug = false } = {}) {
-  const { w, C, O, wire, num, str } = kit(lib, owner);
+export function buildCartridge(lib, L, enc, { event, fps, dur, slot = 0, owner, debug = false, inChip = false } = {}) {
+  const { w, C, O, wire, num, str, chip } = kit(lib, owner);
   let i = 0;
+  const CG = inChip ? chip([L.gate[0] + 40, L.gate[1] + cartY(slot) + 20, L.gate[2] + L.z0 + 10]) : null;
   const gate = (c, data = {}, extra = {}) => {
+    if (CG) {
+      const h = w.addBrick({ asset: c.BRICK, position: [(i % 8) * 20, Math.floor(i / 8) * 20, 2], color: [200, 200, 200], owner_index: O, components: [{ type: c.NAME, data }], ...extra }, CG);
+      i++;
+      return { h, c };
+    }
     const h = w.addBrick({ asset: c.BRICK, position: [L.gate[0] - 200 + (i % 12) * 40, L.gate[1] + cartY(slot) + Math.floor(i / 12) * 40, L.gate[2] + L.z0 + 10], color: [200, 200, 200], owner_index: O,
       visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra });
     i++;
@@ -369,12 +391,12 @@ export function buildTv(lib, L, { event, owner, id, debug = false } = {}) {
     const mv = gate(C.Exec_Entity_SetLocationRotation, { Vector: { X: TV_DUMP[0], Y: TV_DUMP[1], Z: TV_DUMP[2] }, Rotation: { Pitch: 0, Yaw: 0, Roll: 0 } });
     wire(rg, 'BrickGrid', mv, 'Entity'); wire(xc, 'ExecOut', mv, 'Exec');
   };
-  return buildReceiver(lib, L, { event, owner, debug, paint: false, physics: true, extra });
+  return buildReceiver(lib, L, { event, owner, debug, paint: false, physics: true, extra, inChip: true });
 }
 
 /** One cartridge that blanks every tile (black), for when a stream ends. */
 export function blankCartridge(lib, L, { event, owner, slot = 0 }) {
   const enc = encodeTiles([Buffer.alloc(L.cols * L.rows * 3)], L, newState(L), { fps: 1, per: Math.min(288, Math.floor(16200 / entryLen(L))), perSec: 1, full: [0] });
   enc.due = enc.due.map(() => 0);
-  return buildCartridge(lib, L, enc, { event, fps: 1, dur: 2, slot, owner });
+  return buildCartridge(lib, L, enc, { event, fps: 1, dur: 2, slot, owner, inChip: true });
 }

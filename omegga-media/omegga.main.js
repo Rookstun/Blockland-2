@@ -1777,7 +1777,7 @@ module.exports = class Media {
         // cartridges alternate between two slots: this slot held chunk k-2 (long done)
         const slot = k % 2, [c, h] = M.cartridgeBox(L, slot);
         this.clearBox(world(c), T(h).map(Math.abs));
-        loadAt(M.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner, debug: opts.includes('debug') }));
+        loadAt(M.buildCartridge(this.brs4, L, set.frames, { event, fps, dur: set.dur, slot, owner, debug: opts.includes('debug'), inChip: !!tv }));
         if (k === 0) console.log(`[media] ogrid ${name}: first cartridge loaded ${Date.now() - t0ms} ms after the command`);
         const old = prevAudio;
         if (tv && k > 0) {
