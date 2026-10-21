@@ -1044,7 +1044,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * across the sales floor, buttons toward the door; outside a paved forecourt
    * with training dummies / targets and the shop's name board over the door.
    */
-  function weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC, cloth, caseSegs = [], sideWin = [] }) {
+  function weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC, cloth, caseSegs = [], sideWin = [], backSegs = null, s1 = 0 }) {
     const MB = 'PB_DefaultMicroBrick', guns = kind === 'gunsmith';
     const STEEL = c => ({ asset: MB, color: c, material: 'BMC_Metallic' });
     const DARK = { asset: MB, color: [40, 40, 44], material: 'BMC_Metallic' };
@@ -1131,7 +1131,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // runs [line, dir, a0, a1, along]: two free-standing showcases either side of the door aisle (their
     // back board on `line`, glass toward the street), then the side walls between their windows (a stud
     // clear) in front of the counter
-    const runs = [[9.8, -1, fd - 4 - 9.4, fd - 4, 'x'], [9.8, -1, fd + 4, fd + 13.4, 'x']], gl = sideWin.filter(g => g.y0 < cy0);
+    // (2026-10-21, owner on the spawn armory: "move that to where the bars of metal are and remove the wood and bars")
+    // backSegs: the cabinets stand against the back wall behind the counter where the ingot shelf was, no showcases
+    const runs = backSegs ? backSegs.map(([x0, x1]) => [s1, -1, x0, x1, 'x']) : [[9.8, -1, fd - 4 - 9.4, fd - 4, 'x'], [9.8, -1, fd + 4, fd + 13.4, 'x']], gl = sideWin.filter(g => g.y0 < cy0);
     for (const [wx, dir] of [[1, 1], [W, -1]]) {
       const cuts = gl.filter(g => (dir > 0 ? g.x0 < 1 : g.x1 > W)).map(g => [g.y0 - 1, g.y1 + 1]).sort((p, q) => p[0] - q[0]);
       let a = 1.4;
@@ -1193,11 +1195,11 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * A weapon shop on its own roomy lot centred (cx, cy), door toward (fx, fy):
    * the wallgen building pushed back so its forecourt fits in front.
    */
-  function weaponShop(kind, cx, cy, fx, fy, s, wares, { W, D, FC } = WEAPON_SHOP) {
+  function weaponShop(kind, cx, cy, fx, fy, s, wares, { W, D, FC } = WEAPON_SHOP, backCases = false) {
     const back = (FC * 10) / 2;
     wallShop(cx - fx * back, cy - fy * back, fx, fy, W, D, 1, s, kind, {
       wallColor: kind === 'armory' ? pick(PALETTE.stone, s, 3) : pick([PALETTE.brick[0], PALETTE.brick[5], PALETTE.brick[1]], s, 3),
-      roofColor: pick(PALETTE.roof, s, 4), rise: 108, cloth: kind === 'armory' ? [140, 30, 40] : [40, 90, 60], wares, forecourt: FC,
+      roofColor: pick(PALETTE.roof, s, 4), rise: 108, cloth: kind === 'armory' ? [140, 30, 40] : [40, 90, 60], wares, forecourt: FC, backCases,
     });
     count(kind);
   }
@@ -1210,7 +1212,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * behind it, storeroom and workroom at the back, rooms upstairs; fitted out
    * by `kind` (smithy, general, bakery, apothecary), with an awning and a sign.
    */
-  function wallShop(cx, cy, fx, fy, W, D, storeys, s, kind, { wallColor, upperColor = wallColor, roofColor, rise, cloth, wares = [], forecourt = 0 }) {
+  function wallShop(cx, cy, fx, fy, W, D, storeys, s, kind, { wallColor, upperColor = wallColor, roofColor, rise, cloth, wares = [], forecourt = 0, backCases = false }) {
     const h = planShop({ W, D, storeys, seed: s, kind });
     const { sbox, mput, clear, gableOn, at, prop, STOREY_H } = renderWallgen(h, cx, cy, fx, fy, s, { wallColor, upperColor, floorStyle: WEAPON_KINDS.includes(kind) ? 'greyChecker' : 'checker' });
     const { s1, a, fd, dw, hall, lw, rw, ww } = h.rooms;
@@ -1232,17 +1234,18 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     // counter across the sales floor, a gap in front of the back-room door
     const cy0 = s1 - 6;
     // (2026-10-16) a gunsmith has the owner's glass gun case where the counter would be (weaponFit)
-    const caseSegs = [];
+    const caseSegs = [], backSegs = backCases ? [] : null;
     for (const [x0, x1] of [[3, hall - 3], [hall + 3, W - 3]]) {
       if (x1 - x0 < 2) continue;
       if (kind === 'gunsmith') { caseSegs.push([x0, x1]); continue; }
+      if (backSegs) backSegs.push([x0, x1]); // no stock shelf / ingots: weaponFit's glass cabinets go there
       piece(x0, cy0, x1, cy0 + 2, () => {
         // 2.5 bricks high like the faire counters (player 5 bricks; was 36)
         sbox(x0, cy0, x1, cy0 + 2, f, f + 26, { asset: 'PB_DefaultMicroBrick', color: dark });
         sbox(x0, cy0, x1, cy0 + 2, f + 26, f + 30, { asset: 'PB_DefaultTile', color: PALETTE.timber[1] });
       });
       // stock shelves against the back wall behind it
-      piece(x0, s1 - 2, x1, s1, () => {
+      if (!backSegs) piece(x0, s1 - 2, x1, s1, () => {
         sbox(x0, s1 - 2, x1, s1, f, f + 56, { color: timber });
         for (let x = x0; x + 1 < x1; x += 2) {
           if (kind === 'apothecary' || kind === 'general') mput(x + 1, s1 - 1, f + 56 + 12, [0, 0, 0], { asset: 'B_Jar', color: pick(PALETTE.goods, s, x, 21), material: 'BMC_Glass' });
@@ -1305,7 +1308,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         mput(x + 2, back, f + 32 + 2, [0, 0, 0], { asset: 'B_Fern', color: [70, 130, 50] });
       });
     } else if (WEAPON_KINDS.includes(kind)) {
-      weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt, cloth, caseSegs, sideWin: h.boxes.filter(b => b.kind === 'glass' && (b.x0 < 1 || b.x1 > W)) });
+      weaponFit({ sbox, mput, at, prop, piece, kind, W, cy0, fd, dw, lw, rw, ww, f, fx, fy, s, wares, FC: forecourt, cloth, caseSegs, sideWin: h.boxes.filter(b => b.kind === 'glass' && (b.x0 < 1 || b.x1 > W)), backSegs, s1 });
     } else {
       // general store: crates, barrels, sacks along the walls
       for (const [x, y] of [[sideL, back], [sideL + 2, back], [sideL, back - 2], [sideR + 2, back], [sideR + 2, back - 2]])
@@ -2954,7 +2957,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // beside the roads out of town (same search as the soda market, more margin)
   function placeWeaponShops(paths) {
     const SPAWN = {
-      armory: ['bronze', 'iron'].flatMap(t => [`${t}_dagger`, t, `${t}_longsword`].map(tier => ({ tier }))),
+      // (2026-10-21, owner: "offer steel and black")
+      armory: ['bronze', 'iron', 'steel', 'black'].flatMap(t => [`${t}_dagger`, t, `${t}_longsword`].map(tier => ({ tier }))),
       gunsmith: [{ tier: 'derringer', prefab: 'gun_derringer' }, { tier: 'guardpistol', prefab: 'gun_guardpistol' }, { tier: 'revolver', prefab: 'gun_revolver' }, { tier: 'bow', prefab: 'bow_bow' }, { tier: 'oak', prefab: 'bow_oak' }],
     };
     stats.weaponShops = [];
@@ -2978,7 +2982,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
             const r = [cx - hx, cy - hy, cx + hx, cy + hy];
             if (!rectClear(r, { margin: 20, edge: plan.edgeR, claim: true })) continue;
             taken.push(r);
-            onSite(r, () => weaponShop(kind, cx, cy, fx, fy, 811 + stats.weaponShops.length, wares, size));
+            onSite(r, () => weaponShop(kind, cx, cy, fx, fy, 811 + stats.weaponShops.length, wares, size, kind === 'armory'));
             stats.weaponShops.push({ kind, at: [cx, cy], size });
             done = true; break;
           }

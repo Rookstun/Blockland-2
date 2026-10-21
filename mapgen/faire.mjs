@@ -778,7 +778,8 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   const T7 = ['bronze', 'iron', 'steel', 'black', 'mithril', 'adamant', 'rune'];
   const LINE = (() => {
     const u = hash(seed, 91);
-    if (u < 0.7) { const ty = ['dagger', '', 'longsword', 'scimitar', 'spatha', '2h'][Math.floor(hash(seed, 92) * 6)]; return { kind: 'blade', name: ty || 'sword', short: ty === 'dagger', rack: T7.map(t => `shop_${t}${ty ? '_' + ty : ''}_bare`), cas: [] }; }
+    // (2026-10-21, owner: "do not sell sabers and do not sell spathas") their slots are longsword / sword now (same rolls for every other shop)
+    if (u < 0.7) { const ty = ['dagger', '', 'longsword', 'longsword', '', '2h'][Math.floor(hash(seed, 92) * 6)]; return { kind: 'blade', name: ty || 'sword', short: ty === 'dagger', rack: T7.map(t => `shop_${t}${ty ? '_' + ty : ''}_bare`), cas: [] }; }
     if (u < 0.85) { const b = ['bow', 'oak', 'willow', 'maple', 'yew', 'magic']; return { kind: 'bow', name: 'bows', short: false, rack: b.map(x => `bow_${x}_bare`), cas: b.map(x => `bow_${x}_case`) }; }
     return { kind: 'gun', name: 'guns', short: false, rack: ['huntingshotgun', 'leveraction', 'boltaction', 'magnum'].map(x => `gun_${x}_bare`), cas: ['derringer', 'guardpistol', 'revolver'].map(x => `gun_${x}_case`) };
   })();
@@ -786,7 +787,7 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   let cq = 0; const nextCase = () => (cq < LINE.cas.length ? LINE.cas[cq++] : null);
   // a house's wall table: daggers from bronze up
   let tq = 0; const nextDagger = () => (tq < T7.length ? `shop_${T7[tq++]}_dagger_bare` : null);
-  const blade = k => { const t = tiers[k % tiers.length], ty = ['dagger', '', 'longsword', 'scimitar', 'spatha'][Math.floor(hash(k, seed, 61) * 5)]; return `shop_${t}${ty ? '_' + ty : ''}_bare`; };
+  const blade = k => { const t = tiers[k % tiers.length], ty = ['dagger', '', 'longsword', 'longsword', ''][Math.floor(hash(k, seed, 61) * 5)]; return `shop_${t}${ty ? '_' + ty : ''}_bare`; };
   const CASEW = ['gun_derringer_case', 'gun_guardpistol_case', 'gun_revolver_case', 'bow_bow_case', 'bow_oak_case'];
   const standAt = (x, y, zTop, face, prefab, hw = 10) => {
     if (!B.free([X0 + x - hw, Y0 + y - hw, zTop], [X0 + x + hw, Y0 + y + hw, zTop + 36])) { if (process.env.FD) console.error('stand blocked', x, y, zTop); return false; }
