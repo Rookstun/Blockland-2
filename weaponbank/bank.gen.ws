@@ -4,77 +4,20 @@ var ownedR: Map<string, string> = { "00e872ae-9770-4465-8b8e-2f879d56853a": "000
 var held: Map<string, string>
 var sel: Map<string, int>
 var gaveAt: Map<string, int>
-var shown: Map<int, int>
 var viewer: string = ""
 var names: string[] = ["Bronze Dagger", "Iron Dagger", "Steel Dagger", "Black Dagger", "Mithril Dagger", "Adamant Dagger", "Rune Dagger", "Bronze Sword", "Iron Sword", "Steel Sword", "Black Sword", "Mithril Sword", "Adamant Sword", "Rune Sword", "Bronze Scimitar", "Iron Scimitar", "Steel Scimitar", "Black Scimitar", "Mithril Scimitar", "Adamant Scimitar", "Rune Scimitar", "Bronze Spatha", "Iron Spatha", "Steel Spatha", "Black Spatha", "Mithril Spatha", "Adamant Spatha", "Rune Spatha", "Bronze Longsword", "Iron Longsword", "Steel Longsword", "Black Longsword", "Mithril Longsword", "Adamant Longsword", "Rune Longsword", "Bronze 2h Sword", "Iron 2h Sword", "Steel 2h Sword", "Black 2h Sword", "Mithril 2h Sword", "Adamant 2h Sword", "Rune 2h Sword", "Bow", "Oak Bow", "Willow Bow", "Maple Bow", "Yew Bow", "Magic Bow", "Guard Pistol", "Derringer", "Revolver", "Hunting Shotgun", "Lever-Action Rifle", "Bolt-Action Rifle", "Magnum"]
 var catIds: int[] = [27, 33, 51, 21, 39, 15, 45, 25, 31, 49, 19, 37, 13, 43, 29, 35, 53, 23, 41, 17, 47, 30, 36, 54, 24, 42, 18, 48, 28, 34, 52, 22, 40, 16, 46, 26, 32, 50, 20, 38, 14, 44, 1, 4, 5, 3, 6, 2, 65, 8, 12, 9, 10, 7, 11]
-// per panel: the press records act (1 show tpK, 2 hide) and ONE buffered flush at the very end fires them next tick
-// (a buffer emit ends its exec chain: emitting per slot mid-handler ran only the first changed slot and no status line)
+// what the 5 panels show (weapon index, -1 = none): set during a press, broadcast next tick as bank.view by ONE
+// buffered flush at the very end (a buffer emit ends its exec chain)
 let flush: exec
-out tp0: int
-out show0: exec
-out hide0: exec
-var act0: int = 0
+out view: exec
+out v0: int
+out v1: int
+out v2: int
+out v3: int
+out v4: int
 on flush {
-  let a = act0
-  act0 = 0
-  if a == 1 {
-    emit show0
-  } else if a == 2 {
-    emit hide0
-  }
-}
-out tp1: int
-out show1: exec
-out hide1: exec
-var act1: int = 0
-on flush {
-  let a = act1
-  act1 = 0
-  if a == 1 {
-    emit show1
-  } else if a == 2 {
-    emit hide1
-  }
-}
-out tp2: int
-out show2: exec
-out hide2: exec
-var act2: int = 0
-on flush {
-  let a = act2
-  act2 = 0
-  if a == 1 {
-    emit show2
-  } else if a == 2 {
-    emit hide2
-  }
-}
-out tp3: int
-out show3: exec
-out hide3: exec
-var act3: int = 0
-on flush {
-  let a = act3
-  act3 = 0
-  if a == 1 {
-    emit show3
-  } else if a == 2 {
-    emit hide3
-  }
-}
-out tp4: int
-out show4: exec
-out hide4: exec
-var act4: int = 0
-on flush {
-  let a = act4
-  act4 = 0
-  if a == 1 {
-    emit show4
-  } else if a == 2 {
-    emit hide4
-  }
+  emit view
 }
 
 // a purchase shows up as a named slot: unlock it
@@ -153,22 +96,11 @@ on GlobalCustomEvent("bank.act") -> (who: character, op: int) {
   // nothing to show: the user left, or has nothing yet
   let none = (op == 4 && uid == viewer) || (op != 4 && first < 0)
   if none {
-    if shown.get(0) > 0 {
-      act0 = 2
-    }
-    if shown.get(1) > 0 {
-      act1 = 2
-    }
-    if shown.get(2) > 0 {
-      act2 = 2
-    }
-    if shown.get(3) > 0 {
-      act3 = 2
-    }
-    if shown.get(4) > 0 {
-      act4 = 2
-    }
-    shown.clear()
+    out v0 = -1
+    out v1 = -1
+    out v2 = -1
+    out v3 = -1
+    out v4 = -1
     viewer = ""
     if op != 4 {
       pc.ShowStatusMessage("<color=\"ffd34d\">Weapon bank</>: empty. Weapons you buy at the shops show up here, free to take again.")
@@ -188,57 +120,12 @@ on GlobalCustomEvent("bank.act") -> (who: character, op: int) {
     let l1 = if lq1 < 0 then -1 else 54 - lq1
     let lq2 = if l1 < 0 then -1 else rev.Find("1", false, 55 - l1)
     let l2 = if lq2 < 0 then -1 else 54 - lq2
-    let was0 = shown.get(0) - 1
-    let was1 = shown.get(1) - 1
-    let was2 = shown.get(2) - 1
-    let was3 = shown.get(3) - 1
-    let was4 = shown.get(4) - 1
-    PrintToConsole("bankdisp|${l2},${l1},${cur},${r1},${r2}|was ${was0},${was1},${was2},${was3},${was4}")
-    if was0 != l2 {
-      if l2 >= 0 {
-        out tp0 = l2
-        act0 = 1
-      } else {
-        act0 = 2
-      }
-      shown.set(0, l2 + 1)
-    }
-    if was1 != l1 {
-      if l1 >= 0 {
-        out tp1 = l1
-        act1 = 1
-      } else {
-        act1 = 2
-      }
-      shown.set(1, l1 + 1)
-    }
-    if was2 != cur {
-      if cur >= 0 {
-        out tp2 = cur
-        act2 = 1
-      } else {
-        act2 = 2
-      }
-      shown.set(2, cur + 1)
-    }
-    if was3 != r1 {
-      if r1 >= 0 {
-        out tp3 = r1
-        act3 = 1
-      } else {
-        act3 = 2
-      }
-      shown.set(3, r1 + 1)
-    }
-    if was4 != r2 {
-      if r2 >= 0 {
-        out tp4 = r2
-        act4 = 1
-      } else {
-        act4 = 2
-      }
-      shown.set(4, r2 + 1)
-    }
+    PrintToConsole("bankdisp|${l2},${l1},${cur},${r1},${r2}")
+    out v0 = l2
+    out v1 = l1
+    out v2 = cur
+    out v3 = r1
+    out v4 = r2
     let count = 55 - bits.Replace("1", "").Length()
     let pos = bits.Substring(0, cur + 1).Replace("0", "").Length()
     let nm = names.get(cur)
