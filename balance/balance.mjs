@@ -146,7 +146,7 @@ function dump(worldFile) {
   }
   const weapons = {};
   // a name sold by several prefabs: the plain stand's values win (bare/case copies were made from it)
-  for (const [p, s] of Object.entries(st).sort(([a], [b]) => (/_bare|_case/.test(a) ? 1 : 0) - (/_bare|_case/.test(b) ? 1 : 0)))
+  for (const [p, s] of Object.entries(st).sort(([a], [b]) => (/_bare|_case|_cab/.test(a) ? 1 : 0) - (/_bare|_case|_cab/.test(b) ? 1 : 0)))
     weapons[s.name] ??= { item: s.item, damage: s.damage, speed: s.speed };
   const order = Object.keys(weapons).sort((a, b) => weapons[a].item.localeCompare(weapons[b].item) || a.localeCompare(b));
   const json = {
@@ -212,10 +212,11 @@ function liveButtons(file) {
 const DIRS = { 16: [0, -1], 17: [1, 0], 18: [0, 1], 19: [-1, 0] };
 function standBoxes(s) {
   const [x, y, z] = s.at, [dx, dy] = DIRS[s.orient] ?? [0, -1];
-  if (/_case$/.test(s.prefab)) {
+  if (/_case$|_cab$/.test(s.prefab)) {
     const h = (a, c) => (dx ? [a, c] : [c, a]);
-    const [h1x, h1y] = h(18, 18), [h2x, h2y] = h(12, 11);
-    return [[x + 4 * dx, y + 4 * dy, z, h1x, h1y, 13], [x - 2 * dx, y - 2 * dy, z, h2x, h2y, 14]];
+    const [h1x, h1y] = h(18, 18), [h2x, h2y] = h(12, 11), [h3x, h3y] = h(17, 11);
+    const low = /_cab$/.test(s.prefab) ? [[x + 4 * dx, y + 4 * dy, z - 57, h3x, h3y, 7]] : []; // _cab: spawn brick + button 57 down (barestand CAB)
+    return [[x + 4 * dx, y + 4 * dy, z, h1x, h1y, 13], [x - 2 * dx, y - 2 * dy, z, h2x, h2y, 14], ...low];
   }
   if (/_bare$/.test(s.prefab)) return [[x, y, z + 8, 16, 16, 22]];
   return [[x, y, z, 13, 13, 13]];
@@ -366,7 +367,7 @@ async function apply(dry) {
   // the list is a union of old deploy lists: only spots with a shop button live count (others would clear map bricks)
   const btn = liveButtons(copy);
   const stands = (fs.existsSync(SL) ? JSON.parse(fs.readFileSync(SL, 'utf8')) : []).filter(s => standChanged.has(s.prefab)
-    && btn.some(p => Math.hypot(p[0] - s.at[0], p[1] - s.at[1]) < 30 && Math.abs(p[2] - s.at[2]) < 40));
+    && btn.some(p => Math.hypot(p[0] - s.at[0], p[1] - s.at[1]) < 30 && Math.abs(p[2] - s.at[2] + (/_cab$/.test(s.prefab) ? 57 : 0)) < 40));
   // (the saved world can't tell where stands are: their items sit on 20k+ sub-grids) a stand is reloaded
   // only where its clear boxes removed something ("No bricks to clear" = no stand at that list spot)
   let restood = 0, rejects = 0;

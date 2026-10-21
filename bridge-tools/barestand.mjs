@@ -25,7 +25,12 @@ const PICKUP_DIR = Number(process.env.PICKUP_DIR ?? 4), PICKUP_DROP = Number(pro
 // CASE=1 (2026-10-16, the owner's glass gun case in the spawn gunsmith): writes <name>_case.brz
 // instead, the same plus the price button moved BUTTON_OUT units further out and BUTTON_DOWN down,
 // so it sits on the case's front glass (mapgen gunCase: stand 13 units behind the glass centre)
-const CASE = !!process.env.CASE, BUTTON_OUT = Number(process.env.BUTTON_OUT ?? 4), BUTTON_DOWN = Number(process.env.BUTTON_DOWN ?? 6);
+// CAB=1 (2026-10-21, owner re-placed the spawn armory's black longsword by hand: "fix the rest of the swords so it is
+// positioned like the black longsword"): <name>_cab.brz for the armory wall cabinets = CASE plus the item spawn brick
+// SPAWN_DOWN 60 lower (on the cabinet's felt floor, the weapon standing up from it, Z+) and the button 50 lower again (1
+// over the spawn brick: mid glass). Chip + hidden round stay up in the cabinet.
+const CAB = !!process.env.CAB, SPAWN_DOWN = Number(process.env.SPAWN_DOWN ?? (CAB ? 60 : 0));
+const CASE = !!process.env.CASE || CAB, BUTTON_OUT = Number(process.env.BUTTON_OUT ?? 4), BUTTON_DOWN = Number(process.env.BUTTON_DOWN ?? (CAB ? 56 : 6));
 const ONLY = process.env.ONLY ? new RegExp(process.env.ONLY) : null;
 const PEDESTAL = new Set(['B_2x2_Round', 'B_2x2F_Octo_Converter']);
 const FLAGS = ['CollisionFlags_Player', 'CollisionFlags_Player1', 'CollisionFlags_Player2', 'CollisionFlags_Player3', 'CollisionFlags_Weapon',
@@ -44,7 +49,7 @@ function bundle(files) {
 }
 const clearBits = (flags, idx) => ({ ...flags, Flags: flags.Flags.map((byte, k) => { let b = byte; for (const i of idx) if ((i >> 3) === k) b &= ~(1 << (i & 7)); return b; }) });
 
-const names = fs.readdirSync(PREFABS).filter(f => /^(shop|gun|bow)_[a-z0-9_]+\.brz$/.test(f) && !/_bare\.brz$|_case\.brz$|_copy\.brz$|pre_/.test(f) && (!ONLY || ONLY.test(f)));
+const names = fs.readdirSync(PREFABS).filter(f => /^(shop|gun|bow)_[a-z0-9_]+\.brz$/.test(f) && !/_bare\.brz$|_case\.brz$|_cab\.brz$|_copy\.brz$|pre_/.test(f) && (!ONLY || ONLY.test(f)));
 for (const f of names) {
   const reader = brs.WorldReader.from(fs.readFileSync(path.join(PREFABS, f)));
   const paths = reader.fs.listPaths();
@@ -69,7 +74,10 @@ for (const f of names) {
       const B = soa.RelativePositions[bi], C = soa.RelativePositions[ci];
       const dx = B.X - C.X, dy = B.Y - C.Y;
       if ((dx !== 0) === (dy !== 0)) throw new Error(`${f}: button not on one axis (${dx},${dy})`);
-      copy.RelativePositions = soa.RelativePositions.map((q, i) => i !== bi ? q : { X: q.X + Math.sign(dx) * BUTTON_OUT, Y: q.Y + Math.sign(dy) * BUTTON_OUT, Z: q.Z - BUTTON_DOWN });
+      const oi = soa.BrickTypeIndices.findIndex(t => assets[t] === 'B_2x2F_Octo_Converter');
+      copy.RelativePositions = soa.RelativePositions.map((q, i) => i === bi ? { X: q.X + Math.sign(dx) * BUTTON_OUT, Y: q.Y + Math.sign(dy) * BUTTON_OUT, Z: q.Z - BUTTON_DOWN }
+        : i === oi ? { ...q, Z: q.Z - SPAWN_DOWN } : q);
+      if (copy.RelativePositions.some(q => q.Z < -1024 || q.Z >= 1024)) throw new Error(`${f}: moved brick left its chunk`);
     }
     files.set(p, new Uint8Array(schema.encode(structName, copy)));
     hidden += idx.length;
@@ -97,7 +105,7 @@ for (const f of names) {
   if (vis.some(v => /^(B_2x2_Round|B_2x2F_Octo_Converter):(v|.c)/.test(v)) || !vis.some(v => /^B_Button_Square:vc/.test(v))) throw new Error(`${f}: read back wrong: ${vis.join(' ')}`);
   for (const p of paths) { const m = p.match(/^World\/0\/Bricks\/Grids\/(\d+)\/Components\/(-?\d+)_(-?\d+)_(-?\d+)\.mps$/); if (m) for (const c of check.componentChunk(+m[1], { x: +m[2], y: +m[3], z: +m[4] }).components) if (c.typeName === 'Component_ItemSpawn' && (c.data.PickupOffsetDirection !== PICKUP_DIR || c.data.PickupOffsetDistance !== PICKUP_DROP)) throw new Error(`${f}: pickup offset read back wrong`); }
   for (const p of paths) if (!/\/Grids\/1\/(Chunks|Components)\//.test(p) && !Buffer.from(check.fs.readFile(p)).equals(Buffer.from(reader.fs.readFile(p)))) throw new Error(`${f}: ${p} changed`);
-  const name = f.replace(/\.brz$/, CASE ? '_case.brz' : '_bare.brz');
+  const name = f.replace(/\.brz$/, CAB ? '_cab.brz' : CASE ? '_case.brz' : '_bare.brz');
   fs.writeFileSync(path.join(PREFABS, name), out);
   console.log(`${name}: ${vis.join(' ')}`);
 }

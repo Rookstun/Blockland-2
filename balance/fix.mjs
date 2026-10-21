@@ -91,10 +91,11 @@ function npcPrefabs() {
 const DIRS = { 16: [0, -1], 17: [1, 0], 18: [0, 1], 19: [-1, 0] };
 function standBoxes(s) {
   const [x, y, z] = s.at, [dx, dy] = DIRS[s.orient] ?? [0, -1];
-  if (/_case$/.test(s.prefab)) {
+  if (/_case$|_cab$/.test(s.prefab)) {
     const h = (a, c) => (dx ? [a, c] : [c, a]);
-    const [h1x, h1y] = h(18, 18), [h2x, h2y] = h(12, 11);
-    return [[x + 4 * dx, y + 4 * dy, z, h1x, h1y, 13], [x - 2 * dx, y - 2 * dy, z, h2x, h2y, 14]];
+    const [h1x, h1y] = h(18, 18), [h2x, h2y] = h(12, 11), [h3x, h3y] = h(17, 11);
+    const low = /_cab$/.test(s.prefab) ? [[x + 4 * dx, y + 4 * dy, z - 57, h3x, h3y, 7]] : []; // _cab: spawn brick + button 57 down (barestand CAB)
+    return [[x + 4 * dx, y + 4 * dy, z, h1x, h1y, 13], [x - 2 * dx, y - 2 * dy, z, h2x, h2y, 14], ...low];
   }
   if (/_bare$/.test(s.prefab)) return [[x, y, z + 8, 16, 16, 22]];
   return [[x, y, z, 13, 13, 13]];
@@ -152,7 +153,7 @@ async function fixStands(world) {
   const btn = liveButtons(world);
   const all = JSON.parse(fs.readFileSync(path.join(HERE, 'stands.json'), 'utf8'));
   const stands = all.filter(s => fs.existsSync(path.join(PREFABS, s.prefab + '.brz'))
-    && btn.some(p => Math.hypot(p[0] - s.at[0], p[1] - s.at[1]) < 30 && Math.abs(p[2] - s.at[2]) < 40));
+    && btn.some(p => Math.hypot(p[0] - s.at[0], p[1] - s.at[1]) < 30 && Math.abs(p[2] - s.at[2] + (/_cab$/.test(s.prefab) ? 57 : 0)) < 40));
   if (DRY) { say(`shops: ${stands.length} stands would be re-placed`); return; }
   say(`re-placing ${stands.length} shop stands...`);
   let done = 0, rejects = 0;
