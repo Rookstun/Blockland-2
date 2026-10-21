@@ -1,6 +1,8 @@
 // REAL ESTATE IN WIRES (owner 2026-10-20: "no omegga just use wires. players should be granted build
 // perms when in the zone", "you never set the sign when its owned"). One prefab per lot = the pad's
-// BP_ZoneProjector (build zone) + the owner's FOR SALE sign + hidden gates 1600 over the lot:
+// BP_ZoneProjector (build zone) + the owner's FOR SALE sign + ONE hidden microchip on the sign post holding
+// every gate (owner 2026-10-21: "put your shit in microchips, spawn has a ton of floating shit"; the gates
+// used to float 1600 over the lot):
 //   E on the sign board (Component_Button) -> unowned: remember who + when, "type /confirm within 10 s"
 //                                          -> owned: whose it is
 //   /confirm (every lot chip hears it; only the one you clicked answers) -> coins >= price ->
@@ -23,7 +25,7 @@ const PLOTS = JSON.parse(readFileSync(opt('plots', ROOT + 'omegga-realestate/plo
 const OWNERS = (() => { try { return JSON.parse(readFileSync(opt('owners', ROOT + 'realestate/site/owners.json'), 'utf8')); } catch { return {}; } })();
 const OUT = opt('out', ROOT + 'realestate/out');
 const MAP_OWNER = { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'abysmal garbage', display_name: 'renderman' }; // admin: may pay coins + set temp permissions
-const SPAWN = [-120, 160], BANK = 30, P = 10, DEPTH = 30, ZONE_H = 1200, GATE_Z = 1600, CONFIRM_S = 10;
+const SPAWN = [-120, 160], BANK = 30, P = 10, DEPTH = 30, ZONE_H = 1200, CONFIRM_S = 10;
 const HIDE = { visibility: false, collision: { player: false, weapon: false, interaction: false, tool: true, physics: false } };
 const EXT = [SIGN_FONT, { type: 'BrickOneShotAudioDescriptor', name: 'OBA_CashRegister_Ding' }];
 
@@ -32,9 +34,10 @@ const load = [];
 for (const p of PLOTS) {
   const { id, x, y, ground: g, half: I, studs, price } = p;
   const own = OWNERS[id] ?? null;
-  const k = await mk(DIST, { owner: MAP_OWNER, mainBase: [-220, -220], rowStep: 40, baseZ: GATE_Z });
+  const k = await mk(DIST, { owner: MAP_OWNER });
   const { w, C, wire, num, str } = k;
-  const gate = (c, data = {}) => k.gate(c, data, undefined, HIDE);
+  let CG; // the chip's inner grid (made once the sign post is placed)
+  const gate = (c, data = {}) => k.gate(c, data, CG);
   const raw = (h, c) => ({ h, c }); // a non-gate brick's component as a wire end
 
   // ---- bricks (local to the load point x, y, g)
@@ -46,8 +49,18 @@ for (const p of PLOTS) {
   const ox = fx * (I + BANK + 10) + (fy ? -I + 40 : 0), oy = fy * (I + BANK + 10) + (fx ? I - 40 : 0);
   const sign = saleSign(id, ox, oy, 0, [fx, fy], 0, { studs, price, button: true, text: signText(id, studs, price, own?.name) });
   let board;
-  for (const b of sign) { const h = w.addBrick({ ...b, owner_index: k.ownerIdx }); if (b.size.join() === '13,9,1') board = h; }
-  const Z = raw(zone, C.AttachedZone), B = raw(board, C.Button), T = raw(board, C.TextDisplay);
+  let post;
+  for (const b of sign) { const h = w.addBrick({ ...b, owner_index: k.ownerIdx }); if (b.size.join() === '13,9,1') board = h; if (b.size[2] === 27) post = b; }
+  // the chip sits on top of the post (invisible, no collision); value wires cross into it through
+  // MicrochipInput gates (arcade cabinet pattern) and out through a MicrochipOutput
+  const chipBrick = w.addBrick({ asset: 'B_1x1_Microchip', position: [post.position[0], post.position[1], post.position[2] + 29], owner_index: k.ownerIdx,
+    visibility: false, collision: false, components: [{ type: 'Component_Internal_Microchip' }] });
+  CG = w.addBrickGrid({ type: 'Entity_MicrochipDynamicBrickGrid', location: { X: 0, Y: 0, Z: 40 },
+    data: { bCollapsed: true, PlaneCenter: { X: 220, Y: -140, Z: 0 }, PlaneExtent: { X: 260, Y: 180, Z: 2 } } });
+  w.registerMicrochipLink(chipBrick, CG);
+  const pin = (src, label, order) => { const g = gate(C.MicrochipInput, { PortLabel: label, PortOrder: order }); wire(src, src.c === C.AttachedZone ? 'ZoneRef' : label, g, 'RER_Input'); return { h: g.h, c: g.c, out: 'RER_Output' }; };
+  const Zb = raw(zone, C.AttachedZone), Bb = raw(board, C.Button), T = raw(board, C.TextDisplay);
+  const zIn = pin(Zb, 'ZoneRef', 0), hIn = pin(Bb, 'bHeld', 1), cIn = pin(Bb, 'Character', 2);
 
   // ---- state
   const ownerId = gate(C.Var, { Value: str(own?.id ?? '') });
@@ -55,7 +68,7 @@ for (const p of PLOTS) {
   const pendId = gate(C.Var, { Value: str('-') }); // never '' (a server-issued command has an empty user id)
   const pendT = gate(C.Var, { Value: num(-1000) });
   const text = gate(C.Var, { Value: str(signText(id, studs, price, own?.name)) });
-  wire(text, 'Value', T, 'Text');
+  const tOut = gate(C.MicrochipOutput, { PortLabel: 'Text', PortOrder: 0 }); wire(text, 'Value', tOut, 'RER_Input'); wire(tOut, 'RER_Output', T, 'Text');
   const uptime = gate(C.Expr_ServerUptime);
   const msg = (pl, exec, fmt, A) => { // status line + chat line to that player
     const f = gate(C.Expr_String_FormatText, { FormatString: fmt }); if (A) wire(A[0], A[1], f, 'InputA');
@@ -69,8 +82,8 @@ for (const p of PLOTS) {
   const LOT = `<b>Lot ${id}</> · ${studs}x${studs} studs`;
 
   // ---- E on the board
-  const edge = gate(C.Expr_EdgeDetectorExec); wire(B, 'bHeld', edge, 'Input');
-  const ps = gate(C.Exec_PlayerState_GetFromEntity); wire(edge, 'OnRisingEdge', ps, 'Exec'); wire(B, 'Character', ps, 'Entity');
+  const edge = gate(C.Expr_EdgeDetectorExec); wire(hIn, 'RER_Output', edge, 'Input');
+  const ps = gate(C.Exec_PlayerState_GetFromEntity); wire(edge, 'OnRisingEdge', ps, 'Exec'); wire(cIn, 'RER_Output', ps, 'Entity');
   const uid = gate(C.Exec_PlayerState_GetUserId); wire(ps, 'ExecOut', uid, 'Exec'); wire(ps, 'PlayerState', uid, 'PlayerState');
   const oNow = getVar(ownerId, [uid, 'ExecOut']), nNow = getVar(ownerName, [oNow, 'ExecOut']);
   const free = gate(C.Expr_CompareEqual, { InputB: str('') }); wire(oNow, 'Value', free, 'InputA');
@@ -116,7 +129,7 @@ for (const p of PLOTS) {
   const pr = gate(C.Exec_PrintToConsole, { Text: '' }); wire(done, 'ExecOut', pr, 'Exec'); wire(log, 'Output', pr, 'Text');
 
   // ---- build permission inside the zone
-  const ent = gate(C.CharacterZoneEvent_Entered); wire(Z, 'ZoneRef', ent, 'Zone');
+  const ent = gate(C.CharacterZoneEvent_Entered); wire(zIn, 'RER_Output', ent, 'Zone');
   const eps = gate(C.Exec_PlayerState_GetFromEntity); wire(ent, 'Exec', eps, 'Exec'); wire(ent, 'Character', eps, 'Entity');
   const eu = gate(C.Exec_PlayerState_GetUserId); wire(eps, 'ExecOut', eu, 'Exec'); wire(eps, 'PlayerState', eu, 'PlayerState');
   const eo = getVar(ownerId, [eu, 'ExecOut']), en = getVar(ownerName, [eo, 'ExecOut']);
@@ -131,7 +144,7 @@ for (const p of PLOTS) {
   st([eb, 'ExecOutA'], `<color="88ff88">${LOT} · your lot · build mode is yours here</>`);
   st([eb2, 'ExecOutA'], `<color="ffd34d">${LOT} · FOR SALE ${price} coins · click the sign</>`);
   st([eb2, 'ExecOutB'], `<color="ffd34d">${LOT}</> <color="88ccff">owned by {A}</>`, [en, 'Value']);
-  const left = gate(C.CharacterZoneEvent_Left); wire(Z, 'ZoneRef', left, 'Zone');
+  const left = gate(C.CharacterZoneEvent_Left); wire(zIn, 'RER_Output', left, 'Zone');
   const off = gate(C.Exec_Character_SetTempPermission, { PermissionTagStr: 'BR.Permission.Building', bPermissionEnable: false });
   wire(left, 'Exec', off, 'Exec'); wire(left, 'Character', off, 'Character');
 
@@ -140,6 +153,8 @@ for (const p of PLOTS) {
 
   // clear boxes for what this prefab replaces: the old projector + the old sign (each brick +1)
   const boxes = [[x, y, g + 2, I - P + 1, I - P + 1, 3]];
+  boxes.push([x, y - 100, g + 1600, 241, 141, 12]); // the old gate field 1600 over the lot (gates before 2026-10-21)
+  boxes.push([x + ox, y + oy, g + 29, 6, 6, 32]); // the post + the chip on its top (chip half 5,5,2)
   for (const b of saleSign(id, x + ox, y + oy, g, [fx, fy], 0, { studs, price })) {
     const [lo, hi] = worldBox(b); boxes.push(lo.map((v, i) => (v + hi[i]) / 2).concat(hi.map((v, i) => (v - lo[i]) / 2 + 1)));
   }
