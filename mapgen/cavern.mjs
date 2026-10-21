@@ -170,7 +170,7 @@ export function caveField(nodes, ctx) {
     let m = Infinity;
     for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) {
       const cx = cx0 + a, cy = cy0 + b;
-      if (ctx.openWall?.(cx, cy)) continue; // the shelf in front of a cave mouth (tiered mountains): the passage may break out there
+      if (ctx.openWall?.(cx, cy, x, y)) continue; // the shelf in front of a cave mouth (tiered mountains): the passage may break out there
       const dx = Math.max(0, cx * CELL - (x - X0), (x - X0) - (cx + 1) * CELL), dy = Math.max(0, cy * CELL - (y - Y0), (y - Y0) - (cy + 1) * CELL);
       m = Math.min(m, roofOf(cx, cy) + ROOF_SLOPE * Math.hypot(dx, dy));
     }
@@ -187,6 +187,7 @@ export function caveField(nodes, ctx) {
     o[1] = Math.floor(Math.min(o[1], roofLimit(x, y)) / 2) * 2;
   }
   const tiles = new Map(), cells = new Map();
+  if (ctx.debugCell) for (const [dcx, dcy] of ctx.debugCell) { const rows = []; for (let a = -1; a < PER + 1; a++) { const r = []; for (let b = 0; b <= PER; b++) { const o = corners.get((dcx * PER + a) * CW + dcy * PER + b); r.push(o ? `${Math.round(o[0])}/${Math.round(o[1])}${o[2] ? 'd' : ''}` : '-'); } rows.push(r.join(' ')); } console.error(`field cell ${dcx},${dcy} roof ${roofCell(dcx, dcy)}:` + String.fromCharCode(10) + rows.join(String.fromCharCode(10))); }
   const ck = (i, j) => i * CW + j;
   const tileSet = new Set();
   for (const k of corners.keys()) { const i = Math.floor(k / CW), j = k % CW; for (const [a, b] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) if (i + a >= 0 && j + b >= 0 && i + a < TW && j + b < TW) tileSet.add((i + a) * TW + j + b); }

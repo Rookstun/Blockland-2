@@ -2773,7 +2773,7 @@ let carved = 0;
     if (!inMap(cx, cy) || !okCell(cx, cy)) return -Infinity;
     const c = cx * N + cy;
     if (tierMtn.cells[c]) {
-      if (mouthCells.has(c)) return H[c] * VZ; // a cave mouth in a tier wall: 1-brick lintel (5 bricks clear on a 6-brick wall)
+      if (mouthCells.has(c)) return H[c] * VZ; // a cave mouth's passage + the wall it opens through: 1-brick roof / lintel (5 bricks clear on a 6-brick wall)
       // any other wall face of a tier stays shut: no cave air above the shelf below it (those made 1-brick slits)
       let m = Infinity;
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
@@ -2790,7 +2790,28 @@ let carved = 0;
   // its floor flush with the shelf (tierMouths, before the field). The shelf in front of a mouth (mouthFront) does
   // not pull the passage ceiling down; every other tier wall face stays solid.
   const mouthCells = new Set(), mouthFront = new Set();
-  const openWall = (cx, cy) => inMap(cx, cy) && mouthFront.has(cx * N + cy);
+  // roof limit at corner (x, y): next to a mouth passage cell, other tier cells (the shelf outside, the shut wall
+  // faces beside it) do not pull the passage ceiling down
+  const openWall = (cx, cy, x, y) => {
+    if (!inMap(cx, cy)) return false;
+    const gx = (x - X0) / CELL, gy = (y - Y0) / CELL, hn = H[cx * N + cy];
+    for (const ox of [Math.floor(gx - 1e-6), Math.floor(gx + 1e-6)]) for (const oy of [Math.floor(gy - 1e-6), Math.floor(gy + 1e-6)])
+      if (inMap(ox, oy) && mouthCells.has(ox * N + oy) && tierMtn.cells[cx * N + cy] && !mouthCells.has(cx * N + cy)) return true; // its own roof still bounds every tile
+    return false;
+  };
+  const shelfSize = new Map();
+  const openShelf = L => { // >= 40 connected cells at L's height (8-way, the corner wedges' open halves count)
+    if (shelfSize.has(L)) return shelfSize.get(L);
+    const h = H[L], seen = new Set([L]), q = [L];
+    for (let i = 0; i < q.length && seen.size < 40; i++) {
+      const x = (q[i] / N) | 0, y = q[i] % N;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const n = (x + a) * N + y + b; if (inMap(x + a, y + b) && !seen.has(n) && H[n] === h) { seen.add(n); q.push(n); } }
+    }
+    const ok = seen.size >= 40;
+    for (const c of seen) if (seen.size < 40) shelfSize.set(c, false);
+    shelfSize.set(L, ok);
+    return ok;
+  };
   const tierMouths = () => {
     let made = 0;
     for (const s of caves) {
@@ -2804,6 +2825,7 @@ let carved = 0;
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const lx = wx + dx, ly = wy + dy, L = lx * N + ly;
             if (!inMap(lx, ly) || !tierMtn.cells[L] || H[L] !== H[W] - TIER.h || riverCell[L] || H[L] <= SEA) continue;
+            if (!openShelf(L)) continue; // a real shelf outside, not a pocket between walls
             const top = (H[L] + 1) * VZ, mx = X0 + (wx + 0.5 + dx * 0.5) * CELL, my = Y0 + (wy + 0.5 + dy * 0.5) * CELL;
             const dist = Math.hypot(mx - nd.x, my - nd.y);
             if (dist > 280 || Math.abs(top - nd.zf) > dist * 0.4 + 12) continue;
@@ -2813,7 +2835,7 @@ let carved = 0;
               const px = Math.floor((nd.x + (mx - nd.x) * t - X0) / CELL), py = Math.floor((nd.y + (my - nd.y) * t - Y0) / CELL), pc = px * N + py;
               if (!inMap(px, py) || (pc !== W && H[pc] < H[W]) || !okCell(px, py)) ok = false;
             }
-            if (ok) cand.push({ nd, W, L, mx, my, top, dist });
+            if (ok) cand.push({ nd, W, L, mx, my, top, dist, ncx, ncy });
           }
         }
       }
@@ -2829,6 +2851,10 @@ let carved = 0;
           s.plan.nodes.push({ x: c.nd.x + (c.mx - c.nd.x) * q, y: c.nd.y + (c.my - c.nd.y) * q, zf: Math.round(c.nd.zf + (c.top - c.nd.zf) * q), r: 46, hu: 72, door: true });
         }
         mouthCells.add(c.W); mouthFront.add(c.L);
+        for (let t = 0; t <= 1.0001; t += 0.05) { // the passage's cells (and their neighbours: its width) keep a 1-brick roof
+          const px = Math.floor((c.nd.x + (c.mx - c.nd.x) * Math.min(t, 0.98) - X0) / CELL), py = Math.floor((c.nd.y + (c.my - c.nd.y) * Math.min(t, 0.98) - Y0) / CELL);
+          for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const q = (px + a) * N + py + b; if (inMap(px + a, py + b) && H[q] >= H[c.W]) mouthCells.add(q); }
+        }
         if (process.env.CAVE_DEBUG) console.error(`tier mouth at map ${Math.round(c.mx)},${Math.round(c.my)} z ${c.top}`);
         made++;
       }
@@ -2879,7 +2905,7 @@ let carved = 0;
   }
   if (MC && caves.length) tierMouths();
   if (MC && caves.length) {
-    const field = caveField(caves.flatMap(c => c.plan.nodes), { CELL, VZ, X0, Y0, N, roofCell, floorMin, noise: noise3, seed: caves[0].x * 7 + caves[0].y, openWall });
+    const field = caveField(caves.flatMap(c => c.plan.nodes), { CELL, VZ, X0, Y0, N, roofCell, floorMin, noise: noise3, seed: caves[0].x * 7 + caves[0].y, openWall, debugCell: process.env.CAVE_CELL ? [process.env.CAVE_CELL.split(',').map(Number)] : null });
     for (const [c, [f, t]] of field.cells) {
       const cx = (c / N) | 0, cy = c % N;
       for (let z = f + 1; z <= t; z++) if (V[vi(cx, cy, z)]) { V[vi(cx, cy, z)] = 0; carved++; }
