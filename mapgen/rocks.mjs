@@ -27,7 +27,7 @@ const RAMP_ROT = { '-1,0': 0, '0,-1': 1, '1,0': 2, '0,1': 3 }; // micro ramp rot
 
 const hash3 = (x, y, z, s) => { let h = (x * 374761393 + y * 668265263 + z * 1274126177 + s * 2246822519) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const sm = t => t * t * (3 - 2 * t);
-function noise(x, y, z, s) {
+export function noise(x, y, z, s) {
   const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), a = sm(x - xi), b = sm(y - yi), c = sm(z - zi);
   const L = (p, q, t) => p + (q - p) * t, v = (i, j, k) => hash3(xi + i, yi + j, zi + k, s);
   return L(L(L(v(0, 0, 0), v(1, 0, 0), a), L(v(0, 1, 0), v(1, 1, 0), a), b), L(L(v(0, 0, 1), v(1, 0, 1), a), L(v(0, 1, 1), v(1, 1, 1), a), b), c);
@@ -55,6 +55,12 @@ export function buildRocks(blobs, { allow = () => true, seed = 1, moss = 0.35, p
       vox.set(K(i, j, k), 0);
     }
   }
+  return rocksFromVoxels(vox, { allow, seed, moss, palette });
+}
+
+/** vox: Map 'i,j,k' -> any (voxel grid RV, i = floor(x / RV)); colours, merges and caps it like buildRocks */
+export function rocksFromVoxels(vox, { allow = () => true, seed = 1, moss = 0.35, palette = STONE } = {}) {
+  const K = (i, j, k) => i + ',' + j + ',' + k;
   // colours: banded stone tones from low-frequency noise, moss where the top is open
   const pal = [...palette, ...MOSS];
   for (const key of vox.keys()) {

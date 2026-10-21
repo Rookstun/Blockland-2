@@ -2633,7 +2633,8 @@ const CUT = {
   clear: tune('cut.clear', 96, 'arch clearance over the road (units)'),
 };
 const cutRock = new Uint8Array(N * N), cutTop = new Int16Array(N * N), cutBase = new Int16Array(N * N);
-{
+const CUT_ON = !process.env.MAPGEN_NOCUT; // off = the map before cut walls (delta bases)
+if (CUT_ON) {
   // a tunnel cell with nothing over its bore is an open cut
   let opened = 0;
   for (let c = 0; c < N * N; c++) {
@@ -3647,7 +3648,7 @@ let rideBricks = 0;
   for (const t of tiles) {
     const cx = t.tx >> 1, cy = t.ty >> 1, zr = tunnelZ[cx * N + cy];
     if (zr < 0) continue;
-    if (!V[vi(cx, cy, zr + TUNNEL.high + 1)]) continue; // no rock over the bore (open cut): no skin to hang
+    if (CUT_ON && !V[vi(cx, cy, zr + TUNNEL.high + 1)]) continue; // no rock over the bore (open cut): no skin to hang
     const top = (zr + 1 + TUNNEL.high) * VZ;
     const ROCK = MATS[V[vi(cx, cy, zr + TUNNEL.high + 1)]]?.color ?? MATS[STONE].color; // the bore's own rock
     const hc = t.h.map(v => Math.min(top, v + TUNNEL_CLEAR));
@@ -4774,7 +4775,7 @@ stage('cutRocks');
   // arches: across a road sample with rock walls deep enough on both sides (every archGap
   // samples or so), and at every tunnel mouth, framing the bore
   let arches = 0;
-  for (const { P } of roadPaths) {
+  for (const { P } of CUT_ON ? roadPaths : []) {
     let last = -1e9;
     for (let i = 2; i < P.length - 2; i++) {
       const [x, y] = P[i], c = x * N + y;
