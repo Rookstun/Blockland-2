@@ -23,7 +23,7 @@ import { buildSettlement, buildCamp, buildDetail, buildSign, placeName, EXTERNAL
 import { FIXED as BUILDER_FIXED } from './builder.mjs';
 import { treeVoxels } from '../trees/tree.mjs';
 import { makeOccupancy, placeVoxelProp } from './props.mjs';
-import { buildRocks, RV } from './rocks.mjs';
+import { buildRocks, rocksFromVoxels, noise as rockNoise, RV, STONE as STONE_TONES } from './rocks.mjs';
 import { shrine, CHECKPOINT_AT, FOOT as SHRINE_FOOT } from './checkpoint.mjs';
 import { signpost } from './signpost.mjs';
 import { coveDressing, CV as COVE_V } from './cove.mjs';
@@ -1844,6 +1844,7 @@ for (const c of volcano.road) { pathCell[c] = 1; roadGraded[c] = 1; } // the vol
 const townGates = []; // [{ dir, edge, out }] for the signs
 const TOWN_NAME = 'Lumbrick'; // the spawn town (signs at its gates)
 const tunnelLights = [];
+const roadPaths = []; // every graded road: { P: [[x, y]...], z: [level...] } (cut arches)
 {
   const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2;
   const NB = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.414], [1, -1, 1.414], [-1, 1, 1.414], [-1, -1, 1.414]];
@@ -1909,6 +1910,7 @@ const tunnelLights = [];
     }
     const sm = t.map((_, i) => { let a = 0, k = 0; for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) { a += t[j]; k++; } return Math.round(a / k); });
     const z = sm.slice();
+    roadPaths.push({ P, z });
     z[0] = t[0];
     for (let i = 1; i < n; i++) z[i] = Math.max(z[i - 1] - 1, Math.min(z[i - 1] + 1, z[i]));
     z[n - 1] = t[n - 1];
@@ -2613,6 +2615,61 @@ if (tune('river.weirs', 1, 'boulders and foam where the river level steps down (
   console.error(`river weirs: ${weirs.length} boulder steps, ${rapids.length} foam cells`);
 }
 riverDiag('after cap');
+
+stage('cutWalls');
+// ---------------------------------------------------- road cutting walls --
+// (2026-10-21, owner screenshot of a road cut through a ridge: sheer wedge-smoothed walls,
+// a tunnel ceiling skin floating over an open cell: "fix this with arches and rough walls")
+// Ground standing CUT.min+ bricks over a graded road within CUT.reach cells of it comes down
+// to the road and becomes a rock wall instead (rocks.mjs voxels, 'cutRocks'): its old height
+// is the rock's top, its face toward the road rough and leaning back. Natural rock arches
+// span the deep cuts and every tunnel mouth (built with the walls).
+const CUT = {
+  min: tune('cut.min', 3, 'bricks over the road that make a cut wall rock'),
+  reach: tune('cut.reach', 3, 'cells from the road a cut wall reaches'),
+  archMin: tune('cut.archMin', 6, 'bricks deep on both sides for an arch over the cut'),
+  archGap: tune('cut.archGap', 10, 'road samples between arches'),
+  archChance: tune('cut.archChance', 0.6, 'share of deep-cut spots with an arch (tunnel mouths always)'),
+  clear: tune('cut.clear', 96, 'arch clearance over the road (units)'),
+};
+const cutRock = new Uint8Array(N * N), cutTop = new Int16Array(N * N), cutBase = new Int16Array(N * N);
+{
+  // a tunnel cell with nothing over its bore is an open cut
+  let opened = 0;
+  for (let c = 0; c < N * N; c++) {
+    const zr = tunnelZ[c];
+    if (zr >= 0 && H[c] < zr + TUNNEL.high + 1) { H[c] = zr; tunnelZ[c] = -1; pathCell[c] = 1; roadGraded[c] = 1; opened++; }
+  }
+  const road = c => roadGraded[c] && pathCell[c] && tunnelZ[c] < 0 && !deck[c] && !riverCell[c];
+  const dist = new Uint8Array(N * N).fill(255), base = new Int16Array(N * N);
+  let q = [];
+  for (let c = 0; c < N * N; c++) if (road(c)) { dist[c] = 0; base[c] = H[c]; q.push(c); }
+  for (let d = 1; d <= CUT.reach; d++) {
+    const nq = [];
+    for (const c of q) {
+      const x = (c / N) | 0, y = c % N;
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        if (!inBounds(x + a, y + b)) continue;
+        const n = (x + a) * N + y + b;
+        if (dist[n] < d) continue;
+        if (dist[n] === d) { base[n] = Math.min(base[n], base[c]); continue; }
+        if (pathCell[n] || tunnelZ[n] >= 0) continue;
+        dist[n] = d; base[n] = base[c]; nq.push(n);
+      }
+    }
+    q = nq;
+  }
+  let walls = 0;
+  for (let c = 0; c < N * N; c++) {
+    if (dist[c] === 0 || dist[c] === 255 || H[c] - base[c] < CUT.min) continue;
+    const x = (c / N) | 0, y = c % N;
+    if (keepOut[c] || noSmooth[c] || riverCell[c] || deck[c] || weirCell[c] || townKind[c] || townNear[c] || terraceCell[c] || trenchCell[c] || reserved[c] || volcanoCell[c] || swampCell[c]
+      || coveCell[c] || deltaCell[c] || tierMtn.cells[c] || H[c] <= SEA || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend || hengeDist(x, y) <= HENGE.blend
+      || DUNGEONS.some(d => footDist(d, x, y) <= 2)) continue;
+    cutRock[c] = 1; cutTop[c] = H[c]; cutBase[c] = base[c]; H[c] = base[c]; noSmooth[c] = 1; keepOut[c] = 1; walls++;
+  }
+  console.error(`cut walls: ${walls} rock cells, ${opened} roofless tunnel cells opened`);
+}
 
 if (process.env.MAPGEN_HDUMP) fs.writeFileSync(process.env.MAPGEN_HDUMP, Buffer.from(H.buffer, H.byteOffset, H.byteLength));
 stage('voxels');
@@ -3590,6 +3647,7 @@ let rideBricks = 0;
   for (const t of tiles) {
     const cx = t.tx >> 1, cy = t.ty >> 1, zr = tunnelZ[cx * N + cy];
     if (zr < 0) continue;
+    if (!V[vi(cx, cy, zr + TUNNEL.high + 1)]) continue; // no rock over the bore (open cut): no skin to hang
     const top = (zr + 1 + TUNNEL.high) * VZ;
     const ROCK = MATS[V[vi(cx, cy, zr + TUNNEL.high + 1)]]?.color ?? MATS[STONE].color; // the bore's own rock
     const hc = t.h.map(v => Math.min(top, v + TUNNEL_CLEAR));
@@ -4657,6 +4715,128 @@ if (weirs.length) {
   console.error(`river weirs: ${blobs.length} boulders, ${rocks.length} bricks`);
 }
 
+stage('cutRocks');
+// road cutting walls + arches (see 'cutWalls'): rock voxels in the wall cells from their
+// lowered ground up to the old height, the face toward the road eaten back by noise and
+// leaning back with height; arches over deep cuts and at tunnel mouths. soft: anything else
+// placed in their way (signs, trees) wins at output.
+{
+  const roadC = c => pathCell[c] && tunnelZ[c] < 0 && !deck[c];
+  const SANDSTONE = [[204, 168, 120], [188, 150, 104], [214, 182, 134], [178, 142, 100], [196, 158, 112]];
+  const vox = [new Map(), new Map()]; // stone, sandstone
+  const palOf = (x, y) => (desertW(x, y) > 0.5 ? 1 : 0);
+  const K = (i, j, k) => i + ',' + j + ',' + k;
+  const gz = c => (H[c] + 1) * VZ;
+  const rockFloor = c => Math.ceil(gz(c) / RV) * RV; // first voxel layer clear of the ground bricks
+  const cellAt = (wx, wy) => [Math.floor((wx - X0) / CELL), Math.floor((wy - Y0) / CELL)];
+  const faceDist = (wx, wy) => {
+    const [cx, cy] = cellAt(wx, wy); let best = 1e9;
+    for (let a = -4; a <= 4; a++) for (let b = -4; b <= 4; b++) {
+      const x = cx + a, y = cy + b; if (!inMap(x, y) || !roadC(x * N + y)) continue;
+      const x0 = X0 + x * CELL, y0 = Y0 + y * CELL;
+      best = Math.min(best, Math.hypot(Math.max(x0 - wx, 0, wx - x0 - CELL), Math.max(y0 - wy, 0, wy - y0 - CELL)));
+    }
+    return best;
+  };
+  const T = (x, y, own) => { if (!inMap(x, y)) return own; const c = x * N + y; return cutRock[c] ? (cutTop[c] + 1) * VZ : roadC(c) ? own : Math.max(own, gz(c)); };
+  const topAt = (wx, wy, c) => {
+    const own = (cutTop[c] + 1) * VZ, fx = (wx - X0) / CELL - 0.5, fy = (wy - Y0) / CELL - 0.5, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+    return T(x0, y0, own) * (1 - tx) * (1 - ty) + T(x0 + 1, y0, own) * tx * (1 - ty) + T(x0, y0 + 1, own) * (1 - tx) * ty + T(x0 + 1, y0 + 1, own) * tx * ty
+      + (rockNoise(wx / 50, wy / 50, 0, 401) - 0.5) * 14;
+  };
+  // where a voxel may go: wall cells above their floor; elsewhere (arches over the road) well
+  // over the ground and its ride surface; never in a tunnel column, the river or a deck
+  const allow = (x, y, z) => {
+    const [cx, cy] = cellAt(x, y), [cx2, cy2] = cellAt(x + RV - 1, y + RV - 1);
+    if (cx2 !== cx || cy2 !== cy || !inMap(cx, cy)) return false;
+    const c = cx * N + cy;
+    if (tunnelZ[c] >= 0 || riverCell[c] || deck[c]) return false;
+    return cutRock[c] ? z >= rockFloor(c) : z >= gz(c) + 64;
+  };
+  let wallCells = 0;
+  const fillers = [];
+  for (let x = 0; x < N; x++)
+    for (let y = 0; y < N; y++) {
+      const c = x * N + y; if (!cutRock[c]) continue;
+      wallCells++;
+      const m = vox[palOf(x, y)], g = gz(c), f = rockFloor(c);
+      if (f > g) fillers.push({ asset: 'PB_DefaultMicroBrick', position: [X0 + x * CELL + 20, Y0 + y * CELL + 20, (g + f) / 2], size: [20, 20, (f - g) / 2], color: (palOf(x, y) ? SANDSTONE : STONE_TONES)[1], soft: 1 });
+      for (let i = 0; i < CELL / RV; i++) for (let j = 0; j < CELL / RV; j++) {
+        const wx = X0 + x * CELL + i * RV, wy = Y0 + y * CELL + j * RV, mx = wx + RV / 2, my = wy + RV / 2;
+        const fd = faceDist(mx, my), top = Math.max(topAt(mx, my, c), f + RV);
+        for (let z = f; z + RV / 2 <= top; z += RV) {
+          const rough = 4 + 0.3 * (z - g) + 26 * (rockNoise(mx / 32, my / 32, z / 20, 402) - 0.5) + 12 * (rockNoise(mx / 12, my / 12, z / 10, 403) - 0.5);
+          if (fd < rough) continue;
+          m.set(K(Math.round(wx / RV), Math.round(wy / RV), Math.round(z / RV)), 0);
+        }
+      }
+    }
+  // arches: across a road sample with rock walls deep enough on both sides (every archGap
+  // samples or so), and at every tunnel mouth, framing the bore
+  let arches = 0;
+  for (const { P } of roadPaths) {
+    let last = -1e9;
+    for (let i = 2; i < P.length - 2; i++) {
+      const [x, y] = P[i], c = x * N + y;
+      if (!roadC(c) || i - last < 4) continue;
+      const tun = k => k >= 0 && k < P.length && tunnelZ[P[k][0] * N + P[k][1]] >= 0;
+      const mouth = tun(i + 1) ? 1 : tun(i - 1) ? -1 : 0;
+      if (!mouth && (i - last < CUT.archGap || hash(x, y, 909) >= CUT.archChance)) continue;
+      let ux = P[i + 2][0] - P[i - 2][0], uy = P[i + 2][1] - P[i - 2][1];
+      if (mouth) { ux = P[i + mouth][0] - x; uy = P[i + mouth][1] - y; } // toward the bore
+      const ul = Math.hypot(ux, uy); if (!ul) continue;
+      ux /= ul; uy /= ul; const vx = -uy, vy = ux;
+      let Cx = X0 + (x + 0.5) * CELL, Cy = Y0 + (y + 0.5) * CELL;
+      const z0 = gz(c);
+      const scan = sgn => {
+        for (let d = 10; d <= 170; d += 5) {
+          const [sx, sy] = cellAt(Cx + vx * d * sgn, Cy + vy * d * sgn); if (!inMap(sx, sy)) return null;
+          const s = sx * N + sy; if (cutRock[s]) return [d, (cutTop[s] + 1) * VZ];
+        }
+        return null;
+      };
+      let L = scan(-1), R = scan(1), clear = CUT.clear, zt;
+      if (mouth) {
+        const t = P[i + mouth], tc = t[0] * N + t[1];
+        clear = TUNNEL.high * VZ - 8; zt = gz(tc);
+        L = L && L[0] <= 110 ? L : [66, zt]; R = R && R[0] <= 110 ? R : [66, zt];
+      } else {
+        if (!L || !R) continue;
+        zt = Math.min(L[1], R[1]);
+        if (zt - z0 < CUT.archMin * VZ) continue;
+      }
+      const th = 14 + hash(x, y, 911) * 8;
+      if (mouth) { Cx += ux * (20 - th); Cy += uy * (20 - th); } // its back against the portal face
+      const mOff = (R[0] - L[0]) / 2, w = (L[0] + R[0]) / 2 + 6;
+      Cx += vx * mOff; Cy += vy * mOff;
+      const zTop = Math.max(zt + 16, z0 + clear + 50), m = vox[palOf(x, y)], sd = x * 131 + y * 17;
+      const ext = w * 1.15 + th + 10;
+      for (let wx = Math.floor((Cx - ext) / RV) * RV; wx <= Cx + ext; wx += RV)
+        for (let wy = Math.floor((Cy - ext) / RV) * RV; wy <= Cy + ext; wy += RV) {
+          const px = wx + RV / 2 - Cx, py = wy + RV / 2 - Cy, du = px * ux + py * uy, dv = px * vx + py * vy, t = dv / w;
+          if (Math.abs(t) > 1.15) continue;
+          const nz = rockNoise((wx + RV / 2) / 24, (wy + RV / 2) / 24, 0, 410 + sd);
+          if (Math.abs(du) > th + (nz - 0.5) * 10) continue;
+          for (let z = Math.floor(z0 / RV) * RV; z < zTop; z += RV) {
+            const n3 = rockNoise((wx + RV / 2) / 20, (wy + RV / 2) / 20, z / 16, 420 + sd);
+            const intr = z0 + clear * Math.sqrt(Math.max(0, 1 - t * t)) + (n3 - 0.5) * 12;
+            const extr = Math.max(zt - 6 + n3 * 16, z0 + clear + 22 + n3 * 14);
+            if (z + RV / 2 < intr || z + RV / 2 > extr || !allow(wx, wy, z)) continue;
+            m.set(K(Math.round(wx / RV), Math.round(wy / RV), Math.round(z / RV)), 0);
+          }
+        }
+      arches++; last = i;
+    }
+  }
+  let n0 = 0;
+  vox.forEach((m, p) => {
+    if (!m.size) return;
+    for (const b of rocksFromVoxels(m, { seed: 91 + p, moss: p ? 0.04 : 0.3, palette: p ? SANDSTONE : STONE_TONES, allow })) { b.soft = 1; bricks.push(b); n0++; }
+  });
+  for (const b of fillers) bricks.push(b);
+  console.error(`cut rocks: ${wallCells} wall cells, ${arches} arches, ${n0} rock bricks`);
+}
+
 // river rapids (2026-10-21): a foam slope of glass micro wedge over each stepped-down
 // cell, from the lower water up to the upper (collision off: you wade through)
 {
@@ -5176,6 +5356,9 @@ if (!DRY) {
   fs.writeFileSync(path.join(OUT, 'spawners.json'), JSON.stringify(spawners));
   for (const sh of shops) sh.prefab ??= `shop_${sh.tier}`; // house and market stands name only their tier (2026-10-08: they loaded as "undefined")
   fs.writeFileSync(path.join(OUT, 'shops.json'), JSON.stringify(shops));
+  // (2026-10-21, owner: "randomize their colors") pots/potgen6.mjs colour variants pot_0..15, picked by spot hash
+  const potHash = ([x, y, z]) => { let h = Math.imul(Math.round(x), 73856093) ^ Math.imul(Math.round(y), 19349663) ^ Math.imul(Math.round(z), 83492791); h = Math.imul(h ^ (h >>> 13), 0x5bd1e995); return ((h ^ (h >>> 15)) >>> 0) % 16; }; // spots sit on the 10 grid: mix the bits or every index comes out even
+  for (const p of pots) p.prefab ??= `pot_${potHash(p.at)}`;
   fs.writeFileSync(path.join(OUT, 'pots.json'), JSON.stringify(pots));
   fs.writeFileSync(path.join(OUT, 'casino.json'), JSON.stringify(casinoGames)); // br.Prefab.Load "<prefab>" x y z 0 <orient>
   fs.writeFileSync(path.join(OUT, 'gods.json'), JSON.stringify(holy.filter(v => v.god).map(v => ({ kind: v.kind, at: [X0 + v.x * CELL + SHIFT[0], Y0 + v.y * CELL + SHIFT[1], (v.h + 1) * VZ], ...v.god })), null, 1));
