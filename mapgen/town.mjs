@@ -1078,7 +1078,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       if (!rifle) { mput(x, y, z, [3, 2, 1], DARK); mput(x - 0.1, y - 0.5, z, [2, 3, 1], k % 2 ? WOOD : DARK); mput(x + 0.8, y + 0.1, z, [5, 1, 1], STEEL([150, 152, 160])); return; } // grip toward -y
       mput(x, y, z, [10, 3, 1], WOOD); mput(x + 1.8, y, z, [8, 2, 1], DARK); mput(x + 3.8, y, z, [12, 1, 1], WOOD); mput(x + 5.4, y, z, [4, 1, 1], STEEL([150, 152, 160]));
     };
-    for (const [k, c] of [lw + 1, rw + 1].entries()) {
+    // (2026-10-21, owner: "remove all the other bullshit metal bars and cabinets") armories have no window cases
+    for (const [k, c] of (guns ? [lw + 1, rw + 1] : []).entries()) {
       const x0 = c - ww / 2 + 0.6, x1 = c + ww / 2 - 0.6, y0 = 1, y1 = 3.6;
       piece(x0, y0, x1, y1 + 0.4, () => {
         sbox(x0, y0, x1, y1, f, f + 18, MET);                                   // base
@@ -1733,7 +1734,8 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       });
       count('shop'); count('shop: ' + kind);
     },
-    armory(cx, cy, fx, fy, s, small, wares) { weaponShop('armory', cx, cy, fx, fy, s, wares ?? []); },
+    // (2026-10-21, owner: "push the cabinets flush against the wall like every other one") every armory = the spawn layout: cabinets on the back wall, no showcases / ingot shelves
+    armory(cx, cy, fx, fy, s, small, wares) { weaponShop('armory', cx, cy, fx, fy, s, wares ?? [], undefined, true); },
     gunsmith(cx, cy, fx, fy, s, small, wares) { weaponShop('gunsmith', cx, cy, fx, fy, s, wares ?? []); },
     sodashack(cx, cy, fx, fy, s) { sodaShack(cx, cy, fx, fy, s); },
     tavern(cx, cy, fx, fy, s) {
