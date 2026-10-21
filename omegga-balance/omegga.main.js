@@ -10,7 +10,8 @@ module.exports = class Balance {
 
   async init() {
     this.omegga.on('cmd:reload', (name, ...args) => this.reload(name, args).catch(e => this.tell(name, 'reload failed: ' + e.message)));
-    return { registeredCommands: ['reload'] };
+    this.omegga.on('cmd:fix', (name, ...args) => this.fix(name, args).catch(e => this.tell(name, 'fix failed: ' + e.message)));
+    return { registeredCommands: ['reload', 'fix'] };
   }
 
   tell(name, msg) {
@@ -27,12 +28,23 @@ module.exports = class Balance {
   }
 
   async reload(name, args) {
+    const dry = args[0] === 'dry';
+    await this.run(name, 'balance.mjs', ['apply', ...(dry ? ['dry'] : [])], dry ? 'checking balance.json...' : 'applying balance.json (takes a minute or two)...');
+  }
+
+  // /fix [npcs|shops] [dry]: fix.mjs reloads the quest NPC bodies + talk rods, re-places shopkeepers and every shop stand
+  async fix(name, args) {
+    const a = args.map(s => String(s).toLowerCase());
+    const mode = a.find(s => ['npcs', 'npc', 'shops', 'shop'].includes(s)) ?? 'all', dry = a.includes('dry');
+    await this.run(name, 'fix.mjs', [mode, ...(dry ? ['dry'] : [])], dry ? 'checking what /fix would do...' : `fixing ${mode === 'all' ? 'npcs and shops' : mode} (a minute or two)...`);
+  }
+
+  async run(name, script, argv, hello) {
     if (!this.allowed(name)) return this.tell(name, 'not allowed');
     if (this.busy) return this.tell(name, `already running (started by ${this.busy})`);
-    const dry = args[0] === 'dry';
     this.busy = name;
-    this.tell(name, dry ? 'checking balance.json...' : 'applying balance.json (takes a minute or two)...');
-    const child = spawn(process.execPath, [path.join(DIR, 'balance.mjs'), 'apply', ...(dry ? ['dry'] : [])], { cwd: DIR });
+    this.tell(name, hello);
+    const child = spawn(process.execPath, [path.join(DIR, script), ...argv], { cwd: DIR });
     let buf = '';
     const onData = d => {
       buf += d; let i;

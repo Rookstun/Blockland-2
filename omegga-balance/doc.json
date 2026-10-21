@@ -1,11 +1,12 @@
 {
   "name": "balance",
-  "description": "/reload makes enemies and shop weapons match bridge/balance/balance.json (health, damage, speed, weapon types). /reload dry = show what would change.",
+  "description": "/reload makes enemies and shop weapons match bridge/balance/balance.json (health, damage, speed, weapon types). /reload dry = show what would change. /fix [npcs|shops] [dry] reloads NPCs, their talk rods and the shop stands.",
   "author": "pooper",
   "config": {
     "allowed": { "description": "Players who may /reload (the host always may)", "type": "list", "itemType": "string", "default": ["abysmal garbage", "soapstain22", "renderman"] }
   },
   "commands": [
-    { "name": "/reload", "description": "apply balance.json to the game", "example": "/reload", "args": [{ "name": "dry", "description": "only show what would change", "required": false }] }
+    { "name": "/reload", "description": "apply balance.json to the game", "example": "/reload", "args": [{ "name": "dry", "description": "only show what would change", "required": false }] },
+    { "name": "/fix", "description": "reload quest NPCs + their talk rods, re-place shopkeepers and every shop stand", "example": "/fix", "args": [{ "name": "npcs|shops", "description": "only that part", "required": false }, { "name": "dry", "description": "only show what would change", "required": false }] }
   ]
 }
