@@ -12,7 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { makeGod } from './gods.mjs';
-import { TOWN_CELLS, build as buildTown, surface as townSurface, planTown, planVillage, RIVER_LOCAL, PLAZA_R, distToLine, LEGACY } from './town.mjs';
+import { TOWN_CELLS, build as buildTown, surface as townSurface, planTown, planVillage, RIVER_LOCAL, PLAZA_R, distToLine } from './town.mjs';
 import { floorPieces } from './floors.mjs';
 import { orientFor, worldBox, ORIENT } from './orient.mjs';
 import { makeBuilder } from './builder.mjs';
@@ -3709,7 +3709,6 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
     if (v.kind === 'temple' || v.kind === 'shrine') v.god = makeGod(v.seed, townRnd);
     const o = at(v.x, v.y, v.h + 1), w = wrap(o[0] - CELL / 2, o[1] - CELL / 2, o[2]);
     const st = buildTown({ put: w.put, free: w.free, orientFor, rnd: townRnd, plan: null, single: { type: v.kind, seed: v.seed, god: v.god, facing: v.facing, wares: v.wares } });
-    if (LEGACY.has(v.kind)) continue; // archived (town.mjs LEGACY): built only so townRnd advances as before, nothing kept
     for (const hs of st.houseShops ?? []) wildShops.push({ at: [o[0] - CELL / 2 + hs.at[0], o[1] - CELL / 2 + hs.at[1], o[2] + hs.at[2]], tier: hs.tier, orient: hs.orient, house: true, ...(hs.prefab ? { prefab: hs.prefab } : {}) });
     if (v.wares) console.error(`${v.kind}: cells ${v.x},${v.y}, ${Math.round(townDist(v.x, v.y))} cells from the town, ${(st.houseShops ?? []).length} stands`);
     if (st.casino) {

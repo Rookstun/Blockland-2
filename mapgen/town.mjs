@@ -365,8 +365,9 @@ const WEAPON_NAMES = {
 };
 // LEGACY (2026-10-21, owner screenshots: "mark these as legacy and archive them and keep them out of the world"):
 // the old building() tavern, the warehouse and the colonnade temple. Their TYPES code stays here archived, but
-// nothing keeps them: mapgen still runs a wild/roadside site's build (the shared townRnd must advance the same, or
-// every later site's build changes) and drops its bricks, so the levelled lot stays empty; hamlets build a house instead.
+// nothing keeps them: they are still planned and built exactly as before (lots, levelling, the shared townRnd and
+// every brick's space stay the same, or road routing and every later site drift map-wide) but as GHOST bricks
+// (dropped at output, like vending boxes) and without their stands, so their lots stand empty.
 export const LEGACY = new Set(['tavern', 'warehouse', 'temple']);
 export const WEAPON_SHOP = { W: 52, D: 40, FC: 12 }; // studs: building W x D, forecourt FC deep
 // Houses (2026-10-03, owner): shapedhouse.mjs rect / L / T houses with rounded
@@ -487,6 +488,10 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   const pick = (list, a, b, c) => list[Math.floor(rnd(a, b, c) * list.length)];
   const stats = { buildings: {}, stalls: 0, lamps: 0, trees: 0, removed: [], houseShops: [] };
   const count = t => (stats.buildings[t] = (stats.buildings[t] ?? 0) + 1);
+  // LEGACY types build as ghosts: every brick keeps its space, none reaches the output; their stands are dropped
+  let ghosting = false;
+  { const put0 = put; put = (b, ...r) => put0(ghosting ? { ...b, ghost: 1 } : b, ...r); }
+  const legacyBuild = (type, f) => { if (!LEGACY.has(type)) return f(); const n = stats.houseShops.length; ghosting = true; try { f(); } finally { ghosting = false; stats.houseShops.length = n; } };
 
   // furniture switch: while FURN > 0 every piece is furniture and is only laid when FURNITURE is on
   let FURN = 0;
@@ -2449,7 +2454,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const r = boxOf(cx, cy, fx, fy, fp);
           if (!rectClear(r, { edge, margin, claim: true })) continue;
           taken.push(r);
-          onSite(r, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); });
+          onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); }));
           if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
         }
       }
@@ -2480,7 +2485,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const r = boxOf(cx, cy, fx, fy, footprint(type, s, small));
         if (!rectClear(r, { edge, margin, claim: true })) continue;
         taken.push(r);
-        onSite(r, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); });
+        onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); }));
         if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
       }
   }
@@ -2557,8 +2562,10 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     if (!TYPES[single.type]) throw new Error(`town: no building type ${single.type}`);
     const [sfx, sfy] = single.facing ?? [0, -1];
     lastDoor = null;
-    TYPES[single.type](0, 0, sfx, sfy, single.seed, false, single.wares ?? single.god);
-    vending(null, single.type, sfx, sfy, lastDoor, single.seed);
+    legacyBuild(single.type, () => {
+      TYPES[single.type](0, 0, sfx, sfy, single.seed, false, single.wares ?? single.god);
+      vending(null, single.type, sfx, sfy, lastDoor, single.seed);
+    });
     return stats;
   }
   if (village) {
@@ -2579,7 +2586,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       if (Math.hypot(x, y) < 260) return null;
       if (village.nordic) return stats.buildings['mead hall'] ? 'longhouse' : 'meadhall';
       if (village.desert) return stats.buildings['gun store'] ? 'western' : 'gunstore';
-      const want = specials.find(([t, label]) => !LEGACY.has(t) && !stats.buildings[label]);
+      const want = specials.find(([, label]) => !stats.buildings[label]);
       if (want && rnd(s, 9) < 0.85) return want[0];
       return rnd(s, 4) < 0.6 ? 'cottage' : 'townhouse';
     };
