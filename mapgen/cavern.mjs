@@ -146,14 +146,15 @@ export function caveField(nodes, ctx) {
     for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
       const x = X0 + i * TS, y = Y0 + j * TS;
       const w = noise(x / 110, y / 110, seed * 0.37 + 3.1) + 0.35 * noise(x / 33, y / 33, seed * 0.41 + 8.3);
-      const rr = nd.r * (1 + (nd.door ? 0.08 : 0.28) * w);
+      const rr = nd.r * (1 + (nd.arch ? 0.3 : nd.door ? 0.08 : 0.28) * w); // arch: a cave mouth through a cliff (ragged outline)
       const d = Math.hypot(x - nd.x, y - nd.y) / rr;
       if (d >= 1) continue;
       // floor: flat to half way, then an S-curve up to 0.4 of the height at the rim (scree slopes);
       // ceiling: a low-shouldered dome ((1 - d^2)^0.7) meeting it: the walls are wedge slopes, not cliffs
       const sm = Math.min(1, Math.max(0, (d - 0.5) / 0.5)), curl = sm * sm * (3 - 2 * sm);
       const f = nd.zf + nd.hu * (nd.door ? 0.3 * d * d * d : 0.4 * curl);
-      const c = nd.zf + nd.hu * (nd.door ? Math.sqrt(1 - Math.pow(d, 4)) : Math.pow(1 - d * d, 0.7));
+      // arch nodes: a rounded rock arch (dome profile) over a flat walking floor, ragged by noise
+      const c = nd.zf + nd.hu * (nd.arch ? Math.pow(1 - d * d, 0.6) * (1 + 0.12 * noise(x / 23, y / 23, 9.7)) : nd.door ? Math.sqrt(1 - Math.pow(d, 4)) : Math.pow(1 - d * d, 0.7));
       const k = i * CW + j, o = corners.get(k);
       if (!o) corners.set(k, [f, c, nd.door ? 1 : 0]);
       else { o[0] = Math.min(o[0], f); o[1] = Math.max(o[1], c); if (nd.door) o[2] = 1; }

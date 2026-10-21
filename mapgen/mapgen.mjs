@@ -2848,7 +2848,9 @@ let carved = 0;
         const n = Math.max(2, Math.ceil(c.dist / 36));
         for (let t = 1; t <= n; t++) {
           const q = t / n;
-          s.plan.nodes.push({ x: c.nd.x + (c.mx - c.nd.x) * q, y: c.nd.y + (c.my - c.nd.y) * q, zf: Math.round(c.nd.zf + (c.top - c.nd.zf) * q), r: 46, hu: 72, door: true });
+          // a rock arch that flares wider and taller toward the wall face (ragged outline, flat floor)
+          const flare = Math.max(0, (q - 0.6) / 0.4);
+          s.plan.nodes.push({ x: c.nd.x + (c.mx - c.nd.x) * q, y: c.nd.y + (c.my - c.nd.y) * q, zf: Math.round(c.nd.zf + (c.top - c.nd.zf) * q), r: 50 + 14 * flare, hu: 68 + 6 * flare, door: true, arch: true });
         }
         mouthCells.add(c.W); mouthFront.add(c.L);
         for (let t = 0; t <= 1.0001; t += 0.05) { // the passage's cells (and their neighbours: its width) keep a 1-brick roof
@@ -2928,7 +2930,7 @@ let carved = 0;
         if (!inMap(x, y)) continue;
         for (let z = f; z <= t + 1; z++) {
           const v = V[vi(x, y, z)];
-          if (!v || v === WATER || LIME.includes(v)) continue;
+          if (!v || v === WATER || LIME.includes(v) || z >= H[x * N + y]) continue; // the ground's own surface keeps its colour (snow over cave mouths)
           if (air(x + 1, y, z) || air(x - 1, y, z) || air(x, y + 1, z) || air(x, y - 1, z) || air(x, y, z + 1) || air(x, y, z - 1)) { V[vi(x, y, z)] = band(x, y, z); limed++; }
         }
       }
