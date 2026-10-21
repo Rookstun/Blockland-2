@@ -483,6 +483,7 @@ for (const d of DUNGEONS) {
     }
   const gx = d.fx + Math.floor(d.keep.gate[0] / SPC), gy = d.fy + Math.floor(d.keep.gate[1] / SPC);
   let x = dx ? (dx < 0 ? kx0 : kx1) : gx, y = dy ? (dy < 0 ? ky0 : ky1) : gy;
+  d.trenchWalk = { x, y, dx, dy, roof }; // re-walked after the river (see 'river')
   for (let k = 0; k < 160; k++) {
     x += dx; y += dy;
     // flat to the footprint's edge, then a brick per cell (from the pit's edge if the keep overhangs)
@@ -582,7 +583,10 @@ stage('river');
 const RIVER = { rw: tune('river.width', 3 + K, 'half-width, cells'), bank: tune('river.bank', 12, 'bank blend, cells'), depth: tune('river.depth', 2, 'bed depth, voxels'),
   valley: Math.round(tune('river.valley', 20, 'valley sides reach this far past the banks, cells (x K)') * K), slope: tune('river.slope', 4.5, 'steepest valley side, voxels per cell (keep under smooth.maxRise)'),
   levelWin: tune('river.levelWin', 6, 'river level = lowest bank within this many points either side'),
-  levelBlock: tune('river.levelBlock', 40, 'river reach length with one water level, points (2 per cell)'),
+  levelBlock: tune('river.levelBlock', 40, 'unused since 2026-10-21 (falling fit + river.stepEvery)'),
+  stepEvery: tune('river.stepEvery', 6, 'the river falls at most a brick every this many points (2 per cell)'),
+  embank: tune('river.embank', 1, 'floodplain fill round a dammed reach falls this many bricks per cell'),
+  fillCost: tune('river.fillCost', 3, 'falling fit: cost of holding water over the ground vs cutting the ground under it'),
   oct: tune('river.oct', 1, 'octilinear course (45/90 degree runs), 0 = free curve'), octTol: tune('river.octTol', 4, 'octilinear: max cells off the meander line'), octTolTown: tune('river.octTolTown', 2, 'octilinear: max cells off it in town') };
 // the valley's height over the water level at e cells past the channel edge
 // (2026-10-06, owner: the river ran in a sheer-walled canyon): a brick per cell
@@ -674,6 +678,33 @@ const riverRiver = (() => {
     pts.length = 0; pts.push(...dense);
     console.error(`river: octilinear, ${route.length} corners`);
   }
+  // (2026-10-21) round the dungeons: the course could run through a footprint, where the
+  // channel was simply left out (the water stopped at a wall on each side of the keep).
+  // A run of points inside a dungeon's box (+ the channel and 3 cells) is replaced by a
+  // walk along that box's edge, the shorter way round (axis runs: still octilinear).
+  for (const d of DUNGEONS) {
+    const M = RIVER.rw + 3, B0 = d.fx - M, B1 = d.fy - M, B2 = d.fx + d.cells + M, B3 = d.fy + d.cells + M, W = B2 - B0, Hh = B3 - B1, P = 2 * (W + Hh);
+    const inside = q => q[0] > B0 && q[0] < B2 && q[1] > B1 && q[1] < B3;
+    const snap = q => { const ds = [q[1] - B1, B2 - q[0], B3 - q[1], q[0] - B0].map(Math.abs), e = ds.indexOf(Math.min(...ds)), cx = Math.max(B0, Math.min(B2, q[0])), cy = Math.max(B1, Math.min(B3, q[1]));
+      return e === 0 ? [[cx, B1], cx - B0] : e === 1 ? [[B2, cy], W + cy - B1] : e === 2 ? [[cx, B3], W + Hh + B2 - cx] : [[B0, cy], 2 * W + Hh + B3 - cy]; };
+    const corner = t => { t = ((t % P) + P) % P; return t === 0 ? [B0, B1] : t === W ? [B2, B1] : t === W + Hh ? [B2, B3] : [B0, B3]; };
+    for (let guard = 0; guard < 4; guard++) {
+      const i0 = pts.findIndex(inside); if (i0 <= 0) break;
+      let i1 = i0; while (i1 + 1 < pts.length && inside(pts[i1 + 1])) i1++;
+      if (i1 + 1 >= pts.length) break;
+      const a = pts[i0 - 1], b = pts[i1 + 1], [sa, ta] = snap(a), [sb, tb] = snap(b), fwd = ((tb - ta) % P + P) % P, dir = fwd <= P / 2 ? 1 : -1, len = dir > 0 ? fwd : P - fwd;
+      const mid = [];
+      for (const tc of [0, W, W + Hh, 2 * W + Hh]) {
+        const rel = dir > 0 ? ((tc - ta) % P + P) % P : ((ta - tc) % P + P) % P;
+        if (rel > 0 && rel < len) mid.push([rel, corner(tc)]);
+      }
+      const way = [a, sa, ...mid.sort((u, v) => u[0] - v[0]).map(u => u[1]), sb, b];
+      const dense = [a];
+      for (let k = 1; k < way.length; k++) { const u = way[k - 1], v = way[k], m = Math.max(1, Math.ceil(Math.hypot(v[0] - u[0], v[1] - u[1]) * 2)); for (let j = 1; j <= m; j++) dense.push([u[0] + (v[0] - u[0]) * j / m, u[1] + (v[1] - u[1]) * j / m]); }
+      pts.splice(i0 - 1, i1 - i0 + 3, ...dense);
+      console.error(`river: round ${d.name} (${i1 - i0 + 1} points -> ${dense.length})`);
+    }
+  }
   // levels: lowest ground across the channel, falling only, pinned to the town
   const townL = town.h - 1, rw = RIVER.rw;
   const ground = pts.map(([x, y]) => {
@@ -688,20 +719,39 @@ const riverRiver = (() => {
   const inT = pts.map(([x, y]) => townDist(Math.round(x), Math.round(y)) <= 0);
   const firstT = inT.indexOf(true), lastT = inT.lastIndexOf(true);
   const L = new Array(pts.length);
-  // (owner 2026-10-13: "lower and raise water levels that stray too much", "the water sticks
-  // up out of the ground") the level follows the ground both ways: the lowest bank within
-  // RIVER.levelWin points, a brick under it; only the town pins it. Every step it takes
-  // gets a rock weir (see 'rock weirs'). Was: falling only and never below the town upstream,
-  // which held the water up to 22 bricks over lower ground.
-  // in reaches of RIVER.levelBlock points (one level each, so steps, and weirs, come at reach
-  // ends only), each reach as low as the lowest bank over it and LW points either side
-  const LW = RIVER.levelWin, BL = RIVER.levelBlock;
-  for (let b0 = 0; b0 < pts.length; b0 += BL) {
-    const b1 = Math.min(pts.length, b0 + BL);
+  // (owner 2026-10-21 screenshots: a 21-brick sheer step where a road crossed, flat
+  // rectangular pools behind dams; "doesn't work in real life") real rivers only fall:
+  // the level is the lowest bank around each point (RIVER.levelWin points either side),
+  // never higher than any level upstream (higher ground downstream is cut through as a
+  // valley, not dammed), then eased so it falls at most a brick every RIVER.stepEvery
+  // points (riffles, each with a foam cascade) by starting the descent earlier.
+  // Was: reaches of RIVER.levelBlock points at the bank level both ways = 9-24 brick
+  // walls and water climbing back up downstream.
+  const LW = RIVER.levelWin, SE = RIVER.stepEvery, tgt = new Array(pts.length);
+  for (let i = 0; i < pts.length; i++) {
     let g = Infinity;
-    for (let j = Math.max(0, b0 - LW); j < Math.min(pts.length, b1 + LW); j++) g = Math.min(g, ground[j]);
-    for (let i = b0; i < b1; i++) L[i] = inT[i] ? townL : Math.max(g - 1, SEA - 1);
+    for (let j = Math.max(0, i - LW); j < Math.min(pts.length, i + LW + 1); j++) g = Math.min(g, ground[j]);
+    tgt[i] = Math.max(g - 1, SEA - 1);
   }
+  // falling fit: the non-increasing profile with the least cutting (ground over the water)
+  // + RIVER.fillCost x damming (water over the ground, held by levees), the town pinned:
+  // pool-adjacent-violators, each pooled reach at the weighted quantile 1 / (1 + fillCost)
+  const q = 1 / (1 + RIVER.fillCost), blocks = [];
+  const quant = vs => { const tot = vs.reduce((a, v) => a + v[1], 0); let acc = 0; for (const v of vs) { acc += v[1]; if (acc >= q * tot) return v[0]; } return vs[vs.length - 1][0]; };
+  const mergeSorted = (a, b) => { const o = []; let i = 0, j = 0; while (i < a.length || j < b.length) o.push(j >= b.length || (i < a.length && a[i][0] <= b[j][0]) ? a[i++] : b[j++]); return o; };
+  for (let i = 0; i < pts.length; i++) {
+    const vs = [[inT[i] ? townL : tgt[i], inT[i] ? 1000 : 1]];
+    blocks.push({ i0: i, i1: i + 1, vs, v: vs[0][0] });
+    while (blocks.length > 1 && blocks[blocks.length - 2].v < blocks[blocks.length - 1].v) {
+      const b2 = blocks.pop(), b1 = blocks.pop(), m = mergeSorted(b1.vs, b2.vs);
+      blocks.push({ i0: b1.i0, i1: b2.i1, vs: m, v: quant(m) });
+    }
+  }
+  for (const bl of blocks) for (let i = bl.i0; i < bl.i1; i++) L[i] = bl.v;
+  if (firstT >= 0 && L[firstT] !== townL) console.error(`river: reaches town at level ${L[firstT]} (town water ${townL})`);
+  { let cut = 0, fill = 0, fmax = 0; for (let i = 0; i < pts.length; i++) { if (inT[i]) continue; const d = L[i] - tgt[i]; if (d > 0) { fill += d; fmax = Math.max(fmax, d); } else cut -= d; } console.error(`river fit: cut ${cut}, dammed ${fill} (max ${fmax}) brick-points`); if (process.env.MAPGEN_RIVERDIAG) { const sx = -(X0 + (town.fx + TOWN.cells / 2) * CELL), sy = -(Y0 + (town.fy + TOWN.cells / 2) * CELL); const r = []; for (let i = 0; i < pts.length; i += 10) r.push(`${i}:${Math.round(X0 + pts[i][0] * CELL + sx)},${Math.round(Y0 + pts[i][1] * CELL + sy)} L${L[i]} g${tgt[i]}${inT[i] ? 'T' : ''}`); console.error('river profile: ' + r.join(' | ')); } }
+  for (let i = pts.length - 2, f = L[pts.length - 1]; i >= 0; i--) { f = Math.min(L[i], f + 1 / SE); L[i] = Math.floor(f + 1e-9); }
+  for (let i = 1; i < pts.length; i++) L[i] = Math.min(L[i], L[i - 1]); // the easing never lifts a point over its upstream
   // stop a little way into the sea
   let end = pts.length;
   for (let i = Math.max(0, lastT) + 1, wet = 0; i < pts.length; i++) { wet = ground[i] <= SEA - 2 ? wet + 1 : 0; if (wet > 6) { end = i; break; } }
@@ -719,6 +769,16 @@ const riverRiver = (() => {
 {
   const { pts, L } = riverRiver, rw = RIVER.rw, R = rw + RIVER.bank + RIVER.valley;
   const best = new Float32Array(N * N).fill(Infinity), idx = new Int32Array(N * N).fill(-1);
+  const apron = new Uint8Array(N * N); for (const c of apronCells) apron[c] = 1;
+  const deferred = new Map();
+  // valley sides: cut down to the profile (never fill), roughened past the banks; where the
+  // ground lies under the water (a dammed basin) a floodplain is built up a brick a cell
+  // (river.embank) from the banks instead of a bare levee
+  const valleyAt = (c, target, d, lv, e) => {
+    if (H[c] > target) H[c] = target;
+    if (d <= rw + 3 && H[c] < lv + 1) H[c] = lv + 1;
+    else if (lv > SEA) { const fl = lv + 1 - Math.floor(Math.max(0, e - 3) * RIVER.embank); if (H[c] < fl) H[c] = fl; }
+  };
   pts.forEach(([px, py], i) => {
     for (let x = Math.floor(px - R); x <= Math.ceil(px + R); x++)
       for (let y = Math.floor(py - R); y <= Math.ceil(py + R); y++) {
@@ -730,12 +790,13 @@ const riverRiver = (() => {
   for (let x = 0; x < N; x++)
     for (let y = 0; y < N; y++) {
       const c = x * N + y, d = best[c];
-      if (idx[c] < 0 || DUNGEONS.some(dd => footDist(dd, x, y) <= 2) || trenchCell[c]) continue;
+      if (idx[c] < 0 || DUNGEONS.some(dd => footDist(dd, x, y) <= 2) || apron[c]) continue;
       const lv = L[idx[c]];
       riverBankL[c] = lv;
       if (d <= rw) {
         riverCell[c] = 1; riverLevel[c] = lv; noSmooth[c] = 1; keepOut[c] = 1;
-        H[c] = Math.min(H[c], lv - RIVER.depth);
+        // the bed RIVER.depth under the water, cut or filled (a dammed reach was a deep pit)
+        H[c] = townKind[c] ? Math.min(H[c], lv - RIVER.depth) : lv - RIVER.depth;
         continue;
       }
       if (d <= rw + 2) keepOut[c] = 1;
@@ -743,9 +804,30 @@ const riverRiver = (() => {
       // valley sides: cut down to the profile (never fill), roughened past the banks
       const e = d - rw, wx = X0 + x * CELL, wy = Y0 + y * CELL;
       const target = lv + 1 + Math.floor(valleyRise(e) + fbm2(wx / 900 + 13, wy / 900 - 7, 3) * 6 * smooth(4, 14, e));
-      if (H[c] > target) H[c] = target;
-      if (d <= rw + 3 && H[c] < lv + 1) H[c] = lv + 1;
+      if (trenchCell[c]) { deferred.set(c, [target, d, lv, e]); continue; } // after the trench is re-walked
+      valleyAt(c, target, d, lv, e);
     }
+  // (2026-10-21) dungeon entrance trenches were cut before the river and kept out of its
+  // valley, so the valley left them standing as causeways (owner: "the path flies up into
+  // the air"): re-walk each trench on the valley ground; it now ends where that ground
+  // meets its floor or at the river, and the rest of the old trench is valley again
+  for (const dg of DUNGEONS) {
+    const tw = dg.trenchWalk; if (!tw) continue;
+    let x = tw.x, y = tw.y; const path = [];
+    for (let k = 0; k < 160; k++) {
+      x += tw.dx; y += tw.dy;
+      const side = [-1, 0, 1].map(l => [x + tw.dy * l, y + tw.dx * l]).filter(([sx, sy]) => inBounds(sx, sy));
+      if (!side.some(([sx, sy]) => trenchCell[sx * N + sy])) break;
+      path.push({ k, x, y, side });
+    }
+    let keepN = path.length;
+    for (let j = 0; j < path.length; j++) {
+      const { k, x, y, side } = path[j], out = Math.max(0, Math.min(k, footDist(dg, x, y))), floor = tw.roof + out;
+      if (side.some(([sx, sy]) => riverCell[sx * N + sy]) || (out > 0 && side.every(([sx, sy]) => deferred.has(sx * N + sy) && deferred.get(sx * N + sy)[0] <= floor))) { keepN = j; break; }
+    }
+    for (let j = keepN; j < path.length; j++) for (const [sx, sy] of path[j].side) { const c = sx * N + sy; trenchCell[c] = 0; const v = deferred.get(c); if (v) valleyAt(c, ...v); }
+    if (keepN < path.length) { dg.mouth = keepN ? [path[keepN - 1].x, path[keepN - 1].y] : [tw.x, tw.y]; console.error(`${dg.name}: trench ends ${path.length - keepN} cells sooner (river valley)`); }
+  }
   console.error(`river: ${pts.length} cells long, ${rw * 2} wide, level ${L[0]} -> ${L[L.length - 1]} (town ${town.h - 1})`);
 }
 const riverNear = (cx, cy, r) => {
@@ -1754,7 +1836,7 @@ const pathCell = new Uint8Array(N * N);
 // more under the ground it bores a tunnel instead: 3 cells wide, TUNNEL.high
 // bricks high, a path floor, ramp wedges on its steps and ceiling lights.
 const TUNNEL = { at: 9, high: 7 };
-const roadGraded = new Uint8Array(N * N), tunnelZ = new Int16Array(N * N).fill(-1);
+const roadGraded = new Uint8Array(N * N), tunnelZ = new Int16Array(N * N).fill(-1), bridgeZ = new Int16Array(N * N).fill(-1);
 for (const c of volcano.road) { pathCell[c] = 1; roadGraded[c] = 1; } // the volcano's spiral road
 const townGates = []; // [{ dir, edge, out }] for the signs
 const TOWN_NAME = 'Lumbrick'; // the spawn town (signs at its gates)
@@ -1812,7 +1894,16 @@ const tunnelLights = [];
   const wet = c => riverCell[c] || H[c] <= SEA;
   /** grade a routed road: profile, cut/fill, shoulders, tunnels; stamps pathCell */
   const grade = (P, stop) => {
-    const n = P.length, t = P.map(([x, y]) => { const c = x * N + y; return riverCell[c] ? riverLevel[c] + 1 : Math.max(H[c], SEA + 1); });
+    const n = P.length, t = P.map(([x, y]) => { const c = x * N + y; return riverCell[c] ? NaN : Math.max(H[c], SEA + 1); });
+    // (2026-10-21) a river crossing spans straight from bank to bank, at least a brick over
+    // the water (was: down to the water at every river sample = a deck far under the road)
+    for (let i = 0; i < n; i++) {
+      if (!Number.isNaN(t[i])) continue;
+      let b = i; while (b < n && Number.isNaN(t[b])) b++;
+      const a = i - 1, ta = a >= 0 ? t[a] : b < n ? t[b] : SEA + 1, tb = b < n ? t[b] : ta;
+      for (let j = i; j < b; j++) { const [x, y] = P[j]; t[j] = Math.max(riverLevel[x * N + y] + 1, Math.round(ta + (tb - ta) * (j - a) / (b - a))); }
+      i = b;
+    }
     const sm = t.map((_, i) => { let a = 0, k = 0; for (let j = Math.max(0, i - 4); j <= Math.min(n - 1, i + 4); j++) { a += t[j]; k++; } return Math.round(a / k); });
     const z = sm.slice();
     z[0] = t[0];
@@ -1834,6 +1925,7 @@ const tunnelLights = [];
     for (const [c, zr] of zAt) {
       const x = (c / N) | 0, y = c % N;
       if (wet(c) && !crossing.has(c)) continue; // the road's edge spilling onto the water: not road
+      if (riverCell[c] && crossing.has(c)) bridgeZ[c] = Math.max(bridgeZ[c], zr);
       if (pinned(x, y) || wet(c)) { if (!pinned(x, y) || townDist(x, y) > 0) pathCell[c] = 1; continue; }
       if (H[c] - zr >= TUNNEL.at) { tunnelZ[c] = zr; keepOut[c] = 1; continue; }
       H[c] = zr; roadGraded[c] = 1; pathCell[c] = 1;
@@ -1942,7 +2034,7 @@ const deck = new Int16Array(N * N); // deck top (units), 0 = none
     for (let y = 0; y < N; y++) {
       const c = x * N + y;
       if (!pathCell[c]) continue;
-      if (riverCell[c]) deck[c] = (riverLevel[c] + 2) * VZ;
+      if (riverCell[c]) deck[c] = (Math.max(riverLevel[c] + 1, bridgeZ[c]) + 1) * VZ; // the road's level, a brick over the water at least
       else if (H[c] <= SEA) deck[c] = (SEA + 2) * VZ;
       if (deck[c]) { keepOut[c] = 1; noSmooth[c] = 1; }
     }
@@ -2494,26 +2586,28 @@ stage('weirs');
 // ridge of boulders (rocks.mjs) runs across the channel on that line, from the low bed up
 // past the upper water, and into both banks, so a step reads as a rock weir, not a cut.
 // Not next to roads, bridges or in town. Cells under it get no smoothing, plants or trees.
-if (tune('river.weirs', 1, 'boulder weirs where the river level steps down (0 = off)')) {
+// (2026-10-21) the river now falls a brick at a time (river.stepEvery): every step gets a
+// foam cascade (rapids, drawn after the weir rocks) on its lower cell and only some
+// (river.rockChance) a boulder poking out of it; no rock walls into the banks.
+const rapids = [];
+if (tune('river.weirs', 1, 'boulders and foam where the river level steps down (0 = off)')) {
+  const rockChance = tune('river.rockChance', 0.2, 'share of river step cells with a boulder');
   const nearRoad = (x, y) => { for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) if (inBounds(x + a, y + b) && (pathCell[(x + a) * N + y + b] || deck[(x + a) * N + y + b])) return true; return false; };
+  const foam = new Uint8Array(N * N);
   for (let x = 0; x < N; x++)
     for (let y = 0; y < N; y++) {
       const c = x * N + y;
-      if (!riverCell[c] || townKind[c] || nearRoad(x, y)) continue;
+      if (!riverCell[c] || townKind[c]) continue;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const n = (x + dx) * N + y + dy;
         if (!inBounds(x + dx, y + dy) || !riverCell[n] || riverLevel[n] >= riverLevel[c] || townKind[n]) continue;
+        if (nearRoad(x, y) || hash(x, y, 731) >= rockChance) { if (!foam[n]) { foam[n] = 1; rapids.push({ x: x + dx, y: y + dy, dx, dy }); } continue; }
         weirs.push({ x, y, dx, dy });
         weirCell[c] = weirCell[n] = 1;
-        // the line's ends run into the banks (up to 2 cells across, along the step line)
-        for (const s of [-1, 1]) for (let k = 1; k <= 2; k++) {
-          const bx = x + s * k * dy, by = y + s * k * dx; // perpendicular to (dx, dy)
-          if (inBounds(bx, by) && !riverCell[bx * N + by] && !pathCell[bx * N + by] && !deck[bx * N + by]) { weirCell[bx * N + by] = 1; weirs.push({ x: bx, y: by, bank: true }); }
-        }
       }
     }
   for (let c = 0; c < N * N; c++) if (weirCell[c]) { noSmooth[c] = 1; keepOut[c] = 1; }
-  console.error(`river weirs: ${weirs.filter(w => !w.bank).length} step edges, ${weirs.filter(w => w.bank).length} bank ends`);
+  console.error(`river weirs: ${weirs.length} boulder steps, ${rapids.length} foam cells`);
 }
 riverDiag('after cap');
 
@@ -4559,6 +4653,23 @@ if (weirs.length) {
   console.error(`river weirs: ${blobs.length} boulders, ${rocks.length} bricks`);
 }
 
+// river rapids (2026-10-21): a foam slope of glass micro wedge over each stepped-down
+// cell, from the lower water up to the upper (collision off: you wade through)
+{
+  const FOAM = [[214, 236, 244], [192, 224, 236]], NOCOL = { player: false, weapon: false, interaction: false, physics: false };
+  let n0 = 0;
+  for (const r of rapids) {
+    const n = r.x * N + r.y, up = (r.x - r.dx) * N + r.y - r.dy, lv = riverLevel[n];
+    if (weirCell[n] || deck[n] || lv <= SEA) continue;
+    const h = Math.min(riverLevel[up] - lv, 2) * VZ / 2;
+    if (h <= 0) continue;
+    bricks.push({ asset: 'PB_DefaultMicroWedge', ...orientFor('PB_DefaultMicroWedge', [[-r.dx, -r.dy]], [20, 20, h]), color: FOAM[(r.x + r.y) & 1], material: 'BMC_Glass', collision: NOCOL,
+      position: [X0 + (r.x + 0.5) * CELL, Y0 + (r.y + 0.5) * CELL, (lv + 1) * VZ + h] });
+    n0++;
+  }
+  console.error(`river rapids: ${n0} foam wedges`);
+}
+
 stage('bridgeDecks');
 // bridge decks (planks) and their rails over open water
 {
@@ -4571,6 +4682,11 @@ stage('bridgeDecks');
       const wx = X0 + x * CELL, wy = Y0 + y * CELL;
       bricks.push({ asset: MB, position: [wx + 20, wy + 20, top - 2], size: [20, 20, 2], color: PLANK[(x + y) % 3] });
       decks++;
+      // (2026-10-21) piers under a deck 3+ bricks over the water, every third cell each way
+      if (riverCell[x * N + y] && x % 3 === 0 && y % 3 === 0 && top - (riverLevel[x * N + y] + 1) * VZ >= 36) {
+        const z0 = (H[x * N + y] + 1) * VZ + 4, z1 = top - 4;
+        bricks.push({ asset: MB, position: [wx + 20, wy + 20, (z0 + z1) / 2], size: [8, 8, (z1 - z0) / 2], color: [118, 112, 104] });
+      }
       const open = (dx, dy) => { const nx = x + dx, ny = y + dy; if (!inMap(nx, ny)) return true; const n = nx * N + ny; return !deck[n] && (riverCell[n] === 1 || H[n] <= SEA); };
       if (open(0, -1)) bricks.push({ asset: MB, position: [wx + 20, wy + 2, top + 10], size: [20, 2, 10], color: RAIL });
       if (open(0, 1)) bricks.push({ asset: MB, position: [wx + 20, wy + 38, top + 10], size: [20, 2, 10], color: RAIL });
@@ -4580,8 +4696,8 @@ stage('bridgeDecks');
       // between the rails
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy; if (!inMap(nx, ny)) continue;
-        const n = nx * N + ny; if (deck[n] || !pathCell[n]) continue;
-        const rise = Math.min(24, (H[n] + 1) * VZ - top);
+        const n = nx * N + ny; if (!deck[n] && !pathCell[n]) continue;
+        const rise = Math.min(24, (deck[n] || (H[n] + 1) * VZ) - top); // up to the road, or the next deck cell up
         if (rise < 4) continue;
         const x0 = wx + (open(-1, 0) ? 4 : 0), x1 = wx + 40 - (open(1, 0) ? 4 : 0), y0 = wy + (open(0, -1) ? 4 : 0), y1 = wy + 40 - (open(0, 1) ? 4 : 0);
         const ext = [(x1 - x0) / 2, (y1 - y0) / 2, Math.floor(rise / 4) * 2];
