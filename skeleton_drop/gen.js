@@ -206,7 +206,9 @@ const swordAdv = (ch, pad, slotArg) => `${pad}let tier = ${ch}.ControllerOf().Ge
 // The game can't read an item's name, only its class: an item that arrives
 // any other way than a shop or a slot move has no name.
 const INV_EVERY = 5;
-const BUY_KEEP = 20;
+// unmatched purchases wait this long: in builder mode the inventory can't be read, so an item bought
+// there only turns up when the player leaves builder mode (owner 2026-10-21: buys missing from the bank)
+const BUY_KEEP = 1800;
 const R = Array.from({ length: SLOTS }, (_, k) => k);
 const invSnap = (c, pad) => `${pad}if invLive.has(uid) && invLive.get(uid) == 1 && (!invChk.has(uid) || GetUnixTime() - invChk.get(uid) >= ${INV_EVERY}) {
 ${pad}  invChk.set(uid, GetUnixTime())
