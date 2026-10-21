@@ -4,7 +4,9 @@
   "author": "pooper",
   "config": {
     "interval": { "description": "Seconds between saves", "type": "number", "default": 20 },
-    "joinDelay": { "description": "Seconds after joining before restoring", "type": "number", "default": 8 }
+    "joinDelay": { "description": "Seconds after joining before restoring", "type": "number", "default": 8 },
+    "allowed": { "description": "Players who may /eco give|take|set (the host always may)", "type": "list", "itemType": "string", "default": ["abysmal garbage", "soapstain22", "renderman"] }
   },
-  "commands": [{ "name": "!progress", "description": "Show your saved progress", "example": "!progress", "args": [] }]
+  "commands": [{ "name": "!progress", "description": "Show your saved progress", "example": "!progress", "args": [] },
+    { "name": "/eco", "description": "Coins: check [player], top, pay <player> <n>; admins: give|take|set <player|all> <n>", "example": "/eco give soapstain22 500", "args": [] }]
 }

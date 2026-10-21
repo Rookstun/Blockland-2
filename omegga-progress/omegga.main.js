@@ -20,6 +20,8 @@
 // each matching plain item back into that shop's named item.
 //
 //   !progress        your saved values
+//   /eco give|take|set <player|all> <n>   change coins (host + config `allowed`); offline players too
+//   /eco check [player]  /eco top  /eco pay <player> <n> (anyone, from their own coins)
 // Unsafe (plain node) plugin, like tpa and duel.
 
 const KEYS = ['coins', 'XP', 'Level', 'SwordTier'];
@@ -49,6 +51,10 @@ module.exports = class Progress {
       this.omegga.removeAllListeners(e);
       this.omegga.on(e, name => this.show(name).catch(err => console.error('[progress]', err)));
     }
+    for (const e of ['cmd:eco', 'chatcmd:eco']) {
+      this.omegga.removeAllListeners(e);
+      this.omegga.on(e, (name, ...args) => this.eco(name, args).catch(err => { console.error('[eco]', err); this.ecoTell(name, 'error: ' + err.message); }));
+    }
     if (this.omegga.__progressLine) this.omegga.off('line', this.omegga.__progressLine);
     this.omegga.__progressLine = line => this.onLine(line);
     this.omegga.on('line', this.omegga.__progressLine);
@@ -65,7 +71,7 @@ module.exports = class Progress {
     this.bank.quiet = false;
     const every = Math.max(5, this.config?.interval ?? 20) * 1000;
     this.timer = setInterval(() => this.tick().catch(err => console.error('[progress] tick', err)), every);
-    return { registeredCommands: ['progress'] };
+    return { registeredCommands: ['progress', 'eco'] };
   }
 
   async stop() {
@@ -124,6 +130,11 @@ module.exports = class Progress {
     } else player.setLeaderboard('InvPend', 0); // nothing given here: no stale names for later pickups
     const saved = await this.store.get('p:' + player.id);
     if (!saved) return;
+    if (saved.ecoPend) { // /eco changed their coins while they were offline
+      player.setLeaderboard('coins', saved.coins);
+      await this.store.set('p:' + player.id, { ...saved, ecoPend: false });
+      this.omegga.whisper(player.name, `<color="8cf">Your coins were set to ${saved.coins} while you were away.</>`);
+    }
     const now = await this.read(player);
     if (!now || now.XP < saved.XP || (now.XP === saved.XP && now.coins === 0 && saved.coins > 0)) {
       this.restore(player, saved);
@@ -155,5 +166,107 @@ module.exports = class Progress {
     if (!p) return;
     const s = await this.store.get('p:' + p.id);
     this.omegga.whisper(name, s ? `<color="8cf">Saved: level ${s.Level}, ${s.XP} XP, ${s.coins} coins, sword tier ${s.SwordTier}.</>` : '<color="8cf">Nothing saved yet (it saves every few seconds).</>');
+  }
+
+  ecoTell(name, msg) {
+    this.omegga.whisper(name, `<color="fc6">[eco]</> ${clean(msg).slice(0, 300)}`);
+  }
+
+  ecoAllowed(name) {
+    const p = this.omegga.getPlayer(name);
+    if (p?.isHost?.()) return true;
+    return (this.config?.allowed ?? ['abysmal garbage', 'soapstain22', 'renderman']).map(s => String(s).toLowerCase()).includes(String(name).toLowerCase());
+  }
+
+  /** exact name, else a unique partial match */
+  static pick(list, q) {
+    const ex = list.find(x => x.name.toLowerCase() === q);
+    if (ex) return ex;
+    const part = list.filter(x => x.name.toLowerCase().includes(q));
+    return part.length === 1 ? part[0] : null;
+  }
+
+  async ecoSaved() {
+    const out = [];
+    for (const k of await this.store.keys()) if (k.startsWith('p:')) { const v = await this.store.get(k); if (v?.name) out.push({ id: k.slice(2), name: v.name, saved: v }); }
+    return out;
+  }
+
+  /** online player, else the store entry of an offline one */
+  async ecoTarget(q) {
+    q = String(q ?? '').trim().toLowerCase();
+    if (!q) return null;
+    const on = Progress.pick(this.omegga.getPlayers(), q);
+    if (on) return { online: this.omegga.getPlayer(on.id), id: on.id, name: on.name };
+    const off = Progress.pick(await this.ecoSaved(), q);
+    return off ? { online: null, ...off } : null;
+  }
+
+  async ecoGet(t) {
+    if (t.online) { const v = await t.online.getLeaderboard('coins'); return Number.isNaN(+v) ? 0 : +v; }
+    return t.saved?.coins ?? 0;
+  }
+
+  async ecoPut(t, coins) {
+    coins = Math.max(0, Math.round(coins));
+    const key = 'p:' + t.id, saved = (await this.store.get(key)) ?? { coins: 0, XP: 0, Level: 1, SwordTier: 0 };
+    if (t.online) {
+      t.online.setLeaderboard('coins', coins);
+      // save now: the next tick could otherwise read the old value back
+      await this.store.set(key, { ...saved, coins, name: t.name, at: Date.now(), ecoPend: false });
+    } else await this.store.set(key, { ...saved, coins, ecoPend: true });
+    console.log(`[eco] ${t.name} (${t.id}) coins = ${coins}${t.online ? '' : ' (offline, applied on join)'}`);
+    return coins;
+  }
+
+  async eco(name, args) {
+    const sub = String(args[0] ?? '').toLowerCase(), rest = args.slice(1);
+    const amt = rest.length && /^-?\d+$/.test(rest[rest.length - 1]) ? +rest[rest.length - 1] : null;
+    const who = (amt === null ? rest : rest.slice(0, -1)).join(' '); // names can have spaces
+    const take = ['take', 'remove'].includes(sub);
+    if (['give', 'add', 'set'].includes(sub) || take) {
+      if (!this.ecoAllowed(name)) return this.ecoTell(name, 'not allowed');
+      if (amt === null || !who) return this.ecoTell(name, `usage: /eco ${sub} <player|all> <amount>`);
+      const targets = who.toLowerCase() === 'all'
+        ? this.omegga.getPlayers().map(p => ({ online: this.omegga.getPlayer(p.id), id: p.id, name: p.name }))
+        : [await this.ecoTarget(who)].filter(Boolean);
+      if (!targets.length) return this.ecoTell(name, `no player matches "${who}"`);
+      const out = [];
+      for (const t of targets) {
+        const cur = await this.ecoGet(t);
+        const v = await this.ecoPut(t, sub === 'set' ? amt : take ? cur - amt : cur + amt);
+        out.push(`${t.name} ${cur} to ${v}${t.online ? '' : ' (offline)'}`);
+        if (t.online && t.name !== name) this.ecoTell(t.name, sub === 'set' ? `${name} set your coins to ${v}.` : take ? `${name} took ${amt} coins.` : `${name} gave you ${amt} coins.`);
+      }
+      return this.ecoTell(name, out.join(', '));
+    }
+    if (sub === 'pay') {
+      if (amt === null || amt <= 0 || !who) return this.ecoTell(name, 'usage: /eco pay <player> <amount>');
+      const me = this.omegga.getPlayer(name), t = await this.ecoTarget(who);
+      if (!me) return;
+      if (!t) return this.ecoTell(name, `no player matches "${who}"`);
+      if (t.id === me.id) return this.ecoTell(name, 'that is you');
+      const mt = { online: me, id: me.id, name: me.name }, mine = await this.ecoGet(mt);
+      if (mine < amt) return this.ecoTell(name, `you only have ${mine} coins`);
+      await this.ecoPut(mt, mine - amt);
+      await this.ecoPut(t, (await this.ecoGet(t)) + amt);
+      if (t.online) this.ecoTell(t.name, `${name} paid you ${amt} coins.`);
+      return this.ecoTell(name, `paid ${t.name} ${amt} coins (you have ${mine - amt}).`);
+    }
+    if (['check', 'bal', 'balance'].includes(sub)) {
+      const t = await this.ecoTarget(who || name);
+      if (!t) return this.ecoTell(name, `no player matches "${who}"`);
+      return this.ecoTell(name, `${t.name}: ${await this.ecoGet(t)} coins${t.online ? '' : ' (offline, saved)'}`);
+    }
+    if (sub === 'top') {
+      const rows = (await this.ecoSaved()).map(s => ({ id: s.id, name: s.name, c: s.saved.coins ?? 0 }));
+      for (const p of this.omegga.getPlayers()) {
+        const c = await this.ecoGet({ online: this.omegga.getPlayer(p.id) }), r = rows.find(x => x.id === p.id);
+        if (r) r.c = c; else rows.push({ id: p.id, name: p.name, c });
+      }
+      rows.sort((a, b) => b.c - a.c);
+      return this.ecoTell(name, rows.slice(0, 10).map((r, i) => `${i + 1}. ${r.name} ${r.c}`).join(', '));
+    }
+    this.ecoTell(name, 'commands: /eco check [player], /eco top, /eco pay <player> <n>; admins: /eco give|take|set <player|all> <n>');
   }
 };
