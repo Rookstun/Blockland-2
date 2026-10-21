@@ -12,7 +12,7 @@ const scp = (a, b) => execFileSync('scp', ['-q', a, b], { stdio: 'inherit' });
 
 function push() {
   try { JSON.parse(fs.readFileSync(LOCAL, 'utf8')); } catch (e) { console.log(`not uploaded, bad JSON: ${e.message}`); return; }
-  scp(LOCAL, REMOTE);
+  try { scp(LOCAL, REMOTE); } catch (e) { console.log(`upload failed (${e.message.split('\n')[0]}), will retry on the next save`); return; }
   console.log(`${new Date().toLocaleTimeString()} uploaded balance.json, type /reload in game`);
 }
 
@@ -25,8 +25,9 @@ else {
   fs.watch(LOCAL, () => {
     clearTimeout(t);
     t = setTimeout(() => {
-      const now = fs.readFileSync(LOCAL, 'utf8');
+      let now; try { now = fs.readFileSync(LOCAL, 'utf8'); } catch { return; } // editors replace the file on save
       if (now !== last) { last = now; push(); }
     }, 300);
   });
 }
+process.on('uncaughtException', e => console.log('sync error:', e.message));

@@ -37,11 +37,12 @@ const TEXT = {
 // /stream panel mode (2026-10-18): depth = tile half depth, frame false = no bars (the owner's panel has its
 // own frame; its boxes must not touch it), gate = offset of every hidden gate (the sky over a wall panel),
 // colour = blank tile colour.
-export function tLayout({ tw = 64, th = 36, k = 4, cell = 2, lift = 20, pitch = 1.55, ws = 2, fit = 1, depth = 2, frame = true, gate = [0, 0, 0], colour = [6, 6, 8] } = {}) {
+// gstep = receiver gate spacing (/stream tv packs them behind its cabinet: 20)
+export function tLayout({ tw = 64, th = 36, k = 4, cell = 2, lift = 20, pitch = 1.55, ws = 2, fit = 1, depth = 2, frame = true, gate = [0, 0, 0], colour = [6, 6, 8], gstep = 40 } = {}) {
   const tile = k * cell;
   if (tile % 2) throw Error('tile side must be a multiple of 2 units');
   const width = tw * tile, height = th * tile;
-  return { tw, th, k, cell, tile, cols: tw * k, rows: th * k, width, height, hw: width / 2 + 4, side: height + 8, z0: lift, ws, depth, frame, gate, colour,
+  return { tw, th, k, cell, tile, cols: tw * k, rows: th * k, width, height, hw: width / 2 + 4, side: height + 8, z0: lift, ws, depth, frame, gate, colour, gstep,
     textLH: +((cell * fit) / pitch).toFixed(4), aspect: width / height };
 }
 
@@ -139,18 +140,24 @@ function kit(lib, owner) {
 const REF0 = { GridPersistentIndex: 0, ChunkIndex: { X: 0, Y: 0, Z: 0 }, BrickIndexInChunk: 4294967295 };
 
 // paint false = no brick colour write per tile (/stream: halves what goes to clients; owner saw tearing)
-function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, paint: doPaint = true }) {
+// /stream tv: physics = the whole prefab is one loose physics grid (tiles, gates, cabinet move together),
+// extra(kit) adds the TV body and its own gates; it runs after the tiles so their brick refs stay put
+function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, paint: doPaint = true, physics = false, extra = null }) {
   const { w, C, O, wire, num, str } = kit(lib, owner);
+  // physics: everything on ONE loose grid (gravity on: the writer's default grid data floats away)
+  const G = physics ? w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, frozen: false, owner_index: O,
+    data: { BouyancyScale: 0.2, MassScale: 1, bEnableGravity: true, bUseNewMassCalculation: true, bReceivesDecals: true, EntityTag: '' } }) : undefined;
   const T = L.tw * L.th;
   const face = { type: C.TextDisplay.NAME, data: { ...TEXT, LineHeight: L.textLH, WidthScale: L.ws } };
-  for (let t = 0; t < T; t++) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.tile / 2, L.depth, L.tile / 2], position: tilePos(L, t), color: L.colour, owner_index: O, components: [face] });
+  for (let t = 0; t < T; t++) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.tile / 2, L.depth, L.tile / 2], position: tilePos(L, t), color: L.colour, owner_index: O, components: [face] }, G);
   // frame bars
   if (L.frame) for (const zc of [L.z0 + 2, L.z0 + L.side - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.hw, 2, 2], position: [0, 0, zc], color: [6, 6, 8], owner_index: O });
   if (L.frame) for (const xc of [L.width / 2 + 2, -L.width / 2 - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [2, 2, L.height / 2], position: [xc, 0, L.z0 + 4 + L.height / 2], color: [6, 6, 8], owner_index: O });
   let i = 0;
   const gate = (c, data = {}, extra = {}) => {
-    const h = w.addBrick({ asset: c.BRICK, position: [L.gate[0] - 140 + (i % 8) * 40, L.gate[1] + 40 + Math.floor(i / 8) * 40, L.gate[2] + L.z0 + 10], color: [200, 200, 200], owner_index: O,
-      visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra });
+    const g = L.gstep ?? 40;
+    const h = w.addBrick({ asset: c.BRICK, position: [L.gate[0] - 3.5 * g + (i % 8) * g, L.gate[1] + g + Math.floor(i / 8) * g, L.gate[2] + L.z0 + 10], color: [200, 200, 200], owner_index: O,
+      visibility: false, collision: false, components: [{ type: c.NAME, data }], ...extra }, G);
     i++;
     if (i > RECV_ROWS * 8) throw Error('tgrid: receiver gates overflow');
     return { h, c };
@@ -190,7 +197,7 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
   const tf = ig(C.Expr_String_FormatText, { FormatString: Array.from({ length: L.k }, (_, r) => `{${LET[r]}}`).join('\n') });
   rowsOut.forEach((f, r) => wire(f, 'Output', tf, `Input${LET[r]}`));
   const refArr = ig(C.ArrayVar, { Value: { $elementType: 'WireValue', $array: Array.from({ length: T }, (_, t) => ({ $variant: 'BRSavedBrickRef',
-    value: refs?.get(tilePos(L, t).join(',')) ?? { GridPersistentIndex: 1, ChunkIndex: { X: 0, Y: 0, Z: 0 }, BrickIndexInChunk: 0 } })) } });
+    value: refs?.get(tilePos(L, t).join(',')) ?? { GridPersistentIndex: physics ? 2 : 1, ChunkIndex: { X: 0, Y: 0, Z: 0 }, BrickIndexInChunk: 0 } })) } });
   const getR = ig(C.Exec_ArrayVar_Get); wire(refArr, 'ArrayVarRef', getR, 'ArrayVarRef'); wire(...tIdx, getR, 'Index');
   const getC = ig(C.Exec_GetComponent, { Brick: REF0, ComponentType: TD }); wire(getR, 'Value', getC, 'Brick');
   const setT = ig(C.Exec_SetComponentProperty, { Value: str(''), Component: { Brick: REF0, ComponentTypeIndex: 0 }, PropertyName: 'Text', ComponentType: TD });
@@ -208,27 +215,32 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
     const f = gate(C.Expr_String_FormatText, { FormatString: 'tgrid|{A}|{B}' }); wire(shell, 'IterationsExecuted', f, 'InputA'); wire(len, 'Output', f, 'InputB');
     const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(shell, 'Completed', p, 'Exec');
   }
+  if (extra) extra({ w, C, O, wire, num, str, gate, G });
   w.makePrefab({});
   return w.toBrz({ bundle: { description: 'T grid receiver' }, externalAssets: FONTS });
 }
 
 /** brick refs of main-grid bricks keyed by "x,y,z" (two-pass build). */
-function brickRefs(WorldReader, bytes) {
+function brickRefs(WorldReader, bytes, gid = 1) {
   const r = WorldReader.from(bytes);
   const out = new Map();
-  const chunks = r.brickChunkIndex(1);
+  const chunks = r.brickChunkIndex(gid);
   let ci = 0, left = chunks[0]?.numBricks ?? 0, i = 0;
-  for (const b of r.bricks(1)) {
+  for (const b of r.bricks(gid)) {
     while (left === 0) { ci++; i = 0; left = chunks[ci].numBricks; }
     const c = chunks[ci].index;
-    out.set(b.position.join(','), { GridPersistentIndex: 1, ChunkIndex: { X: c.x, Y: c.y, Z: c.z }, BrickIndexInChunk: i });
+    // a loose grid reads back 1024 off on every axis (its chunk origin)
+    out.set(b.position.map(v => v + (gid > 1 ? 1024 : 0)).join(','), { GridPersistentIndex: gid, ChunkIndex: { X: c.x, Y: c.y, Z: c.z }, BrickIndexInChunk: i });
     i++; left--;
   }
   return out;
 }
 
 export function buildReceiver(lib, L, opts) {
-  const refs = brickRefs(lib.WorldReader, buildReceiverOnce(lib, L, opts));
+  const once = buildReceiverOnce(lib, L, opts);
+  let refs = brickRefs(lib.WorldReader, once, 1);
+  // physics: the loose grid's persistent index in the file (main = 1)
+  for (let gid = 2; opts.physics && gid < 8 && !refs.get(tilePos(L, 0).join(',')); gid++) { try { refs = brickRefs(lib.WorldReader, once, gid); } catch { } }
   const missing = Array.from({ length: L.tw * L.th }, (_, t) => refs.get(tilePos(L, t).join(','))).filter(r => !r).length;
   if (missing) throw Error(`tgrid: ${missing} tile refs not found`);
   return buildReceiverOnce(lib, L, { ...opts, refs });

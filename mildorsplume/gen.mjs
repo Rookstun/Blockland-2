@@ -13,7 +13,7 @@ export const PAL = ['140f1e', '2a2238', '3c3450', '5c4030', '8c6844', '48a040', 
   'e03838', 'f8d040', '3868d8', '78c8f8', 'f89038', 'a048c8', 'f8c0a0', '601818'];
 
 // ---- tiles: [tl, tr, bl, br] palette, solid (1) / hazard-solid (2)
-const TILES = {
+export const TILES = {
   air: [[0, 0, 0, 0], 0], rock: [[3, 3, 3, 3], 1], rockTop: [[4, 4, 3, 3], 1], grass: [[5, 5, 3, 3], 1], speck: [[3, 3, 3, 4], 1],
   spike: [[6, 0, 6, 6], 2], save: [[13, 13, 13, 11], 0], star: [[9, 12, 12, 9], 1], gate: [[6, 1, 6, 1], 1], crystal: [[11, 0, 13, 0], 0],
   sky: [[11, 11, 11, 11], 0], cloud: [[7, 7, 7, 7], 0], sun: [[9, 9, 9, 9], 0], letter: [[9, 12, 12, 12], 0], platform: [[5, 5, 4, 4], 1],
@@ -23,7 +23,7 @@ const TN = Object.keys(TILES), T = Object.fromEntries(TN.map((k, i) => [k, i]));
 // ---- rooms (32 x 18 tiles). Legend: # rock (top edge / specks chosen automatically), " grass, = floating platform,
 // ^ spikes, S save point, * star block (shoot it), | boss gate, x crystal, ~ sky, c cloud, o sun, . air
 // entities: P start, h hopper, b bat, M boss, L life capsule
-const ROOMS = [
+export const ROOMS = [
   { name: 'First Cave', song: 0, exits: { R: 1 }, msg: 'You wake up in a cave. Classic.', map: [
     '################################',
     '################################',
@@ -65,9 +65,9 @@ const ROOMS = [
   { name: 'Bat Chimney', song: 0, exits: { L: 1, U: 3 }, msg: "Bats. The cave's way of saying no.", map: [
     '###############..###############',
     '###############..###############',
-    '############........############',
-    '##########...======...##########',
-    '#########...............########',
+    '#########..............#########',
+    '#########..............#########',
+    '#########===..======..===#######',
     '########...............b.#######',
     '#######...................######',
     '######..=====......=====...#####',
