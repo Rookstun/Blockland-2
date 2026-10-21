@@ -230,7 +230,7 @@ async function build(refs) {
   const panelData = { ...ownSpawn, PickupClass: extIdx(item[ORDER[0]].pickup), ProjectileOverride: null, bPickupEnabled: false, bRenderTranslucentWhenDisabled: true, bOverridePickupColors: false, ItemNameOverride: '', DamageMultiplier: 1, WeaponSpeedMultiplier: 1 };
   // panels: the owner's world-grid plates, each with an ItemSpawn (owner: "no entities or prefab spawning just change
   // the fucking item spawn or use add set get component")
-  displays.forEach((bk, k) => w.addBrick(brickOf(bk, { components: [{ type: 'Component_ItemSpawn', data: panelData }] })));
+  const panelH = displays.map(bk => w.addBrick(brickOf(bk, { components: [{ type: 'Component_ItemSpawn', data: panelData }] })));
 
   // inside the chip: gates on a field past the compiled gates
   const maxX = Math.max(...b.rootPos.map(p => p[0])), minY = Math.min(...b.rootPos.map(p => p[1])), z = b.rootPos[0][2];
@@ -287,6 +287,36 @@ async function build(refs) {
     }
     return ex;
   };
+  // COLOURS (owner screenshot: the ItemSpawn's own wire ports "Colors 1".. = internal PickupMeshColors.0..7): no gate can
+  // read or set them, but a WIRE into the component's port drives them. Table = every item's 8 shop colours (linear) +
+  // its override flag, then the EMPTY knife (white, no override); per panel 8 + 1 ArrayVar_Get gates wired into the ports,
+  // re-pointed at the shown item's row on every show / hide.
+  const lin = c => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const WHITE = { R: 1, G: 1, B: 1, A: 1 };
+  const rows = [...ORDER.map(id => item[id].data), { bOverridePickupColors: false, PickupMeshColors: [] }];
+  const colTable = gate(C.ArrayVar, { Value: { $elementType: 'LinearColor', $array: rows.flatMap(d => Array.from({ length: 8 }, (_, j) => {
+    const c = d.PickupMeshColors?.[j]; return c ? { R: lin(c.R), G: lin(c.G), B: lin(c.B), A: (c.A ?? 255) / 255 } : WHITE; })) } });
+  const ovTable = gate(C.ArrayVar, { Value: { $elementType: 'WireValue', $array: rows.map(d => ({ $variant: 'bool', value: !!d.bOverridePickupColors })) } });
+  const paint = (k, ex, hx) => {
+    const cur = gate(C.Var, { Value: { $variant: 'i64', value: N } });
+    const kN = gate(C.Var, { Value: { $variant: 'i64', value: N } });
+    const s1 = gate(C.Exec_Var_Set); wire(cur, 'VarRef', s1, 'VarRef'); wire(b.outSource('tp' + k), null, s1, 'Value'); wire(ex[0], ex[1], s1, 'Exec');
+    const s2 = gate(C.Exec_Var_Set); wire(cur, 'VarRef', s2, 'VarRef'); wire(kN, 'Value', s2, 'Value'); wire(hx[0], hx[1], s2, 'Exec');
+    const un = gate(C.Exec_Union); wire(s1, 'ExecOut', un, 'ExecA'); wire(s2, 'ExecOut', un, 'ExecB');
+    const vg = gate(C.Exec_Var_Get); wire(cur, 'VarRef', vg, 'VarRef'); wire(un, 'ExecOut', vg, 'Exec'); // fresh value (a Var read after its Set in one chain is stale)
+    const P = { brick: panelH[k], component_type: 'Component_ItemSpawn' };
+    const og = gate(C.Exec_ArrayVar_Get); wire(ovTable, 'ArrayVarRef', og, 'ArrayVarRef'); wire(vg, 'Value', og, 'Index'); wire(vg, 'ExecOut', og, 'Exec');
+    wire(og, 'Value', { ...P, port: 'bOverridePickupColors' }, null);
+    const mul = gate(C.Expr_MathMultiply, { InputA: { $variant: 'i64', value: 0 }, InputB: { $variant: 'i64', value: 8 } }); wire(vg, 'Value', mul, 'InputA');
+    let ex2 = [og, 'ExecOut'];
+    for (let j = 0; j < 8; j++) {
+      const add = gate(C.Expr_MathAdd, { InputA: { $variant: 'i64', value: 0 }, InputB: { $variant: 'i64', value: j } }); wire(mul, 'Output', add, 'InputA');
+      const cg = gate(C.Exec_ArrayVar_Get); wire(colTable, 'ArrayVarRef', cg, 'ArrayVarRef'); wire(add, 'Output', cg, 'Index'); wire(ex2[0], ex2[1], cg, 'Exec');
+      wire(cg, 'Value', { ...P, port: `PickupMeshColors.${j}` }, null);
+      ex2 = [cg, 'ExecOut'];
+    }
+    return ex2;
+  };
   // per panel: show = the item's template, solid; hide = the EMPTY knife, translucent
   K.forEach(k => {
     const pref = refs?.panel[k] ?? NOREF;
@@ -298,6 +328,7 @@ async function build(refs) {
     const ht = gate(C.Exec_GetComponent, { Brick: EMPTY, ComponentType: IS }); wire(b.outSource('hide' + k), null, ht, 'Exec');
     const hp = gate(C.Exec_GetComponent, { Brick: pref, ComponentType: IS }); wire(ht, 'ExecOut', hp, 'Exec');
     const hx = copyItem(ht, hp, [hp, 'ExecOut'], true);
+    paint(k, ex, hx);
     if (DEBUG) {
       const dbg = (fmt, A, exec) => {
         const f = gate(C.Expr_String_FormatText, { FormatString: fmt }); if (A) wire(A[0], A[1], f, 'InputA');
