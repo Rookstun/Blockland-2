@@ -2772,8 +2772,19 @@ let carved = 0;
   const roofCell = (cx, cy) => {
     if (!inMap(cx, cy) || !okCell(cx, cy)) return -Infinity;
     const c = cx * N + cy;
+    if (tierWallFace(cx, cy)) return H[c] * VZ; // tier wall: a 1-brick lintel over cave mouths (5 bricks clear on a 6-brick wall)
     return facades.has(c) ? (H[c] - 2 + 1) * VZ : (Math.min(H[c], H0[c]) - CAVE.cover + 1) * VZ;
   };
+  // tiered mountains (2026-10-21, owner: "caves arent creating entrances": tunnels met the sheer tier walls as
+  // 1-brick slits because the ceiling sloped down to the shelf outside): the shelf below a wall does not pull
+  // the ceiling down, and the wall's cells keep only a 1-brick lintel, so a tunnel reaching a wall opens as a doorway
+  function tierWallFace(cx, cy) {
+    const c = cx * N + cy;
+    if (!tierMtn.cells[c]) return false;
+    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(cx + a, cy + b) && tierMtn.cells[(cx + a) * N + cy + b] && H[(cx + a) * N + cy + b] <= H[c] - TIER.h + 1) return true;
+    return false;
+  }
+  const openWall = (cx, cy, ox, oy) => inMap(cx, cy) && inMap(ox, oy) && tierMtn.cells[cx * N + cy] && tierMtn.cells[ox * N + oy] && H[cx * N + cy] <= H[ox * N + oy] - TIER.h + 1;
   // planning sees the estate lots' old ground (lotPre); the field (carving) above still clamps to the lot
   const roofPlan = (cx, cy) => {
     if (!inMap(cx, cy) || !okCell(cx, cy)) return -Infinity;
@@ -2817,7 +2828,7 @@ let carved = 0;
     }
   }
   if (MC && caves.length) {
-    const field = caveField(caves.flatMap(c => c.plan.nodes), { CELL, VZ, X0, Y0, N, roofCell, floorMin, noise: noise3, seed: caves[0].x * 7 + caves[0].y });
+    const field = caveField(caves.flatMap(c => c.plan.nodes), { CELL, VZ, X0, Y0, N, roofCell, floorMin, noise: noise3, seed: caves[0].x * 7 + caves[0].y, openWall });
     for (const [c, [f, t]] of field.cells) {
       const cx = (c / N) | 0, cy = c % N;
       for (let z = f + 1; z <= t; z++) if (V[vi(cx, cy, z)]) { V[vi(cx, cy, z)] = 0; carved++; }

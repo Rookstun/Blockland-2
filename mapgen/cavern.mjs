@@ -170,6 +170,7 @@ export function caveField(nodes, ctx) {
     let m = Infinity;
     for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) {
       const cx = cx0 + a, cy = cy0 + b;
+      if (ctx.openWall?.(cx, cy, cx0, cy0)) continue; // a lower shelf outside a sheer wall: the cave may break out there (a doorway)
       const dx = Math.max(0, cx * CELL - (x - X0), (x - X0) - (cx + 1) * CELL), dy = Math.max(0, cy * CELL - (y - Y0), (y - Y0) - (cy + 1) * CELL);
       m = Math.min(m, roofOf(cx, cy) + ROOF_SLOPE * Math.hypot(dx, dy));
     }
