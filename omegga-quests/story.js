@@ -81,9 +81,8 @@ const MAIN = [
       ] },
     ], coins: 150, xp: 150 },
 
-  // ---- the Indiana Jones segment. The set = npctalk/temple.mjs (Temple of the Stash: stepped mossy
-  // tiers, dart holes, pressure plates, pedestal with THE STASH, boulder on the roof, plaque,
-  // Gary's hammock). The boulder does not roll (yet): the text owns that.
+  // ---- the Indiana Jones segment. The Temple of the Stash (npctalk/temple.mjs) is ARCHIVED (owner
+  // 2026-10-22): the stash now sits under Green Gary's hammock.
   { id: 'm5', main: 5, giver: 'greengary', after: 'm4', auto: true, title: 'Raiders of the Lost Stash',
     intro: [
       'Word arrives through the swamp grapevine, which is mostly frogs named Gerald: the fifth coin is wrapped up in the legendary stash of GREEN GARY, hermit of the swamp, north of the big rocks.',
@@ -91,14 +90,12 @@ const MAIN = [
     ],
     steps: [
       { do: 'talk', to: 'greengary', lines: [
-        'Green Gary snores in a hammock strung between two very tired posts. South of the swamp rises the TEMPLE OF THE STASH: a stepped mountain of red and ochre clay brick, built by Fresnif Construction LLC in the Before Times, and never once repointed.',
-        'Three stairways climb its face and meet in the middle, then march up through a gatehouse to a little crenellated shrine on the very top. Ferns sprout from every ledge. Somewhere deep inside, something glows a gentle, suspicious green. It smells like a guy named Wet Toby.',
-        'Green Gary (asleep): go in at the top, Plinko... the shrine has stairs down... the big room is all tiles over spikes... jump tile to tile... some tiles shoot arrows... the spikes do not hurt, they just end you... zzz',
-        'Green Gary (still asleep): the stash is in the room past the tiles... and the back door goes down and out the south side... do not touch my stash, Plinko... zzz. You pat your pocket: one bag of oregano, roughly the same weight. Probably. You are not a scientist. You are Frogo.',
+        'Green Gary snores in a hammock strung between two very tired posts. Under the hammock, in a shoebox labelled NOT A STASH, something glows a gentle, suspicious green. It smells like a guy named Wet Toby.',
+        'Green Gary (asleep): do not touch my stash, Plinko... zzz. You pat your pocket: one bag of oregano, roughly the same weight. Probably. You are not a scientist. You are Frogo.',
       ] },
-      { do: 'ask', to: 'stash', msg: 'THE STASH sits on its pedestal, glowing. The plaque at the door said NO STEALING. SIGNED, GARY. Swap it for your bag of oregano in one smooth motion?',
-        no: 'You stare at the stash. The stash stares back. Somewhere below, Green Gary mumbles about vibes and a guy named Plinko in his sleep.',
-        yes: ['You swap them in one smooth motion. The pedestal goes click. Every dart hole goes pfft. The decorative boulder on the roof starts rocking. Far below, Green Gary opens one eye. It is red. RUN, FROGO. Get far away from the swamp, fast.'] },
+      { do: 'ask', to: 'greengary', msg: 'THE STASH sits in its shoebox under the hammock, glowing. The lid says NO STEALING. SIGNED, GARY. Swap it for your bag of oregano in one smooth motion?',
+        no: 'You stare at the stash. The stash stares back. Above you, Green Gary mumbles about vibes and a guy named Plinko in his sleep.',
+        yes: ['You swap them in one smooth motion. The hammock goes creak. Green Gary opens one eye. It is red. RUN, FROGO. Get far away from the swamp, fast.'] },
       { do: 'escape', from: 'greengary', dist: 2200, secs: 45, retry: 1, grip: 5,
         fail: ['Green Gary catches you by the backpack. He is shockingly fast for a man in sandals. His sandals are named Lorbo and Flim.', 'He takes THE STASH back, pockets the oregano for later and makes you listen to his whole mixtape. It is all one song. The song is called Gary. Try again.'],
         ok: ['You burst out of the swamp, lungs on fire, stash in hand, past a Fire Homeless and a Water Homeless hitting each other with soup. Far behind you Green Gary yells something about bad karma and good snacks.',

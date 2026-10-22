@@ -1,5 +1,7 @@
 # Temple of the Stash: handoff (2026-10-18)
 
+**ARCHIVED 2026-10-22 (owner: "archive this temple")**: cleared from `site 2026-10-18` (br.Bricks.Clear ea32a1c0-0000-4b0b-9a11-0000000057a5 1 = 36,787 bricks), saved; backup `backup pre_notemple site 2026-10-22`. Code + qout kept; do NOT reload it. Quest m5 now swaps the stash at Green Gary's hammock (story.js). Everything below is history.
+
 Indiana Jones set for main quest chapter 5 (Raiders of the Lost Stash, `omegga-quests/story.js`).
 Live in world `site 2026-10-18` (active), saved. Also read the QUESTS / MAIN QUEST notes in `CLAUDE.md`.
 
