@@ -18,6 +18,8 @@ const note = (k, v) => {
     fs.writeFileSync(STATUS, JSON.stringify(status, null, 1));
   } catch {}
 };
+// MessageFlags.SUPPRESS_NOTIFICATIONS (@silent): no push/desktop notifications
+const SILENT = 1 << 12;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // game rich text (same as chatbot sanitize)
 const gameSafe = s =>
@@ -112,14 +114,14 @@ module.exports = class Discord {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         // webhook names may not contain "discord"/"clyde"
-        body: JSON.stringify({ content, username: username.replace(/discord|clyde/gi, '_') || 'Player', allowed_mentions: { parse: [] } }),
+        body: JSON.stringify({ content, username: username.replace(/discord|clyde/gi, '_') || 'Player', allowed_mentions: { parse: [] }, flags: SILENT }),
       });
     } else if (this.config.token && this.config.channel) {
       if (name) content = `**${mdSafe(name)}**: ${content}`;
       res = await fetch(`${API}/channels/${this.config.channel}/messages`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bot ${this.config.token}` },
-        body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+        body: JSON.stringify({ content, allowed_mentions: { parse: [] }, flags: SILENT }),
       });
     } else return;
     if (res.status === 429 && tries < 5) {
