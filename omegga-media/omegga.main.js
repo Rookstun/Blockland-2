@@ -226,6 +226,10 @@ function isPrivateAddress(ip) {
     (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || a >= 224;
 }
 
+/** .m3u8 playlists (HLS), played by ffmpeg directly; segments may only come over the network. */
+const isHls = s => /^https?:\/\/[^?#]*\.m3u8([?#]|$)/i.test(String(s).replace(/^<link="?([^">]+)"?>.*$/i, '$1').replace(/^<|>$/g, ''));
+const HLS_IN = ['-protocol_whitelist', 'http,https,tcp,tls,crypto', '-rw_timeout', '20000000'];
+
 const looksLikeLink = s => /^<?https?:\/\//i.test(s) || /^<link=/i.test(s);
 
 /** Short display name for a sound asset. */
@@ -508,6 +512,7 @@ module.exports = class Media {
    * -> { v, a (video / audio URLs, may be equal), duration, page (the video's own link) }
    */
   async quickSource(link, maxMin) {
+    if (isHls(link)) return this.hlsSource(link);
     if (!fs.existsSync(YTDLP) || (this.directBlockedUntil && Date.now() < this.directBlockedUntil)) return null;
     const search = /^ytsearch\d*:/.test(link);
     const href = search ? link : await this.checkLink(link);
@@ -528,6 +533,21 @@ module.exports = class Media {
     const v = pick(fmts.find(f => f.vcodec && f.vcodec !== 'none')), a = pick(fmts.find(f => f.acodec && f.acodec !== 'none'));
     if (!v || !j.duration) return null;
     return { v, a: a || null, duration: Number(j.duration), page: j.webpage_url || href, title: j.title };
+  }
+
+  /**
+   * HLS (2026-10-22, owner: "m3u8 support for /stream"): a .m3u8 link plays straight off the playlist,
+   * no download. VOD = ffmpeg seeks by segment (-ss per chunk); live (no duration) = every chunk is
+   * recorded off the live edge in real time (build() records it to a .ts, then cuts that).
+   */
+  async hlsSource(link) {
+    const href = await this.checkLink(link);
+    const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', ...HLS_IN, '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', href], 30_000)));
+    if (!probe.streams?.some(s => s.codec_type === 'video')) throw new Error('that playlist has no picture');
+    const duration = Number(probe.format?.duration);
+    const live = !(duration > 0);
+    const st = { url: href, size: 0 };
+    return { v: st, a: st, duration: live ? Infinity : duration, page: href, hls: true, live };
   }
 
   async fetchMedia(link, kind, withAudio = false, maxMin = this.config['max-minutes'] ?? 10) {
@@ -1672,7 +1692,9 @@ module.exports = class Media {
         : await this.quickSource(link, maxMin).catch(e => (console.log(`[media] ogrid quick source: ${String(e.message).slice(0, 120)}`), null));
       if (session.stopped) return;
       let total;
-      if (quick) {
+      if (quick?.hls) {
+        total = quick.live ? maxMin * 60 : quick.duration; // HLS: no download, every chunk comes off the playlist
+      } else if (quick) {
         fileP = this.download(quick.page, 'video', withSound, maxMin).then(f => (file = f), e => (console.error('[media] ogrid background download', e.message), null));
         total = quick.duration;
       } else {
@@ -1682,7 +1704,7 @@ module.exports = class Media {
         if (!probe.streams?.[0]?.width) throw new Error('that link has no picture');
         total = Number(probe.format?.duration) || maxMin * 60;
       }
-      console.log(`[media] ogrid ${name}: source ready in ${Date.now() - t0ms} ms (${quick ? 'stream URL' : cached ? 'cache' : 'download'})`);
+      console.log(`[media] ogrid ${name}: source ready in ${Date.now() - t0ms} ms (${quick?.hls ? (quick.live ? 'live HLS' : 'HLS') : quick ? 'stream URL' : cached ? 'cache' : 'download'})`);
       const startAt = Math.max(0, Math.min(total - 1, opt('start') || 0));
       const seconds = Math.min(total - startAt, maxMin * 60, opt('len') || Infinity);
       const chunks = Math.max(1, Math.ceil(seconds / chunkSec));
@@ -1700,11 +1722,25 @@ module.exports = class Media {
       const [fw, fh] = tiles ? [L.cols, L.rows] : [n, n];
       const tgState = tiles ? this.tg.newState(L) : null; // what every tile shows (chunks build in order)
       const build = async k => {
-        const t0 = startAt + k * chunkSec, dur = Math.min(chunkSec, seconds - k * chunkSec);
+        const dur = Math.min(chunkSec, seconds - k * chunkSec);
+        // live HLS: record this chunk's seconds off the live edge, then cut that file from 0
+        let rec = null;
+        if (quick?.live) {
+          rec = path.join(TMP, `og_${owner.id.slice(-12)}_${k}.ts`);
+          await run('ffmpeg', ['-v', 'error', '-y', ...HLS_IN, '-i', quick.v.url, '-t', String(dur), '-c', 'copy', '-f', 'mpegts', rec], (dur + 60) * 1000).catch(e => {
+            if (!fs.existsSync(rec) || !fs.statSync(rec).size) throw e;
+          });
+        }
+        try { return await buildFrom(k, dur, rec); } finally { if (rec) fs.rmSync(rec, { force: true }); }
+      };
+      const buildFrom = async (k, dur, rec) => {
+        const t0 = rec ? 0 : startAt + k * chunkSec;
         // URL cuts: YouTube throttles open-ended ranges (300 KB took 10 s, bounded 50 ms), so -end_offset
         // bounds every request to a generous guess past the chunk's end. A stream URL that fails (expired,
         // 403) or comes back short falls back to the downloaded file.
         const cut = async (mk, st, ok) => {
+          if (rec) return mk(rec, []);
+          if (quick?.hls) return mk(st.url, HLS_IN); // no file to fall back to
           if (file || !st) return mk(file ?? (await fileP), []);
           const end = st.size ? Math.min(st.size, Math.ceil(st.size * Math.min(1, (t0 + dur) / quick.duration) * 1.05 + 2e6)) : 0;
           try {
