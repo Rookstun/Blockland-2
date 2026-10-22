@@ -29,6 +29,7 @@ const TTS = require('./tts.js');
 const AT = require('./autotune.js');
 const AF = require('./audiofix.js');
 const YTDLP = path.join(__dirname, 'bin', 'yt-dlp');
+const BROWSER_SRC = path.join(__dirname, 'browser', 'source.mjs');
 const PYTHON = path.join(__dirname, 'venv', 'bin', 'python');
 const HEIGHTMAP = path.join(__dirname, 'bin', 'heightmap');
 const TMP = path.join(__dirname, 'tmp');
@@ -545,7 +546,17 @@ module.exports = class Media {
         console.log(`[media] yt-dlp can't read ${href} (${String(e.message).slice(0, 100)}), trying it as a plain stream`);
       }
     }
-    return yt ? null : this.directSource(href);
+    if (yt) return null;
+    // ANY PAGE (2026-10-22, owner: "any video from any source as long as it makes it to the page"):
+    // ffmpeg can't open it either = a headless Chrome plays the page and sniffs / records its video
+    try {
+      return await this.directSource(href);
+    } catch (e) {
+      if (!fs.existsSync(BROWSER_SRC) || this.config['stream-browser'] === false) throw e;
+      console.log(`[media] ffmpeg can't open ${href} (${String(e.message).slice(0, 80)}), opening it in a browser`);
+      const { browserSource } = await import(pathToFileURL(BROWSER_SRC).href);
+      return browserSource(href, { tmp: TMP, waitMs: this.config['stream-browser-wait-ms'] ?? 25_000 });
+    }
   }
 
   /** The stream URLs yt-dlp finds for a page (-j, ~3.5 s). null = only a full download() will do. */
@@ -1724,7 +1735,7 @@ module.exports = class Media {
       }
     };
     this.sessions.set(key, session);
-    let file, fileP = null;
+    let file, fileP = null, quick = null;
     try {
       const pos = tv ? await this.tvPos(tv) : panel ? null : await this.playerSpot(name);
       if (tv && !pos) throw new Error('your TV is gone (/stream tv gets a new one)');
@@ -1733,7 +1744,7 @@ module.exports = class Media {
       // fast start: chunks come straight off the stream URLs until the whole file is here (quickSource)
       const t0ms = Date.now();
       const cached = this.cache.has(`video|${withSound}|${maxMin}|${link}`);
-      const quick = cached || this.config['ogrid-fast-start'] === false ? null
+      quick = cached || this.config['ogrid-fast-start'] === false ? null
         : await this.quickSource(link, maxMin).catch(e => (console.log(`[media] ogrid quick source: ${String(e.message).slice(0, 120)}`), null));
       if (session.stopped) return;
       let total;
@@ -1884,6 +1895,7 @@ module.exports = class Media {
       }
     } finally {
       session.stopped = true;
+      try { quick?.close?.(); } catch {}
       const done = f => f && setTimeout(() => this.release(f), 60_000);
       if (fileP) fileP.then(done); else done(file);
       if (this.sessions.get(key) === session) this.sessions.delete(key);
