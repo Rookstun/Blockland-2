@@ -5,9 +5,10 @@ whole server works together, NO vice grips (10 coins instead), a statue at spawn
 with the coins in its slots, all 10 = huge boss fight, winning resets the server, frees everyone and
 regenerates the world.
 
-TODO when building: live Book I still talks about "Vice Grips of Truth" (story.js step.grip, m1-m9
-text). Rename to the coins or reword so Book II doesn't contradict it. Book I's ending gives each
-player their **Mark** (personal, needed to count toward a trial) instead of grips.
+DONE 2026-10-22: live Book I is now "The Coins of Truth" (8 coins, Randal is PAID the truth; story.js
++ omegga.main.js text; data keys grip/grips kept so saved progress carries over). These 8 Coins of
+Truth are not the 10 Unspent Coins. When building Book II, finishing Book I also gives each player
+their **Mark** (personal, needed to count toward a trial).
 
 ## The truth
 Book I ends with Randal finally saying the truth:

@@ -12,13 +12,13 @@
 // Fizzwick's side quest gives +1 Regen (stored here + leaderboard value "Regen" for show); every
 // second tick() sends br.Chat.Command /regen <player>|<regen> to the regen chip
 // (npctalk/regenchip.mjs: heals, overheal bleeds off with a tick).
-// Main quest = story.js (The Vice Grips of Truth); step types are documented there.
+// Main quest = story.js (The Coins of Truth); step types are documented there.
 //
 //   !quest        your quests     !quest drop <n>   give one up (not the main quest)
 // Unsafe (plain node) plugin, like progress.
 
 const NPCS = require('./npcs.json');
-const { MAIN, IDLE: STORY_IDLE, GRIPS } = require('./story.js');
+const { MAIN, IDLE: STORY_IDLE, COINS } = require('./story.js');
 const BY = Object.fromEntries(NPCS.map(n => [n.key, n]));
 // things you press E on that are not people (ConsoleTag event:quest:<key>): the pedestal in the Temple of the Stash
 const THINGS = { stash: { key: 'stash', name: 'THE STASH' } };
@@ -113,12 +113,12 @@ module.exports = class Quests {
   hud(p, s) {
     const rows = Object.entries(s.active).sort(([a], [b]) => (Q[b].main ? 1 : 0) - (Q[a].main ? 1 : 0))
       .map(([id, a]) => `${Q[id].main ? '{h}' : '{y}'}${this.titleOf(Q[id])}{/}~{d}  ${this.stepText(Q[id], a)}{/}`);
-    const grips = s.grips || s.done.m1 || s.active.m1 ? `~{w}Vice Grips of Truth: ${s.grips}/8{/}` : '';
+    const grips = s.grips || s.done.m1 || s.active.m1 ? `~{w}Coins of Truth: ${s.grips}/8{/}` : '';
     const text = `{h}{b}Quests{/b}{/}~${rows.length ? rows.join('~') : '{d}none{/}'}${grips}${s.regen ? `~{g}Regen +${s.regen}{/}` : ''}`;
     this.run(`br.Chat.Command /questhud ${clean(p.name, 64)}|${text.replace(/["'\\|]/g, '')}`);
   }
 
-  /** the current step of quest `qid` is done: hand over its grip, move on, finish the quest at the end */
+  /** the current step of quest `qid` is done: hand over its coin, move on, finish the quest at the end */
   async advance(p, qid) {
     const s = await this.get(p.id), a = s.active[qid], q = Q[qid];
     if (!a) return;
@@ -126,7 +126,7 @@ module.exports = class Quests {
     if (st?.grip) {
       s.grips = Math.max(s.grips, st.grip);
       this.sfx(p, 2);
-      this.omegga.whisper(p, C('ffd34d', `<b>Vice Grip of Truth ${st.grip}/8: the Grip of ${GRIPS[st.grip - 1]}</>`));
+      this.omegga.whisper(p, C('ffd34d', `<b>Coin of Truth ${st.grip}/8: the Coin of ${COINS[st.grip - 1]}</>`));
     }
     a.step++; a.count = 0;
     const next = q.steps[a.step];
@@ -188,7 +188,7 @@ module.exports = class Quests {
         if (stepTo(q, st) === npc.key) await this.interact(who, id); // the first scene happens right here
       }, () => q.no && this.box(p, 'm', npc.name, q.no));
     }
-    // 4. small talk (Randal: always about to say it, until the grips)
+    // 4. small talk (Randal: always about to say it, until the coins)
     const key = npc.key === 'randal' && s.done.m9 ? 'randalReformed' : npc.key;
     return this.box(p, 'm', npc.name, pick(IDLE[key] ?? ['...']));
   }
@@ -208,7 +208,7 @@ module.exports = class Quests {
     this.sfx(p, 2); this.hud(p, s);
     const reward = [q.coins && `+${q.coins} coins`, q.xp && `+${q.xp} XP`, q.regen && `Regen ${s.regen}`].filter(Boolean).join(', ');
     const doneBox = q.main ? `${this.titleOf(q)} complete. (${reward})` : `${q.done}  (${reward})`;
-    this.box(p, 'm', q.main ? 'The Vice Grips of Truth' : `${named(q.giver)}: ${q.title} complete`, doneBox, () => {
+    this.box(p, 'm', q.main ? 'The Coins of Truth' : `${named(q.giver)}: ${q.title} complete`, doneBox, () => {
       if (next) { this.sfx(p, 1); this.boxes(p, this.titleOf(next), next.intro); }
     });
   }
@@ -345,6 +345,6 @@ module.exports = class Quests {
     this.hud(p, s);
     if (!ids.length) return this.omegga.whisper(p, C('8cf', 'No quests. Racist Randal on the plaza is about to say something. Someone should stop him (walk up and press E).'));
     ids.forEach((qid, i) => this.omegga.whisper(p, `${C('8f8', `${i + 1}. <b>${this.titleOf(Q[qid])}</>`)} ${C('8cf', this.stepText(Q[qid], s.active[qid]))}`));
-    this.omegga.whisper(p, C('ffd34d', `Vice Grips of Truth: ${s.grips}/8`));
+    this.omegga.whisper(p, C('ffd34d', `Coins of Truth: ${s.grips}/8`));
   }
 };
