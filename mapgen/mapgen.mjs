@@ -1238,7 +1238,34 @@ const nordicCalm = (x, y) => (nordicSpot ? smooth(NORDIC_R + 4, NORDIC_R + 34, M
 const SNOW_STYLE = tune('snow.style', 'tiers', 'tiers = flat shelves, sheer walls, circle-lobed tiers, dirt stair trail; ridge = old ridged peaks');
 const TIER = { h: tune('snow.tierH', 6, 'tier wall height, voxels'), peaks: tune('snow.peaks', 4, 'tiered mountains in the range'),
   levels: tune('snow.levels', 12, 'most tiers per mountain'), lobes: tune('snow.lobes', 3, 'circle lobes grown out of each tier edge') };
-const tierMtn = { cells: new Uint8Array(N * N), trail: new Uint8Array(N * N), chamfer: [], stairs: [], peaks: [] };
+const tierMtn = { cells: new Uint8Array(N * N), trail: new Uint8Array(N * N), B: new Int16Array(N * N).fill(-1), stairAt: new Uint8Array(N * N), chamfer: [], stairs: [], peaks: [], win: null };
+// tier wall corners (run after the tiers are built and again after the river valley cap re-cut them)
+function tierCorners() {
+  const T = TIER.h, { x0, y0, W } = tierMtn.win;
+  const hN = (x, y) => (inBounds(x, y) ? H[x * N + y] : -1);
+  const busy = c => riverCell[c] || trenchCell[c] || volcanoCell[c] || H[c] <= SEA;
+  // 45 degree corners: cut convex corners down a tier, then every cell with two perpendicular walls exactly one
+  // tier up (and open on the other two sides) gets an upright wedge filling the half toward them
+  const DG = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+  for (let c = 0; c < N * N; c++) {
+    if (tierMtn.B[c] < 0 || tierMtn.stairAt[c]) continue; // never under a stair flight
+    const x = (c / N) | 0, y = c % N, h = H[c];
+    for (const [sx, sy] of DG)
+      if (hN(x + sx, y) === h - T && hN(x, y + sy) === h - T && hN(x + sx, y + sy) <= h - T && hN(x - sx, y) === h && hN(x, y - sy) === h && hN(x - sx, y - sy) >= h) { H[c] = h - T; break; }
+  }
+  const chamferAt = new Uint8Array(N * N);
+  tierMtn.chamfer = [];
+  for (let i = 1; i < W - 1; i++) for (let j = 1; j < W - 1; j++) {
+    const x = x0 + i, y = y0 + j, c = x * N + y;
+    if (!inBounds(x, y) || !tierMtn.cells[c] || busy(c)) continue;
+    const h = H[c];
+    for (const [sx, sy] of DG)
+      if (hN(x + sx, y) === h + T && hN(x, y + sy) === h + T && hN(x + sx, y + sy) >= h + T && hN(x - sx, y) <= h && hN(x, y - sy) <= h) {
+        tierMtn.chamfer.push({ x, y, h, sx, sy }); chamferAt[c] = 1; keepOut[c] = 1; break;
+      }
+  }
+  return { hN, busy, chamferAt };
+}
 function buildTiers(capM, floor) {
   const T = TIER.h, R = SNOWB.r, PAD = 60;
   const x0 = snowSite.x - R - PAD, y0 = snowSite.y - R - PAD, W = 2 * (R + PAD) + 1;
@@ -1298,7 +1325,7 @@ function buildTiers(capM, floor) {
       const x = x0 + Math.floor(k / W), y = y0 + (k % W), c = x * N + y;
       if (!capM.has(c)) continue; // rivers, trenches, dungeon hills, the town: untouched
       const l = Math.min(lev[k], Math.floor((Hpre[k] + capM.get(c) - B) / T));
-      if (l >= 1) target[k] = Math.max(target[k], Math.min(NZ - 10, B + l * T));
+      if (l >= 1 && Math.min(NZ - 10, B + l * T) > target[k]) { target[k] = Math.min(NZ - 10, B + l * T); tierMtn.B[c] = B; }
     }
   }
   for (let k = 0; k < W * W; k++) {
@@ -1307,26 +1334,8 @@ function buildTiers(capM, floor) {
     if (target[k] !== H[c]) { floor.set(c, H[c]); H[c] = target[k]; } // flat shelves: bumps under a tier are cut down too
   }
   for (const c of floor.keys()) { const x = (c / N) | 0, y = c % N; for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (inBounds(x + a, y + b)) tierMtn.cells[(x + a) * N + y + b] = 1; }
-  const hN = (x, y) => (inBounds(x, y) ? H[x * N + y] : -1);
-  const busy = c => riverCell[c] || trenchCell[c] || volcanoCell[c] || H[c] <= SEA;
-  // 45 degree corners: cut convex corners down a tier, then every cell with two perpendicular walls exactly one
-  // tier up (and open on the other two sides) gets an upright wedge filling the half toward them
-  const DG = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
-  for (const c of floor.keys()) {
-    const x = (c / N) | 0, y = c % N, h = H[c];
-    for (const [sx, sy] of DG)
-      if (hN(x + sx, y) === h - T && hN(x, y + sy) === h - T && hN(x + sx, y + sy) <= h - T && hN(x - sx, y) === h && hN(x, y - sy) === h && hN(x - sx, y - sy) >= h) { H[c] = h - T; break; }
-  }
-  const chamferAt = new Uint8Array(N * N);
-  for (let i = 1; i < W - 1; i++) for (let j = 1; j < W - 1; j++) {
-    const x = x0 + i, y = y0 + j, c = x * N + y;
-    if (!inBounds(x, y) || !tierMtn.cells[c] || busy(c)) continue;
-    const h = H[c];
-    for (const [sx, sy] of DG)
-      if (hN(x + sx, y) === h + T && hN(x, y + sy) === h + T && hN(x + sx, y + sy) >= h + T && hN(x - sx, y) <= h && hN(x, y - sy) <= h) {
-        tierMtn.chamfer.push({ x, y, h, sx, sy }); chamferAt[c] = 1; keepOut[c] = 1; break;
-      }
-  }
+  tierMtn.win = { x0, y0, W };
+  const { hN, busy, chamferAt } = tierCorners();
   // the trail: per mountain, a stair onto every tier
   const ORTH = [[1, 0], [0, 1], [-1, 0], [0, -1]], DIR8 = [...ORTH, [1, 1], [-1, 1], [-1, -1], [1, -1]];
   let flights = 0;
@@ -1366,6 +1375,7 @@ function buildTiers(capM, floor) {
       if (reach) for (let c = best.cs[0]; c >= 0; c = reach.get(c)) tierMtn.trail[c] = 1;
       for (const c of best.cs) { tierMtn.trail[c] = 1; keepOut[c] = 1; }
       for (const c of best.side) keepOut[c] = 1;
+      for (const c of [...best.cs, ...best.side]) tierMtn.stairAt[c] = 1;
       tierMtn.stairs.push(best); flights++;
       from = best.side[2]; tierMtn.trail[from] = 1;
       if (H[from] >= p.B + p.L * T) break; // the summit
@@ -2340,6 +2350,31 @@ stage('levees');
     }
   console.error(`river levees: ${raised} bank cells raised to the water line`);
 }
+// (2026-10-22, owner screenshots: unsmoothed 1-brick stair fields and half-cut mountains) the valley cap and the
+// levees re-cut tiered mountain ground: snap it back onto the tier grid (shelves stepping down to the river) and
+// hand cells that can't snap (bank cells next to the water, under the base) back to the smoothing
+if (tierMtn.win) {
+  const T = TIER.h;
+  let snapped = 0, freed = 0;
+  for (let c = 0; c < N * N; c++) {
+    const B = tierMtn.B[c];
+    if (B < 0 || (H[c] - B) % T === 0) continue;
+    const x = (c / N) | 0, y = c % N;
+    let wet = riverCell[c] || pathCell[c] || reserved[c] || townKind[c] || H[c] <= B;
+    for (let a = -1; a <= 1 && !wet; a++) for (let b = -1; b <= 1 && !wet; b++) if (inBounds(x + a, y + b) && riverCell[(x + a) * N + y + b]) wet = true;
+    if (!wet && B + Math.floor((H[c] - B) / T) * T > SEA) { H[c] = B + Math.floor((H[c] - B) / T) * T; snapped++; continue; }
+    tierMtn.cells[c] = 0; tierMtn.B[c] = -1; freed++;
+  }
+  // untargeted rim cells (marked so the smoothing leaves the wall foot alone) that the cap moved: smooth them
+  for (let c = 0; c < N * N; c++) if (tierMtn.cells[c] && tierMtn.B[c] < 0 && riverBankL[c] > -999) {
+    const x = (c / N) | 0, y = c % N; let wall = false;
+    for (let a = -1; a <= 1 && !wall; a++) for (let b = -1; b <= 1 && !wall; b++) if (inBounds(x + a, y + b) && tierMtn.B[(x + a) * N + y + b] >= 0 && H[(x + a) * N + y + b] > H[c] + 2) wall = true;
+    if (!wall) { tierMtn.cells[c] = 0; freed++; }
+  }
+  const before = tierMtn.chamfer.length;
+  tierCorners();
+  console.error(`snow tiers after the valley cap: ${snapped} cells snapped to tiers, ${freed} freed to smoothing, corner wedges ${before} -> ${tierMtn.chamfer.length}`);
+}
 stage('coves');
 // ------------------------------------------------------------------ coves --
 // (owner 2026-10-14: "make a cove ... really really beautiful like huge stalagmites, moss
@@ -2906,7 +2941,7 @@ for (let x = 0; x < N; x++)
     else if (villagePaved[x * N + y]) [top, sub] = [COBBLE, STONE];
     else if (swampCell[x * N + y]) [top, sub] = [h < SEA ? POOL_BED : fbm2(wx / 300 + 5, wy / 300) > 0.1 ? MUCK : MUD, MUD];
     else if (townKind[x * N + y]) [top, sub] = townKind[x * N + y] === 1 ? [TOWN_GRASS[Math.floor((fbm2(wx / 260 + 3, wy / 260 - 9, 2) + 1) * 1.6 + hash(x, y, 619) * 1.2) % TOWN_GRASS.length], DIRT] : [COBBLE, STONE]; // finer mottling at spawn (2026-10-14)
-    else if (keepOut[x * N + y] && !pathCell[x * N + y] && h <= riverLevelNear(x, y) + 1) [top, sub] = [SAND, DIRT];
+    else if (keepOut[x * N + y] && !pathCell[x * N + y] && !tierMtn.cells[x * N + y] && h <= riverLevelNear(x, y) + 1) [top, sub] = [SAND, DIRT]; // (2026-10-22) not the tier corners: sand specks on the snow
     else if (hengeDist(x, y) <= 0) [top, sub] = [Math.hypot(x - henge.x0 - (henge.n >> 1), y - henge.y0 - (henge.n >> 1)) < 6.5 ? DIRT : GRASS[shade], DIRT];
     else if (pathCell[x * N + y] && h > SEA + 1 && (slope < 4 || roadGraded[x * N + y])) [top, sub] = [volcanoCell[x * N + y] === 2 ? GRAVEL : PATH, DIRT];
     else if (tierMtn.trail[x * N + y] && !pathCell[x * N + y]) [top, sub] = [PATH, DIRT]; // the tiered mountains' trail
@@ -3240,6 +3275,14 @@ let carved = 0;
     if (caves.length >= CAVE.max) break;
     if (caves.some(c => Math.hypot(c.x - s.x, c.y - s.y) < CAVE.spacing)) continue;
     if (!fits(s)) continue;
+    // (2026-10-22, owner: "the cave faces are causing problems") no door facade on the tiered mountains: its
+    // raised rock face sat on the shelves as grey blocks; caves open into tier walls through tierMouths instead
+    let onTier = false;
+    for (let k = -2; k <= CAVE.depth + 2 && !onTier; k++) for (let l = -4; l <= 4 && !onTier; l++) {
+      const cx = s.x + s.dx * k - s.dy * l, cy = s.y + s.dy * k + s.dx * l;
+      if (inBounds(cx, cy) && tierMtn.cells[cx * N + cy]) onTier = true;
+    }
+    if (onTier) continue;
     caves.push(s);
     // facade: the passage cells and their neighbours rise into a rock face
     s.facade = new Set();
