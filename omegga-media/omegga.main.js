@@ -554,7 +554,7 @@ module.exports = class Media {
     } catch (e) {
       if (!fs.existsSync(BROWSER_SRC) || this.config['stream-browser'] === false) throw e;
       console.log(`[media] ffmpeg can't open ${href} (${String(e.message).slice(0, 80)}), opening it in a browser`);
-      const { browserSource } = await import(pathToFileURL(BROWSER_SRC).href);
+      const { browserSource } = await import(pathToFileURL(BROWSER_SRC).href + `?v=${fs.statSync(BROWSER_SRC).mtimeMs}`); // reloads keep the ESM cache
       return browserSource(href, { tmp: TMP, waitMs: this.config['stream-browser-wait-ms'] ?? 25_000 });
     }
   }

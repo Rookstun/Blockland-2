@@ -21,7 +21,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36';
 const AD_HOST = /(^|\.)(doubleclick\.net|googlesyndication\.com|googleadservices\.com|imasdk\.googleapis\.com|adnxs\.com|adsrvr\.org|popads\.net|popcash\.net|propellerads\.com|exoclick\.com|juicyads\.com|adsterra\.com|taboola\.com|outbrain\.com|moatads\.com|amazon-adsystem\.com)$/i;
 const MEDIA_EXT = /\.(m3u8|mpd|mp4|m4v|webm|mkv|mov|flv|ogv)$/i;
-const SEGMENT = /\.(ts|m4s|aac|m4a|vtt|key)$|\/seg[-_]?\d|[?&](range|bytes)=/i;
+// fMP4 init segments (init-*.mp4, init.mp4): a header with a duration but no frames, never a source
+const SEGMENT = /\.(ts|m4s|aac|m4a|vtt|key)$|\/seg[-_]?\d|\/init(?:[-_][^/]*)?\.(mp4|m4v|cmfv)$|[?&](range|bytes)=/i;
 const PLAY_SELECTORS = ['.vjs-big-play-button', '.jw-icon-display', '.jw-display-icon-container', '.plyr__control--overlaid', '.ytp-large-play-button',
   '.fp-play', '.mejs__overlay-button', '.play-button', '.playbutton', '.btn-play', '#play', '.play', '[aria-label*="play" i]', '[title*="play" i]', 'button[class*="play" i]', 'div[class*="play" i]'];
 
@@ -196,7 +197,8 @@ export async function browserSource(href, { tmp, log = console.log, waitMs = 25_
       const cookie = cookies.map(c => `${c.name}=${c.value}`).join('; ');
       const list = [...cands.values()].map(c => ({ ...c, headers: { ...c.headers, ...(cookie ? { Cookie: cookie } : {}) } }))
         .sort((a, b) => (a.kind === 'file') - (b.kind === 'file')).slice(0, 8);
-      const ok = (await Promise.all(list.map(probe))).filter(Boolean).sort((a, b) => b.duration - a.duration);
+      // manifests beat files (a file may be an ad or a segment), then the longest
+      const ok = (await Promise.all(list.map(probe))).filter(Boolean).sort((a, b) => (a.kind === 'file') - (b.kind === 'file') || b.duration - a.duration);
       if (ok.length) {
         const c = ok[0];
         log(`[media] browser: playing ${c.kind} ${c.url.slice(0, 140)} (${c.duration === Infinity ? 'live' : Math.round(c.duration) + ' s'}, ${ok.length}/${list.length} opened)`);
