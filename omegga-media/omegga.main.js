@@ -606,6 +606,62 @@ module.exports = class Media {
     return { v: st, a: probe.streams.some(s => s.codec_type === 'audio') ? st : null, duration: live ? Infinity : duration, page: href, hls: true, live };
   }
 
+  /**
+   * Copies a stream source (quickSource with hls) whole into the download cache (no re-encode), whispering
+   * progress; the cache key makes a replay start at once. Returns the file (release() it like a download).
+   */
+  async preloadStream(q, cacheKey, session, name, maxMin, from = 0, len = Infinity) {
+    const out = path.join(CACHE, `pre_${Date.now()}_${Math.floor(Math.random() * 1e6)}.mkv`);
+    fs.mkdirSync(CACHE, { recursive: true });
+    const sep = q.a && q.a !== q.v;
+    const total = Math.min(q.duration - from, maxMin * 60, len);
+    // HLS/DASH masters list every quality: copy the smallest one at least 240 high (the screen is 96 wide)
+    let vmap = '0:v:0';
+    try {
+      const vs = JSON.parse(String(await run('ffprobe', ['-v', 'error', ...q.v.in, '-show_entries', 'stream=index,codec_type,height', '-of', 'json', q.v.url], 30_000)))
+        .streams.filter(s => s.codec_type === 'video' && s.height > 0).sort((a, b) => a.height - b.height);
+      const s = vs.find(s => s.height >= 240) ?? vs[vs.length - 1];
+      if (s) vmap = `0:${s.index}`;
+    } catch {}
+    const ss = from ? ['-ss', String(from)] : [];
+    const args = ['-v', 'error', '-y', ...ss, ...q.v.in, '-i', q.v.url, ...(sep ? [...ss, ...q.a.in, '-i', q.a.url] : []),
+      '-map', vmap, '-map', sep ? '1:a:0?' : '0:a:0?', '-c', 'copy', '-t', String(total), '-progress', 'pipe:1', '-nostats', '-f', 'matroska', out];
+    const t0 = Date.now();
+    let done = 0, lastSay = Date.now(), err = '';
+    await new Promise((resolve, reject) => {
+      const p = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      const stop = setInterval(() => session.stopped && p.kill('SIGKILL'), 500);
+      p.stdout.on('data', d => {
+        const m = /out_time_us=(\d+)/.exec(String(d).split('\n').filter(l => l.startsWith('out_time_us=')).pop() || '');
+        if (m) done = Number(m[1]) / 1e6;
+        if (Date.now() - lastSay > 15_000 && total > 0) {
+          lastSay = Date.now();
+          this.whisper(name, `<color="999">Preloading ${Math.min(99, Math.floor(100 * done / total))}%...</>`);
+        }
+      });
+      p.stderr.on('data', d => { err = (err + d).slice(-400); });
+      p.on('error', reject);
+      p.on('close', code => {
+        clearInterval(stop);
+        if (session.stopped) return resolve();
+        // a few bad segments at the end still leave a playable file
+        if (code === 0 || (fs.existsSync(out) && done > total * 0.9)) resolve();
+        else reject(new Error(`preload failed: ${err.trim().split('\n').pop() || 'ffmpeg ' + code}`));
+      });
+    });
+    if (session.stopped) { fs.rmSync(out, { force: true }); return null; }
+    console.log(`[media] preloaded ${Math.round(done)} s (${(fs.statSync(out).size / 1e6).toFixed(1)} MB) in ${Math.round((Date.now() - t0) / 1000)} s`);
+    const hit = { file: out, uses: 1 };
+    this.cache.set(cacheKey ?? out, hit); // a part (start=/len=) is not the link's cache entry
+    for (const [k, v] of this.cache) {
+      if (this.cache.size <= CACHE_MAX) break;
+      if (v.uses || v === hit) continue;
+      fs.rmSync(v.file, { force: true });
+      this.cache.delete(k);
+    }
+    return out;
+  }
+
   async fetchMedia(link, kind, withAudio = false, maxMin = this.config['max-minutes'] ?? 10) {
     if (!fs.existsSync(YTDLP)) throw new Error('yt-dlp is missing from the plugin (bin/yt-dlp)');
     // !search: a YouTube search (yt-dlp takes the first hit that fits the length limit)
@@ -1666,7 +1722,7 @@ module.exports = class Media {
       return hadOne || this.whisper(name, screen ? 'Nothing is streaming.' : 'Screen removed.');
     }
     const opts = [], words = [];
-    for (const a of args) (/^([+-][xy]|mute|letters|strips|debug|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
+    for (const a of args) (/^([+-][xy]|mute|letters|strips|debug|nopreload|\d+|(fps|start|len)[=:]\d+(\.\d+)?)$/i.test(a) && !looksLikeLink(a) ? opts : words).push(a);
     if (!words.length) return this.whisper(name, 'Give a link or something to search for.');
     const link = looksLikeLink(words[0]) ? words[0] : `ytsearch10:${words.join(' ')}`;
     const opt = k => Number(opts.map(a => /^([a-z]+)[=:](\d+(?:\.\d+)?)$/i.exec(a)).find(m => m?.[1].toLowerCase() === k)?.[2] ?? NaN);
@@ -1747,8 +1803,21 @@ module.exports = class Media {
       quick = cached || this.config['ogrid-fast-start'] === false ? null
         : await this.quickSource(link, maxMin).catch(e => (console.log(`[media] ogrid quick source: ${String(e.message).slice(0, 120)}`), null));
       if (session.stopped) return;
-      let total;
-      if (quick?.hls) {
+      let total, startOff = 0;
+      // PRELOAD (2026-10-22, owner: "preload the video beforehand"): a stream with an end is copied whole to a
+      // local file first (stream tokens can expire / CDNs stall mid-video), then plays off the file. `nopreload` skips it
+      if (quick?.hls && !quick.live && !quick.capture && this.config['stream-preload'] !== false && !opts.includes('nopreload')) {
+        const from = Math.max(0, opt('start') || 0);
+        file = await this.preloadStream(quick, from || opt('len') ? null : `video|${withSound}|${maxMin}|${link}`, session, name, maxMin, from, opt('len') || Infinity);
+        startOff = from; // the file starts at start=
+        if (session.stopped) return;
+        try { quick.close?.(); } catch {}
+        quick = null;
+      }
+      if (file) {
+        const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width:format=duration', '-of', 'json', file])));
+        total = Number(probe.format?.duration) || maxMin * 60;
+      } else if (quick?.hls) {
         total = quick.live ? maxMin * 60 : quick.duration; // HLS: no download, every chunk comes off the playlist
       } else if (quick) {
         fileP = this.download(quick.page, 'video', withSound, maxMin).then(f => (file = f), e => (console.error('[media] ogrid background download', e.message), null));
@@ -1761,7 +1830,7 @@ module.exports = class Media {
         total = Number(probe.format?.duration) || maxMin * 60;
       }
       console.log(`[media] ogrid ${name}: source ready in ${Date.now() - t0ms} ms (${quick?.hls ? (quick.live ? 'live stream' : 'stream') : quick ? 'stream URL' : cached ? 'cache' : 'download'})`);
-      const startAt = Math.max(0, Math.min(total - 1, opt('start') || 0));
+      const startAt = Math.max(0, Math.min(total - 1, (opt('start') || 0) - startOff));
       const seconds = Math.min(total - startAt, maxMin * 60, opt('len') || Infinity);
       const chunks = Math.max(1, Math.ceil(seconds / chunkSec));
 
@@ -1866,7 +1935,7 @@ module.exports = class Media {
       let sent = 0, prevAudio = null, set = first;
       for (let k = 0; k < chunks && !session.stopped; k++) {
         if (k > 0) set = await next.catch(e => (console.error(`[media] ogrid chunk ${k}`, e), null));
-        if (k + 1 < chunks) next = build(k + 1); // decode the next chunk while this one plays
+        if (k + 1 < chunks) { next = build(k + 1); next.catch(() => {}); } // decode the next chunk while this one plays (caught: a stop leaves it unawaited)
         if (!set) { await sleep(chunkSec * 1000); continue; }
         // cartridges alternate between two slots: this slot held chunk k-2 (long done)
         const slot = k % 2, [c, h] = M.cartridgeBox(L, slot);
