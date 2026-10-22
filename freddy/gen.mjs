@@ -417,7 +417,7 @@ mod render() {
       let bs: int = if flipT > 0 then (if (flipT / 2) % 2 == 0 then ${S.boardF1} else ${S.boardF2}) else ${S.board}
       drawSpr(bs, 7, fy, 0)
     }
-    for i in 0..3 { put(1 + i * 2, 0, if i < boards then 8 else 6) }
+    for i in 0..5 { put(1 + i * 2, 0, if i < boards then 8 else 6) }
     let prog: int = min(${W - 2}, floor(dist / goal * ${W - 2}.0))
     for i in 0..${W - 2} { put(1 + i, 1, if i < prog then 4 else 3) }
   } else if state == 2 {
@@ -652,7 +652,7 @@ mod skateTick() {
     }
   }
   if kS && !pS && air && flipT == 0 {
-    flipT = 14
+    flipT = 10
     sfx(${FX.flip})
   }
   if flipT > 0 { flipT -= 1 }
@@ -663,7 +663,11 @@ mod skateTick() {
       gy = 29.0
       vy = 0.0
       air = false
-      if flipT > 0 { crash() } else {
+      if flipT > 0 {
+        flipT = 0
+        sfx(${FX.land})
+        say("Sketchy landing. No points, but Gord lives.", 25)
+      } else {
         sfx(${FX.land})
         if flips > 0 {
           score += 50 * flips
@@ -672,7 +676,7 @@ mod skateTick() {
       }
       flips = 0
     }
-    if flipT == 13 { flips += 1 }
+    if flipT == 9 { flips += 1 }
   }
   if inv > 0 { inv -= 1 }
   dist = dist + spd
@@ -723,7 +727,7 @@ mod powerOn() {
   air = false
   flipT = 0
   inv = 0
-  boards = 3
+  boards = 5
   dist = 0.0
   playSong(0)
   say("SPACE start. A parody. Licensed by absolutely no one.", 100000)
@@ -780,7 +784,7 @@ ${debug ? `    kL = left || dbk.Contains("l")
         day = 1
         score = 0
         sausages = 0
-        boards = 3
+        boards = 5
         startSkate()
         pJ = true
         pS = true
@@ -799,7 +803,7 @@ ${debug ? `    kL = left || dbk.Contains("l")
           day = 1
           score = 0
           sausages = 0
-          boards = 3
+          boards = 5
         }
         startSkate()
         pJ = true
@@ -809,7 +813,7 @@ ${debug ? `    kL = left || dbk.Contains("l")
         day = 1
         score = 0
         sausages = 0
-        boards = 3
+        boards = 5
         startSkate()
         pJ = true
       }
