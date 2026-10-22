@@ -71,7 +71,7 @@ function speakers(b) {
 
   // ---- the owner's cabinet (clipboard bricks, rotated into this frame)
   box(-15, 2, 24, 15, 22, 50);     // head behind the screen
-  box(-15, -8, 50, 15, 22, 58, { components: text({ Font: font('Bungee'), LineHeight: 3, Text: 'SUPER SIGMAS', Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
+  box(-15, -8, 50, 15, 22, 58, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: 'SUPER SIGMAS', Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
   box(-15, -8, 0, 15, 22, 24);     // base / desk
   w.addBrick({ asset: 'PB_DefaultBrick', color: GREY, size: [5, 5, 6], position: [0, -22, 6], owner_index: O }); // stool
   const seat = w.addBrick({ asset: 'B_Seat', position: [0, -23, 23], direction: 4, rotation: 0, color: [255, 255, 255], owner_index: O,
@@ -86,12 +86,12 @@ function speakers(b) {
     wireFrom(`strip${k}`, s, 'Text');
   }
   const z0 = Z1 - gen.H * CELL; // 30
-  const hud = box(-13, 0, z0 - 2, 13, 2, z0, { color: base, components: text({ LineHeight: 1.2, Color: rgba([248, 208, 64]) }) });
+  const hud = box(-13, 0, z0 - 2, 13, 2, z0, { color: base, components: text({ LineHeight: 0.8, Color: rgba([248, 208, 64]) }) });
   wireFrom('hud_', hud, 'Text');
-  const msg = box(-13, 0, 26, 13, 2, z0 - 2, { color: base, components: text({ LineHeight: 1.2, Color: rgba([240, 240, 240]) }) });
+  const msg = box(-13, 0, 26, 13, 2, z0 - 2, { color: base, components: text({ LineHeight: 0.8, Color: rgba([240, 240, 240]) }) });
   wireFrom('msg_', msg, 'Text');
   const title = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, 42], visibility: false, collision: false, owner_index: O,
-    components: text({ Font: font('Bungee'), LineHeight: 3.2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });
+    components: text({ Font: font('Bungee'), LineHeight: 2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });
   wireFrom('title_', title, 'Text');
 
   // ---- seat -> chip: occupancy straight into 'seated', the sitter into a raw MicrochipInput -> splitter -> compares
