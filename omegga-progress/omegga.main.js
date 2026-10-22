@@ -21,6 +21,7 @@
 //
 //   !progress        your saved values
 //   /eco give|take|set <player|all> <n>   change coins (host + config `allowed`); offline players too
+//   /clear <player>   empty their inventory (host + `allowed`): chip invclear/ + saved slots + pending names
 //   /eco check [player]  /eco top  /eco pay <player> <n> (anyone, from their own coins)
 // Unsafe (plain node) plugin, like tpa and duel.
 
@@ -53,6 +54,10 @@ module.exports = class Progress {
       this.omegga.removeAllListeners(e);
       this.omegga.on(e, (name, ...args) => this.eco(name, args).catch(err => { console.error('[eco]', err); this.ecoTell(name, 'error: ' + err.message); }));
     }
+    for (const e of ['cmd:clear', 'chatcmd:clear']) {
+      this.omegga.removeAllListeners(e);
+      this.omegga.on(e, (name, ...args) => this.clearInv(name, args).catch(err => { console.error('[clear]', err); this.ecoTell(name, 'error: ' + err.message); }));
+    }
     if (this.omegga.__progressLine) this.omegga.off('line', this.omegga.__progressLine);
     this.omegga.__progressLine = line => this.onLine(line);
     this.omegga.on('line', this.omegga.__progressLine);
@@ -67,7 +72,7 @@ module.exports = class Progress {
     } catch (e) { console.error('[progress] log catch-up', e.message); }
     const every = Math.max(5, this.config?.interval ?? 20) * 1000;
     this.timer = setInterval(() => this.tick().catch(err => console.error('[progress] tick', err)), every);
-    return { registeredCommands: ['progress', 'eco'] };
+    return { registeredCommands: ['progress', 'eco', 'clear'] };
   }
 
   async stop() {
@@ -211,6 +216,24 @@ module.exports = class Progress {
     } else await this.store.set(key, { ...saved, coins, ecoPend: true });
     console.log(`[eco] ${t.name} (${t.id}) coins = ${coins}${t.online ? '' : ' (offline, applied on join)'}`);
     return coins;
+  }
+
+  // /clear <player>: the invclear chip empties slots 0-9; the saved copy and any pending shop names go too,
+  // so neither this plugin nor skeleton_drop gives the items back (the chip's 5 s check sees the empty slots)
+  async clearInv(name, args) {
+    if (!this.ecoAllowed(name)) return this.ecoTell(name, 'not allowed');
+    const q = args.join(' ').trim().toLowerCase();
+    if (!q) return this.ecoTell(name, 'usage: /clear <player>');
+    const hit = Progress.pick(this.omegga.getPlayers(), q);
+    if (!hit) return this.ecoTell(name, `no online player matches "${q}"`);
+    const p = this.omegga.getPlayer(hit.id);
+    this.omegga.writeln(`br.Chat.Command /invclear ${clean(hit.name)}`);
+    await this.store.delete('inv:' + hit.id).catch(() => {});
+    for (let i = 0; i < 10; i++) p.setLeaderboard('InvName' + i, 0);
+    p.setLeaderboard('InvPend', 0);
+    console.log(`[clear] ${name} cleared ${hit.name} (${hit.id})`);
+    if (hit.name !== name) this.ecoTell(hit.name, `${name} cleared your inventory.`);
+    return this.ecoTell(name, `cleared ${hit.name}'s inventory.`);
   }
 
   async eco(name, args) {
