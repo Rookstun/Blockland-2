@@ -47,7 +47,9 @@ function speakers(b) {
 }
 
 {
-  const b = await bundle(compiled, { owner: OWNER, offset: [0, 40, 30], hide: true });
+  // one hidden chip lying on the hood (top z 58), no outer pins: the seat wires into its port gates, its port gates
+  // wire straight into the screen, and the seat adapter (splitter, compares, clock) sits on the chip's own plane
+  const b = await bundle(compiled, { owner: OWNER, offset: [0, 12, 60], hide: true, bare: true });
   const { w, C, O } = b;
   const assets = [...b.ext, ...speakers(b)];
   const font = name => { let i = assets.findIndex(e => e.type === 'BrickFontDescriptor' && e.name === name); if (i < 0) { assets.push({ type: 'BrickFontDescriptor', name }); i = assets.length - 1; } return i; };
@@ -63,8 +65,9 @@ function speakers(b) {
     Typeface: 0, Billboard: 0, Material: 0, Shading: 0, bFlipShading: false, Outline: 0, bSharpCorners: true, bSharpOutlines: true, bOverrideOutlineColor: true, bForeground: false, Text: '',
   };
   const text = data => [{ type: C.TextDisplay.NAME, data: { ...TEXT, ...data } }];
-  const wireFrom = (port, brick, target) => w.addWire({ brick: b.pin(port), component_type: 'Component_Internal_Rerouter', port: 'RER_Output' }, { brick, component_type: C.TextDisplay.NAME, port: target });
-  const wireTo = (src, port) => w.addWire(src, { brick: b.pin(port), component_type: 'Component_Internal_Rerouter', port: 'RER_Input' });
+  const OUTC = 'BrickComponentType_Internal_MicrochipOutput', INC = 'BrickComponentType_Internal_MicrochipInput';
+  const wireFrom = (port, brick, target) => w.addWire({ brick: b.portOut(port), component_type: OUTC, port: 'RER_Output' }, { brick, component_type: C.TextDisplay.NAME, port: target });
+  const wireTo = (src, port) => w.addWire(src, { brick: b.portIn(port), component_type: INC, port: 'RER_Input' });
 
   // ---- the owner's cabinet (clipboard bricks, rotated into this frame)
   box(-15, 2, 24, 15, 22, 50);     // head behind the screen
@@ -91,15 +94,19 @@ function speakers(b) {
     components: text({ Font: font('Bungee'), LineHeight: 3.2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });
   wireFrom('title_', title, 'Text');
 
-  // ---- seat -> input splitter -> bools; occupancy -> seated; 20 Hz clock. Gates hidden behind the cabinet.
+  // ---- seat -> chip: occupancy straight into 'seated', the sitter into a raw MicrochipInput -> splitter -> compares
+  // -> the chip's own input port gates; 20 Hz clock -> 'tick'. All on the chip plane, past its gates and speakers.
+  const X0 = Math.max(...b.rootPos.map(p => p[0])) + 60, Y0 = Math.min(...b.rootPos.map(p => p[1])), ZP = b.rootPos[0][2];
   let gi = 0;
-  const gate = (c, data = {}) => ({ h: w.addBrick({ asset: c.BRICK, position: [-40 + (gi % 10) * 10, 70, 10 + Math.floor(gi++ / 10) * 10], color: [200, 200, 200], owner_index: O,
-    visibility: false, collision: false, components: [{ type: c.NAME, data }] }), c });
+  const gate = (c, data = {}) => ({ h: b.addInside({ asset: c.BRICK, position: [X0 + (gi % 8) * 10, Y0 + Math.floor(gi++ / 8) * 10, ZP], color: [200, 200, 200],
+    components: [{ type: c.NAME, data }] }), c });
   const port = (g, p) => { if (!g.c.PORTS[p]) throw Error(`bad port ${g.c.NAME}.${p}`); return { brick: g.h, component_type: g.c.NAME, port: g.c.PORTS[p] }; };
   const num = v => ({ $variant: 'f64', value: v });
-  const split = gate(C.InputSplitter);
-  w.addWire({ brick: seat, component_type: C.Seat.NAME, port: 'SittingCharacter' }, port(split, 'Character'));
   wireTo({ brick: seat, component_type: C.Seat.NAME, port: 'bIsOccupied' }, 'seated');
+  const pilot = gate(C.MicrochipInput, { PortLabel: 'pilot', PortOrder: 99 });
+  w.addWire({ brick: seat, component_type: C.Seat.NAME, port: 'SittingCharacter' }, port(pilot, 'RER_Input'));
+  const split = gate(C.InputSplitter);
+  w.addWire(port(pilot, 'RER_Output'), port(split, 'Character'));
   const k = v => gate(C.Var, { Value: num(v) });
   const cmp = (kind, a, v) => { const g = gate(C[kind]); w.addWire(a, port(g, 'InputA')); w.addWire(port(k(v), 'Value'), port(g, 'InputB')); return port(g, 'bOutput'); };
   const add = (a, bb) => { const g = gate(C.Expr_MathAdd); w.addWire(a, port(g, 'InputA')); w.addWire(bb, port(g, 'InputB')); return port(g, 'Output'); };
