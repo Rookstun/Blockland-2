@@ -1,0 +1,13 @@
+{
+  "name": "discord",
+  "description": "Two-way chat relay between the server and one Discord channel (no dependencies: Discord gateway over Node's built-in WebSocket).",
+  "author": "pooper",
+  "config": {
+    "token": { "description": "Discord bot token (bot needs the Message Content intent, View Channel + Send Messages in the channel)", "type": "password", "default": "" },
+    "channel": { "description": "Discord channel id to relay", "type": "string", "default": "" },
+    "webhook": { "description": "Optional webhook URL of that channel: game messages then show with the player's name as the sender", "type": "password", "default": "" },
+    "joins": { "description": "Post joins/leaves to Discord", "type": "boolean", "default": true },
+    "skip-commands": { "description": "Don't relay game chat starting with ! or /", "type": "boolean", "default": false }
+  },
+  "commands": []
+}
