@@ -226,11 +226,29 @@ function isPrivateAddress(ip) {
     (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || a >= 224;
 }
 
+/** A bare domain counts as a link when it has a path or starts with www. ("youtu.be/x", "www.site.com"). */
+const BARE_LINK = /^(?:www\.)?(?:[\w-]+\.)+[a-z]{2,}(?::\d+)?(?:[/?#]\S*)?$/i;
+/** A link as typed: <link="..."> and <...> unwrapped, a bare domain gets https://. */
+const cleanLink = s => {
+  const t = String(s).replace(/^<link="?([^">]+)"?>.*$/i, '$1').replace(/^<|>$/g, '');
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(t) || !(/^www\./i.test(t) || /\//.test(t)) || !BARE_LINK.test(t) ? t : 'https://' + t;
+};
 /** .m3u8 playlists (HLS), played by ffmpeg directly; segments may only come over the network. */
-const isHls = s => /^https?:\/\/[^?#]*\.m3u8([?#]|$)/i.test(String(s).replace(/^<link="?([^">]+)"?>.*$/i, '$1').replace(/^<|>$/g, ''));
+const isHls = s => /^https?:\/\/[^?#]*\.m3u8([?#]|$)/i.test(cleanLink(s));
+/** Links ffmpeg reads straight, no yt-dlp: media files, DASH manifests, RTMP/RTSP streams. */
+const MEDIA_EXT = /\.(mp4|m4v|webm|mkv|mov|avi|flv|ts|mts|m2ts|ogv|mpd|wmv|3gp)$/i;
+const isDirect = s => { try { const u = new URL(cleanLink(s)); return /^(rtmps?|rtsp):$/i.test(u.protocol) || MEDIA_EXT.test(u.pathname); } catch { return false; } };
 const HLS_IN = ['-protocol_whitelist', 'http,https,tcp,tls,crypto', '-rw_timeout', '20000000'];
+/** ffmpeg input options for a stream URL (+ the headers yt-dlp says the site wants). */
+function ffIn(url, headers) {
+  const proto = new URL(url).protocol;
+  if (proto === 'rtsp:') return ['-rtsp_transport', 'tcp', '-timeout', '20000000'];
+  if (/^rtmps?:$/.test(proto)) return ['-rw_timeout', '20000000'];
+  const h = Object.entries(headers || {}).filter(([k]) => /^(user-agent|referer|origin|cookie)$/i.test(k)).map(([k, v]) => `${k}: ${v}\r\n`).join('');
+  return [...HLS_IN, ...(h ? ['-headers', h] : [])];
+}
 
-const looksLikeLink = s => /^<?https?:\/\//i.test(s) || /^<link=/i.test(s);
+const looksLikeLink = s => /^<link=/i.test(s) || /^<?(https?|rtmps?|rtsp):\/\//i.test(s) || ((/^www\./i.test(s) || /\//.test(s)) && BARE_LINK.test(s));
 
 /** Short display name for a sound asset. */
 const soundLabel = s => s.replace(/^BA_(MUS_Component_|MUS_|AMB_Component_|AMB_)?/, '');
@@ -401,11 +419,11 @@ module.exports = class Media {
   async checkLink(link) {
     let url;
     try {
-      url = new URL(String(link).replace(/^<link="?([^">]+)"?>.*$/i, '$1').replace(/^<|>$/g, ''));
+      url = new URL(cleanLink(link));
     } catch {
       throw new Error('that is not a valid link');
     }
-    if (!/^https?:$/.test(url.protocol)) throw new Error('only http and https links work');
+    if (!/^(https?|rtmps?|rtsp):$/.test(url.protocol)) throw new Error('only http(s), rtmp and rtsp links work');
     // YouTube Music links: yt-dlp rejects music.youtube.com, the same video is on www
     if (url.hostname === 'music.youtube.com') url.hostname = 'www.youtube.com';
     const host = url.hostname.replace(/^\[|\]$/g, '');
@@ -512,42 +530,69 @@ module.exports = class Media {
    * -> { v, a (video / audio URLs, may be equal), duration, page (the video's own link) }
    */
   async quickSource(link, maxMin) {
-    if (isHls(link)) return this.hlsSource(link);
-    if (!fs.existsSync(YTDLP) || (this.directBlockedUntil && Date.now() < this.directBlockedUntil)) return null;
+    // UNIVERSAL LINKS (2026-10-22, owner: "/stream should have universal url acceptance"): playlists, media
+    // files and rtmp/rtsp go straight to ffmpeg; any page yt-dlp knows (incl. live channels) plays off its
+    // stream URLs; anything else is tried as an ffmpeg input
+    if (isHls(link) || isDirect(link)) return this.directSource(link);
     const search = /^ytsearch\d*:/.test(link);
     const href = search ? link : await this.checkLink(link);
+    const yt = search || /(^|\.)(youtube\.com|youtu\.be)$/i.test(new URL(href).hostname);
+    if (fs.existsSync(YTDLP) && !(yt && this.directBlockedUntil && Date.now() < this.directBlockedUntil)) {
+      try {
+        return await this.ytdlpSource(href, search, maxMin);
+      } catch (e) {
+        if (yt) throw e;
+        console.log(`[media] yt-dlp can't read ${href} (${String(e.message).slice(0, 100)}), trying it as a plain stream`);
+      }
+    }
+    return yt ? null : this.directSource(href);
+  }
+
+  /** The stream URLs yt-dlp finds for a page (-j, ~3.5 s). null = only a full download() will do. */
+  async ytdlpSource(href, search, maxMin) {
     let out;
     try {
       out = await run(YTDLP, ['--js-runtimes', `node:${process.execPath}`, '-j', '--no-playlist', '--quiet', '--no-warnings',
         '--match-filter', `duration <=? ${maxMin * 60}`, ...(search ? ['--max-downloads', '1'] : []),
-        // plain https AVC + m4a: a cut anywhere takes ~0.15 s (AV1 360p ~8 s a seek, webm audio mid-file ~9 s); 240p is plenty for 64x36
-        '-f', 'bv*[height<=240][vcodec^=avc1][protocol=https]+ba[ext=m4a][protocol=https]/bv*[height<=360][vcodec^=avc1][protocol=https]+ba[protocol=https]/b[height<=480][protocol=https]', href], 30_000);
+        // plain https AVC + m4a: a cut anywhere takes ~0.15 s (AV1 360p ~8 s a seek, webm audio mid-file ~9 s); 240p is plenty for 64x36.
+        // Other sites / live channels: any plain https file, else an HLS playlist, else whatever there is
+        '-f', 'bv*[height<=240][vcodec^=avc1][protocol=https]+ba[ext=m4a][protocol=https]/bv*[height<=360][vcodec^=avc1][protocol=https]+ba[protocol=https]/b[height<=480][protocol=https]' +
+          '/b[height<=480][protocol^=m3u8]/bv*[height<=480][protocol^=m3u8]+ba[protocol^=m3u8]/b[protocol=https]/b[protocol=http]/b[protocol^=m3u8]/b/bv*+ba', href], 30_000);
     } catch (e) {
       out = e.stdout; // --max-downloads exits 101 with the one video printed
       if (!out?.length) throw e;
     }
     const j = JSON.parse(String(out).trim().split(/\r?\n/)[0]);
     const fmts = j.requested_formats ?? [j];
-    // byte size of each stream (bounds the ffmpeg requests, see oGridCommand cut())
-    const pick = f => f && f.url && { url: f.url, size: Number(f.filesize || /[?&]clen=(\d+)/.exec(f.url)?.[1] || f.filesize_approx) || 0 };
-    const v = pick(fmts.find(f => f.vcodec && f.vcodec !== 'none')), a = pick(fmts.find(f => f.acodec && f.acodec !== 'none'));
-    if (!v || !j.duration) return null;
-    return { v, a: a || null, duration: Number(j.duration), page: j.webpage_url || href, title: j.title };
+    // byte size of each stream (bounds the ffmpeg requests, see oGridCommand cut()); generic pages often leave codecs unset
+    const vf = fmts.find(f => f.vcodec && f.vcodec !== 'none') ?? fmts.find(f => f.vcodec !== 'none');
+    // (YouTube live audio playlists say acodec unknown: an audio-only format is audio)
+    const af = fmts.find(f => f.acodec && f.acodec !== 'none') ?? fmts.find(f => f !== vf && f.vcodec === 'none') ?? (vf?.acodec !== 'none' ? vf : null);
+    const pick = f => f && f.url && { url: f.url, size: Number(f.filesize || /[?&]clen=(\d+)/.exec(f.url)?.[1] || f.filesize_approx) || 0, in: ffIn(f.url, f.http_headers ?? j.http_headers) };
+    const v = pick(vf), a = af === vf ? v : pick(af);
+    // DASH / f4m / ism fragment lists: ffmpeg can't open those URLs, wait for the download
+    if (!v || [vf, af].some(f => /dash|f4m|ism/i.test(f?.protocol || ''))) return null;
+    const live = !!j.is_live || !(Number(j.duration) > 0);
+    // live or HLS: no download, every chunk comes off the stream URLs
+    const stream = live || [vf, af].some(f => /^m3u8/.test(f?.protocol || ''));
+    return { v, a: a || null, duration: live ? Infinity : Number(j.duration), page: j.webpage_url || href, title: j.title, hls: stream, live };
   }
 
   /**
    * HLS (2026-10-22, owner: "m3u8 support for /stream"): a .m3u8 link plays straight off the playlist,
    * no download. VOD = ffmpeg seeks by segment (-ss per chunk); live (no duration) = every chunk is
    * recorded off the live edge in real time (build() records it to a .ts, then cuts that).
+   * Same for anything else ffmpeg opens: media files, DASH .mpd, rtmp/rtsp, Icecast-style streams.
    */
-  async hlsSource(link) {
+  async directSource(link) {
     const href = await this.checkLink(link);
-    const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', ...HLS_IN, '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', href], 30_000)));
-    if (!probe.streams?.some(s => s.codec_type === 'video')) throw new Error('that playlist has no picture');
+    const inArgs = ffIn(href);
+    const probe = JSON.parse(String(await run('ffprobe', ['-v', 'error', ...inArgs, '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', href], 30_000)));
+    if (!probe.streams?.some(s => s.codec_type === 'video')) throw new Error('that link has no picture');
     const duration = Number(probe.format?.duration);
     const live = !(duration > 0);
-    const st = { url: href, size: 0 };
-    return { v: st, a: st, duration: live ? Infinity : duration, page: href, hls: true, live };
+    const st = { url: href, size: 0, in: inArgs };
+    return { v: st, a: probe.streams.some(s => s.codec_type === 'audio') ? st : null, duration: live ? Infinity : duration, page: href, hls: true, live };
   }
 
   async fetchMedia(link, kind, withAudio = false, maxMin = this.config['max-minutes'] ?? 10) {
@@ -1704,7 +1749,7 @@ module.exports = class Media {
         if (!probe.streams?.[0]?.width) throw new Error('that link has no picture');
         total = Number(probe.format?.duration) || maxMin * 60;
       }
-      console.log(`[media] ogrid ${name}: source ready in ${Date.now() - t0ms} ms (${quick?.hls ? (quick.live ? 'live HLS' : 'HLS') : quick ? 'stream URL' : cached ? 'cache' : 'download'})`);
+      console.log(`[media] ogrid ${name}: source ready in ${Date.now() - t0ms} ms (${quick?.hls ? (quick.live ? 'live stream' : 'stream') : quick ? 'stream URL' : cached ? 'cache' : 'download'})`);
       const startAt = Math.max(0, Math.min(total - 1, opt('start') || 0));
       const seconds = Math.min(total - startAt, maxMin * 60, opt('len') || Infinity);
       const chunks = Math.max(1, Math.ceil(seconds / chunkSec));
@@ -1727,7 +1772,9 @@ module.exports = class Media {
         let rec = null;
         if (quick?.live) {
           rec = path.join(TMP, `og_${owner.id.slice(-12)}_${k}.ts`);
-          await run('ffmpeg', ['-v', 'error', '-y', ...HLS_IN, '-i', quick.v.url, '-t', String(dur), '-c', 'copy', '-f', 'mpegts', rec], (dur + 60) * 1000).catch(e => {
+          const sep = quick.a && quick.a !== quick.v; // separate audio stream: record both
+          await run('ffmpeg', ['-v', 'error', '-y', ...quick.v.in, '-i', quick.v.url, ...(sep ? [...quick.a.in, '-i', quick.a.url, '-map', '0:v:0', '-map', '1:a:0'] : []),
+            '-t', String(dur), '-c', 'copy', '-f', 'mpegts', rec], (dur + 60) * 1000).catch(e => {
             if (!fs.existsSync(rec) || !fs.statSync(rec).size) throw e;
           });
         }
@@ -1740,11 +1787,11 @@ module.exports = class Media {
         // 403) or comes back short falls back to the downloaded file.
         const cut = async (mk, st, ok) => {
           if (rec) return mk(rec, []);
-          if (quick?.hls) return mk(st.url, HLS_IN); // no file to fall back to
+          if (quick?.hls) return mk(st.url, st.in); // no file to fall back to
           if (file || !st) return mk(file ?? (await fileP), []);
           const end = st.size ? Math.min(st.size, Math.ceil(st.size * Math.min(1, (t0 + dur) / quick.duration) * 1.05 + 2e6)) : 0;
           try {
-            const r = await mk(st.url, end ? ['-end_offset', String(end)] : []);
+            const r = await mk(st.url, [...(st.in ?? []), ...(end ? ['-end_offset', String(end)] : [])]);
             if (ok(r)) return r;
             console.log(`[media] ogrid URL cut ${k} came back short, waiting for the file`);
           } catch (e) { console.log(`[media] ogrid URL cut ${k} failed (${String(e.message).slice(0, 80)}), waiting for the file`); }
