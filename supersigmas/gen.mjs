@@ -6,6 +6,8 @@
 //           P0/V0 lead, P1/V1 bass, P2/V2 sfx (synth speaker pitch / volume), state_
 //   node supersigmas/gen.mjs -> supersigmas/supersigmas.gen.ws (also run by build.mjs)
 
+import { midiSong, SONG_FILES } from './midisong.mjs';
+
 export const W = 48, H = 36, STRIP = 4;
 export const PAL = ['0d0a14', '2a1f3d', '4a2f6b', '1c1c24', 'f8d040', '5a5a66', '3e3e48', 'f4f4f4',
   'e03838', 'f8c0a0', '3868d8', '101010', 'f878c8', '78e8f8', '48c048', '8c5a30'];
@@ -34,14 +36,11 @@ const SN = Object.keys(SPRITES), S = Object.fromEntries(SN.map((k, i) => [k, i])
 const KSPR = [0, S.alpha0, S.beta0, S.giga0, S.stacy0, S.bell, S.crown, S.skin, S.heart, S.puff];
 const KANIM = [0, 1, 1, 1, 1, 0, 0, 0, 0, 0];
 
-// music (original). "E5:2" = E5 for 2 eighths, R = rest
+// music: 0 title = overtonight - mirrors demo, 1 gameplay (bosses too) = Clovis Reyes - Fluxxwave (Looksmaxxing)
+// (the owner's MIDIs, midisong.mjs), 2 game over jingle (original). "E5:2" = E5 for 2 eighths, R = rest
 const SONGS = [
-  { eighth: 4, loop: 1,
-    lead: 'E5:1 R:1 E5:1 G5:1 R:1 F#5:1 E5:1 R:1 | D5:1 R:1 D5:1 E5:1 R:1 B4:1 R:2 | E5:1 R:1 E5:1 G5:1 R:1 A5:1 G5:1 F#5:1 | E5:2 B4:1 D5:1 E5:2 R:2',
-    bass: 'E2:2 R:1 E2:1 E3:1 E2:1 R:2 | D2:2 R:1 D2:1 D3:1 D2:1 R:2 | C2:2 R:1 C2:1 C3:1 C2:1 R:2 | B1:2 R:1 B1:1 B2:1 B1:1 D2:1 D#2:1' },
-  { eighth: 3, loop: 1,
-    lead: 'E5:1 E5:1 R:1 E5:1 G5:1 R:1 A#5:1 R:1 | A5:1 G5:1 E5:1 R:1 D5:1 E5:1 R:2',
-    bass: 'E2:1 E3:1 E2:1 E3:1 E2:1 E3:1 E2:1 E3:1 | A#1:1 A#2:1 A#1:1 A#2:1 B1:1 B2:1 B1:1 B2:1' },
+  { loop: 1, voices: midiSong(SONG_FILES.mirrors) },
+  { loop: 1, voices: midiSong(SONG_FILES.fluxx) },
   { eighth: 4, loop: 0, lead: 'E5:2 D5:2 C5:2 B4:6', bass: 'A2:4 G2:4 E2:6' },
 ];
 const SFX = {
@@ -94,7 +93,7 @@ export function generate({ debug = false } = {}) {
   }
   const KW = KSPR.map((s, i) => i ? sw[s] : 0), KH = KSPR.map((s, i) => i ? sh[s] : 0);
   const voices = [[], []], vo = [[], []], vl = [[], []];
-  for (const s of SONGS) [s.lead, s.bass].forEach((txt, v) => { const n = parseVoice(txt, s.eighth); vo[v].push(voices[v].length); vl[v].push(n.length); voices[v].push(...n); });
+  for (const s of SONGS) [s.lead, s.bass].forEach((txt, v) => { const n = s.voices ? s.voices[v] : parseVoice(txt, s.eighth); vo[v].push(voices[v].length); vl[v].push(n.length); voices[v].push(...n); });
   const fxp = [], fxo = [], fxl = [];
   for (const k of Object.keys(SFX)) { fxo.push(fxp.length); fxl.push(SFX[k].length); fxp.push(...SFX[k]); }
   const OPEN = PAL.map((h, i) => i === 0 ? '' : `<color="${h}">`), CLOSE = PAL.map((_, i) => i === 0 ? '' : '</>');
@@ -345,7 +344,7 @@ mod newGame() {
   spawnT = 0
   stacyT = 120
   for k in 0..NK { kt[k] = 0 }
-  playSong(0)
+  playSong(1)
   say("Rizz. Mog. Looksmax. Go.", 60)
 }
 mod hurt(d: int) {
@@ -420,7 +419,6 @@ mod fireMog() {
           ky[k] = ky[k] + 4.0
           score += 500
           sfx(${FX.rizz})
-          playSong(0)
           say("GIGACHAD MOGGED. +500 RIZZ", 70)
           spawn(6, kx[k], ky[k] + 2.0, 0.0)
         }
@@ -463,7 +461,6 @@ mod spawner() {
     bossWave = wave
     spawn(3, edgeX(7), 16.0, 0.0)
     khp[kt.find(3)] = 20 + wave * 2
-    playSong(1)
     sfx(${FX.boss})
     say("GIGACHAD has entered the chat.", 70)
   }
