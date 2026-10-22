@@ -2570,6 +2570,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       TYPES[single.type](0, 0, sfx, sfy, single.seed, false, single.wares ?? single.god);
       vending(null, single.type, sfx, sfy, lastDoor, single.seed);
     });
+    stats.door = lastDoor; // mapgen's footpaths start here
     return stats;
   }
   if (village) {

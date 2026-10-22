@@ -50,6 +50,7 @@ export const STAGES = [
   { id: 'delta', phase: 'coast', title: 'River delta', groups: ['delta'], writes: 'deltaCell, arms, creeks', after: 'after coves; protected cells never change' },
   { id: 'weirs', phase: 'coast', title: 'Weir steps', groups: [], writes: 'weirCell', after: 'needs final river levels' },
   { id: 'cutWalls', phase: 'coast', title: 'Road cutting walls', groups: ['cut'], writes: 'cutRock cells (ground down to the road, old height kept), roofless tunnels opened', after: 'heights final except these walls' },
+  { id: 'footpaths', phase: 'coast', title: 'Footpaths', groups: ['foot'], writes: 'footCell (door-to-road paths of the lone buildings), wares + gods of the roadside buildings', after: 'heights final (after the cut walls); before the voxels take their surface materials' },
   { id: 'voxels', phase: 'carvers', title: 'Voxels', groups: [], writes: 'V (solid columns from H)', after: 'heights are final' },
   { id: 'desertGround', phase: 'carvers', title: 'Desert ground', groups: [], writes: 'dune/mesa materials', after: 'voxels exist' },
   { id: 'tunnels', phase: 'carvers', title: 'Road tunnels', groups: [], writes: 'carved tunnel voxels', after: 'roads + voxels' },

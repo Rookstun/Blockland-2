@@ -235,6 +235,20 @@ const SEWER_BRICK = [mat([112, 66, 52]), mat([98, 58, 46])];
 const SEWER_WALK = mat([104, 100, 94]);
 const SLUDGE = mat([84, 92, 40], { asset: 'PB_DefaultTile' });
 const SEWER_CEIL = mat([92, 70, 58], { asset: 'PB_DefaultTile' });
+// wild grass tones (2026-10-22, owner: "more dynamic grass colors"): five families x four
+// lightnesses, all in GRASS (every GRASS.includes test sees them); grassAt() picks one per
+// cell. Defined last so no older material id moves. Families: 0 shaded forest floor,
+// 1 the old green, 2 bright meadow, 3 warm sun-bleached, 4 cool blue-green (high or damp)
+const GRASS_FAM = [[62, 112, 50], [84, 140, 58], [104, 160, 62], [128, 152, 66], [74, 130, 82]];
+const GRASS_LIGHT = [0.84, 0.94, 1.04, 1.13];
+const GRASS_TONES = GRASS_FAM.map(c => GRASS_LIGHT.map(k => mat(c.map(v => Math.min(255, Math.round(v * k))))));
+GRASS.push(...GRASS_TONES.flat());
+// footpaths (2026-10-22): packed earth in the wild, flagstones on the building's own lot,
+// sandier earth in the desert
+const FOOTPATH = [mat([150, 124, 88]), mat([140, 114, 80]), mat([158, 134, 98])];
+const FOOTFLAG = [mat([150, 144, 136]), mat([134, 128, 120])];
+const FOOTSAND = mat([190, 164, 116]);
+const FOOT_MATS = [...FOOTPATH, ...FOOTFLAG, FOOTSAND];
 
 // --------------------------------------------------------------- dungeons --
 // Zelda-style temple dungeons from dungeon.mjs: floors of rooms on a 5 x 5
@@ -2672,6 +2686,170 @@ if (CUT_ON) {
   console.error(`cut walls: ${walls} rock cells, ${opened} roofless tunnel cells opened`);
 }
 
+stage('footpaths');
+// -------------------------------------------------------------- footpaths --
+// (2026-10-22, owner: "a second path subsystem that connects houses to roads or paths while
+// going around other houses and not through them. be cautious of overlaps and height
+// difference and failed placements") Every lone building (holy: houses, shops, temples, ...)
+// gets a one-cell footpath from its front door to the nearest road, hamlet lane, mountain
+// trail or earlier footpath (nearest buildings first, so later paths join earlier ones).
+// A dry build of each building (the same build decor makes) gives its door and the cells its
+// bricks stand on. Dijkstra over 4-way steps: never onto any building's bricks, around other
+// lots' yards where it can, off water, rivers and their banks, bridges, cut walls, dungeons,
+// the town and the hamlets; each step climbs at most foot.step bricks (the smoothing wedge over
+// 2 bricks a cell is a ~31 degree slope), climbs cost steeply so paths follow the contours. If
+// no such route exists one more brick is allowed and its steep steps graded (path cells off the
+// lots move one brick at most); else the building is logged with what blocked it and gets none.
+// footCell 1 earth, 2 flagstones on the building's own lot; claimed (reserved) in decor, after
+// the caves, so the cave search is unchanged.
+const footCell = new Uint8Array(N * N);
+{
+  // weapon shops' wares: armories sell higher tiers the further out they stand, gunsmiths every gun;
+  // temples and shrines, each to its own god (gods.json lists them)
+  const WSHOP_TIERS = [['steel', 'black'], ['mithril', 'adamant'], ['adamant', 'rune']];
+  const WSHOP_GUNS = ['derringer', 'revolver', 'huntingshotgun', 'leveraction', 'boltaction', 'magnum'];
+  holy.filter(v => v.kind === 'armory').sort((a, b) => townDist(a.x, a.y) - townDist(b.x, b.y)).forEach((v, k) => {
+    v.wares = WSHOP_TIERS[Math.min(k, WSHOP_TIERS.length - 1)].flatMap(t => [`${t}_dagger`, t, `${t}_longsword`].map(tier => ({ tier })));
+  });
+  for (const v of holy) if (v.kind === 'gunsmith') v.wares = WSHOP_GUNS.map(g => ({ tier: g, prefab: 'gun_' + g }));
+  for (const v of holy) if (v.kind === 'temple' || v.kind === 'shrine') v.god = makeGod(v.seed, townRnd);
+}
+if (tune('foot.on', 1, 'footpaths from the lone buildings to the roads (0 = none)')) {
+  const STEP = tune('foot.step', 2, 'most bricks a footpath climbs between cells');
+  const REACH = tune('foot.reach', 90, 'longest footpath, cells');
+  // the cells each building's bricks stand on (low bricks only: walking under an eave is fine)
+  const occ = new Int16Array(N * N), lotOf = new Int16Array(N * N);
+  const doors = [];
+  holy.forEach((v, k) => {
+    for (let x = v.x - v.r; x <= v.x + v.r; x++) for (let y = v.y - v.r; y <= v.y + v.r; y++) if (inBounds(x, y) && reserved[x * N + y]) lotOf[x * N + y] = k + 1;
+    const dry = makeBuilder();
+    const st = buildTown({ put: (br, x, y, z) => dry.add({ ...br, position: [x, y, z] }, br.asset ?? 'box'), free: (x0, y0, z0, x1, y1, z1) => dry.free([x0, y0, z0], [x1, y1, z1]),
+      orientFor, rnd: townRnd, plan: null, single: { type: v.kind, seed: v.seed, god: v.god, facing: v.facing, wares: v.wares } });
+    let real = 0;
+    for (const b of dry.bricks) {
+      if (b.ghost) continue; // legacy buildings: never in the world
+      real++;
+      const [lo, hi] = worldBox(b, BUILDER_FIXED);
+      if (hi[2] <= 0 || lo[2] >= 40) continue;
+      // local units from the lot cell's low corner (decor's wrap origin)
+      for (let i = Math.floor((lo[0] + 2) / CELL); i <= Math.floor((hi[0] - 2) / CELL); i++)
+        for (let j = Math.floor((lo[1] + 2) / CELL); j <= Math.floor((hi[1] - 2) / CELL); j++)
+          if (inBounds(v.x + i, v.y + j)) occ[(v.x + i) * N + v.y + j] = k + 1;
+    }
+    doors.push({ v, k, door: st.door, real });
+  });
+  // near another building's bricks (one cell round them): dearer, so paths keep a little off walls
+  const nearOcc = new Int16Array(N * N);
+  for (let x = 1; x < N - 1; x++) for (let y = 1; y < N - 1; y++) {
+    const o = occ[x * N + y];
+    if (o) for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) if (!occ[(x + a) * N + y + b]) nearOcc[(x + a) * N + y + b] = o;
+  }
+  const dungeonNear = new Uint8Array(N * N); // 0 unknown, 1 clear, 2 too near a dungeon
+  const target = c => {
+    const x = (c / N) | 0, y = c % N;
+    if (footCell[c] === 1) return true;
+    if (villagePaved[c] || tierMtn.trail[c]) return true;
+    return !!pathCell[c] && tunnelZ[c] < 0 && !deck[c] && !riverCell[c] && !weirCell[c] && !cutRock[c] && H[c] > SEA + 1 && inBounds(x, y);
+  };
+  // why a cell is off limits ('' = open ground); a building that gets no path logs the tally
+  const blockedBy = c => {
+    const x = (c / N) | 0, y = c % N;
+    if (occ[c]) return 'building';
+    if (H[c] <= SEA + 1) return 'water';
+    if (pathCell[c]) return 'tunnel/bridge road';
+    if (footCell[c] === 2) return 'other lot flags';
+    if (riverCell[c] || deck[c] || weirCell[c]) return 'river';
+    if (cutRock[c]) return 'cut wall';
+    if (swampCell[c] || volcanoCell[c] || trenchCell[c] || coveCell[c] || deltaCell[c] || tunnelZ[c] >= 0) return 'swamp/volcano/trench/coast';
+    if (keepOut[c]) return 'keepOut';
+    if (townKind[c] || townNear[c]) return 'town';
+    if (terraceCell[c] || villageDist(x, y) <= VILLAGE.r) return 'hamlet';
+    if (tierMtn.cells[c]) return 'tier mountain';
+    if (reserved[c] && !lotOf[c]) return 'ruins/camp/outpost'; // reserved but no building's lot
+    if (hengeDist(x, y) <= 1) return 'henge';
+    if (!dungeonNear[c]) dungeonNear[c] = DUNGEONS.some(d => footDist(d, x, y) <= 2) ? 2 : 1;
+    return dungeonNear[c] === 2 ? 'dungeon' : '';
+  };
+  const passable = c => !blockedBy(c);
+  // binary heap of [cost, cell]
+  const heap = [], push = (f, c) => { heap.push([f, c]); let i = heap.length - 1; while (i) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  const W = 2 * REACH + 1, cost = new Float64Array(W * W), from = new Int32Array(W * W);
+  const route = (s, own, step, why = null) => {
+    const sx = (s / N) | 0, sy = s % N;
+    const li = c => { const x = ((c / N) | 0) - sx + REACH, y = (c % N) - sy + REACH; return x < 0 || y < 0 || x >= W || y >= W ? -1 : x * W + y; };
+    cost.fill(Infinity); heap.length = 0;
+    cost[li(s)] = 0; from[li(s)] = -1; push(0, s);
+    while (heap.length) {
+      const [f, c] = pop(), lc = li(c);
+      if (f > cost[lc]) continue;
+      if (c !== s && target(c)) { const out = []; for (let q = from[lc]; q !== -1 && q !== s; q = from[li(q)]) out.push(q); out.reverse(); return { cells: [s, ...out], end: c }; }
+      const x = (c / N) | 0, y = c % N, p = from[lc];
+      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!inBounds(x + a, y + b)) continue;
+        const n = (x + a) * N + y + b, ln = li(n);
+        if (ln < 0) { if (why) why.reach = (why.reach ?? 0) + 1; continue; }
+        const dh = Math.abs(H[n] - H[c]);
+        if (dh > step) { if (why) why.step = (why.step ?? 0) + 1; continue; }
+        const goal = target(n);
+        if (!goal) { const k = blockedBy(n); if (k) { if (why) why[k] = (why[k] ?? 0) + 1; continue; } }
+        let g = cost[lc] + 1 + dh * (1 + dh * 2) + hash(x + a, y + b, 2401) * 0.25; // a 1-brick step costs 3 cells, 2 bricks 10, 3 bricks 21
+        if (!goal) {
+          if (lotOf[n] && lotOf[n] !== own) g += 5; // through another lot's yard
+          if (nearOcc[n] && nearOcc[n] !== own) g += 2; // hugging another building's wall
+        }
+        if (p >= 0 && ((p / N) | 0) - x !== -a && (p % N) - y !== -b) g += 0.35; // a turn
+        if (g < cost[ln]) { cost[ln] = g; from[ln] = c; push(g, n); }
+      }
+    }
+    return null;
+  };
+  const tally = { laid: 0, joined: { road: 0, footpath: 0, lane: 0, trail: 0 }, steep: 0, graded: 0, cells: 0, failed: 0, ghost: 0, atRoad: 0 };
+  doors.sort((p, q) => pathDist[p.v.x * N + p.v.y] - pathDist[q.v.x * N + q.v.y]);
+  for (const { v, k, door, real } of doors) {
+    const own = k + 1, tag = `${v.kind}@${v.x},${v.y}`;
+    if (!real) { tally.ghost++; continue; }
+    const [fx, fy] = v.facing;
+    // out of the door (or the middle, if the type keeps no door) along the facing, past the building's own bricks
+    let x = v.x + Math.floor(((door?.[0] ?? CELL / 2) + fx * CELL / 2) / CELL), y = v.y + Math.floor(((door?.[1] ?? CELL / 2) + fy * CELL / 2) / CELL);
+    for (let i = 0; i < v.r + 4 && inBounds(x, y) && occ[x * N + y] === own; i++) { x += fx; y += fy; }
+    const s = x * N + y;
+    if (!inBounds(x, y) || occ[s]) { tally.failed++; console.error(`footpaths: ${tag} no free ground at the door`); continue; }
+    if (target(s)) { tally.atRoad++; continue; }
+    if (!passable(s) && !lotOf[s]) { tally.failed++; console.error(`footpaths: ${tag} the door opens onto blocked ground`); continue; }
+    let r = route(s, own, STEP);
+    const relaxed = !r;
+    if (!r) r = route(s, own, STEP + 1);
+    if (!r) {
+      const why = {}; route(s, own, STEP + 1, why);
+      tally.failed++; console.error(`footpaths: ${tag} no route within ${REACH} cells; blocked by ${JSON.stringify(why)}`); continue;
+    }
+    const cells = [...r.cells, r.end], h0 = cells.map(c => H[c]);
+    if (relaxed) {
+      // a route that needed one brick more: grade its steep steps, each free cell (not on the
+      // building's lot, not the road it joins) by one brick at most
+      for (let pass = 0; pass < 3; pass++)
+        for (let i = 1; i < cells.length - 1; i++) {
+          const c = cells[i];
+          if (lotOf[c]) continue;
+          const lo = Math.max(H[cells[i - 1]], H[cells[i + 1]]) - STEP, hi = Math.min(H[cells[i - 1]], H[cells[i + 1]]) + STEP;
+          const want = Math.max(lo, Math.min(hi, H[c]));
+          if (lo <= hi && want !== H[c] && Math.abs(want - h0[i]) <= 1) H[c] = want;
+        }
+      const graded = cells.filter((c, i) => H[c] !== h0[i]).length;
+      tally.graded += graded;
+      if (cells.some((c, i) => i && Math.abs(H[c] - H[cells[i - 1]]) > STEP)) tally.steep++;
+    }
+    // check before laying: no cell on a building, no climb over the limit, every step 4-way
+    const bad = cells.findIndex((c, i) => (i < cells.length - 1 && occ[c]) || (i && (Math.abs(H[c] - H[cells[i - 1]]) > STEP + 1 || Math.abs(((c / N) | 0) - ((cells[i - 1] / N) | 0)) + Math.abs((c % N) - (cells[i - 1] % N)) !== 1)));
+    if (bad >= 0) { cells.forEach((c, i) => { H[c] = h0[i]; }); tally.failed++; console.error(`footpaths: ${tag} route failed its check at step ${bad}`); continue; }
+    for (const c of r.cells) footCell[c] = lotOf[c] === own ? 2 : 1;
+    tally.laid++; tally.cells += r.cells.length;
+    tally.joined[footCell[r.end] === 1 ? 'footpath' : villagePaved[r.end] ? 'lane' : pathCell[r.end] ? 'road' : 'trail']++;
+  }
+  console.error(`footpaths: ${JSON.stringify(tally)} of ${holy.length} lone buildings`);
+}
+
 if (process.env.MAPGEN_HDUMP) fs.writeFileSync(process.env.MAPGEN_HDUMP, Buffer.from(H.buffer, H.byteOffset, H.byteLength));
 stage('voxels');
 // ----------------------------------------------------------------- voxels --
@@ -2684,6 +2862,25 @@ stage('desertGround');
 // ----------------------------------------------------------------- desert --
 // (the desert's site and its levelling moved up, before the hamlets: see 'desert site')
 for (const v of villages) v.desert = desertW(v.x, v.y) > 0.5;
+
+// wild grass (2026-10-22): the family follows what grows there (groundCover's own forest and
+// meadow fields: dark under the woods, bright in the flower meadows), a slow warm/cool drift,
+// height (cooler and bluer up high) and damp ground by the river and the shore; the lightness
+// mottles at a finer grain. Edges between families are dithered a few cells wide, not banded.
+const grassAt = (x, y, h, wx, wy) => {
+  const forest = fbm2(wx / 1500, wy / 1500, 2), meadow = fbm2(wx / 700 + 300, wy / 700 - 40, 3);
+  const drift = fbm2(wx / 1300 + 41, wy / 1300 - 17, 3);
+  const alt = smooth(SEA + 30, SEA + 75, h), damp = Math.max(1 - smooth(4, 16, riverD[x * N + y]), 1 - smooth(SEA + 2, SEA + 6, h));
+  const r = hash(x, y, 2201), band = (v, at, w) => r < smooth(at - w, at + w, v); // dithered threshold
+  let fam = 1;
+  if (band(drift, 0.22, 0.12)) fam = 3;
+  else if (band(-drift, 0.22, 0.12)) fam = 4;
+  if (band(alt + damp * 0.8, 0.6, 0.2)) fam = 4;
+  if (band(meadow, 0.12, 0.06)) fam = drift > 0.3 ? 3 : 2;
+  if (band(forest, 0.08, 0.05)) fam = 0;
+  const lt = (fbm2(wx / 240 + 5, wy / 240 - 11, 2) + 1) * 2 + (hash(x, y, 2202) - 0.5) * 0.7 + alt * 0.6 - damp * 0.5;
+  return GRASS_TONES[fam][Math.max(0, Math.min(3, Math.floor(lt)))];
+};
 
 for (let x = 0; x < N; x++)
   for (let y = 0; y < N; y++) {
@@ -2713,6 +2910,7 @@ for (let x = 0; x < N; x++)
     else if (hengeDist(x, y) <= 0) [top, sub] = [Math.hypot(x - henge.x0 - (henge.n >> 1), y - henge.y0 - (henge.n >> 1)) < 6.5 ? DIRT : GRASS[shade], DIRT];
     else if (pathCell[x * N + y] && h > SEA + 1 && (slope < 4 || roadGraded[x * N + y])) [top, sub] = [volcanoCell[x * N + y] === 2 ? GRAVEL : PATH, DIRT];
     else if (tierMtn.trail[x * N + y] && !pathCell[x * N + y]) [top, sub] = [PATH, DIRT]; // the tiered mountains' trail
+    else if (footCell[x * N + y]) [top, sub] = [footCell[x * N + y] === 2 ? FOOTFLAG[(x + y) & 1] : desertW(x, y) > 0.3 ? FOOTSAND : FOOTPATH[Math.floor(hash(x, y, 2301) * 3)], DIRT]; // footpaths
     else if (volcanoCell[x * N + y] === 3) [top, sub] = [LAVA, BASALT[1]];
     else if (volcanoCell[x * N + y]) [top, sub] = [slope < 3 && fbm2(wx / 500 + 3, wy / 500 + 8, 2) > 0.05 ? ASH : BASALT[shade & 1], BASALT[1]];
     else if (h < SEA - 1) [top, sub] = [h < SEA - 6 ? GRAVEL : SAND, SAND];
@@ -2726,7 +2924,7 @@ for (let x = 0; x < N; x++)
     else if (h > 118 + noise2(wx / 400, wy / 400) * 8) [top, sub] = [SNOW, ROCK[0]];
     else if ((shw = shrubW(x, y)) > 0.5 || (shw > 0.15 && hash(x, y, 432) < (shw - 0.15) / 0.35)) [top, sub] = slope >= 4 ? [ROCK[shade & 1], ROCK[shade & 1]] : [SCRUB[shade & 1], DIRT];
     else if (slope >= 4 || h > 96) [top, sub] = [ROCK[shade & 1], ROCK[shade & 1]];
-    else [top, sub] = [GRASS[shade], DIRT];
+    else [top, sub] = [grassAt(x, y, h, wx, wy), DIRT];
     surfaceMat[x * N + y] = top;
     // a terrace stepping down 2+ bricks to a neighbour: masonry down the exposed face
     let wallFrom = h;
@@ -3716,6 +3914,19 @@ if (opt('--probe', null)) {
 stage('decor');
 // ------------------------------------------------------------------ decor --
 const at = (x, y, z) => [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, z * VZ];
+// footpaths: still whole after the carvers? (a cave mouth's rock face or a carve could cut one;
+// the cave search ran without them so no cave moved.) Then claim them: signs, details, trees,
+// plants and checkpoints all keep off reserved cells
+{
+  let laid = 0, broken = 0;
+  for (let c = 0; c < N * N; c++) {
+    if (!footCell[c]) continue;
+    const x = (c / N) | 0, y = c % N;
+    if (!FOOT_MATS.includes(surfaceMat[c]) || V[vi(x, y, H[c])] === 0) { broken++; if (broken <= 5) console.error(`footpaths: cell ${x},${y} lost to the carvers`); }
+    reserved[c] = 1; laid++;
+  }
+  console.error(`footpaths: ${laid} cells reserved, ${broken} cut by the carvers`);
+}
 // ---------------------------------------- ruins, goblin camps, details --
 // (ruins.mjs) each through its own overlap guard; their cells are reserved, so
 // the trees, boulders and plants below keep off them
@@ -3756,16 +3967,8 @@ for (const at of sewerPots) pots.push({ at, where: 'sewer' });
     potAt(w, o[0] - CELL / 2, o[1] - CELL / 2, o[2], st.pots, 'camp');
     v.goblins = st.spots.length;
   }
-  // weapon shops' wares: armories sell higher tiers the further out they stand, gunsmiths every gun
-  const WSHOP_TIERS = [['steel', 'black'], ['mithril', 'adamant'], ['adamant', 'rune']];
-  const WSHOP_GUNS = ['derringer', 'revolver', 'huntingshotgun', 'leveraction', 'boltaction', 'magnum'];
-  holy.filter(v => v.kind === 'armory').sort((a, b) => townDist(a.x, a.y) - townDist(b.x, b.y)).forEach((v, k) => {
-    v.wares = WSHOP_TIERS[Math.min(k, WSHOP_TIERS.length - 1)].flatMap(t => [`${t}_dagger`, t, `${t}_longsword`].map(tier => ({ tier })));
-  });
-  for (const v of holy) if (v.kind === 'gunsmith') v.wares = WSHOP_GUNS.map(g => ({ tier: g, prefab: 'gun_' + g }));
-  // temples and shrines, each to its own god (gods.json lists them)
+  // (weapon shops' wares and the gods are given out in the footpaths stage: its dry builds need them)
   for (const v of holy) {
-    if (v.kind === 'temple' || v.kind === 'shrine') v.god = makeGod(v.seed, townRnd);
     const o = at(v.x, v.y, v.h + 1), w = wrap(o[0] - CELL / 2, o[1] - CELL / 2, o[2]);
     const st = buildTown({ put: w.put, free: w.free, orientFor, rnd: townRnd, plan: null, single: { type: v.kind, seed: v.seed, god: v.god, facing: v.facing, wares: v.wares } });
     for (const hs of st.houseShops ?? []) wildShops.push({ at: [o[0] - CELL / 2 + hs.at[0], o[1] - CELL / 2 + hs.at[1], o[2] + hs.at[2]], tier: hs.tier, orient: hs.orient, house: true, ...(hs.prefab ? { prefab: hs.prefab } : {}) });
@@ -4306,10 +4509,10 @@ const deathProps = { graves: 0, pikes: 0, lanterns: 0, eyes: 0, spawners: 0 };
   // a flat free cell: level with its 8 neighbours, nothing on it, nothing in the air above for `up` bricks
   const flat = (x, y, up, open = true) => {
     const i = x * N + y, h = H[i];
-    if (!inMap(x, y) || deathW[i] < 0.4 || pathCell[i] || keepOut[i] || volcanoCell[i] || V[vi(x, y, h)] === 0) return false;
+    if (!inMap(x, y) || deathW[i] < 0.4 || pathCell[i] || footCell[i] || keepOut[i] || volcanoCell[i] || V[vi(x, y, h)] === 0) return false;
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
       const j = (x + dx) * N + y + dy;
-      if (!inMap(x + dx, y + dy) || H[j] !== h || rampCol[j] || capCol[j] || pathCell[j] || (dx === 0 && dy === 0 && blocked[j]) || (open && canopy[j])) return false;
+      if (!inMap(x + dx, y + dy) || H[j] !== h || rampCol[j] || capCol[j] || pathCell[j] || footCell[j] || (dx === 0 && dy === 0 && blocked[j]) || (open && canopy[j])) return false;
     }
     for (let z = h + 1; z <= Math.min(NZ - 1, h + up); z++) if (V[vi(x, y, z)]) return false;
     return true;
