@@ -7,6 +7,17 @@
 // sender) if set, else the bot posts "**name**: text". Mentions never ping.
 
 const API = 'https://discord.com/api/v10';
+const fs = require('fs');
+const STATUS = require('path').join(__dirname, 'status.json');
+// plugin console output doesn't reach the game log: keep a status file to read over ssh
+const status = {};
+const note = (k, v) => {
+  status[k] = v;
+  status.at = new Date().toISOString();
+  try {
+    fs.writeFileSync(STATUS, JSON.stringify(status, null, 1));
+  } catch {}
+};
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // game rich text (same as chatbot sanitize)
 const gameSafe = s =>
@@ -57,8 +68,11 @@ module.exports = class Discord {
     on('chat', this.onChat);
     on('join', p => this.config.joins !== false && this.send(null, `**${mdSafe(p.name)}** joined the server`));
     on('leave', p => this.config.joins !== false && this.send(null, `**${mdSafe(p.name)}** left the server`));
-    if (!this.config.token || !this.config.channel) console.warn('[discord] set token + channel in the plugin config');
-    else this.connect();
+    if (!this.config.token || !this.config.channel) note('state', 'no token/channel');
+    else {
+      note('state', 'connecting');
+      this.connect();
+    }
     return { registeredCommands: [] };
   }
 
@@ -113,7 +127,8 @@ module.exports = class Discord {
       await sleep(Math.ceil((j.retry_after ?? 1) * 1000));
       return this.post(name, content, tries + 1);
     }
-    if (!res.ok) console.error('[discord] post', res.status, (await res.text().catch(() => '')).slice(0, 200));
+    if (!res.ok) note('postError', `${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
+    else note('lastToDiscord', content.slice(0, 80));
   }
 
   // ---------- discord -> game ----------
@@ -147,15 +162,18 @@ module.exports = class Discord {
       else if (p.op === 7 || p.op === 9) ws.close(4900);
       else if (p.op === 0 && p.t === 'READY') {
         this.botId = p.d.user.id;
-        console.log(`[discord] connected as ${p.d.user.username}`);
-      } else if (p.op === 0 && p.t === 'MESSAGE_CREATE') this.onDiscord(p.d);
+        note('state', `connected as ${p.d.user.username}`);
+        note('guilds', p.d.guilds?.length ?? 0);
+      } else if (p.op === 0 && p.t === 'GUILD_CREATE') note('guild', p.d.name);
+      else if (p.op === 0 && p.t === 'MESSAGE_CREATE') this.onDiscord(p.d);
     };
     ws.onclose = ev => {
       clearInterval(this.hb);
       if (this.stopped || this.ws !== ws) return;
-      if (ev.code === 4004) return console.error('[discord] bad bot token: relay off');
+      note('closed', ev.code);
+      if (ev.code === 4004) return note('state', 'bad bot token');
       if (ev.code === 4014)
-        return console.error('[discord] turn on MESSAGE CONTENT INTENT (Developer Portal -> Bot), then reload: relay off');
+        return note('state', 'MESSAGE CONTENT INTENT is off');
       console.warn(`[discord] gateway closed ${ev.code}, reconnecting in 5 s`);
       setTimeout(() => this.connect(), 5000);
     };
@@ -184,6 +202,7 @@ module.exports = class Discord {
     const ref = m.referenced_message?.author;
     if (ref) text = `(to ${ref.global_name || ref.username}) ${text}`;
     text = text.slice(0, 400);
+    note('lastFromDiscord', `${name}: ${text.slice(0, 80)}`);
     this.omegga.writeln(`br.Chat.Broadcast <color="7289da"><b>[Discord]</> ${gameSafe(name)}</>: ${gameSafe(text)}`);
   }
 };
