@@ -5371,15 +5371,7 @@ const lawnStats = { patches: 0, tufts: 0, daisies: 0, pebbles: 0, rings: 0 };
     const [a, b] = k.split(',').map(Number), r = hash(a, b, 612), [x0, y0] = W(a, b);
     if (!clearOf(x0 + 5, y0 + 5)) continue;
     const zb = patch.has(k) ? z + 2 : z;
-    if (r < 0.035) {
-      const n = 3 + Math.floor(hash(a, b, 613) * 3);
-      let laid = 0;
-      for (let i = 0; i < n; i++) {
-        const u = 2 * Math.floor(hash(a, b, 620 + i) * 4), v = 2 * Math.floor(hash(a, b, 630 + i) * 4), h = 6 + 2 * Math.floor(hash(a, b, 640 + i) * 6);
-        if (add([x0 + u, y0 + v, zb], [x0 + u + 2, y0 + v + 2, zb + h], BLADE[Math.floor(hash(a, b, 650 + i) * BLADE.length)], 'tuft')) laid++;
-      }
-      if (laid) lawnStats.tufts++;
-    } else if (r < 0.06 && patch.has(k)) {
+    if (r >= 0.035 && r < 0.06 && patch.has(k)) { // (grass tufts 0-0.035 were removed: owner 2026-10-23)
       // a daisy: a 2-high white head with a yellow eye
       if (add([x0 + 2, y0 + 2, zb], [x0 + 8, y0 + 8, zb + 2], [240, 238, 228], 'daisy')) { add([x0 + 4, y0 + 4, zb + 2], [x0 + 6, y0 + 6, zb + 4], [236, 196, 60], 'daisy'); lawnStats.daisies++; }
     } else if (r >= 0.052 && r < 0.062) {
