@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { dutchColonial } from './dutchcolonial.mjs';
 import { splitLevel } from './splitlevel.mjs';
 import { faire } from './faire.mjs';
+import { EXTERNAL_ASSETS } from './ruins.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
 const COLS = +arg('cols', 4), ROWS = +arg('rows', 3);
@@ -41,6 +42,9 @@ for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++, i++) {
 
 fs.mkdirSync(OUT, { recursive: true });
 fs.writeFileSync(path.join(OUT, 'bricks.json'), JSON.stringify(bricks));
+// deploy chunks: add_NNN.json = {bricks, externalAssets} (text components index externalAssets), 4000 bricks each
+const CH = 4000;
+for (let n = 0; n * CH < bricks.length; n++) fs.writeFileSync(path.join(OUT, `add_${String(n).padStart(3, '0')}.json`), JSON.stringify({ bricks: bricks.slice(n * CH, (n + 1) * CH), externalAssets: EXTERNAL_ASSETS }));
 fs.writeFileSync(path.join(OUT, 'grid.json'), JSON.stringify({ cols: COLS, rows: ROWS, cell: CELL, origin: [OX, OY], houses: grid }, null, 1));
 const total = grid.reduce((a, g) => a + g.bricks, 0);
 console.error(`housegrid ${COLS} x ${ROWS} = ${grid.length} houses, ${total} bricks, origin ${OX},${OY} -> ${OUT}`);
