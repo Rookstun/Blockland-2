@@ -1446,7 +1446,7 @@ const deathForest = { cells: 0, x: 0, y: 0 };
 // erosion that only cuts, so every step left there is wedgeable. Cells that
 // must not move (town, hamlets, dungeons, trench, volcano, roads, bridge
 // decks) keep their height and the ground round them is cut to meet them.
-const VCAP = { s1: tune('river.capSlope', 1, 'valley cap: bricks per cell near the river'), e1: Math.round(tune('river.capNear', 36, 'valley cap: cells at the gentle slope (x K)') * K),
+const VCAP = { s1: tune('river.capSlope', 1, 'valley cap: bricks per cell near the river'), e1: Math.round(tune('river.capNear', 8, 'valley cap: cells at the gentle slope (x K)') * K),
   s2: tune('river.capSlope2', 3, 'valley cap: bricks per cell further out (keep under smooth.maxRise)'), blur: tune('river.capBlur', 3, 'valley cap: rounding passes') };
 function riverValleyCap() {
   if (VCAP.s1 >= 100) return;
