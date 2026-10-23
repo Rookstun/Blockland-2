@@ -768,9 +768,11 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   // shop stands are prefabs loaded later (mapgen shops.json): each gets a ghost box here so nothing is built
   // where it will stand. face = the way its button looks (local).
   const stands = [];
-  // tables and counters show daggers only: a bare stand hangs its item ~25 (dagger) to ~55 (sword) under
-  // itself, so a dagger stand 28 over a top sits on it; swords hang on the wall racks (owner screenshots 2026-10-19)
-  const dagger = k => `shop_${tiers[k % tiers.length]}_dagger_bare`;
+  // tables and counters show daggers only, swords stand on the wall racks' benches (owner screenshots 2026-10-19)
+  // (2026-10-23, owner: "make the pedestals visible and place them not floating"): the full stand prefabs (round
+  // pedestal 16 high, item standing up from it, button on its side) with the pedestal ON the top: load point = top + 12,
+  // and the load point is 2 units nearer the button than the pedestal centre (measured live)
+  const dagger = k => `shop_${tiers[k % tiers.length]}_dagger`;
   // (owner 2026-10-19: "you arent using the system for weapons ... all materials of dagger can be bought in this
   // shop from bronze to rune") a drawn shop sells ONE line, every material / model in order, priced by the
   // stand prefabs: blades (bronze..rune of one type) on the racks (daggers also on the counter: short enough),
@@ -779,15 +781,15 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   const LINE = (() => {
     const u = hash(seed, 91);
     // (2026-10-21, owner: "do not sell sabers and do not sell spathas") their slots are longsword / sword now (same rolls for every other shop)
-    if (u < 0.7) { const ty = ['dagger', '', 'longsword', 'longsword', '', '2h'][Math.floor(hash(seed, 92) * 6)]; return { kind: 'blade', name: ty || 'sword', short: ty === 'dagger', rack: T7.map(t => `shop_${t}${ty ? '_' + ty : ''}_bare`), cas: [] }; }
-    if (u < 0.85) { const b = ['bow', 'oak', 'willow', 'maple', 'yew', 'magic']; return { kind: 'bow', name: 'bows', short: false, rack: b.map(x => `bow_${x}_bare`), cas: b.map(x => `bow_${x}_case`) }; }
-    return { kind: 'gun', name: 'guns', short: false, rack: ['huntingshotgun', 'leveraction', 'boltaction', 'magnum'].map(x => `gun_${x}_bare`), cas: ['derringer', 'guardpistol', 'revolver'].map(x => `gun_${x}_case`) };
+    if (u < 0.7) { const ty = ['dagger', '', 'longsword', 'longsword', '', '2h'][Math.floor(hash(seed, 92) * 6)]; return { kind: 'blade', name: ty || 'sword', short: ty === 'dagger', rack: T7.map(t => `shop_${t}${ty ? '_' + ty : ''}`), cas: [] }; }
+    if (u < 0.85) { const b = ['bow', 'oak', 'willow', 'maple', 'yew', 'magic']; return { kind: 'bow', name: 'bows', short: false, rack: b.map(x => `bow_${x}`), cas: b.map(x => `bow_${x}_case`) }; }
+    return { kind: 'gun', name: 'guns', short: false, rack: ['huntingshotgun', 'leveraction', 'boltaction', 'magnum'].map(x => `gun_${x}`), cas: ['derringer', 'guardpistol', 'revolver'].map(x => `gun_${x}_case`) };
   })();
   let wq = 0; const nextWare = () => (wq < LINE.rack.length ? LINE.rack[wq++] : null);
   let cq = 0; const nextCase = () => (cq < LINE.cas.length ? LINE.cas[cq++] : null);
   // a house's wall table: daggers from bronze up
-  let tq = 0; const nextDagger = () => (tq < T7.length ? `shop_${T7[tq++]}_dagger_bare` : null);
-  const blade = k => { const t = tiers[k % tiers.length], ty = ['dagger', '', 'longsword', 'longsword', ''][Math.floor(hash(k, seed, 61) * 5)]; return `shop_${t}${ty ? '_' + ty : ''}_bare`; };
+  let tq = 0; const nextDagger = () => (tq < T7.length ? `shop_${T7[tq++]}_dagger` : null);
+  const blade = k => { const t = tiers[k % tiers.length], ty = ['dagger', '', 'longsword', 'longsword', ''][Math.floor(hash(k, seed, 61) * 5)]; return `shop_${t}${ty ? '_' + ty : ''}`; };
   const CASEW = ['gun_derringer_case', 'gun_guardpistol_case', 'gun_revolver_case', 'bow_bow_case', 'bow_oak_case'];
   const standAt = (x, y, zTop, face, prefab, hw = 10) => {
     if (!B.free([X0 + x - hw, Y0 + y - hw, zTop], [X0 + x + hw, Y0 + y + hw, zTop + 36])) { if (process.env.FD) console.error('stand blocked', x, y, zTop); return false; }
@@ -810,26 +812,28 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
     for (const a of [a0 + 2, a1 - 6]) for (const c of inward > 0 ? [c1 - 4] : [c0]) axis === 'y' ? opt(c, a, z0, c + 4, a + 4, top - 4, { color: WOOD[0] }, 'table leg') : opt(a, c, z0, a + 4, c + 4, top - 4, { color: WOOD[0] }, 'table leg');
     axis === 'y' ? opt(inward > 0 ? c0 : c1 - 2, a0 + 2, top - 8, inward > 0 ? c0 + 2 : c1, a1 - 2, top - 4, { color: WOOD[0] }, 'table apron') : opt(a0 + 2, inward > 0 ? c0 : c1 - 2, top - 8, a1 - 2, inward > 0 ? c0 + 2 : c1, top - 4, { color: WOOD[0] }, 'table apron');
     let k = 0;
-    const mid = (c0 + c1) / 2, face = axis === 'y' ? (inward > 0 ? '+x' : '-x') : (inward > 0 ? '+y' : '-y');
+    const mid = (c0 + c1) / 2 + inward * 2, face = axis === 'y' ? (inward > 0 ? '+x' : '-x') : (inward > 0 ? '+y' : '-y');
     for (let i = 0; i < n; i++) {
       const a = Math.round((a0 + (a1 - a0) * (i + 0.5) / n) / 2) * 2;
-      if (axis === 'y' ? standAt(mid, a, top + 16, face, nextDagger) : standAt(a, mid, top + 16, face, nextDagger)) k++;
+      if (axis === 'y' ? standAt(mid, a, top, face, nextDagger) : standAt(a, mid, top, face, nextDagger)) k++;
     }
     return k;
   }
-  // a wall rack (the drawing's red): backboard on the wall, a plank shelf, bare stands on it
+  // a wall rack (the drawing's red): backboard on the wall, a low bench, stands on it (pedestals visible, the
+  // blades standing up in front of the board, 2026-10-23)
   function wallRack(axis, wallFace, inward, a0, a1, z0 = F) {
     const n = Math.floor((a1 - a0 - 10) / 30);
     if (n < 1) return;
-    const sh = z0 + 48, back = (p, q, z, zt, m, lab) => (axis === 'y' ? opt(inward > 0 ? wallFace + p : wallFace - q, a0, z, inward > 0 ? wallFace + q : wallFace - p, a1, zt, m, lab) : opt(a0, inward > 0 ? wallFace + p : wallFace - q, z, a1, inward > 0 ? wallFace + q : wallFace - p, zt, m, lab));
-    // (owner screenshot 2026-10-19: the bare stands hang their item ~50 below them, through a shelf plank):
-    // no shelf, the stands high on the board so the blades hang clear with their tips over the floor
+    const bench = z0 + 12, back = (p, q, z, zt, m, lab) => (axis === 'y' ? opt(inward > 0 ? wallFace + p : wallFace - q, a0, z, inward > 0 ? wallFace + q : wallFace - p, a1, zt, m, lab) : opt(a0, inward > 0 ? wallFace + p : wallFace - q, z, a1, inward > 0 ? wallFace + q : wallFace - p, zt, m, lab));
     if (!back(0, 2, z0 + 10, z0 + 84, { color: shade(WOOD[0], 0.85) }, 'rack board')) return; // under the tie beams / upper floor (92)
     back(2, 4, z0 + 80, z0 + 84, { color: timber }, 'rack rail');
-    const face = axis === 'y' ? (inward > 0 ? '+x' : '-x') : (inward > 0 ? '+y' : '-y'), c = wallFace + inward * 14;
+    // the bench: pedestal 4..24 off the wall (centre 14, load point 16), the button 24..28 on its front edge
+    if (!back(2, 26, z0, bench - 2, { color: shade(WOOD[0], 0.9) }, 'rack bench')) return;
+    if (!back(2, 26, bench - 2, bench, { color: WOOD[2] }, 'rack bench top')) return;
+    const face = axis === 'y' ? (inward > 0 ? '+x' : '-x') : (inward > 0 ? '+y' : '-y'), c = wallFace + inward * 16;
     for (let i = 0; i < n; i++) {
       const a = Math.round((a0 + (a1 - a0) * (i + 0.5) / n) / 2) * 2;
-      axis === 'y' ? standAt(c, a, sh, face, nextWare) : standAt(a, c, sh, face, nextWare);
+      axis === 'y' ? standAt(c, a, bench, face, nextWare) : standAt(a, c, bench, face, nextWare);
     }
   }
   // lanterns (owner: "should not be floating ... made out of glass and metal, no glow, with a point light"):
@@ -929,8 +933,8 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
     cbox(CX0, PX + 20, PY, PY + 20);
     cbox(PX, PX + 20, PY + 20, CY1);
     if (LINE.short) { // daggers start on the counter (bronze nearest the door side), the rest go on the racks
-      for (let x = CX0 + 22; x <= PX - 12; x += 35) standAt(mx(x), PY + 10, top + 16, '-y', nextWare);
-      for (let y = PY + 50; y <= CY1 - 14; y += 35) standAt(mx(PX + 10), y, top + 16, backLeft ? '+x' : '-x', nextWare);
+      for (let x = CX0 + 22; x <= PX - 12; x += 35) standAt(mx(x), PY + 8, top, '-y', nextWare);
+      for (let y = PY + 50; y <= CY1 - 14; y += 35) standAt(mx(PX + 10) + (backLeft ? 2 : -2), y, top, backLeft ? '+x' : '-x', nextWare);
     }
     // the shopkeeper's spawn and goal point, behind the counter
     npc = [X0 + mx(Math.round((CX0 + PX) / 20) * 10), Y0 + PY + 50, F + 14];
