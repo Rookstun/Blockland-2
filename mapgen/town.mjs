@@ -2359,7 +2359,59 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * goes into `taken`; flags on something already built are left out.
    */
   const WALK = [[150, 124, 88], [140, 114, 80], [158, 134, 98], [128, 104, 70]]; // packed earth (owner 2026-10-23: dirt paths)
-  function walkway(own, fx, fy, door, s, reach = 1400) {
+  const WALK_STONE = [[150, 144, 136], [132, 126, 118], [164, 158, 148], [122, 116, 108]];
+  function walkwayLegacy(own, fx, fy, door, s, reach = 520, lay = true) {
+    if (!door || zCtx == null) return;
+    const lat = fx ? [0, 1] : [1, 0];
+    const ox = Math.round(door[0] / 10) * 10, oy = Math.round(door[1] / 10) * 10;
+    // world rect from along a0..a1 (out from the door) by across l0..l1
+    const rect = (a0, a1, l0, l1) => {
+      const xa = ox + fx * a0 + lat[0] * l0, xb = ox + fx * a1 + lat[0] * l1, ya = oy + fy * a0 + lat[1] * l0, yb = oy + fy * a1 + lat[1] * l1;
+      return [Math.min(xa, xb), Math.min(ya, yb), Math.max(xa, xb), Math.max(ya, yb)];
+    };
+    const blocked = q => taken.some(t => t !== own && q[0] < t[2] && t[0] < q[2] && q[1] < t[3] && t[1] < q[3]);
+    // 10-unit steps q(i) until a step lands on a path: the steps before it, or null
+    const leg = (q, n, toPath) => {
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const r = q(i), mx = (r[0] + r[2]) / 2, my = (r[1] + r[3]) / 2;
+        if (onPath(mx, my)) return toPath ? out : null;
+        if (riverAt(mx, my) || lv(mx, my) !== zCtx || blocked(r)) return null;
+        out.push(r);
+      }
+      return toPath ? null : out;
+    };
+    let route = leg(i => rect(i * 10, i * 10 + 10, -20, 20), reach / 10, true);
+    let bounds = route && [rect(0, route.length * 10, -20, 20)];
+    for (const k of [60, 100, 140, 180]) {
+      if (route) break;
+      const out = leg(i => rect(i * 10, i * 10 + 10, -20, 20), k / 10, false);
+      if (!out) continue;
+      const sides = rnd(s, 905) < 0.5 ? [1, -1] : [-1, 1];
+      let best = null;
+      for (const sd of sides) {
+        const side = leg(i => rect(k - 40, k, sd * (20 + i * 10), sd * (30 + i * 10)), (reach - k) / 10, true);
+        if (side && (!best || side.length < best.side.length)) best = { side, sd };
+      }
+      if (best) { route = [...out, ...best.side]; bounds = [rect(0, k, -20, 20), rect(k - 40, k, best.sd * 20, best.sd * (20 + best.side.length * 10))]; }
+    }
+    if (!route) { count('walkway: no route'); return; }
+    if (!lay) bounds.forEach(b => { b.walk = true; }); // spawn town: the old route only holds its space, the dirt path is laid last (laySpawnWalks)
+    taken.push(...bounds);
+    if (!lay) { count('walkway: reserved'); return; }
+    // flags of two steps each (one at the end of a leg), shaded
+    for (let i = 0, n = 0; i < route.length; n++) {
+      const a = route[i], b = route[i + 1];
+      const pair = b && (a[0] === b[0] || a[1] === b[1]) && (a[2] - a[0] === b[2] - b[0]) && (a[3] - a[1] === b[3] - b[1]);
+      const q = pair ? [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])] : a;
+      i += pair ? 2 : 1;
+      if (groundAt && [[q[0] + 1, q[1] + 1], [q[2] - 1, q[1] + 1], [q[0] + 1, q[3] - 1], [q[2] - 1, q[3] - 1]].some(([x, y]) => groundAt(x, y) !== zCtx)) continue; // the real terrain (mapgen) off the plan's level
+      if (!free(q[0], q[1], 0, q[2], q[3], 2)) continue;
+      box(q[0], q[1], 0, q[2], q[3], 2, { asset: 'PB_DefaultMicroBrick', color: WALK_STONE[Math.floor(rnd(s, 906, n) * WALK_STONE.length)] });
+    }
+    count('walkway');
+  }
+  function walkwayDirt(own, fx, fy, door, s, reach = 1400) {
     if (!door || zCtx == null) return;
     const C = 40, key = (i, j) => (i + 4096) * 8192 + (j + 4096);
     const rect = (i, j) => [i * C, j * C, i * C + C, j * C + C];
@@ -2411,6 +2463,17 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     }
     count('walkway');
   }
+  const walkJobs = [];
+  /** one house's walkway: hamlets keep the stone flags; the spawn town reserves the old route and queues a dirt path */
+  function walkHouse(own, fx, fy, door, s, mode) {
+    if (mode === 'spawn') { walkwayLegacy(own, fx, fy, door, s, 520, false); if (door && zCtx != null) walkJobs.push({ own, fx, fy, door, s, z: zCtx }); } else walkwayLegacy(own, fx, fy, door, s);
+  }
+  /** the spawn town's dirt paths, laid after everything else stands so no house, prop or tree moves for them */
+  function laySpawnWalks() {
+    const z0 = zCtx;
+    for (const j of walkJobs) { zCtx = j.z; walkwayDirt(j.own, j.fx, j.fy, j.door, j.s); }
+    zCtx = z0; walkJobs.length = 0;
+  }
   /**
    * vending machines (2026-10-18, owner: "add it in the world procedurally"): the player
    * -=[sandro]=-'s SQUAWK soda machine (prefab "vending" = prefabs_owner/sandro_vending.brz:
@@ -2444,7 +2507,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * houses along the paths, both sides, facing the path: walk each path every
    * `step` units; pickType(x, y, s) names the building (or null to skip)
    */
-  function housesAlong(paths, { step, pickType, small = false, edge, seed, margin = 40, walks = false }) {
+  function housesAlong(paths, { step, pickType, small = false, edge, seed, margin = 40, walks = 'legacy' }) {
     paths.forEach((p, pi) => {
       for (let i = 6, k = 0; i + 6 < p.length; i += Math.round(step / 20), k++) {
         const [x, y] = p[i], [qx, qy] = p[i + 1], tl = Math.hypot(qx - x, qy - y) || 1;
@@ -2462,7 +2525,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const r = boxOf(cx, cy, fx, fy, fp);
           if (!rectClear(r, { edge, margin, claim: true })) continue;
           taken.push(r);
-          onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); if (walks) walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); }));
+          onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkHouse(r, fx, fy, lastDoor, s, walks); vending(r, type, fx, fy, lastDoor, s); }));
           if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
         }
       }
@@ -2473,7 +2536,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * path-front rows, a jittered grid of plots between them, each house facing
    * the nearest lane (axis-aligned), within `reach` of one
    */
-  function infill({ step, pickType, small = false, edge, seed, reach, margin = 30, walks = false }) {
+  function infill({ step, pickType, small = false, edge, seed, reach, margin = 30, walks = 'legacy' }) {
     const pts = plan.paths.flat();
     const R = Math.ceil(HALF / step) * step;
     let k = 0;
@@ -2493,7 +2556,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const r = boxOf(cx, cy, fx, fy, footprint(type, s, small));
         if (!rectClear(r, { edge, margin, claim: true })) continue;
         taken.push(r);
-        onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); if (walks) walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); }));
+        onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkHouse(r, fx, fy, lastDoor, s, walks); vending(r, type, fx, fy, lastDoor, s); }));
         if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
       }
   }
@@ -3225,16 +3288,17 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // the residential houses (split-levels; the Dutch Colonial's 76-deep porch ceiling is off the stud grid in town
   // facings, so it stays on its roadside lots) take big lots along the main roads out past the faire
   // lanes first, then the faire rows fill the rest
-  housesAlong(plan.main.slice(0, 4), { walks: true, step: 140, edge: plan.edgeR, seed: 76, margin: 20,
+  housesAlong(plan.main.slice(0, 4), { walks: 'spawn', step: 140, edge: plan.edgeR, seed: 76, margin: 20,
     pickType: (x, y, s) => (Math.hypot(x, y) < 1100 || rnd(s, 54) < 0.3 ? null : 'townSplit') });
-  infill({ walks: true, step: 60, edge: plan.edgeR, seed: 75, reach: 900, margin: 20, pickType: (x, y, s) => (Math.hypot(x, y) < 1000 ? null : 'townSplit') });
-  housesAlong(plan.paths, { walks: true, step: 60, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType }); // step 80 -> 60 (2026-10-13: bigger houses, same count)
-  infill({ walks: true, step: 80, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
+  infill({ walks: 'spawn', step: 60, edge: plan.edgeR, seed: 75, reach: 900, margin: 20, pickType: (x, y, s) => (Math.hypot(x, y) < 1000 ? null : 'townSplit') });
+  housesAlong(plan.paths, { walks: 'spawn', step: 60, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType }); // step 80 -> 60 (2026-10-13: bigger houses, same count)
+  infill({ walks: 'spawn', step: 80, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
   // (2026-10-19) faire lane: a second, tighter pass of small booths along every lane fills the frontage
   // left between the houses and stalls, so the lanes read as rows of shops (owner's Ren faire photos)
-  housesAlong(plan.paths, { walks: true, step: 40, small: true, edge: plan.edgeR, seed: 79, margin: 10, pickType: (x, y, s) => (rnd(s, 53) < 0.8 ? 'faireBooth' : 'faireHouse') });
+  housesAlong(plan.paths, { walks: 'spawn', step: 40, small: true, edge: plan.edgeR, seed: 79, margin: 10, pickType: (x, y, s) => (rnd(s, 53) < 0.8 ? 'faireBooth' : 'faireHouse') });
   propsAlong(plan.paths, 120, plan.edgeR, 503);
   trees(26, 7100, (x, y) => Math.hypot(x, y) < plan.edgeR(x, y) - 120);
+  laySpawnWalks();
   return stats;
 
 }

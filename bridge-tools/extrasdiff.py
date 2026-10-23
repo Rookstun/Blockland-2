@@ -41,6 +41,9 @@ import('/home/max/omegga-server/plugins/bridge/lib/brs.mjs').then(async brs => {
 });""", WORLD], capture_output=True, text=True).stdout or "[]")
 
 gone, new = diff("spawners")
+# (2026-10-23) shopkeeper NPCs (npcs.json: bot spawners on the npc_<role> prefabs) go the spawner way
+g2, n2 = diff("npcs")
+gone, new = gone + g2, new + n2
 ops = []
 for e in gone:
     x, y, z = e["at"]
@@ -85,3 +88,16 @@ for name, prefab, box, dz in (("pots", "pot", (10, 10, 24), 4), ("bushes", "bush
     job([{"op": "cmd", "line": f"br.World.ClearRegion {e['at'][0]} {e['at'][1]} {e['at'][2] + cbox(e)[1]} {cbox(e)[0][0]} {cbox(e)[0][1]} {cbox(e)[0][2]}", "captureMs": 150} for e in gone])
     job([{"op": "cmd", "line": f'br.Prefab.Load "{e.get("prefab", prefab)}" {e["at"][0]} {e["at"][1]} {e["at"][2] + LDZ.get(name, 0)} 0 {e.get("orient", 16)}', "captureMs": 150} for e in new])
     print(f"{name}: cleared {len(gone)}, loaded {len(new)}")
+    if name == "shops":
+        # (2026-10-23) bridge/balance/stands.json is what /fix shops re-places: keep it in step or a removed
+        # house's stands come back as floating orphans
+        SJ = "/home/max/omegga-server/bridge/balance/stands.json"
+        st = json.load(open(SJ))
+        sk = lambda e: json.dumps(e["at"]) + "|" + (e.get("prefab") or "shop_" + e.get("tier", "bronze"))
+        gk = {sk(e) for e in gone}
+        out = [e for e in st if sk(e) not in gk]
+        have = {sk(e) for e in out}
+        out += [{"prefab": sk(e).split("|")[1], "at": e["at"], "orient": e.get("orient", 16)} for e in new if sk(e) not in have]
+        open(SJ + ".pre_extras", "w").write(json.dumps(st))
+        open(SJ, "w").write(json.dumps(out))
+        print(f"stands.json {len(st)} -> {len(out)}")

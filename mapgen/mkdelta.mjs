@@ -20,5 +20,22 @@ const restore = [];
 for (const b of n.b) { if (!oldK.has(key(b))) continue; const [lo, hi] = worldBox(b, FIXED);
   const cand = G.get(Math.floor(lo[0] / C) + ',' + Math.floor(lo[1] / C)) ?? [];
   if (cand.some(i => { const c = clear[i]; return [0, 1, 2].every(a => lo[a] >= c[a] - c[a + 3] && hi[a] <= c[a] + c[a + 3]); })) restore.push(b); }
-fs.writeFileSync(OUT, JSON.stringify({ clear, add: [...added, ...restore], externalAssets: n.ext.length ? n.ext : o.ext }));
+// EXTRAS (2026-10-23, owner: removing/moving houses left their weapon-shop stands and shopkeeper NPCs standing in
+// the world, "never have this happen again"): the prefab placements that live beside the bricks (spawners, pots,
+// bushes, shops, gems, npcs) are diffed here too and shipped in the delta as `extras` {name: {gone, new}} for
+// deploydelta.mjs (extrasdiff.py) to apply. A changed category nothing can apply (docks, gods, casino: data
+// other tools read) fails this script (exit 3) unless EXTRAS_ACK=1, so a house change can never ship half-done.
+const EXTRA_HANDLED = ['spawners', 'pots', 'bushes', 'shops', 'gems', 'npcs'], EXTRA_OTHER = ['docks', 'gods', 'casino'];
+const readX = (dir, name) => { const f = `${dir}/${name}.json`; if (!fs.existsSync(f)) return []; const j = JSON.parse(fs.readFileSync(f)); return Array.isArray(j) ? j : Object.values(j).flat(); };
+const extras = {}, unhandled = [];
+for (const name of [...EXTRA_HANDLED, ...EXTRA_OTHER]) {
+  const A = readX(OLD, name), B = readX(NEW, name), ka = new Set(A.map(key)), kb = new Set(B.map(key));
+  const gone = A.filter(e => !kb.has(key(e))).length, nw = B.filter(e => !ka.has(key(e))).length;
+  if (!gone && !nw) continue;
+  extras[name] = { gone, new: nw };
+  if (EXTRA_OTHER.includes(name)) unhandled.push(name);
+}
+fs.writeFileSync(OUT, JSON.stringify({ clear, add: [...added, ...restore], externalAssets: n.ext.length ? n.ext : o.ext, extras }));
 console.log(`removed ${removed.length}, added ${added.length}, restored ${restore.length}, ext ${n.ext.length}`);
+console.log(Object.keys(extras).length ? `EXTRAS CHANGED (deploydelta.mjs applies them): ${Object.entries(extras).map(([k, v]) => `${k} -${v.gone}/+${v.new}`).join(', ')}` : 'extras: unchanged');
+if (unhandled.length && process.env.EXTRAS_ACK !== '1') { console.error(`EXTRAS NOT APPLIED BY ANY TOOL: ${unhandled.join(', ')} changed. Fix the cause (a house/layout change moved them) or set EXTRAS_ACK=1 after handling them by hand.`); process.exit(3); }
