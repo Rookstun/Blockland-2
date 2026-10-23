@@ -2287,6 +2287,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // occupied footprints [x0, y0, x1, y1]; a site must clear them, the paths,
   // the river and the edge
   const taken = stats.taken = [];
+  const walkCells = new Set(); // 40-unit cells of the laid walkways (later paths join them)
   const hits = (r, m = 0) => taken.some(t => r[0] - m < t[2] && t[0] < r[2] + m && r[1] - m < t[3] && t[1] < r[3] + m);
   const onPath = (x, y) => { const k = plan.surfaceAt(x, y); return k === 'street' || k === 'square'; };
   const why = stats.rejects = {};
@@ -2358,52 +2359,55 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * goes into `taken`; flags on something already built are left out.
    */
   const WALK = [[150, 124, 88], [140, 114, 80], [158, 134, 98], [128, 104, 70]]; // packed earth (owner 2026-10-23: dirt paths)
-  function walkway(own, fx, fy, door, s, reach = 520) {
+  function walkway(own, fx, fy, door, s, reach = 1400) {
     if (!door || zCtx == null) return;
-    const lat = fx ? [0, 1] : [1, 0];
-    const ox = Math.round(door[0] / 10) * 10, oy = Math.round(door[1] / 10) * 10;
-    // world rect from along a0..a1 (out from the door) by across l0..l1
-    const rect = (a0, a1, l0, l1) => {
-      const xa = ox + fx * a0 + lat[0] * l0, xb = ox + fx * a1 + lat[0] * l1, ya = oy + fy * a0 + lat[1] * l0, yb = oy + fy * a1 + lat[1] * l1;
-      return [Math.min(xa, xb), Math.min(ya, yb), Math.max(xa, xb), Math.max(ya, yb)];
+    const C = 40, key = (i, j) => (i + 4096) * 8192 + (j + 4096);
+    const rect = (i, j) => [i * C, j * C, i * C + C, j * C + C];
+    const ovl = (a, b, m = 0) => a[0] - m < b[2] && b[0] < a[2] + m && a[1] - m < b[3] && b[1] < a[3] + m;
+    const others = () => taken.filter(t => t !== own && !t.walk);
+    // the cell just outside the door; routes may not run back through the house itself
+    const sx = Math.floor((door[0] + fx * 20) / C), sy = Math.floor((door[1] + fy * 20) / C), s0 = key(sx, sy);
+    const near = others();
+    const open = (i, j) => {
+      const r = rect(i, j), cx = r[0] + C / 2, cy = r[1] + C / 2;
+      if (lv(cx, cy) !== zCtx) return false;
+      for (const [x, y] of [[cx, cy], [r[0] + 1, r[1] + 1], [r[2] - 1, r[1] + 1], [r[0] + 1, r[3] - 1], [r[2] - 1, r[3] - 1]]) if (riverAt(x, y)) return false;
+      if (plan.edgeR && Math.hypot(cx, cy) > plan.edgeR(cx, cy) - 40) return false;
+      if (near.some(t => ovl(r, t))) return false;
+      if (i !== sx || j !== sy) { if (ovl(r, own)) return false; }
+      if (groundAt && [[r[0] + 1, r[1] + 1], [r[2] - 1, r[1] + 1], [r[0] + 1, r[3] - 1], [r[2] - 1, r[3] - 1]].some(([x, y]) => groundAt(x, y) !== zCtx)) return false; // the real terrain off the plan's level
+      return free(r[0], r[1], 0, r[2], r[3], 2);
     };
-    const blocked = q => taken.some(t => t !== own && q[0] < t[2] && t[0] < q[2] && q[1] < t[3] && t[1] < q[3]);
-    // 10-unit steps q(i) until a step lands on a path: the steps before it, or null
-    const leg = (q, n, toPath) => {
-      const out = [];
-      for (let i = 0; i < n; i++) {
-        const r = q(i), mx = (r[0] + r[2]) / 2, my = (r[1] + r[3]) / 2;
-        if (onPath(mx, my)) return toPath ? out : null;
-        if (riverAt(mx, my) || lv(mx, my) !== zCtx || blocked(r)) return null;
-        out.push(r);
+    const isRoad = (i, j) => onPath(i * C + C / 2, j * C + C / 2);
+    if (!open(sx, sy)) { count('walkway: no route'); return; }
+    if (isRoad(sx, sy)) { count('walkway: at road'); return; }
+    // Dijkstra from the door cell over 4-way steps to the nearest road cell or earlier walkway
+    const MAXC = Math.round(reach / C), dist = new Map([[s0, 0]]), prev = new Map(), dir = new Map([[s0, 0]]);
+    const heap = [[0, sx, sy]];
+    const pushH = e => { heap.push(e); let i = heap.length - 1; while (i) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+    const popH = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r2 = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r2 < heap.length && heap[r2][0] < heap[m][0]) m = r2; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+    let end = null;
+    while (heap.length) {
+      const [f, i, j] = popH(), k = key(i, j);
+      if (f > dist.get(k)) continue;
+      if (k !== s0 && (walkCells.has(k) || isRoad(i, j))) { end = [i, j]; break; }
+      for (const [a, b, d] of [[1, 0, 1], [-1, 0, 2], [0, 1, 3], [0, -1, 4]]) {
+        const ni = i + a, nj = j + b, nk = key(ni, nj);
+        if (Math.abs(ni - sx) > MAXC || Math.abs(nj - sy) > MAXC) continue;
+        const goal = walkCells.has(nk) || isRoad(ni, nj);
+        if (!goal && !open(ni, nj)) continue;
+        let g = f + 1 + (dir.get(k) && dir.get(k) !== d ? 0.4 : 0);
+        if (!goal && near.some(t => ovl(rect(ni, nj), t, 20))) g += 0.8; // hugging a wall
+        if (g < (dist.get(nk) ?? Infinity)) { dist.set(nk, g); prev.set(nk, k); dir.set(nk, d); pushH([g, ni, nj]); }
       }
-      return toPath ? null : out;
-    };
-    let route = leg(i => rect(i * 10, i * 10 + 10, -20, 20), reach / 10, true);
-    let bounds = route && [rect(0, route.length * 10, -20, 20)];
-    for (const k of [60, 100, 140, 180]) {
-      if (route) break;
-      const out = leg(i => rect(i * 10, i * 10 + 10, -20, 20), k / 10, false);
-      if (!out) continue;
-      const sides = rnd(s, 905) < 0.5 ? [1, -1] : [-1, 1];
-      let best = null;
-      for (const sd of sides) {
-        const side = leg(i => rect(k - 40, k, sd * (20 + i * 10), sd * (30 + i * 10)), (reach - k) / 10, true);
-        if (side && (!best || side.length < best.side.length)) best = { side, sd };
-      }
-      if (best) { route = [...out, ...best.side]; bounds = [rect(0, k, -20, 20), rect(k - 40, k, best.sd * 20, best.sd * (20 + best.side.length * 10))]; }
     }
-    if (!route) { count('walkway: no route'); return; }
-    taken.push(...bounds);
-    // flags of two steps each (one at the end of a leg), shaded
-    for (let i = 0, n = 0; i < route.length; n++) {
-      const a = route[i], b = route[i + 1];
-      const pair = b && (a[0] === b[0] || a[1] === b[1]) && (a[2] - a[0] === b[2] - b[0]) && (a[3] - a[1] === b[3] - b[1]);
-      const q = pair ? [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])] : a;
-      i += pair ? 2 : 1;
-      if (groundAt && [[q[0] + 1, q[1] + 1], [q[2] - 1, q[1] + 1], [q[0] + 1, q[3] - 1], [q[2] - 1, q[3] - 1]].some(([x, y]) => groundAt(x, y) !== zCtx)) continue; // the real terrain (mapgen) off the plan's level
-      if (!free(q[0], q[1], 0, q[2], q[3], 2)) continue;
-      box(q[0], q[1], 0, q[2], q[3], 2, { asset: 'PB_DefaultMicroBrick', color: WALK[Math.floor(rnd(s, 906, n) * WALK.length)] });
+    if (!end) { count('walkway: no route'); return; }
+    const cells = [];
+    for (let k = prev.get(key(end[0], end[1])); k !== undefined; k = prev.get(k)) cells.push([Math.floor(k / 8192) - 4096, (k % 8192) - 4096]);
+    for (const [i, j] of cells) {
+      const r = rect(i, j), w = [...r]; w.walk = true;
+      taken.push(w); walkCells.add(key(i, j));
+      box(r[0], r[1], 0, r[2], r[3], 2, { asset: 'PB_DefaultMicroBrick', color: WALK[Math.floor(rnd(s, 906, i * 31 + j) * WALK.length)] });
     }
     count('walkway');
   }
