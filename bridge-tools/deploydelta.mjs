@@ -27,6 +27,8 @@ const clr = c => ({ op: 'cmd', line: `br.World.ClearRegion ${c.join(' ')}`, capt
 const addOp = bricks => [{ op: 'bricks', at: [0, 0, 0], bricks, owner: OWNER, externalAssets: D.externalAssets, captureMs: 3000 }];
 const bad = r => (JSON.stringify(r).match(/overlapping|Prefab not found/g) || []).length;
 
+const VERIFY_ONLY = process.env.VERIFY_ONLY === '1'; // re-run just the read-back and repair
+if (!VERIFY_ONLY) {
 await job([{ op: 'cmd', line: 'br.World.Save', captureMs: 5000 }], 'save'); await sleep(8000);
 const date = new Date().toISOString().slice(0, 10);
 fs.copyFileSync(path.join(W, WORLD + '.brdb'), path.join(W, `backup ${TAG} ${WORLD.replace(/ \d{4}-\d\d-\d\d$/, '')} ${date}.brdb`)); log('backup ok');
@@ -42,6 +44,7 @@ if (D.extras && Object.keys(D.extras).length) {
   log(out.trim().split('\n').slice(-12).join(' | '));
 }
 
+}
 // read the world back tile by tile and repair
 const T = 5000, tiles = new Map();
 const tileOf = (x, y) => Math.floor(x / T) + ',' + Math.floor(y / T);
@@ -51,8 +54,10 @@ for (const b of D.add) at(tiles, tileOf(b.position[0], b.position[1])).add.push(
 const pk = p => p.map(Math.round).join(',');
 const readTile = async (k, n) => {
   const [tx, ty] = k.split(',').map(Number), name = `dd_${TAG}_${n}`;
-  await job([{ op: 'cmd', line: `br.Prefab.SaveRegion "${name}" ${(tx + 0.5) * T} ${(ty + 0.5) * T} 3000 ${T / 2 + 100} ${T / 2 + 100} 3000 0`, captureMs: 15000 }], 'sr'); await sleep(5000);
+  await job([{ op: 'cmd', line: `br.Prefab.SaveRegion "${name}" ${(tx + 0.5) * T} ${(ty + 0.5) * T} 3000 ${T / 2 + 100} ${T / 2 + 100} 3000 0`, captureMs: 15000 }], 'sr');
   const f = path.join(SRV, 'data/Saved/Prefabs', name + '.brz'), have = new Set();
+  for (let t = 0, last = -1; t < 120; t++) { await sleep(1000); const z = fs.existsSync(f) ? fs.statSync(f).size : -1; if (z > 0 && z === last) break; last = z; } // big tiles take a while to write
+  if (!fs.existsSync(f)) { log('tile', k, 'saved no prefab (empty region?)'); return have; }
   const r = brs.WorldReader.from(new Uint8Array(fs.readFileSync(f)));
   for (const b of r.bricks(1)) have.add(pk(b.position));
   fs.rmSync(f, { force: true }); return have;
