@@ -5326,7 +5326,7 @@ const lawnStats = { patches: 0, tufts: 0, daisies: 0, pebbles: 0, rings: 0 };
   const patch = new Map();
   for (const [k, z] of lawn) {
     const [a, b] = k.split(',').map(Number), n = fbm2(a / 9 + 31, b / 9 - 17, 3);
-    if (n < 0.28) continue;
+    if (!LAWN_PATCHES || n < 0.28) continue; // (owner 2026-10-23: no clover patches; with none there are no daisies either)
     const t = n > 0.5 ? 0 : hash(a >> 2, b >> 2, 611) < 0.5 ? 1 : 2;
     patch.set(k, [z, t]);
   }
@@ -5339,6 +5339,7 @@ const lawnStats = { patches: 0, tufts: 0, daisies: 0, pebbles: 0, rings: 0 };
     for (let p = a; p < a1; p++) used.add(p + ',' + b);
     const [x0, y0] = W(a, b), [x1, y1] = W(a1, b + 1);
     if (!clearOf((x0 + x1) / 2, y0)) continue;
+  const LAWN_PATCHES = false, LAWN_ROCKS = false; // owner 2026-10-23: the lawns lose tufts, clover patches, daisies and pebbles (fairy rings stay)
     if (add([x0, y0, z], [x1, y1, z + 2], CLOVER[t], 'clover')) lawnStats.patches++;
   }
   // fairy rings: lawn studs with grass all round for 5 studs, spaced far apart
@@ -5374,7 +5375,7 @@ const lawnStats = { patches: 0, tufts: 0, daisies: 0, pebbles: 0, rings: 0 };
     if (r >= 0.035 && r < 0.06 && patch.has(k)) { // (grass tufts 0-0.035 were removed: owner 2026-10-23)
       // a daisy: a 2-high white head with a yellow eye
       if (add([x0 + 2, y0 + 2, zb], [x0 + 8, y0 + 8, zb + 2], [240, 238, 228], 'daisy')) { add([x0 + 4, y0 + 4, zb + 2], [x0 + 6, y0 + 6, zb + 4], [236, 196, 60], 'daisy'); lawnStats.daisies++; }
-    } else if (r >= 0.052 && r < 0.062) {
+    } else if (LAWN_ROCKS && r >= 0.052 && r < 0.062) { // (owner 2026-10-23: no lawn pebbles)
       const g = 120 + Math.floor(hash(a, b, 614) * 30), w = hash(a, b, 615) < 0.5 ? 10 : 6;
       if (add([x0, y0, zb], [x0 + w, y0 + 6, zb + 4], [g, g - 4, g - 10], 'pebble')) lawnStats.pebbles++;
     }
