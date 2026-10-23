@@ -72,5 +72,6 @@ Smooth terrain with micro wedges. No visible undersides: ceilings/lintels/overha
 - `plugins.md`: weapon bank, /clear, /fix, balance /reload, live editor, trees, chatbot, hitsplats, frog, real estate, buildbattle, duel, tpa, discord, snes, quests + main quest, speak & spell, wanted system.
 - `media.md`: /playvideo, /search, YouTube proxy, audio tuning, !tv, /textvideo, /ogrid (crashes, cartridges), /stream (panel, TV entity, HLS, universal links), tts, loading words.
 - `arcade.md`: DDR (+ editor), Super Sigmas cabinet engine (Freddy, Super Penis Man, Zeldoy, Brick Doom, It Wasn't Me), Mildors Plume.
+- `bungus.md`: second server on bungus (Windows + WSL2, UDP relay, autostart).
 - `history.md`: 2026-10-07..10-18 world history (weed*/rizz/houses/site), old deploys, backups, corpus.
 - `CLAUDE.md.pre_trim`: older notes still (pre 10-07 coords).
