@@ -2351,13 +2351,13 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // world box of a building centred (cx, cy) facing (fx, fy)
   const boxOf = (cx, cy, fx, fy, [w, d]) => (fx ? [cx - d / 2, cy - w / 2, cx + d / 2, cy + w / 2] : [cx - w / 2, cy - d / 2, cx + w / 2, cy + d / 2]);
   /**
-   * walkway (owner 2026-10-15: "make houses have paths to the main road"):
+   * walkway (owner 2026-10-15: "make houses have paths to the main road"; 2026-10-23: spawn town only, dirt):
    * 4 studs wide from the front door straight out to the nearest path, else out
-   * a little and then along to one (an L); stone flags 2 high at the lot's level.
+   * a little and then along to one (an L); dirt flags 2 high at the lot's level.
    * The route reads only the plan and `taken` (trial builds route the same) and
    * goes into `taken`; flags on something already built are left out.
    */
-  const WALK = [[150, 144, 136], [132, 126, 118], [164, 158, 148], [122, 116, 108]];
+  const WALK = [[150, 124, 88], [140, 114, 80], [158, 134, 98], [128, 104, 70]]; // packed earth (owner 2026-10-23: dirt paths)
   function walkway(own, fx, fy, door, s, reach = 520) {
     if (!door || zCtx == null) return;
     const lat = fx ? [0, 1] : [1, 0];
@@ -2440,7 +2440,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * houses along the paths, both sides, facing the path: walk each path every
    * `step` units; pickType(x, y, s) names the building (or null to skip)
    */
-  function housesAlong(paths, { step, pickType, small = false, edge, seed, margin = 40 }) {
+  function housesAlong(paths, { step, pickType, small = false, edge, seed, margin = 40, walks = false }) {
     paths.forEach((p, pi) => {
       for (let i = 6, k = 0; i + 6 < p.length; i += Math.round(step / 20), k++) {
         const [x, y] = p[i], [qx, qy] = p[i + 1], tl = Math.hypot(qx - x, qy - y) || 1;
@@ -2458,7 +2458,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           const r = boxOf(cx, cy, fx, fy, fp);
           if (!rectClear(r, { edge, margin, claim: true })) continue;
           taken.push(r);
-          onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); }));
+          onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); if (walks) walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); }));
           if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
         }
       }
@@ -2469,7 +2469,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
    * path-front rows, a jittered grid of plots between them, each house facing
    * the nearest lane (axis-aligned), within `reach` of one
    */
-  function infill({ step, pickType, small = false, edge, seed, reach, margin = 30 }) {
+  function infill({ step, pickType, small = false, edge, seed, reach, margin = 30, walks = false }) {
     const pts = plan.paths.flat();
     const R = Math.ceil(HALF / step) * step;
     let k = 0;
@@ -2489,7 +2489,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         const r = boxOf(cx, cy, fx, fy, footprint(type, s, small));
         if (!rectClear(r, { edge, margin, claim: true })) continue;
         taken.push(r);
-        onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); }));
+        onSite(r, () => legacyBuild(type, () => { lastDoor = null; TYPES[type](cx, cy, fx, fy, s, small); if (walks) walkway(r, fx, fy, lastDoor, s); vending(r, type, fx, fy, lastDoor, s); }));
         if (FURN !== 0) throw new Error(`town: ${type} left the furniture switch at ${FURN}`);
       }
   }
@@ -3221,14 +3221,14 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // the residential houses (split-levels; the Dutch Colonial's 76-deep porch ceiling is off the stud grid in town
   // facings, so it stays on its roadside lots) take big lots along the main roads out past the faire
   // lanes first, then the faire rows fill the rest
-  housesAlong(plan.main.slice(0, 4), { step: 140, edge: plan.edgeR, seed: 76, margin: 20,
+  housesAlong(plan.main.slice(0, 4), { walks: true, step: 140, edge: plan.edgeR, seed: 76, margin: 20,
     pickType: (x, y, s) => (Math.hypot(x, y) < 1100 || rnd(s, 54) < 0.3 ? null : 'townSplit') });
-  infill({ step: 60, edge: plan.edgeR, seed: 75, reach: 900, margin: 20, pickType: (x, y, s) => (Math.hypot(x, y) < 1000 ? null : 'townSplit') });
-  housesAlong(plan.paths, { step: 60, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType }); // step 80 -> 60 (2026-10-13: bigger houses, same count)
-  infill({ step: 80, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
+  infill({ walks: true, step: 60, edge: plan.edgeR, seed: 75, reach: 900, margin: 20, pickType: (x, y, s) => (Math.hypot(x, y) < 1000 ? null : 'townSplit') });
+  housesAlong(plan.paths, { walks: true, step: 60, edge: plan.edgeR, seed: 77, margin: 20, pickType: townType }); // step 80 -> 60 (2026-10-13: bigger houses, same count)
+  infill({ walks: true, step: 80, small: true, edge: plan.edgeR, seed: 78, reach: 1400, margin: 20, pickType: (x, y, s) => { const t = townType(x, y, s); return t === 'garden' ? null : t; } });
   // (2026-10-19) faire lane: a second, tighter pass of small booths along every lane fills the frontage
   // left between the houses and stalls, so the lanes read as rows of shops (owner's Ren faire photos)
-  housesAlong(plan.paths, { step: 40, small: true, edge: plan.edgeR, seed: 79, margin: 10, pickType: (x, y, s) => (rnd(s, 53) < 0.8 ? 'faireBooth' : 'faireHouse') });
+  housesAlong(plan.paths, { walks: true, step: 40, small: true, edge: plan.edgeR, seed: 79, margin: 10, pickType: (x, y, s) => (rnd(s, 53) < 0.8 ? 'faireBooth' : 'faireHouse') });
   propsAlong(plan.paths, 120, plan.edgeR, 503);
   trees(26, 7100, (x, y) => Math.hypot(x, y) < plan.edgeR(x, y) - 120);
   return stats;
