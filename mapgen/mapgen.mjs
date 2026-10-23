@@ -72,6 +72,33 @@ function stage(id) {
   STAGE_LOG.push({ id, t: now });
   stageAt = i;
   if (stageHook) stageHook(id);
+  if (process.env.MAPGEN_HTRACE) htrace(id);
+}
+// MAPGEN_HTRACE='x0,y0,x1,y1' (live coords) [+ MAPGEN_HTRACE_OUT=file]: after the town is placed,
+// write the box's ground heights each time a stage has changed them, plus the road/river flags
+let htraceSnap = null;
+function htrace(id) {
+  let sh; try { sh = [-(X0 + (town.fx + TOWN.cells / 2) * CELL), -(Y0 + (town.fy + TOWN.cells / 2) * CELL)]; } catch { return; }
+  const [a, b, c, d] = process.env.MAPGEN_HTRACE.split(',').map(Number);
+  const x0 = Math.floor((a - sh[0] - X0) / CELL), x1 = Math.floor((c - sh[0] - X0) / CELL);
+  const y0 = Math.floor((b - sh[1] - Y0) / CELL), y1 = Math.floor((d - sh[1] - Y0) / CELL);
+  const out = process.env.MAPGEN_HTRACE_OUT || 'htrace.txt';
+  const cur = []; for (let y = y1; y >= y0; y--) for (let x = x0; x <= x1; x++) cur.push(H[x * N + y]);
+  const flag = (name, f) => { try { return f(); } catch { return null; } };
+  if (!htraceSnap) fs.writeFileSync(out, `box cells x ${x0}..${x1} y ${y0}..${y1}; live x = ${X0 + sh[0]} + cx*${CELL}, y = ${Y0 + sh[1]} + cy*${CELL}\n`);
+  if (htraceSnap && cur.every((v, i) => v === htraceSnap[i]) && id !== 'desertGround') return;
+  let s = `\n== H before ${id}${htraceSnap ? '' : ' (first)'}\n`;
+  let k = 0;
+  for (let y = y1; y >= y0; y--) { s += String(Y0 + sh[1] + y * CELL).padStart(6); for (let x = x0; x <= x1; x++, k++) { const v = cur[k]; s += (htraceSnap && htraceSnap[k] !== v ? '*' : ' ') + String(v).padStart(3); } s += '\n'; }
+  if (id === 'desertGround') {
+    s += `\n== flags before desertGround: R road graded, P path, T tunnel, B bridge, ~ river, c cutRock, k keepOut\n`;
+    for (let y = y1; y >= y0; y--) { s += String(Y0 + sh[1] + y * CELL).padStart(6); for (let x = x0; x <= x1; x++) { const n = x * N + y;
+      const f = [flag('', () => roadGraded[n] && 'R'), flag('', () => pathCell[n] && 'P'), flag('', () => tunnelZ[n] >= 0 && 'T'), flag('', () => bridgeZ[n] >= 0 && 'B'), flag('', () => riverCell[n] && '~'), flag('', () => cutRock[n] && 'c'), flag('', () => keepOut[n] && 'k'),
+        flag('', () => reserved[n] && 'r'), flag('', () => trenchCell[n] && 't'), flag('', () => townNear[n] && 'n'), flag('', () => swampCell[n] && 's'), flag('', () => footCell[n] && 'f')].filter(Boolean).join('');
+      s += f.padStart(6); } s += '\n'; }
+  }
+  fs.appendFileSync(out, s);
+  htraceSnap = cur;
 }
 // MAPGEN_SITECHECK=1: after the roadside sites are levelled, report every later stage
 // that moves the ground under a levelled lot (ruins, camps, holy/roadside/weapon shops)
@@ -1789,9 +1816,17 @@ const reserved = new Uint8Array(N * N);
 const outposts = [];
 const hengeDistPre = (x, y) => Math.max(henge.x0 - x, x - (henge.x0 + henge.n - 1), henge.y0 - y, y - (henge.y0 + henge.n - 1));
 const OUTPOSTS = Math.round(tune('outposts.count', 10, 'outposts (x K), 2 spawners each') * K);
-for (let k = 0; k < OUTPOSTS; k++) {
+// (2026-10-23, owner screenshots: a desert road climbing to a tunnel with 5-14 brick sheer drops in it)
+// the roads come after the outposts and used to keep an outpost's 7x7 lot at its ground level
+// as they crossed it; now roads grade straight through (outpostCell is not pinned) and the
+// 'roads' stage re-places every outpost a road touched, clear of the road net (offRoad)
+const outpostCell = new Uint8Array(N * N);
+const outpostAnchor = k => {
   const t = 0.25 + k * (0.75 / OUTPOSTS), tier = Math.min(7, 1 + Math.floor(((t - 0.25) / 0.7) * 7)); // tier 1 just past the town, 7 at the far end
-  const [ax, ay] = spineAt(t, (k % 2 ? 1 : -1) * (25 + (k % 3) * 12) * K);
+  return { t, tier, at: spineAt(t, (k % 2 ? 1 : -1) * (25 + (k % 3) * 12) * K) };
+};
+const findOutpost = (k, offRoad) => {
+  const { at: [ax, ay] } = outpostAnchor(k);
   let best = null;
   for (let x = Math.round(ax) - 24; x <= Math.round(ax) + 24; x++)
     for (let y = Math.round(ay) - 24; y <= Math.round(ay) + 24; y++) {
@@ -1799,6 +1834,7 @@ for (let k = 0; k < OUTPOSTS; k++) {
       const h = H[x * N + y];
       if (h <= SEA + 2 || swampCell[x * N + y] || keepOut[x * N + y] || siteOff(x * N + y) || townDist(x, y) <= TOWN.blend + 2 || villageDist(x, y) <= VILLAGE.r + VILLAGE.blend ||
           DUNGEONS.some(d => footDist(d, x, y) <= PLAZA_RING + BLEND) || hengeDistPre(x, y) <= HENGE.blend + 3) continue;
+      if (offRoad && !offRoad(x, y)) continue;
       // no neighbour higher (so no smoothing piece lands in this cell) and gentle round it
       let flat = true;
       for (let dx = -1; dx <= 1 && flat; dx++) for (let dy = -1; dy <= 1; dy++) { const g = H[(x + dx) * N + y + dy]; if (g > h || h - g > 2) { flat = false; break; } }
@@ -1806,9 +1842,14 @@ for (let k = 0; k < OUTPOSTS; k++) {
       const d = Math.hypot(x - ax, y - ay);
       if (!best || d < best.d) best = { x, y, h, d };
     }
+  return best;
+};
+const claimOutpost = (o, v) => { for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) { const c = (o.x + dx) * N + o.y + dy; reserved[c] = v; outpostCell[c] = v; } };
+for (let k = 0; k < OUTPOSTS; k++) {
+  const { t, tier, at: [ax, ay] } = outpostAnchor(k), best = findOutpost(k);
   if (!best) { console.error(`outpost ${k} (t ${t.toFixed(2)}) found no flat open ground near ${Math.round(ax)},${Math.round(ay)}`); continue; }
-  outposts.push({ ...best, tier, t });
-  for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) reserved[(best.x + dx) * N + best.y + dy] = 1;
+  outposts.push({ ...best, tier, t, k });
+  claimOutpost(best, 1);
 }
 console.error(`outposts: ${outposts.map(o => 'T' + o.tier).join(' ')}`);
 // spawn ring (owner 2026-10-08: "make more enemies around spawn"): skeleton
@@ -1851,6 +1892,8 @@ for (let x = henge.x0 - HENGE.blend; x < henge.x0 + henge.n + HENGE.blend; x++)
 console.error(`henge: site cells ${henge.x0},${henge.y0}, ground ${henge.h}`);
 
 stage('roads');
+const lotH = o => { const v = []; for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) v.push(H[(o.x + dx) * N + o.y + dy]); return v.join(); };
+const outpostLots = outposts.map(lotH); // (see outpostCell) the ground under each lot before the roads
 const pathCell = new Uint8Array(N * N);
 // Roads through the mountains (owner 2026-10-05: "make paths continue through
 // the mountains either by pathing around and up and over or tunneling
@@ -1918,7 +1961,7 @@ const roadPaths = []; // every graded road: { P: [[x, y]...], z: [level...] } (c
     return out.reverse();
   };
   const pinned = (x, y) => townDist(x, y) <= 0 || townNear[x * N + y] || villageDist(x, y) <= VILLAGE.r || swampCell[x * N + y] ||
-    DUNGEONS.some(d => footDist(d, x, y) <= 2) || trenchCell[x * N + y] || hengeDist(x, y) <= HENGE.blend || reserved[x * N + y] || volcanoCell[x * N + y] !== 0;
+    DUNGEONS.some(d => footDist(d, x, y) <= 2) || trenchCell[x * N + y] || hengeDist(x, y) <= HENGE.blend || (reserved[x * N + y] && !outpostCell[x * N + y]) || volcanoCell[x * N + y] !== 0;
   const wet = c => riverCell[c] || H[c] <= SEA;
   /** grade a routed road: profile, cut/fill, shoulders, tunnels; stamps pathCell */
   const grade = (P, stop) => {
@@ -2049,6 +2092,24 @@ const roadPaths = []; // every graded road: { P: [[x, y]...], z: [level...] } (c
     road(from[0], from[1], lx, ly, stop);
     console.error(`volcano road: from ${from} (${Math.round(fd)} cells) to the lead ${lx},${ly}`);
   }
+}
+
+// outposts a road crossed or regraded: re-placed on flat ground with no road within 3 cells of the lot
+{
+  const offRoad = (x, y) => { for (let dx = -6; dx <= 6; dx++) for (let dy = -6; dy <= 6; dy++) { const c = (x + dx) * N + y + dy; if (!inBounds(x + dx, y + dy) || pathCell[c] || tunnelZ[c] >= 0) return false; } return true; };
+  const onLot = o => { for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) { const c = (o.x + dx) * N + o.y + dy; if (pathCell[c] || tunnelZ[c] >= 0) return true; } return false; };
+  const moved = [];
+  for (let i = outposts.length - 1; i >= 0; i--) {
+    const o = outposts[i];
+    if (lotH(o) === outpostLots[i] && !onLot(o)) continue;
+    claimOutpost(o, 0);
+    const best = findOutpost(o.k, offRoad);
+    if (!best) { console.error(`outpost ${o.k} (t ${o.t.toFixed(2)}): a road crosses its lot and no flat open ground is left off the roads: dropped`); outposts.splice(i, 1); continue; }
+    moved.push(`${o.k} ${X0 + o.x * CELL},${Y0 + o.y * CELL} -> ${X0 + best.x * CELL},${Y0 + best.y * CELL}`);
+    Object.assign(o, best); claimOutpost(o, 1);
+  }
+  for (const o of outposts) claimOutpost(o, 1); // a moved lot may have cleared cells a neighbour shares
+  console.error(`outposts moved off the roads: ${moved.length ? moved.reverse().join('; ') : 'none'} (generator coords)`);
 }
 
 stage('bridges');
