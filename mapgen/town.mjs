@@ -2074,6 +2074,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         if (!r) continue;
         taken.push(r);
         const kind = pick(kinds, s, 3);
+        // (owner 2026-10-23: "all these world props gotta go", "keep pots") only pots are placed; the
+        // other kinds keep their reserved spot empty so the rest of the town lays out as before
+        if (kind !== 'pots') continue;
         onSite(r, () => PROPS[kind](cx, cy, s, Math.abs(qx - x) >= Math.abs(qy - y)));
         prop(kind);
       }
