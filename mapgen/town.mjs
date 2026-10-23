@@ -2353,11 +2353,11 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   /**
    * walkway (owner 2026-10-15: "make houses have paths to the main road"):
    * 4 studs wide from the front door straight out to the nearest path, else out
-   * a little and then along to one (an L); stone flags 2 high at the lot's level.
+   * a little and then along to one (an L); dirt flags 2 high at the lot's level.
    * The route reads only the plan and `taken` (trial builds route the same) and
    * goes into `taken`; flags on something already built are left out.
    */
-  const WALK = [[150, 144, 136], [132, 126, 118], [164, 158, 148], [122, 116, 108]];
+  const WALK = [[150, 124, 88], [140, 114, 80], [158, 134, 98], [128, 104, 70]]; // packed earth (2026-10-23, owner: dirt paths)
   function walkway(own, fx, fy, door, s, reach = 520) {
     if (!door || zCtx == null) return;
     const lat = fx ? [0, 1] : [1, 0];
