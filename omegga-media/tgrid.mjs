@@ -38,11 +38,11 @@ const TEXT = {
 // own frame; its boxes must not touch it), gate = offset of every hidden gate (the sky over a wall panel),
 // colour = blank tile colour.
 // gstep = receiver gate spacing (/stream tv packs them behind its cabinet: 20)
-export function tLayout({ tw = 64, th = 36, k = 4, cell = 2, lift = 20, pitch = 1.55, ws = 2, fit = 1, depth = 2, frame = true, gate = [0, 0, 0], colour = [6, 6, 8], gstep = 40 } = {}) {
+export function tLayout({ tw = 64, th = 36, k = 4, cell = 2, lift = 20, pitch = 1.55, ws = 2, fit = 1, depth = 2, frame = true, gate = [0, 0, 0], colour = [6, 6, 8], gstep = 40, lanes = 1 } = {}) {
   const tile = k * cell;
   if (tile % 2) throw Error('tile side must be a multiple of 2 units');
   const width = tw * tile, height = th * tile;
-  return { tw, th, k, cell, tile, cols: tw * k, rows: th * k, width, height, hw: width / 2 + 4, side: height + 8, z0: lift, ws, depth, frame, gate, colour, gstep,
+  return { tw, th, k, cell, tile, cols: tw * k, rows: th * k, width, height, hw: width / 2 + 4, side: height + 8, z0: lift, ws, depth, frame, gate, colour, gstep, lanes,
     textLH: +((cell * fit) / pitch).toFixed(4), aspect: width / height };
 }
 
@@ -56,6 +56,16 @@ const hex = v => v.toString(16).padStart(2, '0');
 export const ALPHA = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$&()*+,-./:;=?@[]^_|~';
 const B = ALPHA.length;
 export const entryLen = L => 2 + L.k * L.k * 6;
+// entries one receiver applies a packet inside its owner's 10 ms wire budget (2026-10-20: 128 at 3x3)
+export const perPacket = L => Math.floor(1152 / (L.k * L.k));
+
+// LANES (2026-10-23, owner: "a bit more expensive and run better and less pixel tearing"): the wire budget is
+// per OWNER, so a TV with n lanes has n receivers, each in its own hidden chip with its own owner and event
+// (lane 0 = the TV's owner + event, lane j = laneOwner(owner, j) + `${event}.${j}`). A tick sends one packet
+// on every lane: n x the tiles a tick, so a whole frame lands in one tick instead of tearing over several.
+export const laneEvent = (event, j) => (j ? `${event}.${j}` : event);
+export const laneOwner = (owner, j) => (j ? { ...owner, id: owner.id.slice(0, -2) + ((parseInt(owner.id.slice(-2), 16) + j) % 256).toString(16).padStart(2, '0'),
+  name: `${owner.name} ${j + 1}`, display_name: `${owner.display_name ?? owner.name} ${j + 1}` } : owner);
 
 /** What the receiver makes of one entry (JS mirror, for checks): [tile, text]. */
 export function decodeEntry(e, L) {
@@ -83,10 +93,10 @@ export const newState = L => ({ shown: Array.from({ length: L.tw * L.th }, () =>
 // full = session frames that redraw every tile (the first packets can arrive before a just-loaded
 // receiver is live: 2026-10-20 the top 9 rows = one lost 288-tile packet stayed black). refresh slots are
 // reserved even on busy frames, so stale tiles always heal (T / refresh frames for a whole pass).
-export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, perSec = 20, step = 8, refresh = 0, full = [0] } = {}) {
-  const packets = [], due = [];
+export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, perSec = 20, step = 8, refresh = 0, full = [0], lanes = 1 } = {}) {
+  const packets = [], due = [], lane = [];
   const q = v => Math.min(255, Math.round(v / step) * step);
-  const T = L.tw * L.th, slots = Math.max(1, Math.floor(perSec / fps));
+  const T = L.tw * L.th, slots = Math.max(1, Math.floor(perSec / fps)) * lanes;
   frames.forEach((fr, fi) => {
     const cand = [], tiles = new Array(T);
     for (let t = 0; t < T; t++) {
@@ -112,17 +122,19 @@ export function encodeTiles(frames, L, state, { fps, thresh = 28, per = 120, per
       const old = [...Array(T).keys()].filter(t => !inSend.has(t)).sort((a, b) => state.sent[a] - state.sent[b]).slice(0, Math.max(0, room));
       send.push(...old);
     }
-    let pk = '', n = 0;
+    let pk = '', n = 0, np = 0;
+    // tiles top row first, so a frame bigger than one tick fills in top-down rather than in specks
+    if (!all) send.sort((a, b) => a - b);
     for (const t of send) {
       if (state.sent) state.sent[t] = state.frame;
       state.shown[t] = tiles[t];
       pk += ALPHA[Math.floor(t / B)] + ALPHA[t % B] + tiles[t].map(c => c.map(hex).join('')).join('');
-      if (++n === per) { packets.push(pk); due.push(fi); pk = ''; n = 0; }
+      if (++n === per) { packets.push(pk); due.push(fi); lane.push(np++ % lanes); pk = ''; n = 0; }
     }
-    if (n) { packets.push(pk); due.push(fi); }
+    if (n) { packets.push(pk); due.push(fi); lane.push(np++ % lanes); }
     state.frame++;
   });
-  return { packets, due };
+  return { packets, due, lane };
 }
 
 function kit(lib, owner) {
@@ -136,10 +148,10 @@ function kit(lib, owner) {
   };
   // a hidden microchip (house rule: invisible, no collision; addMicrochip can't, so by hand) whose inner grid
   // holds gates: gate bricks inside it don't need room in the build (owner 2026-10-20: "put your shit in a microchip")
-  const chip = (position, parent) => {
-    const brick = w.addBrick({ asset: 'B_1x1_Microchip', position, owner_index: O, visibility: false, collision: false, components: [{ type: 'Component_Internal_Microchip' }] }, parent);
+  const chip = (position, parent, owner_index = O, ext = [100, 60]) => {
+    const brick = w.addBrick({ asset: 'B_1x1_Microchip', position, owner_index, visibility: false, collision: false, components: [{ type: 'Component_Internal_Microchip' }] }, parent);
     const grid = w.addBrickGrid({ type: 'Entity_MicrochipDynamicBrickGrid', location: { X: 0, Y: 0, Z: 40 },
-      data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 100, Y: 60, Z: 2 } } });
+      data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: ext[0], Y: ext[1], Z: 2 } } });
     w.registerMicrochipLink(brick, grid);
     return grid;
   };
@@ -163,11 +175,16 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
   // frame bars
   if (L.frame) for (const zc of [L.z0 + 2, L.z0 + L.side - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [L.hw, 2, 2], position: [0, 0, zc], color: [6, 6, 8], owner_index: O });
   if (L.frame) for (const xc of [L.width / 2 + 2, -L.width / 2 - 2]) w.addBrick({ asset: 'PB_DefaultMicroBrick', size: [2, 2, L.height / 2], position: [xc, 0, L.z0 + 4 + L.height / 2], color: [6, 6, 8], owner_index: O });
+  const lanes = inChip ? L.lanes ?? 1 : 1;
+  let gate0 = null;
+  for (let lj = 0; lj < lanes; lj++) {
+  // lane j: own owner, own chip (spread across the hollow back), own event
+  const OL = lj ? w.addOwner(laneOwner(owner, lj)) : O;
   let i = 0;
-  const CG = inChip ? chip([L.gate[0], L.gate[1] + 22, L.gate[2] + L.z0 + 10], G) : null;
+  const CG = inChip ? chip([L.gate[0] + (lj ? (lj % 2 ? -1 : 1) * 12 * Math.ceil(lj / 2) : 0), L.gate[1] + 22, L.gate[2] + L.z0 + 10], G, OL) : null;
   const gate = (c, data = {}, extra = {}) => {
     if (CG) {
-      const h = w.addBrick({ asset: c.BRICK, position: [(i % 8) * 20, Math.floor(i / 8) * 20, 2], color: [200, 200, 200], owner_index: O, components: [{ type: c.NAME, data }], ...extra }, CG);
+      const h = w.addBrick({ asset: c.BRICK, position: [(i % 8) * 20, Math.floor(i / 8) * 20, 2], color: [200, 200, 200], owner_index: OL, components: [{ type: c.NAME, data }], ...extra }, CG);
       i++;
       return { h, c };
     }
@@ -178,9 +195,10 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
     if (i > RECV_ROWS * 8) throw Error('tgrid: receiver gates overflow');
     return { h, c };
   };
+  if (!lj) gate0 = gate;
   const out = c => (c.PORTS.bOutput ? 'bOutput' : 'Output');
   const E = entryLen(L);
-  const ev = gate(C.Event_CustomGlobal, { EventName: event, bIsObjectEvent: false, DataOut1: str(''), DataOut2: num(0), ...EVENT_REST }, { size: EVENT_SIZE });
+  const ev = gate(C.Event_CustomGlobal, { EventName: laneEvent(event, lj), bIsObjectEvent: false, DataOut1: str(''), DataOut2: num(0), ...EVENT_REST }, { size: EVENT_SIZE });
   // the packet straight off the event: a Var Set then read in the same exec chain gave the PREVIOUS
   // packet (2026-10-20 debug: packet 0 applied 0 entries = the top 9 panel rows never drawn)
   const PKT = 'DataOut1';
@@ -193,7 +211,7 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
     data: { bCollapsed: true, PlaneCenter: { X: 0, Y: 0, Z: 0 }, PlaneExtent: { X: 14, Y: 14, Z: 2 } } });
   w.registerMicrochipLink(shell.h, grid);
   let j = 0;
-  const ig = (c, data = {}) => { const h = w.addBrick({ asset: c.BRICK, position: [(j % 10) * 40, Math.floor(j / 10) * 40, 2], color: [200, 200, 200], owner_index: O, components: [{ type: c.NAME, data }] }, grid); j++; return { h, c }; };
+  const ig = (c, data = {}) => { const h = w.addBrick({ asset: c.BRICK, position: [(j % 10) * 40, Math.floor(j / 10) * 40, 2], color: [200, 200, 200], owner_index: OL, components: [{ type: c.NAME, data }] }, grid); j++; return { h, c }; };
   const iop = (c, a, bb, data = {}) => { const x = ig(c, data); if (a) wire(...a, x, c.PORTS.InputA ? 'InputA' : 'Input'); if (bb) wire(...bb, x, 'InputB'); return [x, out(c)]; };
   const din = ig(C.MicrochipInput, { PortLabel: 'pkt', PortOrder: 0 }); wire(ev, PKT, din, 'RER_Input');
   const data = [din, 'RER_Output'];
@@ -228,9 +246,11 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
   }
   if (debug) {
     // per packet: entries done | packet length
-    const f = gate(C.Expr_String_FormatText, { FormatString: 'tgrid|{A}|{B}' }); wire(shell, 'IterationsExecuted', f, 'InputA'); wire(len, 'Output', f, 'InputB');
+    const f = gate(C.Expr_String_FormatText, { FormatString: `tgrid${lj ? lj : ''}|{A}|{B}` }); wire(shell, 'IterationsExecuted', f, 'InputA'); wire(len, 'Output', f, 'InputB');
     const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(shell, 'Completed', p, 'Exec');
   }
+  }
+  const gate = gate0;
   if (extra) extra({ w, C, O, wire, num, str, gate, G });
   w.makePrefab({});
   return w.toBrz({ bundle: { description: 'T grid receiver' }, externalAssets: FONTS });
@@ -268,7 +288,7 @@ const cartY = slot => 40 + RECV_ROWS * 40 + 40 + slot * 80;
 export function buildCartridge(lib, L, enc, { event, fps, dur, slot = 0, owner, debug = false, inChip = false } = {}) {
   const { w, C, O, wire, num, str, chip } = kit(lib, owner);
   let i = 0;
-  const CG = inChip ? chip([L.gate[0] + 40, L.gate[1] + cartY(slot) + 20, L.gate[2] + L.z0 + 10]) : null;
+  const CG = inChip ? chip([L.gate[0] + 40, L.gate[1] + cartY(slot) + 20, L.gate[2] + L.z0 + 10], undefined, O, [100, Math.max(60, Math.ceil((4 + 14 * (L.lanes ?? 1)) / 8) * 20 + 20)]) : null;
   const gate = (c, data = {}, extra = {}) => {
     if (CG) {
       const h = w.addBrick({ asset: c.BRICK, position: [(i % 8) * 20, Math.floor(i / 8) * 20, 2], color: [200, 200, 200], owner_index: O, components: [{ type: c.NAME, data }], ...extra }, CG);
@@ -281,29 +301,33 @@ export function buildCartridge(lib, L, enc, { event, fps, dur, slot = 0, owner, 
     if (i > 24) throw Error('tgrid: cartridge gates overflow their 2 rows');
     return { h, c };
   };
-  const NP = enc.packets.length;
-  const packets = gate(C.ArrayVar, { Value: { $elementType: 'WireValue', $array: (NP ? enc.packets : ['']).map(value => ({ $variant: 'Str', value })) } });
-  const dueArr = gate(C.ArrayVar, { Value: { $elementType: 'f64', $array: NP ? enc.due : [1e9] } });
-  const cur = gate(C.Var, { Value: num(0) });
   const sw = gate(C.Stopwatch, { Limit: dur + 30, Time: 0, bRunning: true });
   const now = gate(C.Expr_MathMultiply, { InputB: num(fps) }); wire(sw, 'Time', now, 'InputA');
   const clock = gate(C.Clock, { bEnabled: true, bPulseOn: false, OnTimeSeconds: 0.025, OffTimeSeconds: 0.025, IntervalSeconds: 0.05 });
   const tick = gate(C.Expr_EdgeDetectorExec); wire(clock, 'Pulse', tick, 'Input');
-  // the packet at the cursor, once its frame is due (out of bounds past the last one)
-  const getD = gate(C.Exec_ArrayVar_Get); wire(dueArr, 'ArrayVarRef', getD, 'ArrayVarRef'); wire(cur, 'Value', getD, 'Index'); wire(tick, 'OnRisingEdge', getD, 'Exec');
-  const ready = gate(C.Expr_CompareLessOrEqual); wire(getD, 'Value', ready, 'InputA'); wire(now, 'Output', ready, 'InputB');
-  const inb = gate(C.Expr_LogicalNOT); wire(getD, 'bOutOfBounds', inb, 'bInput');
-  const both = gate(C.Expr_LogicalAND); wire(ready, 'bOutput', both, 'bInputA'); wire(inb, 'bOutput', both, 'bInputB');
-  const br = gate(C.Exec_Branch); wire(both, 'bOutput', br, 'bCond'); wire(getD, 'ExecOut', br, 'Exec');
-  const getP = gate(C.Exec_ArrayVar_Get); wire(packets, 'ArrayVarRef', getP, 'ArrayVarRef'); wire(cur, 'Value', getP, 'Index'); wire(br, 'ExecOutA', getP, 'Exec');
-  const send = gate(C.Exec_SendCustomEventGlobal, { EventName: event, DataIn1: str(''), DataIn2: num(0), ...SEND_REST }, { size: EVENT_SIZE });
-  wire(getP, 'Value', send, 'DataIn1'); wire(getP, 'ExecOut', send, 'ExecIn');
-  if (debug) {
-    const f = gate(C.Expr_String_FormatText, { FormatString: 'tgsend|{A}|{B}|{C}' }); wire(cur, 'Value', f, 'InputA'); wire(now, 'Output', f, 'InputB'); wire(getD, 'Value', f, 'InputC'); // packet, frame now, frame due
-    const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(send, 'ExecOut', p, 'Exec');
+  const lanes = inChip ? L.lanes ?? 1 : 1;
+  for (let lj = 0; lj < lanes; lj++) {
+    const mine = enc.packets.map((_, i) => i).filter(i => (enc.lane?.[i] ?? 0) % lanes === lj);
+    const NP = mine.length;
+    const packets = gate(C.ArrayVar, { Value: { $elementType: 'WireValue', $array: (NP ? mine.map(i => enc.packets[i]) : ['']).map(value => ({ $variant: 'Str', value })) } });
+    const dueArr = gate(C.ArrayVar, { Value: { $elementType: 'f64', $array: NP ? mine.map(i => enc.due[i]) : [1e9] } });
+    const cur = gate(C.Var, { Value: num(0) });
+    // the packet at the cursor, once its frame is due (out of bounds past the last one)
+    const getD = gate(C.Exec_ArrayVar_Get); wire(dueArr, 'ArrayVarRef', getD, 'ArrayVarRef'); wire(cur, 'Value', getD, 'Index'); wire(tick, 'OnRisingEdge', getD, 'Exec');
+    const ready = gate(C.Expr_CompareLessOrEqual); wire(getD, 'Value', ready, 'InputA'); wire(now, 'Output', ready, 'InputB');
+    const inb = gate(C.Expr_LogicalNOT); wire(getD, 'bOutOfBounds', inb, 'bInput');
+    const both = gate(C.Expr_LogicalAND); wire(ready, 'bOutput', both, 'bInputA'); wire(inb, 'bOutput', both, 'bInputB');
+    const br = gate(C.Exec_Branch); wire(both, 'bOutput', br, 'bCond'); wire(getD, 'ExecOut', br, 'Exec');
+    const getP = gate(C.Exec_ArrayVar_Get); wire(packets, 'ArrayVarRef', getP, 'ArrayVarRef'); wire(cur, 'Value', getP, 'Index'); wire(br, 'ExecOutA', getP, 'Exec');
+    const send = gate(C.Exec_SendCustomEventGlobal, { EventName: laneEvent(event, lj), DataIn1: str(''), DataIn2: num(0), ...SEND_REST }, { size: EVENT_SIZE });
+    wire(getP, 'Value', send, 'DataIn1'); wire(getP, 'ExecOut', send, 'ExecIn');
+    if (debug) {
+      const f = gate(C.Expr_String_FormatText, { FormatString: `tgsend${lj ? lj : ''}|{A}|{B}|{C}` }); wire(cur, 'Value', f, 'InputA'); wire(now, 'Output', f, 'InputB'); wire(getD, 'Value', f, 'InputC'); // packet, frame now, frame due
+      const p = gate(C.Exec_PrintToConsole, { Text: '' }); wire(f, 'Output', p, 'Text'); wire(send, 'ExecOut', p, 'Exec');
+    }
+    const nxt = gate(C.Expr_MathAdd, { InputB: num(1) }); wire(cur, 'Value', nxt, 'InputA');
+    const adv = gate(C.Exec_Var_Set); wire(cur, 'VarRef', adv, 'VarRef'); wire(nxt, 'Output', adv, 'Value'); wire(send, 'ExecOut', adv, 'Exec');
   }
-  const nxt = gate(C.Expr_MathAdd, { InputB: num(1) }); wire(cur, 'Value', nxt, 'InputA');
-  const adv = gate(C.Exec_Var_Set); wire(cur, 'VarRef', adv, 'VarRef'); wire(nxt, 'Output', adv, 'Value'); wire(send, 'ExecOut', adv, 'Exec');
   w.makePrefab({});
   return w.toBrz({ bundle: { description: 'T grid cartridge' } });
 }
@@ -345,13 +369,13 @@ export const TV_DUMP = [-9000, -20000, 20000];
 export const tvDumpBox = () => [[TV_DUMP[0], TV_DUMP[1], TV_DUMP[2] - 100], [200, 200, 300]];
 // cabinet half width: at least 76 so the gates fit in its back (a small 1x1-tile screen gets a wide bezel)
 const tvHalf = L => Math.max(L.width / 2 + TV_B, 76);
-export function tvLayout({ tw = 32, th = 18, k = 2, cell = 2 } = {}) {
+export function tvLayout({ tw = 32, th = 18, k = 2, cell = 2, lanes = 1 } = {}) {
   // gates in the hollow back: rows at y 18 / 34, z mid-screen, 16 apart (inner half width >= 66)
   const L0 = tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0] });
   const inner = tvHalf(L0) - 4;
   const gstep = Math.min(16, Math.floor((inner - 10) / 3.5 / 2) * 2);
   if (gstep < 12) throw Error('tgrid: TV too narrow for its gates');
-  return tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0], gstep, gate: [0, 2, Math.round(L0.height / 2 / 2) * 2 - 6] });
+  return tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0], gstep, lanes, gate: [0, 2, Math.round(L0.height / 2 / 2) * 2 - 6] });
 }
 
 export function buildTv(lib, L, { event, owner, id, debug = false } = {}) {
@@ -396,7 +420,7 @@ export function buildTv(lib, L, { event, owner, id, debug = false } = {}) {
 
 /** One cartridge that blanks every tile (black), for when a stream ends. */
 export function blankCartridge(lib, L, { event, owner, slot = 0 }) {
-  const enc = encodeTiles([Buffer.alloc(L.cols * L.rows * 3)], L, newState(L), { fps: 1, per: Math.min(288, Math.floor(16200 / entryLen(L))), perSec: 1, full: [0] });
+  const enc = encodeTiles([Buffer.alloc(L.cols * L.rows * 3)], L, newState(L), { fps: 1, per: perPacket(L), perSec: 1, full: [0], lanes: L.lanes ?? 1 });
   enc.due = enc.due.map(() => 0);
   return buildCartridge(lib, L, enc, { event, fps: 1, dur: 2, slot, owner, inChip: true });
 }

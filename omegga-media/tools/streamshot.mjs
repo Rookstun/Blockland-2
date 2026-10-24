@@ -39,8 +39,10 @@ for (const g of grids) {
   }
 }
 if (!tiles.length) { console.log('no tiles found'); process.exit(1); }
+// several TVs of one owner text: --grid N picks one (default the first)
 const gs = [...new Set(tiles.map(t => t[3]))];
-if (gs.length > 1) console.log('tiles in several grids', gs, '- using', gs[0]);
+if (flag('grid', null) != null) gs.unshift(+flag('grid', null));
+if (gs.length > 1) console.log('tiles in several grids', gs, '- using', gs[0], '(--grid N)');
 const mine = tiles.filter(t => t[3] === gs[0]);
 const maxX = Math.max(...mine.map(t => t[0])), maxZ = Math.max(...mine.map(t => t[1]));
 const W = TW * K, H = TH * K, img = Buffer.alloc(W * H * 3);
