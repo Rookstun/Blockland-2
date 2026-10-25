@@ -511,7 +511,7 @@ for (const d of DUNGEONS) {
   const SPC = CELL / 10; // studs per cell
   d.keep = planSurfaceDungeon({
     seed: d.seed * 7 + 3, hole: [ex0 / 10, ey0 / 10, ex1 / 10, ey1 / 10], side: [dx, dy],
-    bounds: [3 * SPC, 3 * SPC, (C - 3) * SPC, (C - 3) * SPC], grid: tune('keep.grid', 8, 'surface keep tiles per side (+ dungeon floors)') + d.levels,
+    bounds: [3 * SPC, 3 * SPC, (C - 3) * SPC, (C - 3) * SPC], grid: tune('keep.grid', 10, 'surface keep tiles per side (+ dungeon floors); 8 before the great hall') + d.levels,
     rooms: tune('keep.rooms', 3, 'surface keep rooms (+ dungeon floors)') + d.levels, theme: DTHEMES[d.theme],
   });
   const [kx0, ky0, kx1, ky1] = [d.fx + Math.floor(d.keep.extent[0] / SPC) - 2, d.fy + Math.floor(d.keep.extent[1] / SPC) - 2,
@@ -3625,6 +3625,7 @@ for (const d of DUNGEONS) {
   const kz = d.topVox * VZ;
   for (const b of d.keep.bricks) bricks.push({ ...b, position: [b.position[0] + ox, b.position[1] + oy, b.position[2] + kz] });
   for (const s of d.keep.spawns) spawners.push({ at: [s[0] + ox, s[1] + oy, s[2] + kz], tier: d.tiers[0], dungeon: d.name, level: 0 });
+  d.keepPots = (d.keep.pots ?? []).map(p => [p[0] + ox, p[1] + oy, p[2] + kz + 12]); // the great hall's reward (greathall.mjs)
   console.error(`${d.name}: ${d.levels} floors, ${out.bricks.length} bricks, ${out.atria.length} atriums, ${out.spawns.length} spawners`);
 }
 const dungeonCount = bricks.length - terrainCount;
@@ -4036,6 +4037,7 @@ const at = (x, y, z) => [X0 + (x + 0.5) * CELL, Y0 + (y + 0.5) * CELL, z * VZ];
 // the trees, boulders and plants below keep off them
 const details = { count: 0, kinds: {} }, pots = [], casinoGames = [], wildShops = [];
 for (const at of sewerPots) pots.push({ at, where: 'sewer' });
+for (const d of DUNGEONS) for (const at of d.keepPots ?? []) pots.push({ at, where: 'keep hall' });
 {
   const wrap = (ox, oy, oz) => { const b = makeBuilder(); return { b, put: (br, x, y, z) => b.add({ ...br, position: [ox + x, oy + y, oz + z] }, br.asset ?? 'box'), free: (x0, y0, z0, x1, y1, z1) => b.free([ox + x0, oy + y0, oz + z0], [ox + x1, oy + y1, oz + z1]) }; };
   // procedural sizes off the grid would load as "Missing brick type": drop and count them
