@@ -63,7 +63,13 @@ module.exports = class Quests {
   constructor(omegga, config, store) { this.omegga = omegga; this.config = config ?? {}; this.store = store; this.pending = new Map(); this.busy = new Set(); this.level = new Map(); }
 
   async init() {
-    const on = (e, fn) => { this.omegga.removeAllListeners(e); this.omegga.on(e, (...a) => fn(...a).catch(err => console.error('[quests]', e, err))); };
+    // shared emitter: drop only our own handlers from an earlier load ('join' has other listeners: discord, progress)
+    for (const [e, h] of this.omegga.__questsHandlers ?? []) this.omegga.off(e, h);
+    this.omegga.__questsHandlers = [];
+    // handlers from loads before this tracking existed: find them by their source
+    for (const e of ['cmd:quest', 'chatcmd:quest', 'cmd:quests', 'chatcmd:quests', 'event:quest', 'join'])
+      for (const h of this.omegga.listeners(e)) if (String(h).includes("console.error('[quests]', e, err)")) this.omegga.off(e, h);
+    const on = (e, fn) => { const h = (...a) => fn(...a).catch(err => console.error('[quests]', e, err)); this.omegga.on(e, h); this.omegga.__questsHandlers.push([e, h]); };
     for (const e of ['cmd:quest', 'chatcmd:quest', 'cmd:quests', 'chatcmd:quests']) on(e, (name, ...a) => this.cmd(name, a.join(' ').trim().toLowerCase()));
     on('event:quest', (who, id) => this.interact(who, id));
     on('join', p => this.onJoin(p));
@@ -80,7 +86,7 @@ module.exports = class Quests {
     console.log(`[quests] ${NPCS.length} NPCs, ${QUESTS.length} quests (${MAIN.length} main chapters)`);
     return { registeredCommands: ['quest', 'quests'] };
   }
-  async stop() { clearInterval(this.timer); clearInterval(this.ticker); clearInterval(this.hudTimer); if (this.omegga.__questsLine) this.omegga.off('line', this.omegga.__questsLine); }
+  async stop() { for (const [e, h] of this.omegga.__questsHandlers ?? []) this.omegga.off(e, h); this.omegga.__questsHandlers = []; clearInterval(this.timer); clearInterval(this.ticker); clearInterval(this.hudTimer); if (this.omegga.__questsLine) this.omegga.off('line', this.omegga.__questsLine); }
 
   get = async id => { const s = (await this.store.get('qs:' + id)) ?? {}; s.active ??= {}; s.done ??= {}; s.regen ??= 0; s.grips ??= 0; return s; };
   put = (id, s) => this.store.set('qs:' + id, s);

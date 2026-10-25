@@ -63,12 +63,15 @@ module.exports = class Discord {
       const h = (...a) =>
         Promise.resolve()
           .then(() => fn.apply(this, a))
-          .catch(err => console.error('[discord]', e, err?.message ?? err));
+          .catch(err => (note('handlerError', `${e}: ${err?.message ?? err}`), console.error('[discord]', e, err?.message ?? err)));
       this.omegga.on(e, h);
       this.handlers.push([e, h]);
     };
     on('chat', this.onChat);
-    on('join', p => this.config.joins !== false && this.send(null, `**${mdSafe(p.name)}** joined the server`));
+    on('join', p => {
+      note('lastJoin', `${p?.name} ${new Date().toISOString()}`);
+      if (this.config.joins !== false) return this.send(null, `**${mdSafe(p?.name ?? p?.displayName)}** joined the server`);
+    });
     on('leave', p => this.config.joins !== false && this.send(null, `**${mdSafe(p.name)}** left the server`));
     if (!this.config.token || !this.config.channel) note('state', 'no token/channel');
     else {
