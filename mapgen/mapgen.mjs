@@ -529,6 +529,21 @@ for (const d of DUNGEONS) {
       // level with the roof: cut over the footprint, filled where the keep overhangs low ground
       if (inBounds(x, y)) { H[x * N + y] = roof; trenchCell[x * N + y] = 1; apronCells.push(x * N + y); }
     }
+  // round the apron (owner 2026-10-25: "make the floors outside the building flat but then as they get
+  // farther tween into the geometry approx 60 studs"): the ground eases from the roof level back into
+  // the terrain over keep.blend cells (Chebyshev from the apron), never under the roof over the dungeon
+  {
+    const BL = tune('keep.blend', 15, 'cells round a surface keep easing its flat apron into the terrain (15 = 60 studs)');
+    for (let x = kx0 - BL; x <= kx1 + BL; x++)
+      for (let y = ky0 - BL; y <= ky1 + BL; y++) {
+        if (!inBounds(x, y)) continue;
+        const dd = Math.max(kx0 - x, x - kx1, ky0 - y, y - ky1), c = x * N + y;
+        if (dd <= 0 || trenchCell[c]) continue;
+        let h = Math.round(roof + (H[c] - roof) * smooth(0, BL, dd));
+        if (footDist(d, x, y) <= 0) h = Math.max(h, roof);
+        H[c] = h;
+      }
+  }
   const gx = d.fx + Math.floor(d.keep.gate[0] / SPC), gy = d.fy + Math.floor(d.keep.gate[1] / SPC);
   let x = dx ? (dx < 0 ? kx0 : kx1) : gx, y = dy ? (dy < 0 ? ky0 : ky1) : gy;
   d.trenchWalk = { x, y, dx, dy, roof }; // re-walked after the river (see 'river')
