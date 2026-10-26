@@ -1,4 +1,4 @@
-**NEVER PACE LOADS (owner, furious, 2026-10-26, said many times): every add goes out AT ONCE. Never a loop that waits for each bricks op to finish before sending the next, never gaps/sleeps between batches, never 'procedural' one-at-a-time placement. Drop ALL batch jobs into bridge/inbox in one go (pattern: ~/citygrid/blast.mjs / mapgen/citygrid_blast.mjs), then check the log once at the end.**
+**NEVER QUEUE BRICKS, NEVER PACE (owner, furious, 2026-10-26, said many times): ALL bricks go in ONE `bricks` op in ONE job. No add_NNN batches, no chunking, no queue of jobs, no loop sending batches, no waits/sleeps/gaps, no 'procedural' one-at-a-time placement, no sitting watching a deploy. Wipe old builds with one `br.Bricks.Clear <owner> 1` (give every build its own owner), then the single bricks op.**
 
 # Brickadia building rules (what the game accepts, and what looks right)
 

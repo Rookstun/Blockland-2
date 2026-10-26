@@ -8,7 +8,7 @@
 // residential lots houses and commercial / industrial lots empty paved plots for sale (no generators for
 // those yet). Every lot gets a real estate price (land + house floor area, x income, x population).
 //   node mapgen/citygrid.mjs [--cols 8] [--rows 6] [--ox 3000] [--oy -3000] [--seed 1] [--out DIR]
-// Output: DIR/bricks.json, DIR/add_NNN.json (8000 each, {bricks, externalAssets}), DIR/city.json,
+// Output: DIR/bricks.json, DIR/add.json (every brick, ONE bricks op), DIR/city.json,
 // DIR/plots.json (realestate plots format + zoning/density/income/population/house), DIR/fields.png.
 import fs from 'fs';
 import path from 'path';
@@ -180,8 +180,8 @@ const bricks = B.bricks.map(({ label, ...b }) => b);
 fs.mkdirSync(OUT, { recursive: true });
 for (const f of fs.readdirSync(OUT).filter(f => /^add_\d+\.json$/.test(f))) fs.rmSync(path.join(OUT, f));
 fs.writeFileSync(path.join(OUT, 'bricks.json'), JSON.stringify(bricks));
-const CH = 8000;
-for (let n = 0; n * CH < bricks.length; n++) fs.writeFileSync(path.join(OUT, `add_${String(n).padStart(3, '0')}.json`), JSON.stringify({ bricks: bricks.slice(n * CH, (n + 1) * CH), externalAssets: EXTERNAL_ASSETS }));
+// owner: NEVER queue bricks: one file, one bricks op
+fs.writeFileSync(path.join(OUT, 'add.json'), JSON.stringify({ bricks, externalAssets: EXTERNAL_ASSETS }));
 fs.writeFileSync(path.join(OUT, 'plots.json'), JSON.stringify(plots, null, 1));
 fs.writeFileSync(path.join(OUT, 'city.json'), JSON.stringify({ seed: SEED, extent: EXT, downtown: F.downtown, colW, dropped, tiles: tally, zones: zoneTally, houses }, null, 1));
 writeFieldMap(path.join(OUT, 'fields.png'));
