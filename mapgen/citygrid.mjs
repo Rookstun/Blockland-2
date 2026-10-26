@@ -161,7 +161,7 @@ for (const L of lots) {
     }
     if (bad) throw new Error(`${hk} ${seed}: ${bad} bricks dropped`);
     floor = h.W * h.D * (hk === 'splitlevel' ? 1.6 : 2);
-    house = { kind: hk, seed, mirror, centre: [cx, cy], W: h.W, D: h.D, bricks: h.count };
+    house = { kind: hk, seed, mirror, centre: [cx, cy], r, origin: [cx - (r ? -lx : lx), cy - (r ? -ly : ly)], W: h.W, D: h.D, bricks: h.count };
     houses.push(house);
   } else if (kind !== 'residential') {
     // empty plot for sale: commercial = light concrete flush with the sidewalk, industrial = dark gravel yard

@@ -16,10 +16,19 @@ const { World, brdb } = lib;
 const C = brdb.COMPONENTS;
 if (!World.prototype.registerJoint) throw Error('run node tools/patch_brs4.mjs first (joint links)');
 
-const OWNER = { id: 'c1770000-0000-4b0b-9a11-0000000a3313', name: 'Tavistock', display_name: 'Tavistock' };
+const OWNER = process.argv.includes('--owner') ? { id: process.argv[process.argv.indexOf('--owner') + 1], name: process.argv[process.argv.indexOf('--owner') + 2], display_name: process.argv[process.argv.indexOf('--owner') + 2] } : { id: 'c1770000-0000-4b0b-9a11-0000000a3313', name: 'Tavistock', display_name: 'Tavistock' };
 const ASSETS = [{ type: 'BrickAudioDescriptor', name: 'BA_Thumpy_Machine' }, { type: 'BrickOneShotAudioDescriptor', name: 'OBA_Lightswitch' }, { type: 'BrickOneShotAudioDescriptor', name: 'OBA_Door_Wood3_Open' }];
 const WHITE = [244, 242, 236];
+// --turn 2: the house turned half round (city north lots, citygrid r 2): every position and normal negated in x, y;
+// load the prefab at centre + (lx, ly). --owner ID NAME: another owner (city copies, not wiped with the main house)
+const argv = process.argv.slice(2), opt = k => argv.includes(k) ? argv[argv.indexOf(k) + 1] : null;
+const turn = +(opt('--turn') ?? 0);
 const { fixtures } = tavistock();
+if (turn === 2) {
+  const n = ([x, y, z]) => [-x, -y, z];
+  for (const r of fixtures.rooms) { r.lamps.forEach(l => { l.at = n(l.at); }); r.switch.at = n(r.switch.at); r.switch.normal = r.switch.normal.map(v => -v); }
+  for (const d of fixtures.doors) { d.a0 = n(d.a0); d.a1 = n(d.a1); }
+}
 const w = new World();
 const O = w.addOwner(OWNER);
 const add = (b, grid) => w.addBrick({ owner_index: O, color: WHITE, ...b }, grid);
@@ -77,6 +86,6 @@ for (const d of fixtures.doors) {
   wire(panel, 'Switch', 'bEnabled', sel, 'Expr_Select', 'bSelectB');
   wire(sel, 'Expr_Select', 'Output', servo, 'Servo', 'TargetAngle');
 }
-const out = process.argv[2] ?? new URL('./tavistock_fixtures.brz', import.meta.url).pathname.replace(/^\/(\w:)/, '$1');
+const out = opt('--out') ?? new URL('./tavistock_fixtures.brz', import.meta.url).pathname.replace(/^\/(\w:)/, '$1');
 fs.writeFileSync(out, w.toBrz({ bundle: { description: 'Tavistock fixtures: lamps, switches, doors' }, externalAssets: ASSETS }));
 console.error(`fixtures: ${fixtures.rooms.length} switches, ${nLamps} lamps, ${fixtures.doors.length} doors -> ${out}`);
