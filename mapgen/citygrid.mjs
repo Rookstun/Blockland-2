@@ -18,6 +18,7 @@ import { makeBuilder, rng } from './builder.mjs';
 import { turnBrick, worldBox } from './orient.mjs';
 import { dutchColonial } from './dutchcolonial.mjs';
 import { splitLevel } from './splitlevel.mjs';
+import { tavistock } from './tavistock.mjs';
 import { EXTERNAL_ASSETS } from './ruins.mjs';
 import { cityFields } from './cityfields.mjs';
 
@@ -25,7 +26,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
 const COLS = +arg('cols', 8), ROWS = +arg('rows', 6), OX = +arg('ox', 3000), OY = +arg('oy', -3000);
 const SEED = +arg('seed', 1), OUT = arg('out', path.join(HERE, 'out_citygrid'));
-const T = 320, DEPTH = 4; // tile size (units); block depth in tiles = two 640-deep lots back to back
+const T = 320, DEPTH = 6; // tile size (units); block depth in tiles = two 960-deep lots back to back (Tavistock needs 820 + setback)
 
 // ---- road tiles: the owner's prefabs, local to the tile centre, with the sides each one opens to
 const SIDE = { '1,0': 'E', '-1,0': 'W', '0,1': 'N', '0,-1': 'S' };
@@ -142,8 +143,9 @@ for (const L of lots) {
   let house = null, floor = 0;
   if (kind === 'residential' && !(dens === 'rural' && rnd() < 0.3)) {
     const big = rnd() < Math.min(0.95, Math.max(0.05, inc * 1.3 - 0.15));
-    const hk = big ? 'dutchcolonial' : 'splitlevel', seed = hseed++, mirror = rnd() < 0.5;
-    const h = big ? dutchColonial({ seed, mirror }) : splitLevel({ seed, mirror });
+    // a third of the houses are Tavistock colonials (seed picks the siding colour; owner 2026-10-26)
+    const hk = rnd() < 0.33 ? 'tavistock' : big ? 'dutchcolonial' : 'splitlevel', seed = hseed++, mirror = rnd() < 0.5;
+    const h = hk === 'tavistock' ? tavistock({ seed }) : big ? dutchColonial({ seed, mirror }) : splitLevel({ seed, mirror });
     const fw = (h.W + 1) * 10, fd = (h.D + 1) * 10;
     if (fw > lw - 20 || fd > ld - 30) throw new Error(`${hk} ${seed} ${fw}x${fd} does not fit a ${lw}x${ld} lot`);
     const jit = Math.floor((rnd() - 0.5) * Math.max(0, lw - fw - 40) / 10) * 10;
@@ -158,7 +160,7 @@ for (const L of lots) {
       if (!B.add({ ...t, position: [cx + t.position[0], cy + t.position[1], t.position[2]] }, hk)) bad++;
     }
     if (bad) throw new Error(`${hk} ${seed}: ${bad} bricks dropped`);
-    floor = h.W * h.D * (big ? 2 : 1.6);
+    floor = h.W * h.D * (hk === 'splitlevel' ? 1.6 : 2);
     house = { kind: hk, seed, mirror, centre: [cx, cy], W: h.W, D: h.D, bricks: h.count };
     houses.push(house);
   } else if (kind !== 'residential') {
@@ -186,7 +188,7 @@ fs.writeFileSync(path.join(OUT, 'plots.json'), JSON.stringify(plots, null, 1));
 fs.writeFileSync(path.join(OUT, 'city.json'), JSON.stringify({ seed: SEED, extent: EXT, downtown: F.downtown, colW, dropped, tiles: tally, zones: zoneTally, houses }, null, 1));
 writeFieldMap(path.join(OUT, 'fields.png'));
 const pr = plots.map(p => p.price).sort((a, b) => a - b);
-console.error(`city ${COLS}x${ROWS}, extent ${EXT.join(',')}, ${dropped.length} streets dropped, road tiles ${JSON.stringify(tally)}, ${lots.length} lots ${JSON.stringify(zoneTally)}, ${houses.length} houses (${houses.filter(h => h.kind === 'dutchcolonial').length} Dutch), prices ${pr[0]}..${pr.at(-1)} (median ${pr[pr.length >> 1]}), ${bricks.length} bricks -> ${OUT}`);
+console.error(`city ${COLS}x${ROWS}, extent ${EXT.join(',')}, ${dropped.length} streets dropped, road tiles ${JSON.stringify(tally)}, ${lots.length} lots ${JSON.stringify(zoneTally)}, ${houses.length} houses (${houses.filter(h => h.kind === 'dutchcolonial').length} Dutch, ${houses.filter(h => h.kind === 'tavistock').length} Tavistock), prices ${pr[0]}..${pr.at(-1)} (median ${pr[pr.length >> 1]}), ${bricks.length} bricks -> ${OUT}`);
 
 /** three panels, north up, roads darkened: income (dark -> gold) | density (urban red, suburb sand,
  *  rural green; brighter = more people) | zoning triangle blend (R green, C blue, I orange) */
