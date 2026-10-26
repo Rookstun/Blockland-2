@@ -1,0 +1,12 @@
+{
+  "name": "translate",
+  "description": "Universal translator: /tr <lang> <text> says it in that language, /tr on [lang] whispers you translations of all foreign chat.",
+  "author": "pooper",
+  "config": {
+    "base-url": { "description": "FCC proxy for joke languages", "type": "string", "default": "http://127.0.0.1:8083" },
+    "model": { "description": "Model name sent to the proxy", "type": "string", "default": "claude-opus-5" }
+  },
+  "commands": [
+    { "name": "/tr", "description": "Translate: /tr <lang> <text>, /tr <text> (to English), /tr (last line), /tr on [lang], /tr off, /tr langs", "example": "/tr spanish where is the shop", "args": [] }
+  ]
+}
