@@ -606,7 +606,11 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole, checkpo
   });
   {
     const B = makeBuilder();
-    for (const b of bricks) B.add(b, 'keep');
+    // every fixed piece through the overlap index in build order; one that hits an earlier piece is
+    // dropped (a floor strip under a wall course), so the keep never ships an overlap
+    const kept = bricks.filter(b => B.add(b, 'keep'));
+    if (process.env.KEEPDBG && kept.length < bricks.length) console.error(`keep: ${bricks.length - kept.length} overlapping pieces dropped`);
+    bricks.length = 0; bricks.push(...kept);
     const boxOf = b => worldBox(b, FIXED);
     const clash = (p, q) => p[0][0] < q[1][0] && q[0][0] < p[1][0] && p[0][1] < q[1][1] && q[0][1] < p[1][1] && p[0][2] < q[1][2] && q[0][2] < p[1][2];
     let placed = 0, why = { blocked: 0, self: 0 };
