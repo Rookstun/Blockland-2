@@ -83,9 +83,9 @@ export function tavistock({ seed = 1 } = {}) {
     }
     for (const c of pcs) if (c.q > c.p && c.zt > c.z) piece(axis, line, c.p, c.q, c.z, c.zt, color, label, t);
   }
-  let lapK = 0;
-  const lapColor = () => shade(sidingC, lapK++ % 2 ? 0.93 : 1);
-  function wall(axis, line, a0, a1, z0, z1, skin, openings = [], label = 'wall', lap = 6) {
+  // shade by height, so laps of neighbouring walls line up at corners (owner: 'fix seam splitting')
+  const lapColor = z => shade(sidingC, Math.floor((z - 20) / 6) % 2 ? 0.93 : 1);
+  function wall(axis, line, a0, a1, z0, z1, skin, openings = [], label = 'wall', lap = 6, caps = [false, false]) {
     WALLS.push({ axis, line, a0, a1, z0, z1, openings });
     if (skin === 'paint') return course(axis, line, a0, a1, z0, z1, openings, [200, 196, 188], label);
     let z = z0;
@@ -95,10 +95,13 @@ export function tavistock({ seed = 1 } = {}) {
     // sides; 'siding+high' = indoors under the wing roof (z < WT), siding above it
     const out = skin.startsWith('siding-') ? -1 : 1;
     // the core (and a plaster skin) goes up in one piece: per-lap bricks drew lap seams indoors (owner, garage)
-    course(axis, out < 0 ? line + 4 : line, a0, a1, z, z1, openings, PLASTER, label + ' core', 6);
+    // caps: an end that shows outside at a corner gets 4 of siding over the core's end (the core showed as a strip)
+    const ca0 = a0 + (caps[0] ? 4 : 0), ca1 = a1 - (caps[1] ? 4 : 0), cl = out < 0 ? line + 4 : line;
+    course(axis, cl, ca0, ca1, z, z1, openings, PLASTER, label + ' core', 6);
+    for (let zz = z; zz < z1; zz += lap) for (const [p, q] of [[a0, ca0], [ca1, a1]]) if (q > p) course(axis, cl, p, q, zz, Math.min(z1, zz + lap), [], lapColor(zz), label + ' corner', 6);
     const zp = skin === 'plaster' ? z1 : skin === 'siding+high' ? Math.min(z1, WT) : z;
     if (zp > z) course(axis, out < 0 ? line : line + 6, a0, a1, z, zp, openings, PLASTER, label + ' skin', 4);
-    for (z = zp; z < z1; z += lap) course(axis, out < 0 ? line : line + 6, a0, a1, z, Math.min(z1, z + lap), openings, lapColor(), label + ' siding', 4);
+    for (z = zp; z < z1; z += lap) course(axis, out < 0 ? line : line + 6, a0, a1, z, Math.min(z1, z + lap), openings, lapColor(z), label + ' siding', 4);
   }
   function windowIn(axis, line, out, o, shutters = false, sill = true) {
     const T = { color: WHITE };
@@ -221,7 +224,7 @@ export function tavistock({ seed = 1 } = {}) {
     for (let i = 1; i <= n; i++) {
       const z = rz - per * (i + 1), zt = rz - per * i;
       const a0 = Math.max(lo, r0 - w * i), a1 = Math.min(hi, r1 + w * i);
-      for (let zz = z; zz < zt; zz += 6) if (a1 > a0) course(axis, line, a0, a1, zz, Math.min(zt, zz + 6), ops, lapColor(), 'gable');
+      for (let zz = z; zz < zt; zz += 6) if (a1 > a0) course(axis, line, a0, a1, zz, Math.min(zt, zz + 6), ops, lapColor(zz), 'gable');
     }
   }
   // main block: side gable, ridge along x at y 120..140, 13 courses of 6 on 10 from the eave at TOP
@@ -248,7 +251,7 @@ export function tavistock({ seed = 1 } = {}) {
   const fd = op(220, 250, G, G + DOOR);
   const bay = [op(46, 82, G + SILL - 6, G + HEAD), op(92, 128, G + SILL - 6, G + HEAD), op(138, 174, G + SILL - 6, G + HEAD)];
   const upF = [op(40, 76, U + SILL, U + HEAD), op(110, 146, U + SILL, U + HEAD), op(196, 230, U + SILL, U + HEAD)];
-  wall('x', 0, 0, 300, 0, TOP, 'siding-', [{ ...fd, z1: fd.z1 + 4 }, ...bay, ...upF], 'front');
+  wall('x', 0, 0, 300, 0, TOP, 'siding-', [{ ...fd, z1: fd.z1 + 4 }, ...bay, ...upF], 'front', 6, [true, false]);
   WALLS.at(-1).openings = [fd, ...bay, ...upF];
   bay.forEach(w => windowIn('x', 0, -1, w, false, false)); upF.forEach(w => windowIn('x', 0, -1, w, true));
   for (const [a, b] of [[32, 44], [176, 188]]) box(a, -2, bay[0].z0, b, 0, bay[0].z1, { color: shutC }, 'shutter');
@@ -276,7 +279,7 @@ export function tavistock({ seed = 1 } = {}) {
   // back: sitting room, kitchen (over the sink), the nook slider; upstairs one window per bedroom
   const slider = op(220, 280, G, G + 64);
   const backW = [op(40, 76, G + SILL, G + HEAD), op(160, 196, G + 32, G + HEAD), op(50, 86, U + SILL, U + HEAD), op(210, 246, U + SILL, U + HEAD)];
-  wall('x', 290, 0, 300, 0, TOP, 'siding+', [slider, ...backW], 'back');
+  wall('x', 290, 0, 300, 0, TOP, 'siding+', [slider, ...backW], 'back', 6, [true, true]);
   backW.forEach(w => windowIn('x', 290, 1, w, w.z0 > U));
   box(slider.a0 + 2, 294, G, slider.a0 + 28, 296, slider.z1, GLASS, 'slider glass');
   box(slider.a0 + 30, 292, G, slider.a1 - 2, 294, slider.z1, GLASS, 'slider glass');
@@ -326,12 +329,12 @@ export function tavistock({ seed = 1 } = {}) {
 
   // -------------------------------------------------------------- wing --
   // front row y 10..130: closet | powder (x 300..330) | hall (340..380, door to the garage) | laundry
-  wall('x', 0, 300, 480, 0, WT, 'plaster', [op(360, 390, G, G + DOOR)], 'garage wall');
+  wall('x', 0, 300, 470, 0, WT, 'plaster', [op(360, 390, G, G + DOOR)], 'garage wall');
   const laundryW = op(50, 86, G + SILL, G + HEAD);
-  wall('y', 470, 10, 280, 0, WT, 'siding+', [laundryW], 'wing side');
+  wall('y', 470, 0, 280, 0, WT, 'siding+', [laundryW], 'wing side');
   windowIn('y', 470, 1, laundryW);
   const porchDoor = op(310, 340, G, G + DOOR), livW = [op(370, 406, G + SILL, G + HEAD), op(414, 450, G + SILL, G + HEAD)];
-  wall('x', 280, 300, 480, 0, WT, 'siding+', [porchDoor, ...livW], 'wing back');
+  wall('x', 280, 300, 480, 0, WT, 'siding+', [porchDoor, ...livW], 'wing back', 6, [false, true]);
   livW.forEach(w => windowIn('x', 280, 1, w));
   box(porchDoor.a0 - 4, 290, G, porchDoor.a0, 320, G + DOOR, { color: WHITE }, 'porch door (open)');
   wall('x', 130, 300, 470, 20, GC, 'paint', [op(360, 390, G, G + DOOR)], 'wing partition');
@@ -388,7 +391,7 @@ export function tavistock({ seed = 1 } = {}) {
   box(300, -190, GC, 470, 0, GC + 4, { asset: TILE, color: [240, 240, 236], direction: 5 }, 'garage ceiling');
   box(360, -14, 4, 390, 0, 14, { color: [170, 168, 162] }, 'garage step');
   const gd = [op(306, 380, 4, 76), op(390, 464, 4, 76)], gWin = op(-120, -84, 40, 66);
-  wall('x', -200, 290, 480, 0, WT, 'siding-', gd, 'garage front');
+  wall('x', -200, 290, 480, 0, WT, 'siding-', gd, 'garage front', 6, [true, true]);
   wall('y', 290, -190, 0, 0, WT, 'siding-', [gWin], 'garage side');
   windowIn('y', 290, -1, gWin);
   wall('y', 470, -190, 0, 0, WT, 'siding+', [], 'garage side');
