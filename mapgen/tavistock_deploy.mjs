@@ -1,5 +1,6 @@
 // Deploy the Tavistock house to pzedlo in ONE job (owner rule: never queue bricks): wipe the generator's owner,
-// one bricks op with every brick, save. The owner's own work (garage door servo, light switches, pole lamp:
+// one bricks op with every brick, the working fixtures (lamps, switches, servo doors: tavistock_fixtures.mjs,
+// owned by Tavistock too) as one Prefab.Load, save. The owner's own work (garage door servo, light switches, pole lamp:
 // mapgen/tavistock_owner.brz, from tavistock_extract.mjs) is owned by the owner, so a wipe leaves it alone; pass
 // --owner-work to also Prefab.Load it (a fresh world or a new spot). Check the active world first (CLAUDE.md).
 //   node mapgen/tavistock_deploy.mjs [--owner-work] [--at X,Y,Z]
@@ -16,6 +17,10 @@ const ops = [
   { op: 'cmd', line: `br.Bricks.Clear ${OWNER.id} 1`, captureMs: 1500 },
   { op: 'bricks', at, owner: OWNER, captureMs: 3000, bricks: tavistock().bricks },
 ];
+const local = f => new URL(f, import.meta.url).pathname.replace(/^\/(\w:)/, '$1');
+execFileSync(process.execPath, [local('./tavistock_fixtures.mjs')], { stdio: 'inherit' });
+execFileSync('scp', ['-q', local('./tavistock_fixtures.brz'), `${HOST}:omegga-server/data/Saved/Prefabs/tavistock_fixtures.brz`]);
+ops.push({ op: 'cmd', line: `br.Prefab.Load "tavistock_fixtures" ${at.join(' ')} 0 16`, captureMs: 3000 });
 if (args.includes('--owner-work')) {
   execFileSync('scp', ['-q', new URL('./tavistock_owner.brz', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), `${HOST}:omegga-server/data/Saved/Prefabs/tavistock_owner.brz`]);
   ops.push({ op: 'cmd', line: `br.Prefab.Load "tavistock_owner" ${at.join(' ')} 0 16`, captureMs: 2000 });

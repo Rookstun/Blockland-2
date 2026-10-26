@@ -196,7 +196,6 @@ export function tavistock({ seed = 1 } = {}) {
       }
     }
   }
-  const light = (x, y, z, c = [255, 240, 210]) => box(x - 8, y - 8, z - 2, x + 8, y + 8, z, GLOW(c), 'ceiling light');
 
   // --------------------------------------------------------- the roofs --
   // coursed (BUILDING.md): each course a 4-high lip with a micro wedge on it, from the ridge outward
@@ -261,10 +260,6 @@ export function tavistock({ seed = 1 } = {}) {
   box(fd.a0 - 4, -4, fd.z0, fd.a0, 0, fd.z1 + 4, { color: WHITE }, 'door case');
   box(fd.a1, -4, fd.z0, fd.a1 + 4, 0, fd.z1 + 4, { color: WHITE }, 'door case');
   box(fd.a0 - 6, -6, fd.z1 + 4, fd.a1 + 6, 0, fd.z1 + 8, { color: WHITE }, 'door cornice');
-  box(fd.a0 - 4, 14, fd.z0, fd.a0, 44, fd.z1 - 18, { color: doorC }, 'front door (open)');
-  box(fd.a0 - 4, 14, fd.z1 - 6, fd.a0, 44, fd.z1, { color: doorC }, 'front door (open)');
-  for (const [a, b] of [[14, 18], [26, 28], [36, 44]]) box(fd.a0 - 4, a, fd.z1 - 18, fd.a0, b, fd.z1 - 6, { color: doorC }, 'front door (open)');
-  for (const [a, b] of [[18, 26], [28, 36]]) box(fd.a0 - 3, a, fd.z1 - 18, fd.a0 - 1, b, fd.z1 - 6, GLASS, 'door lite');
   box(fd.a1 + 6, -6, G + 40, fd.a1 + 12, 0, G + 52, GLOW([255, 236, 190], 3), 'coach light');
   // sides: sitting room + primary / back bedroom windows on the left, nothing on the wing side
   const leftG = [op(200, 236, G + SILL, G + HEAD)], leftU = [op(60, 96, U + SILL, U + HEAD), op(228, 264, U + SILL, U + HEAD)];
@@ -336,7 +331,6 @@ export function tavistock({ seed = 1 } = {}) {
   const porchDoor = op(310, 340, G, G + DOOR), livW = [op(370, 406, G + SILL, G + HEAD), op(414, 450, G + SILL, G + HEAD)];
   wall('x', 280, 300, 480, 0, WT, 'siding+', [porchDoor, ...livW], 'wing back', 6, [false, true]);
   livW.forEach(w => windowIn('x', 280, 1, w));
-  box(porchDoor.a0 - 4, 290, G, porchDoor.a0, 320, G + DOOR, { color: WHITE }, 'porch door (open)');
   wall('x', 130, 300, 470, 20, GC, 'paint', [op(360, 390, G, G + DOOR)], 'wing partition');
   wall('y', 340, 10, 130, 20, GC, 'paint', [op(24, 54, G, G + DOOR), op(90, 120, G, G + DOOR)], 'powder partition');
   wall('x', 64, 300, 340, 20, GC, 'paint', [], 'closet partition');
@@ -370,10 +364,6 @@ export function tavistock({ seed = 1 } = {}) {
 
   // ------------------------------------------------------------ lights --
   // owner 2026-10-26: an empty house, no furniture or fixtures; the fireplace is built in and stays
-  light(105, 75, GC); light(230, 80, GC); light(250, 200, GC); light(70, 200, GC); light(200, 220, GC);
-  light(390, 210, GC); light(440, 70, GC); light(375, 70, GC);
-  light(85, 70, UC); light(75, 245, UC); light(150, 165, UC); light(270, 90, UC); // bedroom B: the owner's own pole lamp + switch (tavistock_owner.brz)
-  light(205, 40, UC); light(205, 105, UC);
   // living room: white painted brick fireplace on the wing side with a long wood mantel
   const FPY0 = 176, FPY1 = 244;
   for (let z = G, k = 0; z < G + 36; z += 6, k++) {
@@ -426,7 +416,6 @@ export function tavistock({ seed = 1 } = {}) {
   // owner screenshot 2026-10-26: the open roof courses (dark lip undersides) and the attic over the living room
   // showed from the porch; a face-down boarded ceiling between the beams closes both
   box(300, 290, 100, 470, 380, WT, { asset: TILE, color: [176, 132, 92], direction: 5 }, 'porch ceiling');
-  light(385, 335, 100, [255, 236, 190]);
 
   // ------------------------------------------------------------ the deck + yard --
   box(40, 300, 0, 290, 440, 20, { color: [120, 84, 60] }, 'deck skirt');
@@ -450,6 +439,43 @@ export function tavistock({ seed = 1 } = {}) {
   box(290, -Y0, 0, 480, -204, 4, { color: [184, 180, 172] }, 'driveway');
   box(250, -Y0, 0, 290, -100, 4, { asset: TILE, color: [160, 74, 56] }, 'brick walk');
 
+  // ----------------------------------------------------------- fixtures --
+  // owner 2026-10-26: working lights, light switches and doors in every room, wired through invisible rerouters /
+  // gates so no wires show. Laid out here in plan coordinates; tavistock_fixtures.mjs writes them (components +
+  // wires need a .brz, not the bricks op). The owner's own garage door 1 and bedroom B lamp + switch stay theirs.
+  // room: lamps [x, y], ceiling underside, switch on a wall face (n = the face normal into the room), floor
+  const ROOMS = [
+    { name: 'dining', lamps: [[105, 75]], c: GC, sw: [200, 124, '-x', G] },
+    { name: 'foyer + stair', lamps: [[230, 80], [270, 90, UC]], c: GC, sw: [262, 10, '+y', G] },
+    { name: 'sitting', lamps: [[70, 220]], c: GC, sw: [112, 150, '+y', G] },
+    { name: 'kitchen', lamps: [[250, 200], [190, 230]], c: GC, sw: [266, 150, '+y', G] },
+    { name: 'living', lamps: [[390, 210]], c: GC, sw: [402, 140, '+y', G] },
+    { name: 'wing hall', lamps: [[375, 70]], c: GC, sw: [350, 70, '+x', G] },
+    { name: 'laundry', lamps: [[440, 70]], c: GC, sw: [410, 72, '+x', G] },
+    { name: 'powder', lamps: [[320, 102]], c: GC, sw: [340, 80, '-x', G] },
+    { name: 'garage', lamps: [[340, -100], [430, -100]], c: GC, sw: [400, 0, '-y', 4] },
+    { name: 'porch', lamps: [[385, 335]], c: 100, sw: [352, 290, '+y', G] },
+    { name: 'primary', lamps: [[85, 70]], c: UC, sw: [98, 130, '-y', U] },
+    { name: 'ensuite', lamps: [[205, 40]], c: UC, sw: [160, 66, '-x', U] },
+    { name: 'hall bath', lamps: [[205, 105]], c: UC, sw: [228, 130, '-y', U] },
+    { name: 'upstairs hall', lamps: [[150, 165]], c: UC, sw: [236, 140, '+y', U] },
+    { name: 'bedroom A', lamps: [[75, 245]], c: UC, sw: [128, 200, '+y', U] },
+  ];
+  // doors: the opening (wall axis, wall line, a0..a1, sill), hinge on a0, colour
+  const DOORS = [
+    { name: 'front', axis: 'x', line: 0, a0: fd.a0, a1: fd.a1, z0: G, color: doorC },
+    { name: 'porch', axis: 'x', line: 280, a0: porchDoor.a0, a1: porchDoor.a1, z0: G },
+    { name: 'garage hall', axis: 'x', line: 0, a0: 360, a1: 390, z0: G },
+    { name: 'powder', axis: 'y', line: 340, a0: 90, a1: 120, z0: G },
+    { name: 'closet', axis: 'y', line: 340, a0: 24, a1: 54, z0: G },
+    { name: 'laundry', axis: 'y', line: 400, a0: 30, a1: 60, z0: G },
+    { name: 'primary', axis: 'x', line: 130, a0: 110, a1: 140, z0: U },
+    { name: 'ensuite', axis: 'y', line: 160, a0: 24, a1: 54, z0: U },
+    { name: 'hall bath', axis: 'x', line: 130, a0: 190, a1: 220, z0: U },
+    { name: 'bedroom A', axis: 'x', line: 190, a0: 90, a1: 120, z0: U },
+    { name: 'bedroom B', axis: 'x', line: 190, a0: 200, a1: 230, z0: U },
+  ];
+
   // ------------------------------------------------------------- output --
   // mirror into the left-handed world (plan x -> total - x)
   const total = X0 + 540;
@@ -458,12 +484,24 @@ export function tavistock({ seed = 1 } = {}) {
     if (_tri != null) return { ...nb, rotation: [1, 0, 3, 2][_tri] };
     return _m ? { ...nb, ...orientFor(_m.asset, _m.ups.map(([dx, dy]) => [-dx, dy]), _m.ext, _m.zSign) } : nb;
   });
-  return { bricks, W: total / 10, D: (Y0 + 540) / 10, door: [Math.round((total - X0 - (fd.a0 + fd.a1) / 2) / 10)], count: bricks.length };
+  // fixtures in the output frame: x mirrored (a plan +x normal is a world -x one)
+  const PW = (x, y, z) => [total - (X0 + x), Y0 + y, z];
+  const N = n => ({ '+x': [-1, 0], '-x': [1, 0], '+y': [0, 1], '-y': [0, -1] })[n];
+  const fixtures = {
+    rooms: ROOMS.map(r => ({ name: r.name, lamps: r.lamps.map(([x, y, c = r.c]) => ({ at: PW(x, y, c) })), switch: { at: PW(r.sw[0], r.sw[1], r.sw[3]), normal: N(r.sw[2]) } })),
+    doors: DOORS.map(d => {
+      const z1 = d.z0 + DOOR, mid = (d.a0 + d.a1) / 2;
+      const at = (a, t, z) => d.axis === "x" ? PW(a, d.line + t, z) : PW(d.line + t, a, z);
+      return { name: d.name, color: d.color ?? WHITE, z0: d.z0, z1, hinge: at(d.a0 + 5, 5, z1 - 4), free: at(d.a1 - 2, 5, d.z0), mid: at(mid, 5, d.z0), along: d.axis === 'x' ? [-1, 0] : [0, 1] };
+    }),
+  };
+  return { bricks, fixtures, W: total / 10, D: (Y0 + 540) / 10, door: [Math.round((total - X0 - (fd.a0 + fd.a1) / 2) / 10)], count: bricks.length };
 }
 
 if (process.argv[1]?.endsWith('tavistock.mjs')) {
   const seed = +(process.argv[2] ?? 1), out = process.argv[3] ?? 'tavistock.json';
   const h = tavistock({ seed });
   fs.writeFileSync(out, JSON.stringify(h.bricks));
+  fs.writeFileSync(out.replace(/\.json$/, '') + '_fixtures.json', JSON.stringify(h.fixtures, null, 1));
   console.error(`tavistock seed ${seed}: ${h.count} bricks, ${h.W} x ${h.D} studs, door x ${h.door[0]}`);
 }
