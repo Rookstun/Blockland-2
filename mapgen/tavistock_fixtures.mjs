@@ -54,7 +54,7 @@ const GRID_DATA = { BouyancyScale: 0.2, MassScale: 1, bEnableGravity: true, bUse
 // Its servo sits on the floor at the hinge (upright, rotation 2, TargetAngle 180 = shut); the joint holds the door
 // grid at the servo itself (offset 0, rotation identity). On the grid: the panel IS the switch (click the door),
 // wired to an invisible Select (shut 180 / open 90) whose output crosses to the servo; a knob on each face.
-// Grid-local, panel toward -x from the hinge. Only change: the panel is 60 tall (was 62) to clear our 62 heads.
+// Grid-local, panel toward -x from the hinge. Only change: the panel is 58 tall (was 62; 60 still touched the head: owner 'some doors are 1 microblock too tall').
 const DOOR_WOOD = [149, 96, 46], KNOB = [246, 206, 42];
 const quat = k => ({ X: 0, Y: 0, Z: Math.sin(k * Math.PI / 4), W: Math.cos(k * Math.PI / 4) }); // k quarter turns about +Z
 for (const d of fixtures.doors) {
@@ -70,7 +70,7 @@ for (const d of fixtures.doors) {
   w.registerJoint(servo, grid, { X: 0, Y: 0, Z: 0 }, { X: 0, Y: 0, Z: 0, W: 1 });
   for (const ky of [-2, 2]) add({ asset: 'PB_DefaultMicroBrick', size: [2, 1, 2], position: [-25, ky, 28], direction: 4, rotation: 2, color: KNOB, collision: false }, grid);
   const panel = add({
-    asset: 'PB_DefaultMicroBrick', size: [15, 1, 30], position: [-14, 0, 30], direction: 4, rotation: 2, color: d.color ?? DOOR_WOOD,
+    asset: 'PB_DefaultMicroBrick', size: [15, 1, 29], position: [-14, 0, 29], direction: 4, rotation: 2, color: d.color ?? DOOR_WOOD,
     components: [{ type: C.Switch.NAME, data: { bEnabled: true, InteractSound: 2, bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: '' } }],
   }, grid);
   const sel = add({ asset: C.Expr_Select.BRICK, position: [-16, -3, 29], direction: 3, rotation: 0, ...hidden, components: [{ type: C.Expr_Select.NAME, data: { bSelectB: true, InputA: { $variant: 'f64', value: 90 }, InputB: { $variant: 'f64', value: 180 } } }] }, grid);
