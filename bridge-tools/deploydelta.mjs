@@ -35,7 +35,7 @@ fs.copyFileSync(path.join(W, WORLD + '.brdb'), path.join(W, `backup ${TAG} ${WOR
 // (2026-10-25, owner: "DO IT ALL AT ONCE") every clear in one job, every add in ONE bricks op
 const CC = +process.env.CLEAR_CHUNK || Infinity, AC = +process.env.ADD_CHUNK || Infinity;
 for (let i = 0; i < D.clear.length; i += CC) await job(D.clear.slice(i, i + CC).map(clr), 'clr' + i);
-log('cleared', D.clear.length); await sleep(8000);
+log('cleared', D.clear.length); await sleep(8000 + D.clear.length * 10); // the game drains queued ClearRegions at ~100/s: adds sent sooner get eaten by the late clears (2026-10-25 gta deploy: ~20k re-adds)
 for (let i = 0; i < D.add.length; i += AC) { const r = await job(addOp(D.add.slice(i, i + AC)), 'add' + i); log('added', Math.min(D.add.length, i + AC), '/', D.add.length, 'warnings', bad(r)); }
 
 if (D.extras && Object.keys(D.extras).length) {
