@@ -275,7 +275,12 @@ GRASS.push(...GRASS_TONES.flat());
 const FOOTPATH = [mat([150, 124, 88]), mat([140, 114, 80]), mat([158, 134, 98])];
 const FOOTFLAG = [mat([150, 144, 136]), mat([134, 128, 120])];
 const FOOTSAND = mat([190, 164, 116]);
-const FOOT_MATS = [...FOOTPATH, ...FOOTFLAG, FOOTSAND];
+const DRIVE = [mat([170, 168, 162], { asset: 'PB_DefaultTile' }), mat([160, 158, 152], { asset: 'PB_DefaultTile' })]; // (2026-10-25) the houses' concrete driveways
+const FOOT_MATS = [...FOOTPATH, ...FOOTFLAG, FOOTSAND, ...DRIVE];
+const GTA = tune('road.gta', 1, 'asphalt roads with curbs, edge lines and a dashed centre line (0 = the old dirt ride surface)');
+const ROAD_SKIN = tune('road.skin', 2, 'asphalt skin over the ride surface, units');
+const ASPHALT = [54, 56, 60], CURB = [168, 166, 158], EDGE_LINE = [226, 226, 218], CENTRE_LINE = [226, 174, 34];
+const DRIVE_KINDS = new Set(['splitlevel', 'cottage', 'townhouse', 'dutchcolonial', 'georgian']);
 
 // --------------------------------------------------------------- dungeons --
 // Zelda-style temple dungeons from dungeon.mjs: floors of rooms on a 5 x 5
@@ -2845,7 +2850,7 @@ if (tune('foot.on', 1, 'footpaths from the lone buildings to the roads (0 = none
   const dungeonNear = new Uint8Array(N * N); // 0 unknown, 1 clear, 2 too near a dungeon
   const target = c => {
     const x = (c / N) | 0, y = c % N;
-    if (footCell[c] === 1) return true;
+    if (footCell[c] === 1 || footCell[c] === 3) return true;
     if (villagePaved[c] || tierMtn.trail[c]) return true;
     return !!pathCell[c] && tunnelZ[c] < 0 && !deck[c] && !riverCell[c] && !weirCell[c] && !cutRock[c] && H[c] > SEA + 1 && inBounds(x, y);
   };
@@ -2855,7 +2860,7 @@ if (tune('foot.on', 1, 'footpaths from the lone buildings to the roads (0 = none
     if (occ[c]) return 'building';
     if (H[c] <= SEA + 1) return 'water';
     if (pathCell[c]) return 'tunnel/bridge road';
-    if (footCell[c] === 2) return 'other lot flags';
+    if (footCell[c] === 2 || footCell[c] === 4) return 'other lot flags';
     if (riverCell[c] || deck[c] || weirCell[c]) return 'river';
     if (cutRock[c]) return 'cut wall';
     if (swampCell[c] || volcanoCell[c] || trenchCell[c] || coveCell[c] || deltaCell[c] || tunnelZ[c] >= 0) return 'swamp/volcano/trench/coast';
@@ -2941,9 +2946,10 @@ if (tune('foot.on', 1, 'footpaths from the lone buildings to the roads (0 = none
     // check before laying: no cell on a building, no climb over the limit, every step 4-way
     const bad = cells.findIndex((c, i) => (i < cells.length - 1 && occ[c]) || (i && (Math.abs(H[c] - H[cells[i - 1]]) > STEP + 1 || Math.abs(((c / N) | 0) - ((cells[i - 1] / N) | 0)) + Math.abs((c % N) - (cells[i - 1] % N)) !== 1)));
     if (bad >= 0) { cells.forEach((c, i) => { H[c] = h0[i]; }); tally.failed++; console.error(`footpaths: ${tag} route failed its check at step ${bad}`); continue; }
-    for (const c of r.cells) footCell[c] = lotOf[c] === own ? 2 : 1;
+    const drive = GTA && DRIVE_KINDS.has(v.kind); // (2026-10-25) houses: a concrete driveway (3 off the lot, 4 on it)
+    for (const c of r.cells) footCell[c] = lotOf[c] === own ? (drive ? 4 : 2) : drive ? 3 : 1;
     tally.laid++; tally.cells += r.cells.length;
-    tally.joined[footCell[r.end] === 1 ? 'footpath' : villagePaved[r.end] ? 'lane' : pathCell[r.end] ? 'road' : 'trail']++;
+    tally.joined[footCell[r.end] === 1 || footCell[r.end] === 3 ? 'footpath' : villagePaved[r.end] ? 'lane' : pathCell[r.end] ? 'road' : 'trail']++;
   }
   console.error(`footpaths: ${JSON.stringify(tally)} of ${holy.length} lone buildings`);
 }
@@ -3008,6 +3014,7 @@ for (let x = 0; x < N; x++)
     else if (hengeDist(x, y) <= 0) [top, sub] = [Math.hypot(x - henge.x0 - (henge.n >> 1), y - henge.y0 - (henge.n >> 1)) < 6.5 ? DIRT : GRASS[shade], DIRT];
     else if (pathCell[x * N + y] && h > SEA + 1 && (slope < 4 || roadGraded[x * N + y])) [top, sub] = [volcanoCell[x * N + y] === 2 ? GRAVEL : PATH, DIRT];
     else if (tierMtn.trail[x * N + y] && !pathCell[x * N + y]) [top, sub] = [PATH, DIRT]; // the tiered mountains' trail
+    else if (footCell[x * N + y] >= 3) [top, sub] = [DRIVE[(x + y) & 1], STONE]; // the houses' concrete driveways
     else if (footCell[x * N + y]) [top, sub] = [footCell[x * N + y] === 2 ? FOOTFLAG[(x + y) & 1] : desertW(x, y) > 0.3 ? FOOTSAND : FOOTPATH[Math.floor(hash(x, y, 2301) * 3)], DIRT]; // footpaths
     else if (volcanoCell[x * N + y] === 3) [top, sub] = [LAVA, BASALT[1]];
     else if (volcanoCell[x * N + y]) [top, sub] = [slope < 3 && fbm2(wx / 500 + 3, wy / 500 + 8, 2) > 0.05 ? ASH : BASALT[shade & 1], BASALT[1]];
@@ -3843,6 +3850,11 @@ if (process.env.MAPGEN_RIVERDIAG) console.error('river corridor smoothing pieces
 //  fills merged into rectangles, wedges merged along runs across the slope; path colour
 const RIDE_ITERS = tune('road.rideIters', 240, 'ride surface: membrane relaxation passes (more = smoother over longer runs)');
 const RIDE_MAXFILL = tune('road.rideMaxFill', 60, 'ride surface: most units the surface may stand over its ground');
+// (2026-10-25, owner: "a road system that uses actual roads gta style with the houses we built connected to the
+// roads") asphalt roads: the ride surface gets a ROAD_SKIN-unit asphalt skin everywhere (a flat stretch used to show
+// the dirt voxel), coloured per stud: a concrete curb on the outermost stud, a white edge line inside it, a dashed
+// yellow centre line along each road's smoothed centre (none through junctions), asphalt between; the houses'
+// footpaths become concrete driveways (footCell 3/4)
 let rideBricks = 0;
 {
   const SPC = CELL / 10, W = N * SPC; // studs per cell, studs per map side
@@ -3883,7 +3895,7 @@ let rideBricks = 0;
     seen[t] = 1;
     const g = T[idx(tx * 2, ty * 2)];
     // corners 00 10 01 11, rounded up to 2 units, never more than RIDE_MAXFILL over this tile's ground
-    const h = [[0, 0], [2, 0], [0, 2], [2, 2]].map(([a, b]) => Math.min(g + RIDE_MAXFILL, Math.ceil(C[cIdx(tx * 2 + a, ty * 2 + b)] / 2) * 2));
+    const h = [[0, 0], [2, 0], [0, 2], [2, 2]].map(([a, b]) => Math.min(g + RIDE_MAXFILL, Math.ceil(C[cIdx(tx * 2 + a, ty * 2 + b)] / 2) * 2) + (GTA ? ROAD_SKIN : 0));
     tiles.push({ tx, ty, g, h });
   }
   const PC = MATS[PATH].color;
@@ -3907,34 +3919,129 @@ let rideBricks = 0;
       else t.base = hi; // a saddle (two opposite corners up): flat at the top
     }
   }
-  // fills: greedy rectangles of equal (ground, base) over the tile grid
-  const used = new Uint8Array(TW * TW);
-  for (const t of tiles) {
-    const k0 = t.tx * TW + t.ty;
-    if (used[k0] || t.base - t.g < 2) continue;
-    const same = (a, b) => { const o = tileAt.get((t.tx + a) * TW + t.ty + b); return o && o.g === t.g && o.base === t.base && !used[(t.tx + a) * TW + t.ty + b]; };
-    let l = 1; while (l < 20 && same(0, l)) l++;
-    let w = 1; grow: while (w < 20) { for (let b = 0; b < l; b++) if (!same(w, b)) break grow; w++; }
-    for (let a = 0; a < w; a++) for (let b = 0; b < l; b++) used[(t.tx + a) * TW + t.ty + b] = 1;
-    bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx(t.tx * 2) + w * 10, wy(t.ty * 2) + l * 10, (t.g + t.base) / 2], size: [w * 10, l * 10, (t.base - t.g) / 2], color: PC, ride: 1 });
-    rideBricks++;
-  }
-  // caps: wedges merged along runs across their slope (same base, height, direction); corners alone
-  const usedC = new Uint8Array(TW * TW);
-  const ck = c => c && c[0] + c[1].join(';') + c[2];
-  for (const t of tiles) {
-    const k0 = t.tx * TW + t.ty;
-    if (!t.cap || usedC[k0]) continue;
-    const [asset, dirs, d] = t.cap;
-    let len = 1, px = 0, py = 0;
-    if (asset === 'PB_DefaultMicroWedge') {
-      [px, py] = dirs[0][0] ? [0, 1] : [1, 0];
-      while (len < 20) { const o = tileAt.get((t.tx + px * len) * TW + t.ty + py * len); if (!o || o.base !== t.base || ck(o.cap) !== ck(t.cap) || usedC[(t.tx + px * len) * TW + t.ty + py * len]) break; len++; }
+  if (GTA) {
+    // per road stud: its colour. rm = any surface a road runs on or into (no curb where it meets them)
+    const rm = c => pathCell[c] || tunnelZ[c] >= 0 || townKind[c] || villagePaved[c] || deck[c] || weirCell[c] || bridgeZ[c] >= 0;
+    const sIdx = new Int32Array(W * W).fill(-1);
+    studs.forEach((i, k) => { sIdx[i] = k; });
+    const NS = studs.length, D1 = new Float32Array(NS).fill(1e9), S1 = new Float32Array(NS), R1 = new Int32Array(NS).fill(-1), TX = new Float32Array(NS), TY = new Float32Array(NS), JN = new Uint8Array(NS);
+    const roadStud = (sx, sy) => sx >= 0 && sy >= 0 && sx < W && sy < W && rm(((sx / SPC) | 0) * N + ((sy / SPC) | 0));
+    // centre lines: each graded road's cell path, smoothed twice (+-4 samples), in stud units
+    const lines = roadPaths.map(({ P }) => {
+      let q = P.map(([x, y]) => [x * SPC + SPC / 2, y * SPC + SPC / 2]);
+      for (let pass = 0; pass < 2; pass++) q = q.map((_, i) => { let a = 0, b = 0, k = 0; for (let j = Math.max(0, i - 4); j <= Math.min(q.length - 1, i + 4); j++) { a += q[j][0]; b += q[j][1]; k++; } return [a / k, b / k]; });
+      return q;
+    });
+    const visit = (R, fn) => lines.forEach((q, r) => {
+      let s = 0;
+      for (let i = 0; i + 1 < q.length; i++) {
+        const [ax, ay] = q[i], [bx, by] = q[i + 1], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+        if (L < 1e-6) continue;
+        const ux = dx / L, uy = dy / L;
+        for (let sx = Math.floor(Math.min(ax, bx) - R); sx <= Math.ceil(Math.max(ax, bx) + R); sx++)
+          for (let sy = Math.floor(Math.min(ay, by) - R); sy <= Math.ceil(Math.max(ay, by) + R); sy++) {
+            if (sx < 0 || sy < 0 || sx >= W || sy >= W) continue;
+            const k = sIdx[idx(sx, sy)]; if (k < 0) continue;
+            const px = sx + 0.5 - ax, py = sy + 0.5 - ay, t = Math.max(0, Math.min(L, px * ux + py * uy));
+            const d = Math.hypot(px - t * ux, py - t * uy);
+            if (d <= R) fn(k, d, s + t, r, ux, uy);
+          }
+        s += L;
+      }
+    });
+    visit(3, (k, d, s, r, ux, uy) => { if (d < D1[k]) { D1[k] = d; S1[k] = s; R1[k] = r; TX[k] = ux; TY[k] = uy; } });
+    // junctions: another road crossing (not running alongside) within 6 studs; grown by 2
+    visit(6, (k, d, s, r, ux, uy) => { if (R1[k] >= 0 && R1[k] !== r && Math.abs(ux * TX[k] + uy * TY[k]) < 0.85) JN[k] = 1; });
+    for (let pass = 0; pass < 2; pass++) {
+      const add = [];
+      for (let k = 0; k < NS; k++) if (JN[k]) { const i = studs[k], sx = (i / W) | 0, sy = i % W; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = sx + a >= 0 && sx + a < W && sy + b >= 0 && sy + b < W ? sIdx[idx(sx + a, sy + b)] : -1; if (n >= 0 && !JN[n]) add.push(n); } }
+      for (const n of add) JN[n] = 1;
     }
-    for (let m = 0; m < len; m++) usedC[(t.tx + px * m) * TW + t.ty + py * m] = 1;
-    const ext = [px ? len * 10 : 10, py ? len * 10 : 10, d / 2];
-    bricks.push({ asset, ...orientFor(asset, dirs, ext), position: [wx(t.tx * 2) + ext[0], wy(t.ty * 2) + ext[1], t.base + d / 2], color: PC, ride: 1 });
-    rideBricks++;
+    const PAL = [ASPHALT, CURB, EDGE_LINE, CENTRE_LINE];
+    const col = new Uint8Array(NS); // 0 asphalt, 1 curb, 2 edge line, 3 centre line
+    const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (let k = 0; k < NS; k++) { const i = studs[k], sx = (i / W) | 0, sy = i % W; if (N8.some(([a, b]) => !roadStud(sx + a, sy + b))) col[k] = 1; }
+    for (let k = 0; k < NS; k++) {
+      if (col[k]) continue;
+      const i = studs[k], sx = (i / W) | 0, sy = i % W;
+      if (N8.some(([a, b]) => { const n = sIdx[idx(sx + a, sy + b)]; return n >= 0 && col[n] === 1; })) { col[k] = 2; continue; }
+      if (D1[k] < 0.75 && !JN[k] && S1[k] % 10 < 6) col[k] = 3;
+    }
+    // a capped (sloped) tile is one colour: the most common of its studs (ties: curb, line, centre, asphalt)
+    const tileCol = t => {
+      const n = [0, 0, 0, 0];
+      for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const k = sIdx[idx(t.tx * 2 + a, t.ty * 2 + b)]; if (k >= 0) n[col[k]]++; }
+      let best = 0; for (const c of [1, 2, 3, 0]) if (n[c] > n[best] || (n[c] === n[best] && c !== 0 && best === 0)) best = c;
+      return best;
+    };
+    for (const t of tiles) {
+      t.col = tileCol(t);
+      if (t.cap) for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const k = sIdx[idx(t.tx * 2 + a, t.ty * 2 + b)]; if (k >= 0) col[k] = t.col; }
+    }
+    // fills: greedy rectangles of equal (ground, base, colour) over the stud grid, up to 40 studs a side
+    const sBase = new Float32Array(NS);
+    for (const t of tiles) for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const k = sIdx[idx(t.tx * 2 + a, t.ty * 2 + b)]; if (k >= 0) sBase[k] = t.base; }
+    const usedS = new Uint8Array(NS);
+    for (let k0 = 0; k0 < NS; k0++) {
+      if (usedS[k0]) continue;
+      const i0 = studs[k0], sx = (i0 / W) | 0, sy = i0 % W, g = T[i0], base = sBase[k0], c0 = col[k0];
+      if (base - g < 2) { usedS[k0] = 1; continue; }
+      const same = (a, b) => { if (sx + a >= W || sy + b >= W) return false; const k = sIdx[idx(sx + a, sy + b)]; return k >= 0 && !usedS[k] && T[studs[k]] === g && sBase[k] === base && col[k] === c0; };
+      let l = 1; while (l < 40 && same(0, l)) l++;
+      let w = 1; grow: while (w < 40) { for (let b = 0; b < l; b++) if (!same(w, b)) break grow; w++; }
+      for (let a = 0; a < w; a++) for (let b = 0; b < l; b++) usedS[sIdx[idx(sx + a, sy + b)]] = 1;
+      bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx(sx) + w * 5, wy(sy) + l * 5, (g + base) / 2], size: [w * 5, l * 5, (base - g) / 2], color: PAL[c0], ride: 1, split: 1 });
+      rideBricks++;
+    }
+    // caps: as below, runs also of one colour
+    const usedC = new Uint8Array(TW * TW);
+    const ck = t => t.cap && t.cap[0] + t.cap[1].join(';') + t.cap[2] + '/' + t.col;
+    for (const t of tiles) {
+      const k0 = t.tx * TW + t.ty;
+      if (!t.cap || usedC[k0]) continue;
+      const [asset, dirs, d] = t.cap;
+      let len = 1, px = 0, py = 0;
+      if (asset === 'PB_DefaultMicroWedge') {
+        [px, py] = dirs[0][0] ? [0, 1] : [1, 0];
+        while (len < 20) { const o = tileAt.get((t.tx + px * len) * TW + t.ty + py * len); if (!o || o.base !== t.base || ck(o) !== ck(t) || usedC[(t.tx + px * len) * TW + t.ty + py * len]) break; len++; }
+      }
+      for (let m = 0; m < len; m++) usedC[(t.tx + px * m) * TW + t.ty + py * m] = 1;
+      const ext = [px ? len * 10 : 10, py ? len * 10 : 10, d / 2];
+      bricks.push({ asset, ...orientFor(asset, dirs, ext), position: [wx(t.tx * 2) + ext[0], wy(t.ty * 2) + ext[1], t.base + d / 2], color: PAL[t.col], ride: 1 });
+      rideBricks++;
+    }
+    const tally = [0, 0, 0, 0]; for (let k = 0; k < NS; k++) tally[col[k]]++;
+    console.error(`asphalt roads: ${NS} studs (asphalt ${tally[0]}, curb ${tally[1]}, edge line ${tally[2]}, centre line ${tally[3]}), ${lines.length} centre lines, ${JN.reduce((a, b) => a + b, 0)} junction studs`);
+  } else {
+    // fills: greedy rectangles of equal (ground, base) over the tile grid
+    const used = new Uint8Array(TW * TW);
+    for (const t of tiles) {
+      const k0 = t.tx * TW + t.ty;
+      if (used[k0] || t.base - t.g < 2) continue;
+      const same = (a, b) => { const o = tileAt.get((t.tx + a) * TW + t.ty + b); return o && o.g === t.g && o.base === t.base && !used[(t.tx + a) * TW + t.ty + b]; };
+      let l = 1; while (l < 20 && same(0, l)) l++;
+      let w = 1; grow: while (w < 20) { for (let b = 0; b < l; b++) if (!same(w, b)) break grow; w++; }
+      for (let a = 0; a < w; a++) for (let b = 0; b < l; b++) used[(t.tx + a) * TW + t.ty + b] = 1;
+      bricks.push({ asset: 'PB_DefaultMicroBrick', position: [wx(t.tx * 2) + w * 10, wy(t.ty * 2) + l * 10, (t.g + t.base) / 2], size: [w * 10, l * 10, (t.base - t.g) / 2], color: PC, ride: 1 });
+      rideBricks++;
+    }
+    // caps: wedges merged along runs across their slope (same base, height, direction); corners alone
+    const usedC = new Uint8Array(TW * TW);
+    const ck = c => c && c[0] + c[1].join(';') + c[2];
+    for (const t of tiles) {
+      const k0 = t.tx * TW + t.ty;
+      if (!t.cap || usedC[k0]) continue;
+      const [asset, dirs, d] = t.cap;
+      let len = 1, px = 0, py = 0;
+      if (asset === 'PB_DefaultMicroWedge') {
+        [px, py] = dirs[0][0] ? [0, 1] : [1, 0];
+        while (len < 20) { const o = tileAt.get((t.tx + px * len) * TW + t.ty + py * len); if (!o || o.base !== t.base || ck(o.cap) !== ck(t.cap) || usedC[(t.tx + px * len) * TW + t.ty + py * len]) break; len++; }
+      }
+      for (let m = 0; m < len; m++) usedC[(t.tx + px * m) * TW + t.ty + py * m] = 1;
+      const ext = [px ? len * 10 : 10, py ? len * 10 : 10, d / 2];
+      bricks.push({ asset, ...orientFor(asset, dirs, ext), position: [wx(t.tx * 2) + ext[0], wy(t.ty * 2) + ext[1], t.base + d / 2], color: PC, ride: 1 });
+      rideBricks++;
+    }
   }
   // road tunnels (2026-10-16, owner: "when paths cut through caves it looks really bad": the floor
   // was 1-brick steps with a wedge each, the ceiling a brick step per cell): a ceiling skin hanging
@@ -5561,11 +5668,25 @@ else if (offGrid.length) throw new Error(`${offGrid.length} bricks off the stud 
       for (const [a0, a1] of idx.get(x + ',' + y) ?? []) if (lo[0] < a1[0] && a0[0] < hi[0] && lo[1] < a1[1] && a0[1] < hi[1] && lo[2] < a1[2] && a0[2] < hi[2]) { hit = true; break; }
     if (hit) drop.add(i);
   }
+  const keep = [];
+  let cut = 0;
+  for (const i of drop) {
+    const b = bricks[i];
+    if (!b.split || (b.size[0] === 5 && b.size[1] === 5)) continue;
+    const [lo, hi] = worldBox(b, BUILDER_FIXED);
+    for (let x = lo[0]; x < hi[0]; x += 10) for (let y = lo[1]; y < hi[1]; y += 10) {
+      let hit = false;
+      for (let gx = Math.floor(x / G); gx <= Math.floor((x + 9) / G) && !hit; gx++) for (let gy = Math.floor(y / G); gy <= Math.floor((y + 9) / G) && !hit; gy++)
+        for (const [a0, a1] of idx.get(gx + ',' + gy) ?? []) if (x < a1[0] && a0[0] < x + 10 && y < a1[1] && a0[1] < y + 10 && lo[2] < a1[2] && a0[2] < hi[2]) { hit = true; break; }
+      if (!hit) keep.push({ ...b, position: [x + 5, y + 5, b.position[2]], size: [5, 5, b.size[2]] }); else cut++;
+    }
+  }
   if (drop.size) { let k = 0; for (let i = 0; i < bricks.length; i++) if (!drop.has(i)) bricks[k++] = bricks[i]; bricks.length = k; }
-  console.error(`ride surface pieces dropped for objects on the road: ${drop.size}`);
+  bricks.push(...keep);
+  console.error(`ride surface pieces dropped for objects on the road: ${drop.size} (asphalt fills cut to studs: ${keep.length} kept, ${cut} dropped)`);
 }
 { let k = 0; for (const b of bricks) if (!b.ghost) bricks[k++] = b; bricks.length = k; } // ghosts (town.mjs vending): boxes held for prefabs loaded later
-for (const b of bricks) { delete b.gameSize; delete b.group; delete b.ride; delete b.soft; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups; ride surface marks)
+for (const b of bricks) { delete b.gameSize; delete b.group; delete b.ride; delete b.soft; delete b.split; } // (town.mjs asProp / prop: sizes the owner placed in game, model groups; ride surface marks)
 
 stage('output');
 // ----------------------------------------------------------------- output --
