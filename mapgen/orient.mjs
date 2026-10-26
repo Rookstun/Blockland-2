@@ -26,8 +26,8 @@ export const ORIENT = [
 const orientCache = new Map();
 /** direction, rotation and local size for a piece whose local x, y (and z for
  * corners) map onto +Z and the negated uphill directions; ext = world half-extents */
-export function orientFor(asset, ups, ext) {
-  const key = JSON.stringify([asset, ups, ext]);
+export function orientFor(asset, ups, ext, zSign = 1) { // zSign -1: flat face up (a hanging / inverted wedge)
+  const key = JSON.stringify([asset, ups, ext, zSign]);
   const sign = SIGN[asset];
   if (asset === 'PB_DefaultMicroWedgeCorner') {
     const res = { direction: 4, rotation: CORNER_ROT[[ups[0][0] + ups[1][0], ups[0][1] + ups[1][1]].join()], size: [...ext] };
@@ -35,7 +35,7 @@ export function orientFor(asset, ups, ext) {
     return res;
   }
   if (orientCache.has(key)) return orientCache.get(key);
-  const want = [[0, 0, 1], ...ups.map(([dx, dy]) => [-dx, -dy, 0])].map(String).sort();
+  const want = [[0, 0, zSign], ...ups.map(([dx, dy]) => [-dx, -dy, 0])].map(String).sort();
   for (let c = 0; c < 24; c++) {
     const ax = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map(v => ORIENT[c](v).map(q => q + 0)); // +0 drops -0
     const got = sign.map((g, i) => ax[i].map(q => -g * q + 0)).map(String).sort();

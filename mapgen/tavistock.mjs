@@ -50,9 +50,9 @@ export function tavistock({ seed = 1 } = {}) {
     if (x1 <= x0 || y1 <= y0 || z1 <= z0) return;
     if (!B.box(X0 + x0, Y0 + y0, z0, X0 + x1, Y0 + y1, z1, { asset: MB, ...m }, label)) throw new Error(`tavistock: ${label} dropped: ${B.dropped.at(-1)}`);
   };
-  const wedge = (x0, y0, z0, x1, y1, z1, ups, color, label) => {
+  const wedge = (x0, y0, z0, x1, y1, z1, ups, color, label, zSign = 1) => {
     const asset = 'PB_DefaultMicroWedge', ext = [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2];
-    if (!B.add({ asset, ...orientFor(asset, ups, ext), _m: { asset, ups, ext }, color, position: [X0 + (x0 + x1) / 2, Y0 + (y0 + y1) / 2, (z0 + z1) / 2] }, label)) throw new Error(`tavistock: ${label} dropped: ${B.dropped.at(-1)}`);
+    if (!B.add({ asset, ...orientFor(asset, ups, ext, zSign), _m: { asset, ups, ext, zSign }, color, position: [X0 + (x0 + x1) / 2, Y0 + (y0 + y1) / 2, (z0 + z1) / 2] }, label)) throw new Error(`tavistock: ${label} dropped: ${B.dropped.at(-1)}`);
   };
   const fadd = (x0, y0, z0, x1, y1, z1, m, label) => box(x0, y0, z0, x1, y1, z1, m, label);
   fadd.wedge = (x0, y0, z0, x1, y1, z1, rot, color) => {
@@ -293,7 +293,20 @@ export function tavistock({ seed = 1 } = {}) {
   floor('kitchen', [140, 150, 290, 290], G);
   const TREAD = [140, 96, 60];
   for (let k = 1; k <= 8; k++) box(SX0, SY0 + 12 * (k - 1), G + 10 * (k - 1), SX1, SY1, G + 10 * k, { color: shade(TREAD, k % 2 ? 1 : 0.9) }, 'stair course');
-  for (let k = 1; k <= 8; k++) box(SX0, SY0 + 12 * (k - 1) + 4, G + 10 * k, SX0 + 2, SY0 + 12 * (k - 1) + 6, G + 10 * k + 30, { color: WHITE }, 'baluster');
+  // owner 2026-10-26 'railings need wedges': a sloped handrail and an open-side stringer, each segment a hanging
+  // wedge under a standing one (a 10-high parallelogram band rising 10 per 12-unit tread)
+  const band = (x0, x1, y, z, color, label) => {
+    wedge(x0, y, z, x1, y + 12, z + 10, [[0, -1]], color, label, -1);
+    wedge(x0, y, z + 10, x1, y + 12, z + 20, [[0, 1]], color, label);
+  };
+  const RAILC = [120, 76, 44];
+  for (let k = 1; k <= 8; k++) {
+    const y = SY0 + 12 * (k - 1);
+    box(SX0, y, G + 10 * k, SX0 + 2, y + 2, G + 10 * k + 30, { color: WHITE }, 'baluster');
+    band(SX0, SX0 + 4, y, G + 10 * k + 30, RAILC, 'handrail');
+    if (k <= 6) band(SX0 - 4, SX0, y, G + 10 * (k - 1), shade(TREAD, 0.8), 'stringer');
+    else if (k === 7) wedge(SX0 - 4, y, G + 60, SX0, y + 12, G + 70, [[0, -1]], shade(TREAD, 0.8), 'stringer', -1);
+  }
   for (const [a, b, c, d] of [[10, 10, 250, 140], [10, 140, 290, 290]]) box(a, b, GC, c, d, GC + 4, { asset: TILE, color: [240, 240, 236], direction: 5 }, 'ceiling');
 
   // upstairs
@@ -436,7 +449,7 @@ export function tavistock({ seed = 1 } = {}) {
   const bricks = B.bricks.map(({ label, _m, _tri, ...b }) => {
     const nb = { ...b, position: [total - b.position[0], b.position[1], b.position[2]] };
     if (_tri != null) return { ...nb, rotation: [1, 0, 3, 2][_tri] };
-    return _m ? { ...nb, ...orientFor(_m.asset, _m.ups.map(([dx, dy]) => [-dx, dy]), _m.ext) } : nb;
+    return _m ? { ...nb, ...orientFor(_m.asset, _m.ups.map(([dx, dy]) => [-dx, dy]), _m.ext, _m.zSign) } : nb;
   });
   return { bricks, W: total / 10, D: (Y0 + 540) / 10, door: [Math.round((total - X0 - (fd.a0 + fd.a1) / 2) / 10)], count: bricks.length };
 }
