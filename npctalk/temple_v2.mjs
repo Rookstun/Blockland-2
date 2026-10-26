@@ -285,7 +285,7 @@ const zones = [], spawners = [];
 for (const brick of mine) {
   const { label, obstacle, trap, dart, spike, stash, ...b } = brick;
   const comps = [...(b.components ?? [])];
-  if (spike) comps.push({ type: COMP.Damage.NAME, data: { Damage: 20, RepeatDelay: 0.5, Message: 'SPIKES', ConsoleTag: '' } });
+  if (spike) comps.push({ type: COMP.Damage.NAME, data: { Damage: 20, RepeatDelay: 0.5, Message: '', ConsoleTag: '' } });
   if (trap !== undefined) comps.push({ type: COMP.AttachedZone.NAME, data: { ZoneStartDistance: 0, ZoneEndDistance: 40, bIsBuildingZone: false, bIsLooseZone: false, bIsShareZone: false, bWater: false,
     bDetectPlayers: true, bDetectPlayers1: true, bDetectPlayers2: true, bDetectPlayers3: true, bDetectEntities: false, bDetectProjectiles: false, TagFilter: '', ZoneWindForce: 0 } });
   if (dart) comps.push({ type: COMP.ProjectileSpawner.NAME, data: { ProjectileClass: PROJ, FireSound: null, Direction: dart.dir, SpawnLocation: 0, SpawnMargin: 5, SpawnOffsetBias: 0, bEnabled: false,

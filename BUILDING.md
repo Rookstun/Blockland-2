@@ -84,6 +84,12 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
   props; RuneScape-like towns and hamlets; natural shapes, no perfect circles
   or flat plateaus. **(owner)**
 
+- HAZARDS NEVER LABEL THEMSELVES (owner 2026-10-25, "spikes should NEVER say spikes"): Component_Damage Message ''. **(owner)**
+- STAIRS ARE ARCHITECTURE (owner 2026-10-25, "stairs should NEVER look like this unless theres an extremely good reason"): no open pyramid of stacked studded slabs. A flight runs between stringers/cheek walls (bonded, sloped wedge copes), treads are smooth tiles, both ends get landings. greathall.mjs stair. **(owner)**
+- BRICKWORK SHOWS (owner 2026-10-25): walls in bonded blocks (2-5 studs, joints staggered per course, shaded per block), not one long box per course. **(owner)**
+- WINDOWS: arched heads, and NO player fits through an opening unless it is a deliberate secret: glaze it (BMC_Glass) or keep it under ~1 stud. **(owner)**
+- WALKING SURFACES are smooth tiles (PB_DefaultSmoothTile, 4 high; a 2-high tile loads as "Missing brick type"). Big rooms must feel open: slabs on piers instead of solid blocks, light. Ceilings get real architecture (cornice, cove, coffers, an oculus/lantern), never a bare slab. **(owner)**
+
 ## 5. Players, bikes and bots
 - PLAYER (owner 2026-10-19, exact, supersedes the 48 below): the character is exactly 5 bricks = 60 units tall. Tables 2 bricks (top 24 over the floor), counters 3 (36); a 44-high display table read as "gigantic". **(owner)**
 - PLAYER (owner 2026-10-18, exact): 4 bricks = 48 units tall, jumps 300 long / 108 high. (Measured

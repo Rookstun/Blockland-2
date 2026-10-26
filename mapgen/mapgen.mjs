@@ -511,7 +511,7 @@ for (const d of DUNGEONS) {
   const SPC = CELL / 10; // studs per cell
   d.keep = planSurfaceDungeon({
     seed: d.seed * 7 + 3, hole: [ex0 / 10, ey0 / 10, ex1 / 10, ey1 / 10], side: [dx, dy],
-    bounds: [3 * SPC, 3 * SPC, (C - 3) * SPC, (C - 3) * SPC], grid: tune('keep.grid', 10, 'surface keep tiles per side (+ dungeon floors); 8 before the great hall') + d.levels,
+    bounds: [3 * SPC, 3 * SPC, (C - 3) * SPC, (C - 3) * SPC], grid: tune('keep.grid', 12, 'surface keep tiles per side (+ dungeon floors); 8 before the great hall') + d.levels,
     rooms: tune('keep.rooms', 3, 'surface keep rooms (+ dungeon floors)') + d.levels, theme: DTHEMES[d.theme],
   });
   const [kx0, ky0, kx1, ky1] = [d.fx + Math.floor(d.keep.extent[0] / SPC) - 2, d.fy + Math.floor(d.keep.extent[1] / SPC) - 2,
