@@ -1,0 +1,138 @@
+{
+	"formatVersion": "1",
+	"presetVersion": "1",
+	"type": "Environment",
+	"data":
+	{
+		"groups":
+		{
+			"ambience":
+			{
+				"SelectedAmbienceType": null,
+				"AmbienceVolume": 1,
+				"ReverbEffect": "Default"
+			},
+			"groundPlate":
+			{
+				"Variance": 0,
+				"VarianceBrickSize": 1,
+				"GroundColor":
+				{
+					"R": 0.042311001569032669,
+					"G": 0.21223099529743195,
+					"B": 0.042311001569032669,
+					"A": 1
+				},
+				"GroundAccentColor":
+				{
+					"R": 0,
+					"G": 0,
+					"B": 0,
+					"A": 1
+				},
+				"IsVisible": true,
+				"bUseStudTexture": true
+			},
+			"sky":
+			{
+				"TimeOfDay": 9.6000003814697266,
+				"AnimateTimeOfDay": false,
+				"DayLength": 30,
+				"NightLength": 15,
+				"SunAngle": 300,
+				"SunScale": 0.85000002384185791,
+				"SunHorizonScaleMultiplier": 1,
+				"SunlightColor":
+				{
+					"R": 1,
+					"G": 0.80695199966430664,
+					"B": 0.76815098524093628,
+					"A": 1
+				},
+				"SkyIntensity": 1,
+				"SkyColor":
+				{
+					"R": 0,
+					"G": 0.17144100368022919,
+					"B": 1,
+					"A": 1
+				},
+				"MoonPhase": 0.40000000596046448,
+				"MoonScale": 0.69999998807907104,
+				"MoonlightIntensity": 0.40000000596046448,
+				"MoonlightColor":
+				{
+					"R": 0.51764702796936035,
+					"G": 0.60000002384185791,
+					"B": 0.86666697263717651,
+					"A": 1
+				},
+				"StarsIntensity": 10,
+				"StarsColor":
+				{
+					"R": 0.74901998043060303,
+					"G": 0.85097998380661011,
+					"B": 1,
+					"A": 1
+				},
+				"AuroraIntensity": 0,
+				"CloudCoverage": 0.30000001192092896,
+				"Rain": 0,
+				"Snow": 0,
+				"Dust": 0,
+				"Thunder": 0,
+				"Wind": 0.20000000298023224,
+				"WindDirection": 1,
+				"bCloseLightning": true,
+				"RainVolume": 0.64999997615814209,
+				"CloseThunderVolume": 1,
+				"DistantThunderVolume": 0.40000000596046448,
+				"WindVolume": 0.64999997615814209,
+				"ClearFogDensity": 0.0099999997764825821,
+				"CloudyFogDensity": 0.25,
+				"ClearFogHeightFalloff": 0.090000003576278687,
+				"CloudyFogHeightFalloff": 0.039999999105930328,
+				"FogColor":
+				{
+					"R": 0.50288647413253784,
+					"G": 0.67954248189926147,
+					"B": 1,
+					"A": 1
+				}
+			},
+			"water":
+			{
+				"WaterHeight": 0,
+				"WaterAbsorption":
+				{
+					"X": 0.0065000001341104507,
+					"Y": 0.00070799997774884105,
+					"Z": 0.00019599999359343201
+				},
+				"WaterScattering":
+				{
+					"X": 7.0000000960135367e-06,
+					"Y": 1.8000000636675395e-05,
+					"Z": 3.0999999580672011e-05
+				},
+				"WaterFogIntensity": 0.00019999999494757503,
+				"WaterFogAmbientColor":
+				{
+					"R": 0.10000000149011612,
+					"G": 0.40952399373054504,
+					"B": 0.75,
+					"A": 1
+				},
+				"WaterFogAmbientScale": 0.25,
+				"WaterFogScatteringColor":
+				{
+					"R": 0.5,
+					"G": 1,
+					"B": 0.75,
+					"A": 1
+				},
+				"WaterFogScatteringScale": 3
+			}
+		}
+	}
+}
