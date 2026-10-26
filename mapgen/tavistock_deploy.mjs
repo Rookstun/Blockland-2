@@ -15,7 +15,7 @@ import { tavistock } from './tavistock.mjs';
 
 const HOST = 'pzedlo.hopto.org', OWNER = { id: 'c1770000-0000-4b0b-9a11-0000000a3313', name: 'Tavistock' };
 const args = process.argv.slice(2);
-const at = (args.includes('--at') ? args[args.indexOf('--at') + 1] : '1000,0,0').split(',').map(Number);
+const at = (args.includes('--at') ? args[args.indexOf('--at') + 1] : '4270,5320,0').split(',').map(Number);
 const { bricks, W, D } = tavistock();
 // the lot: the house frame (W x D studs from the origin) and 30 above the roofs
 const box = [at[0] + W * 5, at[1] + D * 5, at[2] + 150, W * 5 + 20, D * 5 + 20, 170].map(Math.round).join(' ');
