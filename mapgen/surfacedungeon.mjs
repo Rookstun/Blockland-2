@@ -284,7 +284,12 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
       for (const p of holesUp.reduce((bs, h) => bs.flatMap(q => clipRect(q, h)), clipHall(b))) put(p.x0, p.y0, p.x1, p.y1, p.z0, p.z1, { asset: MB, color: T.trim });
       for (const p of clipHall(b)) put(p.x0, p.y0, p.x1, p.y1, p.z0 + top, p.z1 + top, { asset: MB, color: T.trim });
     } else if (b.kind === 'roof') for (const p of clipHall(b)) {
-      put(p.x0, p.y0, p.x1, p.y1, p.z0 + top, p.z1 + top, { asset: TILE_B, color: T.dado }); // darker than the paving round it
+      // a regular 4 x 4 stud tile grid on the global stud grid, shades varied (owner 2026-10-25:
+      // "that greedy meshing on top sucks": one merged tile per roof box showed random long seams)
+      for (let x = Math.floor(p.x0 / 4) * 4; x < p.x1; x += 4) for (let y = Math.floor(p.y0 / 4) * 4; y < p.y1; y += 4) {
+        const a0 = Math.max(x, p.x0), a1 = Math.min(x + 4, p.x1), b0 = Math.max(y, p.y0), b1 = Math.min(y + 4, p.y1);
+        if (a1 > a0 && b1 > b0) put(a0, b0, a1, b1, p.z0 + top, p.z1 + top, { asset: TILE_B, color: shade(T.dado, (((x >> 2) * 7 + (y >> 2) * 13) % 5 + 5) % 5) });
+      }
       for (let x = p.x0; x < p.x1; x++) for (let y = p.y0; y < p.y1; y++) roofCells.add(x + ',' + y);
     }
   }
