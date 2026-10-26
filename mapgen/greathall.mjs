@@ -214,27 +214,45 @@ export function hallShell({ put, HI, HR, top, T, rng, shade, roofCells, foot, ga
   return { windows: { x: wx, y: wy }, corniceZ: z0c - 8, roofTop: ridgeZ };
 }
 
-// a recessed portal on one face of a doorway: n orders round the opening [a0, a1) along `axis`
-// (0 = wall along x at stud line c, 1 = along y), face side s (-1: toward lower c, +1: higher),
-// each order a stud wider each side and a stud prouder, heads 12 apart, a pointed head + keystone.
+// a doorway set INTO the wall (owner 2026-10-25: "doors are not placed inside walls", the v4 frames
+// stood proud of a 1-stud wall like props): on one face of the opening [a0, a1) (axis 0 = wall
+// along x at stud line c, 1 = along y; s = -1 the face toward lower c, +1 higher) the wall itself
+// thickens by D studs in the keep's running bond, from the floor to the ceiling, and the opening
+// steps one stud wider and 12 higher per layer outward (an outline round it, another a stud in),
+// jambs and lintels of every step in trim, a pointed head at the door, a keystone on the front.
 // Returns put() argument lists (the caller adds them only where they fit).
-export function portal({ axis, a0, a1, c, s, n = 2, T, h = 72, z0: zb = 0 }) {
+export function portal({ axis, a0, a1, c, s, D = 2, T, h = 72, z0 = 4, zTop = 152, field }) {
   const out = [];
-  const P = (p, q, d0, d1, z0, z1, b) => {
+  const P = (p, q, d0, d1, za, zb, b) => {
+    if (q <= p || zb <= za) return;
     const [c0, c1] = s < 0 ? [c - d1, c - d0] : [c + 1 + d0, c + 1 + d1];
-    out.push(axis === 0 ? [p, c0, q, c1, z0, z1, b] : [c0, p, c1, q, z0, z1, b]);
+    out.push(axis === 0 ? [p, c0, q, c1, za, zb, b] : [c0, p, c1, q, za, zb, b]);
   };
+  const run = (p, q, d0, d1, za, zb, course, b) => { for (const [x, y] of runCuts(p, q, course)) P(x, y, d0, d1, za, zb, b ?? { color: field() }); };
   const along = axis === 0 ? [1, 0] : [0, 1];
-  for (let o = 1; o <= n; o++) {
-    const col = o % 2 ? T.trim : T.mould, zh = h + 12 * (o - 1);
-    P(a0 - o, a0 - o + 1, 0, o, zb, zh + 12, { asset: MB, color: col });
-    P(a1 + o - 1, a1 + o, 0, o, zb, zh + 12, { asset: MB, color: col });
-    P(a0 - o + 1, a1 + o - 1, 0, o, zh, zh + 12, { asset: MB, color: col });
+  const L0 = a0 - D, L1 = a1 + D;
+  for (let k = 0; k < D; k++) {
+    const o0 = a0 - k, o1 = a1 + k, hk = h + 12 * k; // this layer's opening
+    for (let za = z0; za < zTop; za = Math.floor(za / 12) * 12 + 12) {
+      const zb = Math.min(zTop, Math.floor(za / 12) * 12 + 12), course = Math.floor(za / 12), last = zb === zTop;
+      const top = last ? { asset: MB } : null;
+      if (zb <= hk) { // beside the opening: field, a trim jamb on its edge
+        run(L0, o0 - 1, k, k + 1, za, zb, course, top && { ...top, color: field() });
+        P(o0 - 1, o0, k, k + 1, za, zb, { asset: MB, color: T.trim });
+        P(o1, o1 + 1, k, k + 1, za, zb, { asset: MB, color: T.trim });
+        run(o1 + 1, L1, k, k + 1, za, zb, course, top && { ...top, color: field() });
+      } else if (za === hk) { // the lintel course: micro, trim over the opening, a keystone on the front layer
+        run(L0, o0 - 1, k, k + 1, za, zb, course, { asset: MB, color: field() });
+        if (k === D - 1) { const m = (o0 + o1) / 2; P(o0 - 1, m - 0.6, k, k + 1, za, zb, { asset: MB, color: T.trim }); P(m - 0.6, m + 0.6, k, k + 1, za, zb, { asset: MB, color: GOLD }); P(m + 0.6, o1 + 1, k, k + 1, za, zb, { asset: MB, color: T.trim }); }
+        else P(o0 - 1, o1 + 1, k, k + 1, za, zb, { asset: MB, color: T.trim });
+        run(o1 + 1, L1, k, k + 1, za, zb, course, { asset: MB, color: field() });
+      } else run(L0, L1, k, k + 1, za, zb, course, top && { ...top, color: field() });
+    }
   }
+  // the pointed head of the door itself: two hanging wedges in the innermost layer's top course
   const mid = (a0 + a1) / 2;
   P(a0, mid, 0, 1, h - 12, h, { asset: WEDGE, color: T.trim, wedge: { D: [-along[0], -along[1]], down: true } });
   P(mid, a1, 0, 1, h - 12, h, { asset: WEDGE, color: T.trim, wedge: { D: along, down: true } });
-  P(mid - 0.4, mid + 0.4, n, n + 0.4, h + 12 * (n - 1) + 2, h + 12 * n - 2, { asset: MB, color: GOLD }); // keystone
   return out;
 }
 

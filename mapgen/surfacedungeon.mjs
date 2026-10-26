@@ -285,6 +285,22 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
   const frng = makeRng((seed ?? 1) * 97 + 5); // decoration draws: the keep's own rng (spawns) stays put
   const [gtx, gty] = L.gateTile;
   const gateK = [gx + (gtx + 0.5 + side[0] * 0.5) * TILE - ox, gy + (gty + 0.5 + side[1] * 0.5) * TILE - oy];
+  // a door edge's real opening in the built wall (owner 2026-10-25: "doors are not placed inside
+  // walls": the wall builder can shift or drop an opening, so read it off the wall cells): the
+  // 4-stud gap with no wall in courses 0-5 and jambs either side, searched +-4 studs from the plan
+  const opening = key => {
+    const [[ax, ay], [bx, by]] = key.split('|').map(t => t.split(',').map(Number));
+    const H = ay !== by, l = H ? Math.max(ay, by) : Math.max(ax, bx);
+    const c = (H ? shy : shx) + l * TILE, p0 = (H ? shx + ax * TILE : shy + ay * TILE) + 2;
+    const w = (a, k) => wallAt.has(H ? `${a},${c},${k}` : `${c},${a},${k}`);
+    for (const sh of [0, -1, 1, -2, 2, -3, 3, -4, 4]) {
+      const a0 = p0 + sh;
+      let gap = true;
+      for (let a = a0; a < a0 + 4 && gap; a++) for (let k = 0; k < 6; k++) if (w(a, k)) { gap = false; break; }
+      if (gap && w(a0 - 1, 0) && w(a0 + 4, 0)) return { H, c, a0, a1: a0 + 4, ax, ay, bx, by };
+    }
+    return null;
+  };
   // doors of a tile rect (grid tiles), as spans on its walls (keep frame)
   const doorsOf = r => {
     const inR = (x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h, out = [];
@@ -292,8 +308,9 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
       const [[ax, ay], [bx, by]] = key.split('|').map(t => t.split(',').map(Number));
       if (inR(ax, ay) === inR(bx, by)) continue;
       const [ix, iy, ex, ey] = inR(ax, ay) ? [ax, ay, bx, by] : [bx, by, ax, ay];
-      if (ey !== iy) out.push({ side: ey < iy ? 'S' : 'N', a0: shx + ix * TILE + 2, a1: shx + ix * TILE + 6 });
-      else out.push({ side: ex < ix ? 'W' : 'E', a0: shy + iy * TILE + 2, a1: shy + iy * TILE + 6 });
+      const o = opening(key);
+      if (!o) continue;
+      out.push({ side: ey !== iy ? (ey < iy ? 'S' : 'N') : (ex < ix ? 'W' : 'E'), a0: o.a0, a1: o.a1 });
     }
     return out;
   };
@@ -315,15 +332,16 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
   for (const a of floors({ tiles, sh: [shx, shy], TILE, wallAt: (x, y) => wallAt.has(`${x},${y},0`), keepOut, T, rng: frng })) put(...a);
   // optional pieces (portals, furniture): each group goes in whole where it touches nothing, else not at all
   const groups = [];
+  let noOpening = 0;
   for (const key of L.doors) {
-    const [[ax, ay], [bx, by]] = key.split('|').map(t => t.split(',').map(Number));
-    const H = ay !== by, l = H ? Math.max(ay, by) : Math.max(ax, bx);
-    const d = H ? { axis: 0, c: shy + l * TILE, a0: shx + ax * TILE + 2 } : { axis: 1, c: shx + l * TILE, a0: shy + ay * TILE + 2 };
-    d.a1 = d.a0 + 4;
+    const o = opening(key);
+    if (!o) { noOpening++; continue; }
+    const { H, ax, ay, bx, by } = o, d = { axis: H ? 0 : 1, c: o.c, a0: o.a0, a1: o.a1 };
     const isGate = (ax === gtx && ay === gty && bx === gtx + side[0] && by === gty + side[1]) || (bx === gtx && by === gty && ax === gtx + side[0] && ay === gty + side[1]);
     for (const s of [-1, 1]) {
       const outside = isGate && s === (H ? side[1] : side[0]);
-      const tries = (outside ? [3, 2, 1] : [2, 1]).map(n => portal({ ...d, s, n, T, z0: outside ? 0 : 4 }));
+      const field = () => { const k = Math.floor(frng() * 5); return shade(T.field[k % T.field.length], k); };
+      const tries = (outside ? [3, 2, 1] : [2, 1]).map(D => portal({ ...d, s, D, T, z0: outside ? 0 : 4, zTop: top - 4, field }));
       groups.push({ alts: tries });
     }
   }
@@ -359,6 +377,7 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
       placed++;
       break;
     }
+    if (process.env.KEEPDBG) console.error(`doors without an opening: ${noOpening}/${L.doors.size}`);
     if (process.env.KEEPDBG) console.error(`keep decor: ${placed}/${groups.length} groups placed`, why);
   }
   const [tx, ty] = L.gateTile;
