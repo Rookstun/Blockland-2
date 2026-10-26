@@ -24,7 +24,6 @@ const GLASS = { color: [170, 210, 230], material: 'BMC_Glass' };
 const SCREEN = { color: [50, 54, 56], material: 'BMC_Glass' };
 const GLOW = (color, i = 4) => ({ color, material: 'BMC_Glow', material_intensity: i });
 const WHITE = [242, 242, 238], TILE = 'PB_DefaultTile', MB = 'PB_DefaultMicroBrick';
-const METAL = { color: [190, 190, 196], material: 'BMC_Metallic' };
 const PAPERS = [
   { kind: 'paint', color: [178, 184, 214] },          // the dining / living lavender-blue
   { kind: 'paint', color: [214, 190, 150] },          // foyer tan
@@ -333,7 +332,7 @@ export function tavistock({ seed = 1 } = {}) {
   finishRoom({ x0: 10, y0: 10, x1: 200, y1: 140, z0: G, z1: GC }, { paper: P[0], wains: WAINS[0] });
   finishRoom({ x0: 210, y0: 10, x1: 290, y1: 140, z0: G, z1: GC }, { paper: P[1], wains: WAINS[0], skip: { x1: 'all', y1: [[248, 290]] } });
   finishRoom({ x0: 10, y0: 150, x1: 130, y1: 290, z0: G, z1: GC }, { paper: P[0], wains: WAINS[1] });
-  finishRoom({ x0: 140, y0: 150, x1: 290, y1: 290, z0: G, z1: GC }, { paper: P[5], wains: WAINS[1], skip: { y1: [[140, 214]], x0: [[264, 290]] } });
+  finishRoom({ x0: 140, y0: 150, x1: 290, y1: 290, z0: G, z1: GC }, { paper: P[5], wains: WAINS[1], });
   finishRoom({ x0: 300, y0: 140, x1: 470, y1: 280, z0: G, z1: GC }, { paper: P[0], wains: WAINS[1], skip: { x1: [[152, 268]] } });
   finishRoom({ x0: 350, y0: 10, x1: 400, y1: 130, z0: G, z1: GC }, { paper: P[1], wains: WAINS[0] });
   finishRoom({ x0: 410, y0: 10, x1: 470, y1: 130, z0: G, z1: GC }, { paper: { kind: 'paint', color: [110, 120, 140] }, wains: WAINS[1] });
@@ -345,20 +344,13 @@ export function tavistock({ seed = 1 } = {}) {
   finishRoom({ x0: 10, y0: 200, x1: 140, y1: 290, z0: U, z1: UC }, { paper: P[3] });
   finishRoom({ x0: 150, y0: 200, x1: 290, y1: 290, z0: U, z1: UC }, { paper: pick([P[2], { kind: 'stripe', cols: [[6, [60, 60, 64]], [4, [230, 230, 226]]] }]) });
 
-  // ---------------------------------------------------------- fixtures --
-  // owner 2026-10-26: no furniture; only the kitchen counter run, bathrooms and the laundry
-  light(105, 75, GC); light(230, 80, GC); light(250, 200, GC); light(70, 200, GC);
-  const CAB = [244, 244, 240], TOPC = [56, 44, 40], KB = 290;
-  box(144, 154, G, 170, 180, G + 58, METAL, 'fridge');
-  for (let x = 144, k = 0; x < 214; x += 14, k++) box(x, KB - 22, G, x + 14, KB, G + 26, { color: shade(CAB, k % 2 ? 0.96 : 1) }, 'base cabinet');
-  box(144, KB - 24, G + 26, 214, KB, G + 30, { color: TOPC }, 'worktop');
-  box(170, KB - 18, G + 30, 186, KB - 6, G + 32, METAL, 'sink');
-  box(194, KB - 20, G + 30, 210, KB - 4, G + 32, { color: [30, 30, 32] }, 'range top');
-  box(144, KB - 4, G + 30, 214, KB, G + 50, { color: [190, 110, 70] }, 'backsplash');
-  box(144, KB - 14, G + 58, 158, KB, GC, { color: CAB }, 'wall cabinet');
-  box(200, KB - 14, G + 58, 214, KB, GC, { color: CAB }, 'wall cabinet');
-  light(200, 220, GC, [255, 244, 220]);
-  // living room: white painted brick fireplace on the wing side with a long wood mantel, two blue sofas
+  // ------------------------------------------------------------ lights --
+  // owner 2026-10-26: an empty house, no furniture or fixtures; the fireplace is built in and stays
+  light(105, 75, GC); light(230, 80, GC); light(250, 200, GC); light(70, 200, GC); light(200, 220, GC);
+  light(390, 210, GC); light(440, 70, GC); light(375, 70, GC);
+  light(85, 70, UC); light(75, 245, UC); light(220, 245, UC); light(150, 165, UC); light(270, 90, UC);
+  light(205, 40, UC); light(205, 105, UC);
+  // living room: white painted brick fireplace on the wing side with a long wood mantel
   const FPY0 = 176, FPY1 = 244;
   for (let z = G, k = 0; z < G + 36; z += 6, k++) {
     const c = { color: shade(brickC, k % 2 ? 0.95 : 1) };
@@ -369,27 +361,6 @@ export function tavistock({ seed = 1 } = {}) {
   box(452, FPY0 - 20, G + 36, 470, FPY1 + 20, G + 40, { color: [112, 70, 40] }, 'mantel');
   box(436, FPY0, G, 456, FPY1, G + 4, { color: shade(brickC, 0.9) }, 'hearth');
   box(458, 202, G + 6, 466, 218, G + 8, GLOW([255, 120, 40], 3), 'embers');
-  light(390, 210, GC);
-  for (const x of [416, 442]) { box(x, 104, G, x + 24, 126, G + 26, { color: [244, 244, 244] }, 'washer'); box(x + 6, 102, G + 8, x + 18, 104, G + 20, { color: [60, 70, 80], material: 'BMC_Glass' }, 'porthole'); }
-  box(416, 110, G + 50, 466, 124, GC - 6, { color: CAB }, 'laundry cabinet');
-  light(440, 70, GC); light(375, 70, GC);
-  box(304, 108, G, 314, 118, G + 8, { color: CAB }, 'toilet'); box(304, 106, G + 8, 316, 120, G + 12, { color: CAB }, 'toilet seat');
-  box(320, 80, G, 326, 86, G + 26, { color: CAB }, 'pedestal'); box(316, 78, G + 26, 330, 90, G + 30, { color: CAB }, 'basin');
-  light(85, 70, UC); light(75, 245, UC); light(220, 245, UC); light(150, 165, UC); light(270, 90, UC);
-  // ensuite: double floating vanity on the stairwell wall, glass shower; hall bath: tub, vanity, toilet
-  box(222, 18, U + 12, 236, 62, U + 28, { color: [170, 120, 80] }, 'floating vanity');
-  box(222, 18, U + 28, 236, 62, U + 30, { color: [244, 244, 240] }, 'vanity top');
-  box(174, 36, U, 200, 64, U + 2, { color: [230, 230, 230] }, 'shower tray');
-  box(200, 36, U, 202, 64, U + 64, GLASS, 'shower glass');
-  box(176, 14, U, 186, 24, U + 12, { color: CAB }, 'toilet');
-  const TUB = [244, 244, 240];
-  box(174, 84, U, 236, 106, U + 2, { color: TUB }, 'tub bottom');
-  box(174, 84, U + 2, 236, 88, U + 16, { color: TUB }, 'tub side'); box(174, 102, U + 2, 236, 106, U + 16, { color: TUB }, 'tub side');
-  box(174, 88, U + 2, 178, 102, U + 16, { color: TUB }, 'tub end'); box(232, 88, U + 2, 236, 102, U + 16, { color: TUB }, 'tub end');
-  box(178, 88, U + 2, 232, 102, U + 8, { color: [150, 200, 220], material: 'BMC_Glass' }, 'bath water');
-  box(226, 108, U, 236, 126, U + 28, { color: CAB }, 'vanity'); box(224, 108, U + 28, 236, 126, U + 30, { color: [232, 230, 226] }, 'vanity top');
-  box(174, 110, U, 184, 120, U + 12, { color: CAB }, 'toilet');
-  light(205, 40, UC, [255, 244, 220]); light(205, 115, UC, [255, 244, 220]);
 
   // ------------------------------------------------------------ garage --
   box(300, -190, 0, 470, 0, 4, { asset: TILE, color: [168, 166, 160] }, 'garage floor');
