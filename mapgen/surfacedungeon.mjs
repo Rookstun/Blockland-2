@@ -173,11 +173,12 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed }) {
   const top = COURSES * 12;
   // stud box (keep frame, after buildFromPlan's shift) -> local-unit brick
   // (rounded: greathall.mjs puts 0.2-stud parts; brick.wedge = { D, down } orients a micro wedge)
-  const put = (x0, y0, x1, y1, z0, z1, { wedge, ...b }) => {
+  const SIDE_ROT = { '-1,-1': 0, '1,-1': 1, '1,1': 2, '-1,1': 3 }; // vertical side wedge: rotation by the side it is solid toward
+  const put = (x0, y0, x1, y1, z0, z1, { wedge, side, ...b }) => {
     const size = [Math.round(((x1 - x0) * U) / 2), Math.round(((y1 - y0) * U) / 2), Math.round((z1 - z0) / 2)];
     bricks.push({
       ...b, position: [Math.round((ox + (x0 + x1) / 2) * U), Math.round((oy + (y0 + y1) / 2) * U), Math.round((z0 + z1) / 2)],
-      size, ...(wedge ? orientWedge(wedge.D, wedge.down, size) : {}),
+      size, ...(wedge ? orientWedge(wedge.D, wedge.down, size) : {}), ...(side ? { direction: 4, rotation: SIDE_ROT[side.join()] } : {}),
     });
   };
   const wallAt = new Set();

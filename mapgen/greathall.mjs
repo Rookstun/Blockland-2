@@ -223,15 +223,34 @@ export function greatHall({ put, I, doors, T, rng, shade, shell }) {
     let a = u0, L = 1 + ((n * 3) % 4);
     while (a < u1) { if (u1 - a - L < 2) L = u1 - a; const b = Math.min(u1, a + L); box(a, v0, b, v1, z0, z1, { color: fieldR() }); a = b; L = 2 + Math.floor(rng() * 4); }
   };
-  // a square column of bonded courses (the split turns every course), a smooth cap
-  const column = (u0, v0, s, z0, z1, cap) => {
-    const h = Math.ceil(s / 2);
-    for (let z = z0, n = 0; z < z1; z += 12, n++) {
-      const zt = Math.min(z1, z + 12);
-      if (n % 2) { box(u0, v0, u0 + h, v0 + s, z, zt, { color: fieldR() }); box(u0 + h, v0, u0 + s, v0 + s, z, zt, { color: fieldR() }); }
-      else { box(u0, v0, u0 + s, v0 + h, z, zt, { color: fieldR() }); box(u0, v0 + h, u0 + s, v0 + s, z, zt, { color: fieldR() }); }
+  const ubondC = (u0, u1, v0, v1, z0, z1, n, col) => { // ubond in one colour family
+    let a = u0, L = 1 + ((n * 3) % 4);
+    while (a < u1) { if (u1 - a - L < 2) L = u1 - a; const b = Math.min(u1, a + L); box(a, v0, b, v1, z0, z1, { color: col() }); a = b; L = 2 + Math.floor(rng() * 4); }
+  };
+  const MARBLE = [[70, 130, 92], [62, 118, 84], [78, 140, 100]], GOLD = [196, 170, 92];
+  const wd = (du_, dv_) => { const [a, b] = f.m(0, 0), [c, d] = f.m(du_, dv_); return [Math.sign(c - a), Math.sign(d - b)]; }; // hall-frame dir -> world
+  // an octagonal 3 x 3 shaft: a cross of micro bricks, the corners vertical side wedges (solid toward the axis), in drums
+  const octShaft = (u0, v0, z0, z1, drum = 24) => {
+    for (let z = z0, n = 0; z < z1; z += drum, n++) {
+      const zt = Math.min(z1, z + drum), c = MARBLE[n % 3];
+      box(u0 + 1, v0, u0 + 2, v0 + 3, z, zt, { asset: MB, color: c });
+      box(u0, v0 + 1, u0 + 1, v0 + 2, z, zt, { asset: MB, color: c });
+      box(u0 + 2, v0 + 1, u0 + 3, v0 + 2, z, zt, { asset: MB, color: c });
+      for (const [cu, cv, du_, dv_] of [[0, 0, 1, 1], [2, 0, -1, 1], [0, 2, 1, -1], [2, 2, -1, -1]])
+        box(u0 + cu, v0 + cv, u0 + cu + 1, v0 + cv + 1, z, zt, { asset: WEDGE, color: c, side: wd(du_, dv_) });
     }
-    if (cap) box(u0, v0, u0 + s, v0 + s, z1, z1 + 4, { asset: SMOOTH, color: cap });
+  };
+  // a platform pillar, 5 x 5 footprint: plinth, gold base, marble shaft, necking, corbelled flare, abacus, smooth top
+  const pillar = (u0, v0, h) => {
+    box(u0, v0, u0 + 5, v0 + 5, 0, 12, { color: T.trim });
+    box(u0 + 0.5, v0 + 0.5, u0 + 4.5, v0 + 4.5, 12, 16, { asset: MB, color: GOLD });
+    octShaft(u0 + 1, v0 + 1, 16, h - 24);
+    box(u0 + 1, v0 + 1, u0 + 4, v0 + 4, h - 24, h - 22, { asset: MB, color: GOLD });
+    box(u0 + 1, v0 + 1, u0 + 4, v0 + 4, h - 22, h - 10, { asset: MB, color: T.trim });
+    for (const [a, b, c, d, D] of [[0, 1, 1, 4, [1, 0]], [4, 1, 5, 4, [-1, 0]], [1, 0, 4, 1, [0, 1]], [1, 4, 4, 5, [0, -1]]])
+      box(u0 + a, v0 + b, u0 + c, v0 + d, h - 22, h - 10, { asset: WEDGE, color: T.trim, wedge: { D: wd(...D), down: true } });
+    box(u0, v0, u0 + 5, v0 + 5, h - 10, h - 4, { asset: MB, color: T.trim });
+    box(u0, v0, u0 + 5, v0 + 5, h - 4, h, { asset: SMOOTH, color: T.mould });
   };
   // ---- the pit's footprint first: the floor leaves it out
   const pu0 = 4, pu1 = f.W - 4, pv0 = GD + SW + 3, pv1 = f.D - 4;
@@ -243,32 +262,35 @@ export function greatHall({ put, I, doors, T, rng, shade, shell }) {
   for (let u = 0; u < f.W; u += 4) for (let v = 0; v < f.D; v += 4)
     for (const r of minus([u, v, Math.min(f.W, u + 4), Math.min(f.D, v + 4)], outer)) box(...r, 0, FL, { asset: SMOOTH, color: tone(u, v) });
   for (const r of minus(outer, [pu0, pv0, pu1, pv1])) box(...r, 0, FL, { asset: SMOOTH, color: CARPET });
-  // ---- gallery: a smooth-tile slab on piers, hanging-wedge haunches either side of each pier
+  // ---- gallery: a smooth-tile slab on an arcade of octagonal piers (pointed arches between them)
   const SLAB = FL + GH - 16;
   box(0, 0, f.W, GD, SLAB, FL + GH - 4, { asset: MB, color: T.trim });
   box(0, 0, f.W, GD, FL + GH - 4, FL + GH, { asset: SMOOTH, color: T.mould });
-  const piers = [];
-  for (let u = 2; u + 2 <= f.W - 2; u += 7) piers.push(u);
-  if (piers.at(-1) < f.W - 6) piers.push(f.W - 4);
-  for (const u of piers) {
-    column(u, GD - 2, 2, FL, SLAB, null);
-    for (const [a, d] of [[u - 1, 1], [u + 2, -1]]) if (a >= 0 && a + 1 <= f.W && piers.every(p => a + 1 <= p || a >= p + 2))
-      box(a, GD - 2, a + 1, GD, SLAB - 12, SLAB, { asset: WEDGE, color: T.trim, wedge: { D: [du[0] * d, du[1] * d], down: true } });
+  const NPI = Math.floor((f.W + 4) / 7), m0 = Math.floor((f.W - (7 * NPI - 4)) / 2);
+  for (let i = 0; i < NPI; i++) {
+    const u = m0 + 7 * i;
+    box(u, GD - 3, u + 3, GD, FL, FL + 8, { asset: MB, color: T.trim });
+    octShaft(u, GD - 3, FL + 8, SLAB - 14);
+    box(u, GD - 3, u + 3, GD, SLAB - 14, SLAB - 12, { asset: MB, color: GOLD });
+    box(u, GD - 3, u + 3, GD, SLAB - 12, SLAB, { asset: MB, color: T.trim });
+    if (i + 1 < NPI) for (const [a, d] of [[u + 3, -1], [u + 5, 1]])
+      box(a, GD - 3, a + 2, GD, SLAB - 12, SLAB, { asset: WEDGE, color: T.trim, wedge: { D: wd(d, 0), down: true } });
   }
-  // ---- the stair: treads between two stringers, bonded, smooth treads, sloped copes
+  // ---- the stair: treads between two stringers (pale stone, so the wedge copes read as one slope), smooth treads
   const seg = j => (dir > 0 ? [st + 2 * (j - 1), st + 2 * j] : [st + 22 - 2 * j, st + 22 - 2 * (j - 1)]);
   const segs = (ja, jb) => { const a = Math.min(seg(ja)[0], seg(jb)[0]), b = Math.max(seg(ja)[1], seg(jb)[1]); return [a, b]; };
   const cz = c => (c === 0 ? [FL, FL + 8] : [FL + 12 * c - 4, FL + 12 * c + 8]);
   const NT = GH / 12; // 11 treads
+  const cheek = () => shade(T.trim, Math.floor(rng() * 5));
   for (let c = 0; c < NT; c++) { // tread fill: course c under every tread j > c; the top two treads reach back to the gallery
     const [z0, z1] = cz(c), [a, b] = segs(c + 1, NT);
     ubond(a, b, GD + 1, GD + SW - 1, z0, z1, c);
     const [p, q] = segs(Math.max(c + 1, NT - 1), NT);
     ubond(p, q, GD, GD + 1, z0, z1, c + 1);
   }
-  for (let j = 1; j <= NT; j++) { const [a, b] = seg(j); box(a, j >= NT - 1 ? GD : GD + 1, b, GD + SW - 1, FL + 12 * j - 4, FL + 12 * j, { asset: SMOOTH, color: T.mould }); }
+  for (let j = 1; j <= NT; j++) { const [a, b] = seg(j); box(a, j >= NT - 1 ? GD : GD + 1, b, GD + SW - 1, FL + 12 * j - 4, FL + 12 * j, { asset: SMOOTH, color: T.dado }); }
   for (const [v0, last] of [[GD + SW - 1, NT], [GD, NT - 2]]) { // front stringer whole, the back one stops short of the gallery
-    for (let c = 0; c <= last; c++) { const [z0, z1] = cz(c), [a, b] = segs(Math.max(1, c), last); ubond(a, b, v0, v0 + 1, z0, z1, c + 5); }
+    for (let c = 0; c <= last; c++) { const [z0, z1] = cz(c), [a, b] = segs(Math.max(1, c), last); ubondC(a, b, v0, v0 + 1, z0, z1, c + 5, cheek); }
     for (let j = 1; j <= last; j++) { const [a, b] = seg(j); box(a, v0, b, v0 + 1, FL + 12 * j + 8, FL + 12 * j + 20, { asset: WEDGE, color: T.trim, wedge: { D: [du[0] * dir, du[1] * dir], down: false } }); }
   }
   // ---- island, pillars
@@ -276,16 +298,22 @@ export function greatHall({ put, I, doors, T, rng, shade, shell }) {
   const iu0 = Math.floor((P[0] + P[2] - IS) / 2), iv0 = Math.floor((P[1] + P[3] - IS) / 2) + 1;
   const ISL = [iu0, iv0, iu0 + IS, iv0 + IS];
   const GTOP = FL + GH, ISTOP = GTOP + 3 * STEP;
-  const off = Math.max(2, Math.min(6, ISL[0] - P[0] - 4, ISL[1] - P[1] - 4, P[2] - ISL[2] - 4, P[3] - ISL[3] - 4));
-  const M = [ISL[0] - off - 3, ISL[1] - off - 3, ISL[2] + off, ISL[3] + off];
+  const off = Math.max(2, Math.min(6, ISL[0] - P[0] - 6, ISL[1] - P[1] - 6, P[2] - ISL[2] - 6, P[3] - ISL[3] - 6));
+  const M = [ISL[0] - off - 5, ISL[1] - off - 5, ISL[2] + off, ISL[3] + off];
   const Lw = M[2] - M[0], Lh = M[3] - M[1], Lp = 2 * (Lw + Lh);
   const at = t => { t = ((t % Lp) + Lp) % Lp; if (t < Lw) return [M[0] + t, M[1]]; t -= Lw; if (t < Lh) return [M[2], M[1] + t]; t -= Lh; if (t < Lw) return [M[2] - t, M[3]]; return [M[0], M[3] - (t - Lw)]; };
   const jumpU = Math.max(3, Math.min(f.W - 4, dir > 0 ? st - 5 : st + 27)); // gallery edge past the stair's foot
   const away = dir > 0 ? -1 : 1;
-  const t0 = Math.max(0, Math.min(Lw, jumpU - 1 - M[0]));
+  const t0 = Math.max(0, Math.min(Lw, jumpU - 2 - M[0]));
   const span = Math.round(0.72 * Lp), NP = Math.max(5, Math.round(span / 8) + 1), stepT = span / (NP - 1);
-  const pillars = Array.from({ length: NP }, (_, n) => { const [u, v] = at(t0 + away * n * stepT); return { u: Math.round(u), v: Math.round(v), h: GTOP + (n < NP / 2 ? 1 : 2) * STEP }; });
-  const onPillar = (u, v) => pillars.some(p => u >= p.u && u < p.u + 3 && v >= p.v && v < p.v + 3);
+  const pillars = [];
+  for (let n = 0, t = t0; n < NP; n++, t += away * stepT) {
+    let [u, v] = at(t).map(Math.round);
+    for (let k = 0; k < 6 && pillars.length && Math.abs(u - pillars.at(-1).u) < 6 && Math.abs(v - pillars.at(-1).v) < 6; k++) { t += away; [u, v] = at(t).map(Math.round); }
+    pillars.push({ u, v, h: GTOP + (n < NP / 2 ? 1 : 2) * STEP });
+  }
+  const onPillar = (u, v) => pillars.some(p => u >= p.u && u < p.u + 5 && v >= p.v && v < p.v + 5);
+  const ISF = [ISL[0] - 1, ISL[1] - 1, ISL[2] + 1, ISL[3] + 1]; // the island's flare
   const onIsland = (u, v) => u >= ISL[0] && u < ISL[2] && v >= ISL[1] && v < ISL[3];
   // parapet (bonded, smooth cope), spikes
   for (const [a, b, c, d, ax] of [[pu0, pv0, pu1, pv0 + 1, 0], [pu0, pv1 - 1, pu1, pv1, 0], [pu0, pv0 + 1, pu0 + 1, pv1 - 1, 1], [pu1 - 1, pv0 + 1, pu1, pv1 - 1, 1]]) {
@@ -295,48 +323,78 @@ export function greatHall({ put, I, doors, T, rng, shade, shell }) {
   }
   for (let u = P[0]; u < P[2]; u++) for (let v = P[1]; v < P[3]; v++)
     if (!onPillar(u, v) && !onIsland(u, v)) box(u, v, u + 1, v + 1, 0, 10, { asset: 'PB_Spike', color: [120, 116, 110], components: [DAMAGE] });
-  for (const p of pillars) column(p.u, p.v, 3, 0, p.h - 4, T.trim);
-  // the island: bonded ring round a core, smooth top, gazebo, the pot
-  for (let z = 0, n = 0; z < ISTOP - 4; z += 12, n++) {
-    const zt = z + 12;
+  for (const p of pillars) pillar(p.u, p.v, p.h);
+  // the island: bonded ring round a core, a gold band, a corbelled flare, smooth top, gazebo, the pot
+  for (let z = 0, n = 0; z < ISTOP - 28; z += 12, n++) {
+    const zt = Math.min(ISTOP - 28, z + 12);
     ubond(ISL[0], ISL[2], ISL[1], ISL[1] + 1, z, zt, n); ubond(ISL[0], ISL[2], ISL[3] - 1, ISL[3], z, zt, n + 2);
     for (const u of [ISL[0], ISL[2] - 1]) box(u, ISL[1] + 1, u + 1, ISL[3] - 1, z, zt, { color: fieldR() });
     box(ISL[0] + 1, ISL[1] + 1, ISL[2] - 1, ISL[3] - 1, z, zt, { color: T.field[0] });
   }
-  box(ISL[0], ISL[1], ISL[2], ISL[3], ISTOP - 4, ISTOP, { asset: SMOOTH, color: T.trim });
-  const MARBLE = [70, 130, 92], GOLD = [196, 170, 92];
+  box(ISL[0], ISL[1], ISL[2], ISL[3], ISTOP - 28, ISTOP - 24, { asset: MB, color: GOLD });
+  box(ISL[0], ISL[1], ISL[2], ISL[3], ISTOP - 24, ISTOP - 10, { asset: MB, color: T.trim });
+  for (const [a, b, c, d, D] of [[ISF[0], ISL[1], ISL[0], ISL[3], [1, 0]], [ISL[2], ISL[1], ISF[2], ISL[3], [-1, 0]], [ISL[0], ISF[1], ISL[2], ISL[1], [0, 1]], [ISL[0], ISL[3], ISL[2], ISF[3], [0, -1]]])
+    box(a, b, c, d, ISTOP - 22, ISTOP - 10, { asset: WEDGE, color: T.trim, wedge: { D: wd(...D), down: true } });
+  box(...ISF, ISTOP - 10, ISTOP - 4, { asset: MB, color: T.trim });
+  box(...ISF, ISTOP - 4, ISTOP, { asset: SMOOTH, color: T.mould });
   for (const [u, v] of [[ISL[0], ISL[1]], [ISL[2] - 1, ISL[1]], [ISL[0], ISL[3] - 1], [ISL[2] - 1, ISL[3] - 1]]) {
     box(u, v, u + 1, v + 1, ISTOP, ISTOP + 6, { asset: MB, color: GOLD });
-    box(u + 0.2, v + 0.2, u + 0.8, v + 0.8, ISTOP + 6, ISTOP + 78, { asset: MB, color: MARBLE });
+    box(u + 0.2, v + 0.2, u + 0.8, v + 0.8, ISTOP + 6, ISTOP + 78, { asset: MB, color: MARBLE[0] });
     box(u, v, u + 1, v + 1, ISTOP + 78, ISTOP + 84, { asset: MB, color: GOLD });
   }
-  box(ISL[0], ISL[1], ISL[2], ISL[3], ISTOP + 84, ISTOP + 90, { asset: MB, color: [48, 96, 66] });
-  box(ISL[0] + 1, ISL[1] + 1, ISL[2] - 1, ISL[3] - 1, ISTOP + 90, ISTOP + 96, { asset: MB, color: GOLD });
+  box(ISL[0] - 0.6, ISL[1] - 0.6, ISL[2] + 0.6, ISL[3] + 0.6, ISTOP + 84, ISTOP + 90, { asset: MB, color: [48, 96, 66] });
+  box(ISL[0] + 0.4, ISL[1] + 0.4, ISL[2] - 0.4, ISL[3] - 0.4, ISTOP + 90, ISTOP + 96, { asset: MB, color: GOLD });
+  box(ISL[0] + 1.4, ISL[1] + 1.4, ISL[2] - 1.4, ISL[3] - 1.4, ISTOP + 96, ISTOP + 102, { asset: MB, color: [48, 96, 66] });
+  {
+    const cu = ISL[0] + IS / 2, cv = ISL[1] + IS / 2;
+    box(cu - 0.4, cv - 0.4, cu + 0.4, cv + 0.4, ISTOP + 102, ISTOP + 116, { asset: MB, color: GOLD });
+    box(cu - 0.2, cv - 0.2, cu + 0.2, cv + 0.2, ISTOP + 80, ISTOP + 84, { asset: MB, color: GOLD });
+    box(cu - 0.4, cv - 0.4, cu + 0.4, cv + 0.4, ISTOP + 70, ISTOP + 80, { asset: MB, color: [255, 220, 150], material: 'BMC_Glow', material_intensity: 6, components: [LIGHT([255, 210, 150], 360)] });
+  }
   { const [x, y] = f.m(ISL[0] + IS / 2, ISL[1] + IS / 2); pots.push([x, y, ISTOP]); }
   // torches on the parapet corners
   const TORCH = [[255, 150, 50], [200, 90, 255], [90, 255, 120], [90, 170, 255]];
   [[pu0, pv0], [pu1 - 1, pv0], [pu0, pv1 - 1], [pu1 - 1, pv1 - 1]].forEach(([u, v], n) => {
-    box(u + 0.2, v + 0.2, u + 0.8, v + 0.8, 16, 48, { asset: MB, color: MARBLE });
+    box(u + 0.2, v + 0.2, u + 0.8, v + 0.8, 16, 48, { asset: MB, color: MARBLE[0] });
     box(u, v, u + 1, v + 1, 48, 54, { asset: MB, color: GOLD });
     box(u + 0.3, v + 0.3, u + 0.7, v + 0.7, 54, 66, { asset: MB, color: TORCH[n], material: 'BMC_Glow', material_intensity: 10, components: [LIGHT(TORCH[n])] });
   });
-  // balustrade on the gallery edge: open at the stair head and the jump
-  const RAIL = [58, 46, 40];
+  // balustrade on the gallery edge: turned stone balusters a stud apart, newels, a stone rail; open at the stair head and the jump
   const head = segs(NT - 1, NT);
   const gaps = [[head[0] - 1, head[1] + 1], [jumpU - 2, jumpU + 3]].sort((a, b) => a[0] - b[0]);
+  const BAL = [[0.6, 0, 4], [0.4, 4, 8], [0.6, 8, 18], [0.4, 18, 22], [0.6, 22, 24]]; // width, z0, z1 over the slab
   let p = 0;
   for (const [g0, g1] of [...gaps, [f.W, f.W]]) {
     const q = Math.max(p, g0);
-    if (q - p >= 2) {
-      for (let u = p; u < q; u += 3) box(u + 0.2, GD - 0.8, u + 0.8, GD - 0.2, GTOP, GTOP + 24, { asset: MB, color: RAIL });
-      box(p, GD - 1, q, GD, GTOP + 24, GTOP + 28, { asset: MB, color: RAIL });
+    if (q - p >= 3) {
+      for (const u of [p, q - 1]) { box(u, GD - 1, u + 1, GD, GTOP, GTOP + 28, { asset: MB, color: T.trim }); box(u + 0.2, GD - 0.8, u + 0.8, GD - 0.2, GTOP + 28, GTOP + 34, { asset: MB, color: GOLD }); }
+      box(p + 1, GD - 1, q - 1, GD, GTOP + 24, GTOP + 28, { asset: MB, color: T.trim });
+      for (let u = p + 1; u < q - 1; u++) for (const [w, z0, z1] of BAL) box(u + 0.5 - w / 2, GD - 0.5 - w / 2, u + 0.5 + w / 2, GD - 0.5 + w / 2, GTOP + z0, GTOP + z1, { asset: MB, color: T.mould });
     }
     p = Math.max(p, g1);
+  }
+  // pilasters inside, between the windows (in line with the buttresses): pale stone in courses, a gold
+  // base and capital under the cornice; on the gallery wall they start on the gallery, the side walls
+  // skip the gallery's end, none in front of a doorway
+  {
+    const opp = { S: 'N', N: 'S', W: 'E', E: 'W' }[plan.s], cz1 = shell.corniceZ;
+    const walls = [['S', 0, iy0, shell.windows.x], ['N', 0, iy1 - 1, shell.windows.x], ['W', 1, ix0, shell.windows.y], ['E', 1, ix1 - 1, shell.windows.y]];
+    const vOf = (a0, a1) => ({ S: a0 - iy0, N: iy1 - a1, W: a0 - ix0, E: ix1 - a1 }[plan.s]);
+    for (const [w, axis, c, ws] of walls) for (const m of ws.slice(0, -1).map(([, w1], i) => (w1 + ws[i + 1][0]) / 2)) {
+      if (doors.some(d => d.side === w && Math.abs((d.a0 + d.a1) / 2 - m) < 4)) continue;
+      let z0 = FL;
+      if (w === plan.s) z0 = GTOP; else if (w !== opp && vOf(m - 2, m + 2) < GD + 1) continue;
+      const P2 = (a0, a1, z, zt, b) => (axis === 0 ? put(a0, c, a1, c + 1, z, zt, b) : put(c, a0, c + 1, a1, z, zt, b));
+      P2(m - 1.4, m + 1.4, z0, z0 + 6, { asset: MB, color: GOLD });
+      for (let z = z0 + 6, n = 0; z < cz1 - 10; z += 12, n++) P2(m - 1, m + 1, z, Math.min(cz1 - 10, z + 12), { color: shade(T.trim, n % 5) });
+      P2(m - 1, m + 1, cz1 - 10, cz1 - 8, { asset: MB, color: GOLD });
+      P2(m - 1.4, m + 1.4, cz1 - 8, cz1, { asset: MB, color: T.trim });
+    }
   }
   // vines off the cornice, between the windows
   const VINE = [[46, 92, 52], [60, 112, 58], [38, 78, 46]];
   const W = ix1 - ix0, D = iy1 - iy0, cz0 = shell.corniceZ;
-  const inWin = (wall, a) => { const base = wall < 2 ? ix0 : iy0; return (wall < 2 ? shell.windows.x : shell.windows.y).some(([w0, w1]) => base + a >= w0 - 1 && base + a < w1 + 1); };
+  const inWin = (wall, a) => { const base = wall < 2 ? ix0 : iy0; const ws = wall < 2 ? shell.windows.x : shell.windows.y; return ws.some(([w0, w1]) => base + a >= w0 - 1 && base + a < w1 + 1) || ws.slice(0, -1).some(([, w1], i) => Math.abs(base + a - (w1 + ws[i + 1][0]) / 2) < 3); };
   const used = new Set();
   for (let n = 0; n < 18; n++) {
     const wall = n % 4, a = 2 + Math.floor(rng() * ((wall < 2 ? W : D) - 4)), len = 40 + Math.floor(rng() * 6) * 20;
