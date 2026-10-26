@@ -95,17 +95,18 @@ export function tavistock({ seed = 1 } = {}) {
   }
   function windowIn(axis, line, out, o, shutters = false, sill = true) {
     const T = { color: WHITE };
-    const lo = out < 0 ? line - 4 : line + 10, hi = lo + 4;
     const pb = (a, b, z, zt, m, lab, t0 = line, t1 = line + 10) => axis === 'x' ? box(a, t0, z, b, t1, zt, m, lab) : box(t0, a, z, t1, b, zt, m, lab);
-    pb(o.a0, o.a1, o.z0, o.z0 + 4, T, 'window frame');
-    pb(o.a0, o.a1, o.z1 - 4, o.z1, T, 'window frame');
-    pb(o.a0, o.a0 + 4, o.z0 + 4, o.z1 - 4, T, 'window frame');
-    pb(o.a1 - 4, o.a1, o.z0 + 4, o.z1 - 4, T, 'window frame');
+    // slim frame (owner 2026-10-26: windows read too thick): 2-wide, set in the outer half of the wall
+    const f0 = out < 0 ? line : line + 4, f1 = f0 + 6;
+    pb(o.a0, o.a1, o.z0, o.z0 + 2, T, 'window frame', f0, f1);
+    pb(o.a0, o.a1, o.z1 - 2, o.z1, T, 'window frame', f0, f1);
+    pb(o.a0, o.a0 + 2, o.z0 + 2, o.z1 - 2, T, 'window frame', f0, f1);
+    pb(o.a1 - 2, o.a1, o.z0 + 2, o.z1 - 2, T, 'window frame', f0, f1);
     const mz = o.z0 + Math.round((o.z1 - o.z0) / 4) * 2;
-    pb(o.a0 + 4, o.a1 - 4, mz - 2, mz, T, 'meeting rail', line + 3, line + 7);
-    pb(o.a0 + 4, o.a1 - 4, o.z0 + 4, mz - 2, GLASS, 'glass', line + 4, line + 6);
-    pb(o.a0 + 4, o.a1 - 4, mz, o.z1 - 4, GLASS, 'glass', line + 4, line + 6);
-    if (sill) pb(o.a0 - 4, o.a1 + 4, o.z0 - 4, o.z0, { color: WHITE }, 'sill', lo, hi);
+    pb(o.a0 + 2, o.a1 - 2, mz - 2, mz, T, 'meeting rail', line + 4, line + 6);
+    pb(o.a0 + 2, o.a1 - 2, o.z0 + 2, mz - 2, GLASS, 'glass', line + 4, line + 6);
+    pb(o.a0 + 2, o.a1 - 2, mz, o.z1 - 2, GLASS, 'glass', line + 4, line + 6);
+    if (sill) pb(o.a0 - 2, o.a1 + 2, o.z0 - 2, o.z0, { color: WHITE }, 'sill', out < 0 ? line - 2 : line + 10, out < 0 ? line : line + 12);
     if (!shutters) return;
     const s0 = out < 0 ? line - 2 : line + 10, s1 = s0 + 2;
     for (const [a, b] of [[o.a0 - 12, o.a0], [o.a1, o.a1 + 12]]) {
@@ -150,17 +151,28 @@ export function tavistock({ seed = 1 } = {}) {
       for (const [z0, z1, t, kind] of bands(R.z0, R.z1)) {
         let a0 = lo, a1 = hi;
         if (axis === 'y') { if (has.y0) a0 += t; if (has.y1) a1 -= t; }
+        // a band crossing an opening is cut there, but keeps its pieces under the stool / over the casing head
+        // (owner 2026-10-26: whole-band cuts left holes in the paneling under windows)
+        const cutSpans = (sp, p0, p1) => sp.flatMap(([p, q]) => (p1 <= p || p0 >= q) ? [[p, q]] : [[p, p0], [p1, q]].filter(([u, v]) => v > u));
         let spans = [[a0, a1]];
-        const cut = (p0, p1) => { spans = spans.flatMap(([p, q]) => (p1 <= p || p0 >= q) ? [[p, q]] : [[p, p0], [p1, q]].filter(([u, v]) => v > u)); };
+        const parts = [];
         for (const o of ops) {
           const door = o.z0 <= R.z0 + 2;
-          const oz0 = door ? R.z0 : o.z0 - 2, oz1 = o.z1 + 4;
-          if (oz0 < z1 && oz1 > z0) cut(o.a0 - 4, o.a1 + 4);
+          const oz0 = door ? R.z0 : o.z0 - 2, oz1 = Math.max(o.z1, Math.min(R.z1 - 6, o.z1 + 4));
+          if (!(oz0 < z1 && oz1 > z0)) continue;
+          spans = cutSpans(spans, o.a0 - 4, o.a1 + 4);
+          const p = Math.max(a0, o.a0 - 4), q = Math.min(a1, o.a1 + 4);
+          if (z0 < oz0) parts.push([p, q, z0, Math.min(z1, oz0)]);
+          if (z1 > oz1) parts.push([p, q, Math.max(z0, oz1), z1]);
         }
-        for (const [p0, p1] of skip[side] ?? []) cut(p0, p1);
-        for (const [p, q] of spans) {
-          if (kind === 'paper' || kind === 'wains') patterned(kind === 'paper' ? paper : wains, p, q, z0, z1, (u, v, zz, zt, c) => facePiece(side, R, u, v, zz, zt, t, c, 'wall ' + kind));
-          else facePiece(side, R, p, q, z0, z1, t, kind === 'crown' && t === 6 ? shade(trimC, 0.96) : trimC, kind);
+        const all = [...spans.map(([p, q]) => [p, q, z0, z1]), ...parts].flatMap(([p, q, u, v]) => {
+          let sp = [[p, q]];
+          for (const [p0, p1] of skip[side] ?? []) sp = cutSpans(sp, p0, p1);
+          return sp.map(([a, b]) => [a, b, u, v]);
+        });
+        for (const [p, q, u, v] of all) {
+          if (kind === 'paper' || kind === 'wains') patterned(kind === 'paper' ? paper : wains, p, q, u, v, (s0, s1, zz, zt, c) => facePiece(side, R, s0, s1, zz, zt, t, c, 'wall ' + kind));
+          else facePiece(side, R, p, q, u, v, t, kind === 'crown' && t === 6 ? shade(trimC, 0.96) : trimC, kind);
         }
       }
       for (const o of ops) {
@@ -170,7 +182,7 @@ export function tavistock({ seed = 1 } = {}) {
         facePiece(side, R, o.a0 - 4, o.a0, jz0, top, 4, trimC, 'casing');
         facePiece(side, R, o.a1, o.a1 + 4, jz0, top, 4, trimC, 'casing');
         if (o.z1 < top) facePiece(side, R, o.a0, o.a1, o.z1, top, 4, trimC, 'casing head');
-        if (!door) facePiece(side, R, o.a0 - 4, o.a1 + 4, o.z0 - 2, o.z0, 6, trimC, 'stool');
+        if (!door) facePiece(side, R, o.a0 - 4, o.a1 + 4, o.z0 - 2, o.z0, 4, trimC, 'stool');
       }
     }
   }
@@ -206,23 +218,23 @@ export function tavistock({ seed = 1 } = {}) {
     }
   }
   // main block: side gable, ridge along x at y 120..140, 13 courses of 6 on 10 from the eave at TOP
-  const MRY0 = 120, MRY1 = 140, MP = 6, MN = 13, MRZ = TOP + MP * MN;
+  const MRY0 = 140, MRY1 = 160, MP = 6, MN = 15, MRZ = TOP + MP * MN;
   lay('y', courses(MRY0, MRZ, -1, MN, MP, 10), -10, 310, -1, 'roof');
   lay('y', courses(MRY1, MRZ, 1, MN, MP, 10), -10, 310, 1, 'roof');
   box(-10, MRY0, MRZ - MP, 310, MRY1, MRZ, { color: shade(roofC, 0.9) }, 'ridge');
   box(-10, MRY0 - 4, MRZ, 310, MRY1 + 4, MRZ + 4, { color: shade(roofC, 0.8) }, 'ridge cap');
   box(10, 0, TOP, 290, 10, TOP + MP, { color: WHITE }, 'frieze');
-  box(10, 250, TOP, 290, 260, TOP + MP, { color: WHITE }, 'frieze');
+  box(10, 290, TOP, 290, 300, TOP + MP, { color: WHITE }, 'frieze');
   // wing: front gable, ridge along y at x 380..390, 10 courses of 8 on 10 from the eave at WT; skips where the
-  // main block's wall stands (x < 300, y 0..260) and the chimney (x >= 480, y 190..230)
+  // main block's wall stands (x < 300, y 0..300) and the chimney (x >= 480, y 190..230)
   const WRX0 = 380, WRX1 = 390, WP = 8, WN = 10, WRZ = WT + WP * WN, WY0 = -210, WY1 = 400;
   const wl = courses(WRX0, WRZ, -1, WN, WP, 10), wr = courses(WRX1, WRZ, 1, WN, WP, 10);
-  lay('x', wl, WY0, 0, -1, 'wing roof'); lay('x', wl, 0, 260, -1, 'wing roof', b => b.a0 >= 300); lay('x', wl, 260, WY1, -1, 'wing roof');
+  lay('x', wl, WY0, 0, -1, 'wing roof'); lay('x', wl, 0, 300, -1, 'wing roof', b => b.a0 >= 300); lay('x', wl, 300, WY1, -1, 'wing roof');
   lay('x', wr, WY0, 190, 1, 'wing roof'); lay('x', wr, 190, 230, 1, 'wing roof', b => b.a1 <= 480); lay('x', wr, 230, WY1, 1, 'wing roof');
   box(WRX0, WY0, WRZ - WP, WRX1, WY1, WRZ, { color: shade(roofC, 0.9) }, 'wing ridge');
   box(WRX0 - 4, WY0, WRZ, WRX1 + 4, WY1, WRZ + 4, { color: shade(roofC, 0.8) }, 'wing ridge cap');
   box(290, -190, WT, 300, 0, WT + WP, { color: WHITE }, 'wing frieze');
-  box(290, 260, WT, 300, 380, WT + WP, { color: WHITE }, 'wing frieze');
+  box(290, 300, WT, 300, 380, WT + WP, { color: WHITE }, 'wing frieze');
   box(470, -190, WT, 480, 380, WT + WP, { color: WHITE }, 'wing frieze');
 
   // ------------------------------------------------------- main block --
@@ -245,52 +257,52 @@ export function tavistock({ seed = 1 } = {}) {
   for (const [a, b] of [[18, 26], [28, 36]]) box(fd.a0 - 3, a, fd.z1 - 18, fd.a0 - 1, b, fd.z1 - 6, GLASS, 'door lite');
   box(fd.a1 + 6, -6, G + 40, fd.a1 + 12, 0, G + 52, GLOW([255, 236, 190], 3), 'coach light');
   // sides: sitting room + primary / back bedroom windows on the left, nothing on the wing side
-  const leftG = [op(180, 216, G + SILL, G + HEAD)], leftU = [op(60, 96, U + SILL, U + HEAD), op(208, 240, U + SILL, U + HEAD)];
-  const attic = op(116, 144, 196, 220);
-  wall('y', 0, 10, 250, 0, TOP, 'siding', [...leftG, ...leftU], 'left');
+  const leftG = [op(200, 236, G + SILL, G + HEAD)], leftU = [op(60, 96, U + SILL, U + HEAD), op(228, 264, U + SILL, U + HEAD)];
+  const attic = op(136, 164, 200, 224);
+  wall('y', 0, 10, 290, 0, TOP, 'siding', [...leftG, ...leftU], 'left');
   [...leftG, ...leftU].forEach(w => windowIn('y', 0, -1, w));
-  gable('y', 0, MRY0, MRY1, MRZ, MP, 10, MN - 1, 0, 260, [attic]);
+  gable('y', 0, MRY0, MRY1, MRZ, MP, 10, MN - 1, 0, 300, [attic]);
   windowIn('y', 0, -1, attic);
   const kitOpen = op(170, 230, G, G + DOOR + 6);
-  wall('y', 290, 10, 250, 0, TOP, 'siding', [kitOpen], 'right');
-  gable('y', 290, MRY0, MRY1, MRZ, MP, 10, MN - 1, 0, 260);
+  wall('y', 290, 10, 290, 0, TOP, 'siding', [kitOpen], 'right');
+  gable('y', 290, MRY0, MRY1, MRZ, MP, 10, MN - 1, 0, 300);
   // back: sitting room, kitchen (over the sink), the nook slider; upstairs one window per bedroom
   const slider = op(220, 280, G, G + 64);
   const backW = [op(40, 76, G + SILL, G + HEAD), op(160, 196, G + 32, G + HEAD), op(50, 86, U + SILL, U + HEAD), op(210, 246, U + SILL, U + HEAD)];
-  wall('x', 250, 0, 300, 0, TOP, 'siding', [slider, ...backW], 'back');
-  backW.forEach(w => windowIn('x', 250, 1, w, w.z0 > U));
-  box(slider.a0 + 2, 254, G, slider.a0 + 28, 256, slider.z1, GLASS, 'slider glass');
-  box(slider.a0 + 30, 252, G, slider.a1 - 2, 254, slider.z1, GLASS, 'slider glass');
-  for (const x of [slider.a0, slider.a0 + 28, slider.a1 - 2]) box(x, 250, G, x + 2, 260, slider.z1, { color: WHITE }, 'slider frame');
+  wall('x', 290, 0, 300, 0, TOP, 'siding', [slider, ...backW], 'back');
+  backW.forEach(w => windowIn('x', 290, 1, w, w.z0 > U));
+  box(slider.a0 + 2, 294, G, slider.a0 + 28, 296, slider.z1, GLASS, 'slider glass');
+  box(slider.a0 + 30, 292, G, slider.a1 - 2, 294, slider.z1, GLASS, 'slider glass');
+  for (const x of [slider.a0, slider.a0 + 28, slider.a1 - 2]) box(x, 290, G, x + 2, 300, slider.z1, { color: WHITE }, 'slider frame');
 
   // ground: dining | foyer front, sitting | kitchen back
   const SX0 = 250, SX1 = 290, SY0 = 44, SY1 = 140;     // the stair: 40 wide, 8 courses of 10 on 12 from y 44 (landing 10..44) up to the hall
   wall('y', 200, 10, 140, 20, GC, 'paint', [op(30, 110, G, G + DOOR + 6)], 'dining partition');
   wall('x', 140, 10, 290, 20, GC, 'paint', [op(30, 100, G, G + DOOR + 6), op(220, 250, G, G + DOOR)], 'cross partition');
-  wall('y', 130, 150, 250, 20, GC, 'paint', [op(170, 210, G, G + DOOR + 6)], 'sitting partition');
+  wall('y', 130, 150, 290, 20, GC, 'paint', [op(170, 210, G, G + DOOR + 6)], 'sitting partition');
   floor('living', [10, 10, 200, 140], G, 'dining');
   floor('hall', [210, 10, 290, 140], G, 'foyer');
-  floor('living', [10, 150, 130, 250], G, 'sitting');
-  floor('kitchen', [140, 150, 290, 250], G);
+  floor('living', [10, 150, 130, 290], G, 'sitting');
+  floor('kitchen', [140, 150, 290, 290], G);
   const TREAD = [140, 96, 60];
   for (let k = 1; k <= 8; k++) box(SX0, SY0 + 12 * (k - 1), G + 10 * (k - 1), SX1, SY1, G + 10 * k, { color: shade(TREAD, k % 2 ? 1 : 0.9) }, 'stair course');
   for (let k = 1; k <= 8; k++) box(SX0, SY0 + 12 * (k - 1) + 4, G + 10 * k, SX0 + 2, SY0 + 12 * (k - 1) + 6, G + 10 * k + 30, { color: WHITE }, 'baluster');
-  for (const [a, b, c, d] of [[10, 10, 250, 140], [10, 140, 290, 250]]) box(a, b, GC, c, d, GC + 4, { asset: TILE, color: [240, 240, 236], direction: 5 }, 'ceiling');
+  for (const [a, b, c, d] of [[10, 10, 250, 140], [10, 140, 290, 290]]) box(a, b, GC, c, d, GC + 4, { asset: TILE, color: [240, 240, 236], direction: 5 }, 'ceiling');
 
   // upstairs
   wall('x', 130, 10, 250, 100, UC, 'paint', [op(110, 140, U, U + DOOR), op(190, 220, U, U + DOOR)], 'hall partition');
-  wall('y', 170, 10, 130, 100, UC, 'paint', [op(20, 50, U, U + DOOR)], 'ensuite partition');
-  wall('x', 60, 180, 240, 100, UC, 'paint', [], 'bath partition');
+  wall('y', 160, 10, 130, 100, UC, 'paint', [op(24, 54, U, U + DOOR)], 'ensuite partition');
+  wall('x', 70, 170, 240, 100, UC, 'paint', [], 'bath partition');
   wall('y', 240, 10, 130, 100, UC, 'paint', [], 'stairwell partition');
   wall('x', 190, 10, 290, 100, UC, 'paint', [op(90, 120, U, U + DOOR), op(200, 230, U, U + DOOR)], 'back hall partition');
-  wall('y', 140, 200, 250, 100, UC, 'paint', [], 'bedroom partition');
-  floor('bedroom', [10, 10, 170, 130], U, 'primary');
-  floor('bathroom', [180, 10, 240, 60], U, 'ensuite');
-  floor('bathroom', [180, 70, 240, 130], U, 'bath');
+  wall('y', 140, 200, 290, 100, UC, 'paint', [], 'bedroom partition');
+  floor('bedroom', [10, 10, 160, 130], U, 'primary');
+  floor('bathroom', [170, 10, 240, 70], U, 'ensuite');
+  floor('bathroom', [170, 80, 240, 130], U, 'bath');
   floor('hall', [10, 140, 290, 190], U, 'uphall');
-  floor('bedroom', [10, 200, 140, 250], U, 'bedA');
-  floor('bedroom', [150, 200, 290, 250], U, 'bedB');
-  box(10, 10, UC, 290, 250, UC + 4, { asset: TILE, color: [240, 240, 236], direction: 5 }, 'upper ceiling');
+  floor('bedroom', [10, 200, 140, 290], U, 'bedA');
+  floor('bedroom', [150, 200, 290, 290], U, 'bedB');
+  box(10, 10, UC, 290, 290, UC + 4, { asset: TILE, color: [240, 240, 236], direction: 5 }, 'upper ceiling');
 
   // -------------------------------------------------------------- wing --
   // front row y 10..130: closet | powder (x 300..330) | hall (340..380, door to the garage) | laundry
@@ -298,9 +310,8 @@ export function tavistock({ seed = 1 } = {}) {
   const laundryW = op(50, 86, G + SILL, G + HEAD);
   wall('y', 470, 10, 280, 0, WT, 'siding', [laundryW], 'wing side');
   windowIn('y', 470, 1, laundryW);
-  wall('y', 290, 260, 280, 0, WT, 'siding', [], 'wing side');
   const porchDoor = op(310, 340, G, G + DOOR), livW = [op(370, 406, G + SILL, G + HEAD), op(414, 450, G + SILL, G + HEAD)];
-  wall('x', 280, 290, 480, 0, WT, 'siding', [porchDoor, ...livW], 'wing back');
+  wall('x', 280, 300, 480, 0, WT, 'siding', [porchDoor, ...livW], 'wing back');
   livW.forEach(w => windowIn('x', 280, 1, w));
   box(porchDoor.a0 - 4, 290, G, porchDoor.a0, 320, G + DOOR, { color: WHITE }, 'porch door (open)');
   wall('x', 130, 300, 470, 20, GC, 'paint', [op(360, 390, G, G + DOOR)], 'wing partition');
@@ -321,23 +332,23 @@ export function tavistock({ seed = 1 } = {}) {
   const P = PAPERS;
   finishRoom({ x0: 10, y0: 10, x1: 200, y1: 140, z0: G, z1: GC }, { paper: P[0], wains: WAINS[0] });
   finishRoom({ x0: 210, y0: 10, x1: 290, y1: 140, z0: G, z1: GC }, { paper: P[1], wains: WAINS[0], skip: { x1: 'all', y1: [[248, 290]] } });
-  finishRoom({ x0: 10, y0: 150, x1: 130, y1: 250, z0: G, z1: GC }, { paper: P[0], wains: WAINS[1] });
-  finishRoom({ x0: 140, y0: 150, x1: 290, y1: 250, z0: G, z1: GC }, { paper: P[5], wains: WAINS[1], skip: { y1: [[140, 214]], x0: [[224, 250]] } });
+  finishRoom({ x0: 10, y0: 150, x1: 130, y1: 290, z0: G, z1: GC }, { paper: P[0], wains: WAINS[1] });
+  finishRoom({ x0: 140, y0: 150, x1: 290, y1: 290, z0: G, z1: GC }, { paper: P[5], wains: WAINS[1], skip: { y1: [[140, 214]], x0: [[264, 290]] } });
   finishRoom({ x0: 300, y0: 140, x1: 470, y1: 280, z0: G, z1: GC }, { paper: P[0], wains: WAINS[1], skip: { x1: [[152, 268]] } });
   finishRoom({ x0: 350, y0: 10, x1: 400, y1: 130, z0: G, z1: GC }, { paper: P[1], wains: WAINS[0] });
   finishRoom({ x0: 410, y0: 10, x1: 470, y1: 130, z0: G, z1: GC }, { paper: { kind: 'paint', color: [110, 120, 140] }, wains: WAINS[1] });
   finishRoom({ x0: 300, y0: 74, x1: 340, y1: 130, z0: G, z1: GC }, { paper: P[5], wains: { kind: 'paint', color: [226, 214, 196] } });
-  finishRoom({ x0: 10, y0: 10, x1: 170, y1: 130, z0: U, z1: UC }, { paper: P[2] });
-  finishRoom({ x0: 180, y0: 10, x1: 240, y1: 60, z0: U, z1: UC }, { paper: P[4], wains: { kind: 'paint', color: [160, 120, 84] } });
-  finishRoom({ x0: 180, y0: 70, x1: 240, y1: 130, z0: U, z1: UC }, { paper: { kind: 'paint', color: [190, 196, 206] }, wains: { kind: 'stripe', cols: [[10, [244, 244, 240]], [10, [236, 236, 232]]] } });
+  finishRoom({ x0: 10, y0: 10, x1: 160, y1: 130, z0: U, z1: UC }, { paper: P[2] });
+  finishRoom({ x0: 170, y0: 10, x1: 240, y1: 70, z0: U, z1: UC }, { paper: P[4], wains: { kind: 'paint', color: [160, 120, 84] } });
+  finishRoom({ x0: 170, y0: 80, x1: 240, y1: 130, z0: U, z1: UC }, { paper: { kind: 'paint', color: [190, 196, 206] }, wains: { kind: 'stripe', cols: [[10, [244, 244, 240]], [10, [236, 236, 232]]] } });
   finishRoom({ x0: 10, y0: 140, x1: 290, y1: 190, z0: U, z1: UC }, { paper: P[1], skip: { y0: [[246, 290]] } });
-  finishRoom({ x0: 10, y0: 200, x1: 140, y1: 250, z0: U, z1: UC }, { paper: P[3] });
-  finishRoom({ x0: 150, y0: 200, x1: 290, y1: 250, z0: U, z1: UC }, { paper: pick([P[2], { kind: 'stripe', cols: [[6, [60, 60, 64]], [4, [230, 230, 226]]] }]) });
+  finishRoom({ x0: 10, y0: 200, x1: 140, y1: 290, z0: U, z1: UC }, { paper: P[3] });
+  finishRoom({ x0: 150, y0: 200, x1: 290, y1: 290, z0: U, z1: UC }, { paper: pick([P[2], { kind: 'stripe', cols: [[6, [60, 60, 64]], [4, [230, 230, 226]]] }]) });
 
   // ---------------------------------------------------------- fixtures --
   // owner 2026-10-26: no furniture; only the kitchen counter run, bathrooms and the laundry
   light(105, 75, GC); light(230, 80, GC); light(250, 200, GC); light(70, 200, GC);
-  const CAB = [244, 244, 240], TOPC = [56, 44, 40], KB = 250;
+  const CAB = [244, 244, 240], TOPC = [56, 44, 40], KB = 290;
   box(144, 154, G, 170, 180, G + 58, METAL, 'fridge');
   for (let x = 144, k = 0; x < 214; x += 14, k++) box(x, KB - 22, G, x + 14, KB, G + 26, { color: shade(CAB, k % 2 ? 0.96 : 1) }, 'base cabinet');
   box(144, KB - 24, G + 26, 214, KB, G + 30, { color: TOPC }, 'worktop');
@@ -364,21 +375,21 @@ export function tavistock({ seed = 1 } = {}) {
   light(440, 70, GC); light(375, 70, GC);
   box(304, 108, G, 314, 118, G + 8, { color: CAB }, 'toilet'); box(304, 106, G + 8, 316, 120, G + 12, { color: CAB }, 'toilet seat');
   box(320, 80, G, 326, 86, G + 26, { color: CAB }, 'pedestal'); box(316, 78, G + 26, 330, 90, G + 30, { color: CAB }, 'basin');
-  light(90, 70, UC); light(75, 225, UC); light(220, 225, UC); light(150, 165, UC); light(270, 90, UC);
-  // ensuite: double floating vanity in wood on the stairwell wall, glass shower; hall bath: tub, vanity, toilet
-  box(222, 18, U + 12, 236, 52, U + 28, { color: [170, 120, 80] }, 'floating vanity');
-  box(222, 18, U + 28, 236, 52, U + 30, { color: [244, 244, 240] }, 'vanity top');
-  box(184, 26, U, 208, 54, U + 2, { color: [230, 230, 230] }, 'shower tray');
-  box(208, 26, U, 210, 54, U + 64, GLASS, 'shower glass');
-  box(186, 14, U, 196, 24, U + 12, { color: CAB }, 'toilet');
+  light(85, 70, UC); light(75, 245, UC); light(220, 245, UC); light(150, 165, UC); light(270, 90, UC);
+  // ensuite: double floating vanity on the stairwell wall, glass shower; hall bath: tub, vanity, toilet
+  box(222, 18, U + 12, 236, 62, U + 28, { color: [170, 120, 80] }, 'floating vanity');
+  box(222, 18, U + 28, 236, 62, U + 30, { color: [244, 244, 240] }, 'vanity top');
+  box(174, 36, U, 200, 64, U + 2, { color: [230, 230, 230] }, 'shower tray');
+  box(200, 36, U, 202, 64, U + 64, GLASS, 'shower glass');
+  box(176, 14, U, 186, 24, U + 12, { color: CAB }, 'toilet');
   const TUB = [244, 244, 240];
-  box(184, 74, U, 236, 96, U + 2, { color: TUB }, 'tub bottom');
-  box(184, 74, U + 2, 236, 78, U + 16, { color: TUB }, 'tub side'); box(184, 92, U + 2, 236, 96, U + 16, { color: TUB }, 'tub side');
-  box(184, 78, U + 2, 188, 92, U + 16, { color: TUB }, 'tub end'); box(232, 78, U + 2, 236, 92, U + 16, { color: TUB }, 'tub end');
-  box(188, 78, U + 2, 232, 92, U + 8, { color: [150, 200, 220], material: 'BMC_Glass' }, 'bath water');
-  box(216, 104, U, 236, 124, U + 28, { color: CAB }, 'vanity'); box(214, 102, U + 28, 236, 126, U + 30, { color: [232, 230, 226] }, 'vanity top');
-  box(184, 104, U, 194, 114, U + 12, { color: CAB }, 'toilet');
-  light(205, 40, UC, [255, 244, 220]); light(205, 110, UC, [255, 244, 220]);
+  box(174, 84, U, 236, 106, U + 2, { color: TUB }, 'tub bottom');
+  box(174, 84, U + 2, 236, 88, U + 16, { color: TUB }, 'tub side'); box(174, 102, U + 2, 236, 106, U + 16, { color: TUB }, 'tub side');
+  box(174, 88, U + 2, 178, 102, U + 16, { color: TUB }, 'tub end'); box(232, 88, U + 2, 236, 102, U + 16, { color: TUB }, 'tub end');
+  box(178, 88, U + 2, 232, 102, U + 8, { color: [150, 200, 220], material: 'BMC_Glass' }, 'bath water');
+  box(226, 108, U, 236, 126, U + 28, { color: CAB }, 'vanity'); box(224, 108, U + 28, 236, 126, U + 30, { color: [232, 230, 226] }, 'vanity top');
+  box(174, 110, U, 184, 120, U + 12, { color: CAB }, 'toilet');
+  light(205, 40, UC, [255, 244, 220]); light(205, 115, UC, [255, 244, 220]);
 
   // ------------------------------------------------------------ garage --
   box(300, -190, 0, 470, 0, 4, { asset: TILE, color: [168, 166, 160] }, 'garage floor');
@@ -404,12 +415,12 @@ export function tavistock({ seed = 1 } = {}) {
   box(478, 188, 228, 518, 232, 234, { color: [120, 118, 114] }, 'chimney cap');
 
   // ------------------------------------------------------- screened porch --
-  box(290, 290, 0, 480, 390, 20, { color: WHITE }, 'porch skirt');
-  for (let x = 290, k = 0; x < 480; x += 10, k++) box(x, 290, 20, x + 10, 390, 24, { color: shade([128, 84, 56], [1, 0.94, 1.04][k % 3]) }, 'porch board');
-  const posts = [[290, 290], [290, 330], [290, 380], [470, 290], [470, 330], [470, 380], [380, 380]];
+  box(300, 290, 0, 480, 300, 20, { color: WHITE }, 'porch skirt'); box(290, 300, 0, 480, 390, 20, { color: WHITE }, 'porch skirt');
+  for (let x = 290, k = 0; x < 480; x += 10, k++) box(x, x < 300 ? 300 : 290, 20, x + 10, 390, 24, { color: shade([128, 84, 56], [1, 0.94, 1.04][k % 3]) }, 'porch board');
+  const posts = [[290, 330], [290, 380], [470, 290], [470, 330], [470, 380], [380, 380]];
   for (const [x, y] of posts) box(x, y, G, x + 10, y + 10, 96, { color: WHITE }, 'porch post');
   box(290, 300, 96, 300, 380, WT, { color: WHITE }, 'porch beam'); box(470, 300, 96, 480, 380, WT, { color: WHITE }, 'porch beam');
-  box(290, 290, 96, 300, 300, WT, { color: WHITE }, 'porch beam'); box(470, 290, 96, 480, 300, WT, { color: WHITE }, 'porch beam');
+  box(470, 290, 96, 480, 300, WT, { color: WHITE }, 'porch beam');
   box(290, 380, 96, 480, 390, WT, { color: WHITE }, 'porch beam');
   for (const [a, b] of [[300, 330]]) box(294, a, G, 296, b, 96, SCREEN, 'screen');
   for (const [a, b] of [[300, 330], [340, 380]]) box(474, a, G, 476, b, 96, SCREEN, 'screen');
@@ -417,19 +428,19 @@ export function tavistock({ seed = 1 } = {}) {
   light(385, 335, 150, [255, 236, 190]);
 
   // ------------------------------------------------------------ the deck + yard --
-  box(40, 260, 0, 290, 400, 20, { color: [120, 84, 60] }, 'deck skirt');
-  for (let x = 40, k = 0; x < 290; x += 10, k++) box(x, 260, 20, x + 10, 400, 24, { color: shade([150, 82, 70], [1, 0.94, 1.05, 0.97][k % 4]) }, 'deck board');
+  box(40, 300, 0, 290, 440, 20, { color: [120, 84, 60] }, 'deck skirt');
+  for (let x = 40, k = 0; x < 290; x += 10, k++) box(x, 300, 20, x + 10, 440, 24, { color: shade([150, 82, 70], [1, 0.94, 1.05, 0.97][k % 4]) }, 'deck board');
   const RAIL = [130, 84, 56];
-  for (let y = 270; y < 400; y += 30) box(40, y, G, 44, y + 4, G + 30, { color: RAIL }, 'rail post');
-  box(40, 260, G + 30, 44, 400, G + 34, { color: RAIL }, 'rail');
-  for (const [a, b] of [[44, 150], [190, 290]]) { box(a, 396, G + 30, b, 400, G + 34, { color: RAIL }, 'rail'); for (let x = a; x + 4 <= b; x += 30) box(x, 396, G, x + 4, 400, G + 30, { color: RAIL }, 'rail post'); }
-  box(150, 400, 0, 190, 412, 16, { color: RAIL }, 'deck step'); box(150, 412, 0, 190, 424, 8, { color: RAIL }, 'deck step');
-  box(40, 410, 0, 140, 500, 4, { asset: TILE, color: [150, 120, 100] }, 'pavers');
+  for (let y = 310; y < 440; y += 30) box(40, y, G, 44, y + 4, G + 30, { color: RAIL }, 'rail post');
+  box(40, 300, G + 30, 44, 440, G + 34, { color: RAIL }, 'rail');
+  for (const [a, b] of [[44, 150], [190, 290]]) { box(a, 436, G + 30, b, 440, G + 34, { color: RAIL }, 'rail'); for (let x = a; x + 4 <= b; x += 30) box(x, 436, G, x + 4, 440, G + 30, { color: RAIL }, 'rail post'); }
+  box(150, 440, 0, 190, 452, 16, { color: RAIL }, 'deck step'); box(150, 452, 0, 190, 464, 8, { color: RAIL }, 'deck step');
+  box(40, 450, 0, 140, 540, 4, { asset: TILE, color: [150, 120, 100] }, 'pavers');
   const TUBC = { color: [150, 130, 90] };
-  box(60, 420, 4, 120, 480, 26, TUBC, 'hot tub shell');
-  box(60, 420, 26, 120, 426, 34, TUBC, 'hot tub rim'); box(60, 474, 26, 120, 480, 34, TUBC, 'hot tub rim');
-  box(60, 426, 26, 66, 474, 34, TUBC, 'hot tub rim'); box(114, 426, 26, 120, 474, 34, TUBC, 'hot tub rim');
-  box(66, 426, 26, 114, 474, 32, { color: [120, 200, 220], material: 'BMC_Glass' }, 'hot tub water');
+  box(60, 460, 4, 120, 520, 26, TUBC, 'hot tub shell');
+  box(60, 460, 26, 120, 466, 34, TUBC, 'hot tub rim'); box(60, 514, 26, 120, 520, 34, TUBC, 'hot tub rim');
+  box(60, 466, 26, 66, 514, 34, TUBC, 'hot tub rim'); box(114, 466, 26, 120, 514, 34, TUBC, 'hot tub rim');
+  box(66, 466, 26, 114, 514, 32, { color: [120, 200, 220], material: 'BMC_Glass' }, 'hot tub water');
 
   // ------------------------------------------------------------ front --
   box(200, -40, 0, 260, 0, 16, { color: [176, 172, 166] }, 'stoop');
@@ -446,7 +457,7 @@ export function tavistock({ seed = 1 } = {}) {
     if (_tri != null) return { ...nb, rotation: [1, 0, 3, 2][_tri] };
     return _m ? { ...nb, ...orientFor(_m.asset, _m.ups.map(([dx, dy]) => [-dx, dy]), _m.ext) } : nb;
   });
-  return { bricks, W: total / 10, D: (Y0 + 500) / 10, door: [Math.round((total - X0 - (fd.a0 + fd.a1) / 2) / 10)], count: bricks.length };
+  return { bricks, W: total / 10, D: (Y0 + 540) / 10, door: [Math.round((total - X0 - (fd.a0 + fd.a1) / 2) / 10)], count: bricks.length };
 }
 
 if (process.argv[1]?.endsWith('tavistock.mjs')) {
