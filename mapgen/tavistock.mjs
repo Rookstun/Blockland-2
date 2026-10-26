@@ -465,7 +465,7 @@ export function tavistock({ seed = 1 } = {}) {
   const DOORS = [
     { name: 'front', axis: 'x', line: 0, a0: fd.a0, a1: fd.a1, z0: G, color: doorC },
     { name: 'porch', axis: 'x', line: 280, a0: porchDoor.a0, a1: porchDoor.a1, z0: G },
-    { name: 'garage hall', axis: 'x', line: 0, a0: 360, a1: 390, z0: G },
+    // garage hall: the owner's own door (tavistock_owner.brz)
     { name: 'powder', axis: 'y', line: 340, a0: 90, a1: 120, z0: G },
     { name: 'closet', axis: 'y', line: 340, a0: 24, a1: 54, z0: G },
     { name: 'laundry', axis: 'y', line: 400, a0: 30, a1: 60, z0: G },
@@ -490,9 +490,9 @@ export function tavistock({ seed = 1 } = {}) {
   const fixtures = {
     rooms: ROOMS.map(r => ({ name: r.name, lamps: r.lamps.map(([x, y, c = r.c]) => ({ at: PW(x, y, c) })), switch: { at: PW(r.sw[0], r.sw[1], r.sw[3]), normal: N(r.sw[2]) } })),
     doors: DOORS.map(d => {
-      const z1 = d.z0 + DOOR, mid = (d.a0 + d.a1) / 2;
+      const z1 = d.z0 + DOOR;
       const at = (a, t, z) => d.axis === "x" ? PW(a, d.line + t, z) : PW(d.line + t, a, z);
-      return { name: d.name, color: d.color ?? WHITE, z0: d.z0, z1, hinge: at(d.a0 + 5, 5, z1 - 4), free: at(d.a1 - 2, 5, d.z0), mid: at(mid, 5, d.z0), along: d.axis === 'x' ? [-1, 0] : [0, 1] };
+      return { name: d.name, color: d.color, z0: d.z0, z1, a0: at(d.a0, 5, d.z0), a1: at(d.a1, 5, d.z0) };
     }),
   };
   return { bricks, fixtures, W: total / 10, D: (Y0 + 540) / 10, door: [Math.round((total - X0 - (fd.a0 + fd.a1) / 2) / 10)], count: bricks.length };
