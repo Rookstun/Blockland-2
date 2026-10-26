@@ -1,6 +1,6 @@
 # Brickadia workspace handoff (read first, don't re-derive)
 
-Owner = renderman (in-game soapstain22, display name 'abysmal garbage'). Terse, token-limited: act, don't ask, short replies. Geometry rules: `BUILDING.md` (read before generating bricks; add new rules there). Per-topic detail lives in `notes/` (index at the bottom): grep it before re-deriving anything. Keep THIS file short: new feature write-ups go into the matching notes file, only rules/traps that apply everywhere go here.
+Owner = renderman (in-game soapstain22, display name 'abysmal garbage'). Terse, token-limited: act, don't ask, short replies. DO IT ALL AT ONCE (owner, repeatedly, furious): never stop between steps to report a plan; chain build -> delta -> deploy in one go, all clears in one job, all adds in ONE bricks op. Geometry rules: `BUILDING.md` (read before generating bricks; add new rules there). Per-topic detail lives in `notes/` (index at the bottom): grep it before re-deriving anything. Keep THIS file short: new feature write-ups go into the matching notes file, only rules/traps that apply everywhere go here.
 
 ## Current state (2026-10-22)
 - ACTIVE WORLD = `test 2026-10-22` (cp of `site 2026-10-18`, for the owner's complaint fixes; AUTOLOAD still = `site 2026-10-18`, so a restart goes back to site). Main world = `site 2026-10-18` (map seed 2029224243 x2, params out_site_1021_params.json, MAPGEN_LENIENT=1, built with node --max-old-space-size=12288). Never load `site 2026-10-16` (micro-terrain experiment). Old RPG world `rizz` untouched since 10-16.

@@ -3,8 +3,7 @@
 // and a house change must never leave its shop stands / NPCs / pots behind):
 //   DIR/delta.json   from mapgen/mkdelta.mjs (clear, add, externalAssets, extras)
 //   DIR/old, DIR/new the OLD and NEW map dirs' extras jsons (spawners pots bushes shops gems npcs *.json)
-// Steps: save, backup `backup TAG WORLD DATE`, ClearRegions (4000 per job, no gaps), adds (<= 8000 per op,
-// 2 s apart), extras through extrasdiff.py when delta.extras says any changed, then READ THE WORLD BACK per
+// Steps: save, backup `backup TAG WORLD DATE`, ClearRegions (all in one job), adds (ALL in one op), extras through extrasdiff.py when delta.extras says any changed, then READ THE WORLD BACK per
 // 5000-unit tile and repair: clears whose brick is still there, adds that never landed (3 passes), save.
 import fs from 'fs'; import path from 'path'; import { execFileSync } from 'child_process';
 const [DIR, WORLD, TAG] = process.argv.slice(2);
@@ -33,9 +32,11 @@ await job([{ op: 'cmd', line: 'br.World.Save', captureMs: 5000 }], 'save'); awai
 const date = new Date().toISOString().slice(0, 10);
 fs.copyFileSync(path.join(W, WORLD + '.brdb'), path.join(W, `backup ${TAG} ${WORLD.replace(/ \d{4}-\d\d-\d\d$/, '')} ${date}.brdb`)); log('backup ok');
 
-for (let i = 0; i < D.clear.length; i += 4000) await job(D.clear.slice(i, i + 4000).map(clr), 'clr' + i);
+// (2026-10-25, owner: "DO IT ALL AT ONCE") every clear in one job, every add in ONE bricks op
+const CC = +process.env.CLEAR_CHUNK || Infinity, AC = +process.env.ADD_CHUNK || Infinity;
+for (let i = 0; i < D.clear.length; i += CC) await job(D.clear.slice(i, i + CC).map(clr), 'clr' + i);
 log('cleared', D.clear.length); await sleep(8000);
-for (let i = 0; i < D.add.length; i += 8000) { const r = await job(addOp(D.add.slice(i, i + 8000)), 'add' + i); log('added', Math.min(D.add.length, i + 8000), '/', D.add.length, 'warnings', bad(r)); await sleep(2000); }
+for (let i = 0; i < D.add.length; i += AC) { const r = await job(addOp(D.add.slice(i, i + AC)), 'add' + i); log('added', Math.min(D.add.length, i + AC), '/', D.add.length, 'warnings', bad(r)); }
 
 if (D.extras && Object.keys(D.extras).length) {
   log('extras', JSON.stringify(D.extras));
