@@ -94,12 +94,11 @@ export function tavistock({ seed = 1 } = {}) {
     // over a 6-deep plaster core; skin 'siding-' / 'siding+' = the outside is toward -/+; 'plaster' = indoors both
     // sides; 'siding+high' = indoors under the wing roof (z < WT), siding above it
     const out = skin.startsWith('siding-') ? -1 : 1;
-    for (; z < z1; z += lap) {
-      const zt = Math.min(z1, z + lap), c = lapColor();
-      const skinC = skin === 'plaster' || (skin === 'siding+high' && z < WT) ? PLASTER : c;
-      course(axis, out < 0 ? line + 4 : line, a0, a1, z, zt, openings, PLASTER, label + ' core', 6);
-      course(axis, out < 0 ? line : line + 6, a0, a1, z, zt, openings, skinC, label + ' siding', 4);
-    }
+    // the core (and a plaster skin) goes up in one piece: per-lap bricks drew lap seams indoors (owner, garage)
+    course(axis, out < 0 ? line + 4 : line, a0, a1, z, z1, openings, PLASTER, label + ' core', 6);
+    const zp = skin === 'plaster' ? z1 : skin === 'siding+high' ? Math.min(z1, WT) : z;
+    if (zp > z) course(axis, out < 0 ? line : line + 6, a0, a1, z, zp, openings, PLASTER, label + ' skin', 4);
+    for (z = zp; z < z1; z += lap) course(axis, out < 0 ? line : line + 6, a0, a1, z, Math.min(z1, z + lap), openings, lapColor(), label + ' siding', 4);
   }
   function windowIn(axis, line, out, o, shutters = false, sill = true) {
     const T = { color: WHITE };
@@ -373,6 +372,8 @@ export function tavistock({ seed = 1 } = {}) {
 
   // ------------------------------------------------------------ garage --
   box(300, -190, 0, 470, 0, 4, { asset: TILE, color: [168, 166, 160] }, 'garage floor');
+  box(300, -190, GC, 470, 0, GC + 4, { asset: TILE, color: [240, 240, 236], direction: 5 }, 'garage ceiling');
+  box(360, -14, 4, 390, 0, 14, { color: [170, 168, 162] }, 'garage step');
   const gd = [op(306, 380, 4, 76), op(390, 464, 4, 76)], gWin = op(-120, -84, 40, 66);
   wall('x', -200, 290, 480, 0, WT, 'siding-', gd, 'garage front');
   wall('y', 290, -190, 0, 0, WT, 'siding-', [gWin], 'garage side');
