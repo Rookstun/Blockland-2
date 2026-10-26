@@ -372,7 +372,7 @@ export function tavistock({ seed = 1 } = {}) {
   // owner 2026-10-26: an empty house, no furniture or fixtures; the fireplace is built in and stays
   light(105, 75, GC); light(230, 80, GC); light(250, 200, GC); light(70, 200, GC); light(200, 220, GC);
   light(390, 210, GC); light(440, 70, GC); light(375, 70, GC);
-  light(85, 70, UC); light(75, 245, UC); light(220, 245, UC); light(150, 165, UC); light(270, 90, UC);
+  light(85, 70, UC); light(75, 245, UC); light(150, 165, UC); light(270, 90, UC); // bedroom B: the owner's own pole lamp + switch (tavistock_owner.brz)
   light(205, 40, UC); light(205, 105, UC);
   // living room: white painted brick fireplace on the wing side with a long wood mantel
   const FPY0 = 176, FPY1 = 244;
@@ -396,7 +396,8 @@ export function tavistock({ seed = 1 } = {}) {
   windowIn('y', 290, -1, gWin);
   wall('y', 470, -190, 0, 0, WT, 'siding+', [], 'garage side');
   for (const g of gd) {
-    for (let z = g.z0, k = 0; z < g.z1; z += 18, k++) {
+    // the first door is the owner's own (servo + switch, tavistock_owner.brz): no panels from here
+    if (g !== gd[0]) for (let z = g.z0, k = 0; z < g.z1; z += 18, k++) {
       const zt = Math.min(g.z1, z + 18);
       box(g.a0, -197, z, g.a1, -193, zt - 2, { color: WHITE }, 'garage door');
       box(g.a0, -195, zt - 2, g.a1, -193, zt, { color: shade(WHITE, 0.85) }, 'garage door groove');
