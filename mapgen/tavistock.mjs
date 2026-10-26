@@ -302,8 +302,8 @@ export function tavistock({ seed = 1 } = {}) {
   const RAILC = [120, 76, 44];
   for (let k = 1; k <= 8; k++) {
     const y = SY0 + 12 * (k - 1);
-    box(SX0, y, G + 10 * k, SX0 + 2, y + 2, G + 10 * k + 30, { color: WHITE }, 'baluster');
-    band(SX0, SX0 + 2, y, G + 10 * k + 30, RAILC, 'handrail'); // 2 wide (owner: 'a little thick'); 10 high is the least a rise-10 wedge pair gives
+    box(SX0, y, G + 10 * k, SX0 + 2, y + 2, G + 10 * k + 18, { color: WHITE }, 'baluster');
+    band(SX0, SX0 + 2, y, G + 10 * k + 18, RAILC, 'handrail'); // 2 wide (owner: 'a little thick'); 10 high is the least a rise-10 wedge pair gives
     if (k <= 6) band(SX0 - 4, SX0, y, G + 10 * (k - 1), shade(TREAD, 0.8), 'stringer');
     else if (k === 7) wedge(SX0 - 4, y, G + 60, SX0, y + 12, G + 70, [[0, -1]], shade(TREAD, 0.8), 'stringer', -1);
   }
