@@ -27,7 +27,10 @@
 //      [[x, y, z]] local units, rooms, top (wall top, units) }
 import { buildFromPlan, COURSES } from './wallhouse.mjs';
 import { canvas, masked, wrapNull, roundTower, stone, VX, VZ } from './castle.mjs';
-import { greatHall, hallShell, portico, orientWedge, HALL_UP } from './greathall.mjs';
+import { greatHall, hallShell, portal, orientWedge, HALL_UP } from './greathall.mjs';
+import { floors, furnish, KINDS } from './keeprooms.mjs';
+import { makeBuilder, FIXED } from './builder.mjs';
+import { worldBox } from './orient.mjs';
 
 export const TILE = 8; // studs per tile: a 4-stud doorway leaves 2-stud piers
 const SOLID = -1, CORRIDOR = -2;
@@ -130,7 +133,7 @@ function toRuns({ grid, doors }, G) {
   return runs;
 }
 
-export function planSurfaceDungeon({ seed, hole, side, bounds, grid: G = 11, rooms: nRooms = 7, theme, hall: hallSize = 6 }) {
+export function planSurfaceDungeon({ seed, hole, side, bounds, grid: G = 11, rooms: nRooms = 7, theme, hall: hallSize = 7 }) {
   const rng = makeRng(seed);
   const span = G * TILE + 1;
   const even = v => 2 * Math.round(v / 2);
@@ -162,25 +165,26 @@ export function planSurfaceDungeon({ seed, hole, side, bounds, grid: G = 11, roo
         model: { glass: false, floor: false, ceiling: true, roof: true },
       });
     } catch (e) { last = e.message; continue; }
-    return finish({ h, L, ox: ox + minX, oy: oy + minY, gx: ox, gy: oy, side, theme, seed, rng });
+    return finish({ h, L, ox: ox + minX, oy: oy + minY, gx: ox, gy: oy, side, theme, seed, rng, hole });
   }
   throw new Error(`surface dungeon: no layout fits (${last})`);
 }
 
-function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed }) {
+function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
   const bricks = [];
   const U = 10;
   const top = COURSES * 12;
   // stud box (keep frame, after buildFromPlan's shift) -> local-unit brick
   // (rounded: greathall.mjs puts 0.2-stud parts; brick.wedge = { D, down } orients a micro wedge)
   const SIDE_ROT = { '-1,-1': 0, '1,-1': 1, '1,1': 2, '-1,1': 3 }; // vertical side wedge: rotation by the side it is solid toward
-  const put = (x0, y0, x1, y1, z0, z1, { wedge, side, ...b }) => {
+  const mk = (x0, y0, x1, y1, z0, z1, { wedge, side, ...b }) => {
     const size = [Math.round(((x1 - x0) * U) / 2), Math.round(((y1 - y0) * U) / 2), Math.round((z1 - z0) / 2)];
-    bricks.push({
+    return {
       ...b, position: [Math.round((ox + (x0 + x1) / 2) * U), Math.round((oy + (y0 + y1) / 2) * U), Math.round((z0 + z1) / 2)],
       size, ...(wedge ? orientWedge(wedge.D, wedge.down, size) : {}), ...(side ? { direction: 4, rotation: SIDE_ROT[side.join()] } : {}),
-    });
+    };
   };
+  const put = (...a) => bricks.push(mk(...a));
   const wallAt = new Set();
   for (const b of h.boxes) if (b.kind === 'wall') for (let x = b.x0; x < b.x1; x++) for (let y = b.y0; y < b.y1; y++) wallAt.add(`${x},${y},${b.course}`);
   const F = [1, 0.92, 1.06, 0.96, 1.03];
@@ -218,6 +222,7 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed }) {
   // roof behind the corner, so not on corridor stubs), well apart and clear of
   // the gate; centred on the corner, so three quarters stand outside; below the
   // roof they never enter the keep's footprint, above it they sit on the roof
+  const towerPots = [];
   const towerAt = [], foot = new Set(roofCells), trng = makeRng((seed ?? 1) * 31 + 7); // own rng: the keep's spawns stay put
   for (const k of wallAt) { const [x, y, c] = k.split(','); if (c === '0') foot.add(x + ',' + y); }
   {
@@ -242,11 +247,29 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed }) {
   if (towerAt.length) {
     const kRoof = Math.ceil(roofTop / VZ), oxs = Math.round(ox), oys = Math.round(oy);
     const c = masked(wrapNull(canvas()), (i, j, k) => k < kRoof && foot.has((i - oxs) + ',' + (j - oys)));
+    const rooms = [];
     towerAt.forEach(([vx, vy], n) => {
-      const kTop = Math.ceil((top + 60) / VZ) + (n % 2) * 4;
-      roundTower(c, vx + oxs, vy + oys, 4, kTop, trng() < 0.4 ? 'cone' : 'crenel', 7000 + n, [], { slits: true, base: T.field[0] });
+      const kTop = Math.ceil((top + 60) / VZ) + (n % 2) * 4, ci = vx + oxs, cj = vy + oys;
+      roundTower(c, ci, cj, 4, kTop, trng() < 0.4 ? 'cone' : 'crenel', 7000 + n, [], { slits: true, base: T.field[0] });
+      // enterable (owner 2026-10-25): a room inside (radius 3, 72 high, bounded by the keep's corner
+      // where the tower meets it), a doorway out the side away from the keep
+      const q = [[-1, -1], [1, -1], [-1, 1], [1, 1]].find(([a, b]) => foot.has((vx + (a < 0 ? -1 : 0)) + ',' + (vy + (b < 0 ? -1 : 0)))) ?? [-1, -1];
+      const bx = -q[0] / Math.SQRT2, by = -q[1] / Math.SQRT2;
+      for (let i = ci - 6; i <= ci + 6; i++) for (let j = cj - 6; j <= cj + 6; j++) {
+        const dx = i + 0.5 - ci, dy = j + 0.5 - cj, r = Math.hypot(dx, dy), along = dx * bx + dy * by, cross = Math.abs(dx * by - dy * bx);
+        for (let k = 0; k < 12; k++) {
+          if (r < 3) c.del(i, j, k);
+          else if (along > 0 && cross < 1.1 && r < 6) c.del(i, j, k); // the doorway, through wall and plinth
+        }
+      }
+      rooms.push({ ci, cj, bx, by });
     });
     for (const b of c.bricks()) bricks.push({ ...b, position: [b.position[0], b.position[1], b.position[2]] });
+    for (const { ci, cj, bx, by } of rooms) { // a lamp under the room's ceiling, a pot on the floor
+      const lx = Math.round((ci + bx * 1.5) * VX), ly = Math.round((cj + by * 1.5) * VX);
+      bricks.push({ asset: MB, size: [4, 4, 2], position: [lx, ly, 12 * VZ - 4], color: T.glow, material: 'BMC_Glow', material_intensity: 6, components: [{ type: 'Component_PointLight', data: { bMatchBrickShape: false, bEnabled: true, Brightness: 3, Radius: 240, Color: { R: 255, G: 200, B: 140, A: 255 }, bUseBrickColor: false, bCastShadows: false, RayTracingVisibility: 0 } }] });
+      towerPots.push([Math.round((ci + Math.sign(bx)) * VX), Math.round((cj + Math.sign(by)) * VX), 0]); // its 2 x 2 box covers only hollowed cells
+    }
   }
   const inTower = (x, y) => towerAt.some(([vx, vy]) => Math.hypot(x + 0.5 - vx, y + 0.5 - vy) <= 5.6);
   for (const k of roofCells) {
@@ -256,43 +279,91 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed }) {
     if (((x >> 1) + (y >> 1)) % 2) continue;
     put(x, y, x + 1, y + 1, roofTop, roofTop + 12, { color: T.mould });
   }
-  // the hall: its walls on up (coursed, alternate corners), ceiling, roof, merlons, then the inside
-  const pots = [];
-  let hallInfo = null;
-  if (HR) {
-    const [gtx, gty] = L.gateTile;
-    const shell = hallShell({ put, HI, HR, top, roofTop, T, rng, shade, roofCells, foot,
-      gate: [gx + (gtx + 0.5 + side[0] * 0.5) * TILE - ox, gy + (gty + 0.5 + side[1] * 0.5) * TILE - oy] });
-    const doors = [];
-    const inHall = (x, y) => x >= hr.x && x < hr.x + hr.w && y >= hr.y && y < hr.y + hr.h;
+  // the hall (greathall.mjs): walls, roof, ceiling, then the inside
+  const pots = [...towerPots];
+  let hallInfo = null, roofPeak = roofTop + 12;
+  const frng = makeRng((seed ?? 1) * 97 + 5); // decoration draws: the keep's own rng (spawns) stays put
+  const [gtx, gty] = L.gateTile;
+  const gateK = [gx + (gtx + 0.5 + side[0] * 0.5) * TILE - ox, gy + (gty + 0.5 + side[1] * 0.5) * TILE - oy];
+  // doors of a tile rect (grid tiles), as spans on its walls (keep frame)
+  const doorsOf = r => {
+    const inR = (x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h, out = [];
     for (const key of L.doors) {
       const [[ax, ay], [bx, by]] = key.split('|').map(t => t.split(',').map(Number));
-      if (inHall(ax, ay) === inHall(bx, by)) continue;
-      const [ix, iy, ex, ey] = inHall(ax, ay) ? [ax, ay, bx, by] : [bx, by, ax, ay];
-      if (ey !== iy) doors.push({ side: ey < iy ? 'S' : 'N', a0: shx + ix * TILE + 2, a1: shx + ix * TILE + 6 });
-      else doors.push({ side: ex < ix ? 'W' : 'E', a0: shy + iy * TILE + 2, a1: shy + iy * TILE + 6 });
+      if (inR(ax, ay) === inR(bx, by)) continue;
+      const [ix, iy, ex, ey] = inR(ax, ay) ? [ax, ay, bx, by] : [bx, by, ax, ay];
+      if (ey !== iy) out.push({ side: ey < iy ? 'S' : 'N', a0: shx + ix * TILE + 2, a1: shx + ix * TILE + 6 });
+      else out.push({ side: ex < ix ? 'W' : 'E', a0: shy + iy * TILE + 2, a1: shy + iy * TILE + 6 });
     }
-    hallInfo = greatHall({ put, I: HI, doors, T, rng: makeRng((seed ?? 1) * 53 + 11), shade, shell });
+    return out;
+  };
+  if (HR) {
+    const shell = hallShell({ put, HI, HR, top, T, rng, shade, roofCells, foot, gate: gateK });
+    roofPeak = shell.roofTop;
+    hallInfo = greatHall({ put, I: HI, doors: doorsOf(hr), T, rng: makeRng((seed ?? 1) * 53 + 11), shade, shell });
     for (const [x, y, z] of hallInfo.pots) pots.push([(ox + x) * U, (oy + y) * U, z]);
   }
-  // the gate's portico
-  {
-    const [tx, ty] = L.gateTile;
-    const gwx = gx + (tx + 0.5 + side[0] * 0.5) * TILE - ox, gwy = gy + (ty + 0.5 + side[1] * 0.5) * TILE - oy;
-    const face = side[0] ? gwx + (side[0] > 0 ? 1 : 0) : gwy + (side[1] > 0 ? 1 : 0);
-    portico({ put, face, a: side[0] ? gwy : gwx, side, T });
+  // floors: smooth flagstones on every room and corridor tile (the hall has its own); bare round the stairwell
+  const holeK = hole && [hole[0] - ox, hole[1] - oy, hole[2] - ox, hole[3] - oy];
+  const tiles = [];
+  for (let ty = 0; ty < L.grid.length; ty++) for (let tx = 0; tx < L.grid.length; tx++) {
+    const g = L.grid[ty][tx];
+    if (g === SOLID || (HR && g === L.hall)) continue;
+    tiles.push({ tx, ty, room: g });
   }
+  const keepOut = holeK ? [[holeK[0] - 6, holeK[1] - 6, holeK[2] + 6, holeK[3] + 6]] : [];
+  for (const a of floors({ tiles, sh: [shx, shy], TILE, wallAt: (x, y) => wallAt.has(`${x},${y},0`), keepOut, T, rng: frng })) put(...a);
+  // optional pieces (portals, furniture): each group goes in whole where it touches nothing, else not at all
+  const groups = [];
+  for (const key of L.doors) {
+    const [[ax, ay], [bx, by]] = key.split('|').map(t => t.split(',').map(Number));
+    const H = ay !== by, l = H ? Math.max(ay, by) : Math.max(ax, bx);
+    const d = H ? { axis: 0, c: shy + l * TILE, a0: shx + ax * TILE + 2 } : { axis: 1, c: shx + l * TILE, a0: shy + ay * TILE + 2 };
+    d.a1 = d.a0 + 4;
+    const isGate = (ax === gtx && ay === gty && bx === gtx + side[0] && by === gty + side[1]) || (bx === gtx && by === gty && ax === gtx + side[0] && ay === gty + side[1]);
+    for (const s of [-1, 1]) {
+      const outside = isGate && s === (H ? side[1] : side[0]);
+      const tries = (outside ? [3, 2, 1] : [2, 1]).map(n => portal({ ...d, s, n, T, z0: outside ? 0 : 4 }));
+      groups.push({ alts: tries });
+    }
+  }
+  const kinds = [...KINDS].sort(() => frng() - 0.5);
+  L.rooms.forEach((r, i) => {
+    if (i === L.hall && HR) return;
+    const R = [shx + r.x * TILE + 1, shy + r.y * TILE + 1, shx + (r.x + r.w) * TILE, shy + (r.y + r.h) * TILE];
+    const cxk = shx + (r.x + r.w / 2) * TILE, cyk = shy + (r.y + r.h / 2) * TILE;
+    const kind = i === 0 ? 'entry' : kinds[(i - 1) % kinds.length];
+    const fg = furnish({ R, doors: doorsOf(r), kind, top: top - 4, T, rng: frng, spawn: [cxk, cyk], hole: i === 0 ? keepOut[0] : null });
+    if (process.env.KEEPDBG) console.error(`room ${i} ${kind} ${R.join(',')} doors ${doorsOf(r).length}: ${fg.length} groups`);
+    for (const g of fg) groups.push({ alts: [g] });
+  });
   // lamps under the ceiling and spawners in the rooms (not the stairwell's, not the hall's)
   const spawns = [];
   L.rooms.forEach((r, i) => {
     const cx = gx + (r.x + r.w / 2) * TILE, cy = gy + (r.y + r.h / 2) * TILE; // stud centre, grid frame
-    if (i === L.hall && HR) { rng(); return; } // the hall: its lantern lights it, no spawner (rng() keeps the draws)
-    const lz = top - 6;
-    bricks.push({ asset: MB, size: [6, 6, 2], position: [cx * U, cy * U, lz], color: T.glow, material: 'BMC_Glow', material_intensity: 5 });
-    if (i > 0 && rng() < 0.75 && i !== L.hall) spawns.push([cx * U, cy * U, 2]);
+    if (i === L.hall && HR) { rng(); return; } // the hall: its chandelier lights it, no spawner (rng() keeps the draws)
+    bricks.push({ asset: MB, size: [6, 6, 2], position: [cx * U, cy * U, top - 6], color: T.glow, material: 'BMC_Glow', material_intensity: 5 });
+    if (i > 0 && rng() < 0.75 && i !== L.hall) spawns.push([cx * U, cy * U, 6]); // on the floor tiles
   });
+  {
+    const B = makeBuilder();
+    for (const b of bricks) B.add(b, 'keep');
+    const boxOf = b => worldBox(b, FIXED);
+    const clash = (p, q) => p[0][0] < q[1][0] && q[0][0] < p[1][0] && p[0][1] < q[1][1] && q[0][1] < p[1][1] && p[0][2] < q[1][2] && q[0][2] < p[1][2];
+    let placed = 0, why = { blocked: 0, self: 0 };
+    for (const { alts } of groups) for (const list of alts) {
+      const bs = list.map(a => mk(...a)), bx = bs.map(boxOf);
+      if (!bx.every(([lo, hi]) => B.free(lo, hi))) { why.blocked++; continue; }
+      if (bx.some((p, i) => bx.some((q, j) => j > i && clash(p, q)))) { why.self++; continue; }
+      for (const b of bs) { B.add(b, 'opt'); bricks.push(b); }
+      placed++;
+      break;
+    }
+    if (process.env.KEEPDBG) console.error(`keep decor: ${placed}/${groups.length} groups placed`, why);
+  }
   const [tx, ty] = L.gateTile;
   const gate = [gx + (tx + 0.5 + side[0] * 0.5) * TILE, gy + (ty + 0.5 + side[1] * 0.5) * TILE];
   const G = L.grid.length;
-  return { bricks, extent: [gx, gy, gx + G * TILE + 1, gy + G * TILE + 1], gate, spawns, pots, hall: hallInfo, rooms: L.rooms.length, top: HR ? top + HALL_UP + 70 : roofTop + 12 };
+  return { bricks, extent: [gx, gy, gx + G * TILE + 1, gy + G * TILE + 1], gate, spawns, pots, hall: hallInfo, rooms: L.rooms.length, top: Math.max(roofPeak, roofTop + 12) };
 }
+
