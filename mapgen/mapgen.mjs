@@ -277,7 +277,7 @@ const FOOTFLAG = [mat([150, 144, 136]), mat([134, 128, 120])];
 const FOOTSAND = mat([190, 164, 116]);
 const DRIVE = [mat([170, 168, 162], { asset: 'PB_DefaultTile' }), mat([160, 158, 152], { asset: 'PB_DefaultTile' })]; // (2026-10-25) the houses' concrete driveways
 const FOOT_MATS = [...FOOTPATH, ...FOOTFLAG, FOOTSAND, ...DRIVE];
-const GTA = tune('road.gta', 1, 'asphalt roads with curbs, edge lines and a dashed centre line (0 = the old dirt ride surface)');
+const GTA = tune('road.gta', 0, /* rolled back 2026-10-25 (owner: rollback immediately) */ 'asphalt roads with curbs, edge lines and a dashed centre line (0 = the old dirt ride surface)');
 const ROAD_SKIN = tune('road.skin', 2, 'asphalt skin over the ride surface, units');
 const ASPHALT = [54, 56, 60], CURB = [168, 166, 158], EDGE_LINE = [226, 226, 218], CENTRE_LINE = [226, 174, 34];
 const DRIVE_KINDS = new Set(['splitlevel', 'cottage', 'townhouse', 'dutchcolonial', 'georgian']);
