@@ -84,6 +84,20 @@ function parseLang(word) {
   return null;
 }
 
+// Omegga drops console lines over its limit: split long text at spaces
+function chunks(text, n = 280) {
+  const out = [];
+  let rest = String(text);
+  while (rest.length > n) {
+    let cut = rest.lastIndexOf(' ', n);
+    if (cut < n / 2) cut = n;
+    out.push(rest.slice(0, cut));
+    rest = rest.slice(cut).trimStart();
+  }
+  if (rest) out.push(rest);
+  return out;
+}
+
 const base = c => String(c).toLowerCase().split('-')[0].replace(/^iw$/, 'he');
 
 module.exports = class Translate {
@@ -139,11 +153,11 @@ module.exports = class Translate {
       if (!this.last) return this.whisper(name, this.tag('Nothing has been said yet. The silence translates as "silence".'));
       const lang = parseLang(this.auto.get(name) ?? 'en');
       const r = await this.translate(this.last.text, lang, name);
-      return this.whisper(name, this.tag(`<b>${gameSafe(this.last.name)}</> (${r.from}): ${gameSafe(r.text)}`));
+      return chunks(r.text).forEach((c, i) => this.whisper(name, this.tag(i ? gameSafe(c) : `<b>${gameSafe(this.last.name)}</> (${gameSafe(r.from)}): ${gameSafe(c)}`)));
     }
     if (sub === 'langs' || sub === 'languages' || sub === 'help') {
       this.whisper(name, this.tag('/tr <lang> <text> | /tr <text> (to English) | /tr (last line, to you) | /tr on [lang] | /tr off'));
-      this.whisper(name, this.tag(`Languages: ${Object.keys(LANGS).join(' ')} (or codes: es fr ja ...)`));
+      for (const c of chunks(`Languages: ${Object.keys(LANGS).join(' ')} (or codes: es fr ja ...)`)) this.whisper(name, this.tag(c));
       return this.whisper(name, this.tag(`Questionable dialects (slow): ${Object.keys(FUN).join(' ')}`));
     }
     if (sub === 'off') {
@@ -167,7 +181,7 @@ module.exports = class Translate {
     if (text.length > 400) text = text.slice(0, 400);
     if (lang.fun) this.whisper(name, this.tag(`Consulting the ${lang.name} scholars...`));
     const r = await this.translate(text, lang, name);
-    this.omegga.broadcast(`<b>${gameSafe(name)}</> <color="7fd4ff">[${gameSafe(lang.name)}]</>: ${gameSafe(r.text)}`);
+    chunks(r.text).forEach((c, i) => this.omegga.broadcast(i ? gameSafe(c) : `<b>${gameSafe(name)}</> <color="7fd4ff">[${gameSafe(lang.name)}]</>: ${gameSafe(c)}`));
   }
 
   async onChat(name, message) {
@@ -186,7 +200,7 @@ module.exports = class Translate {
       [...byLang].map(async ([code, who]) => {
         const r = await this.google(text, code);
         if (base(r.src) === base(code) || r.text.trim().toLowerCase() === text.toLowerCase()) return;
-        for (const w of who) this.whisper(w, this.tag(`<b>${gameSafe(name)}</> (${gameSafe(r.from)}): ${gameSafe(r.text)}`));
+        for (const w of who) chunks(r.text).forEach((c, i) => this.whisper(w, this.tag(i ? gameSafe(c) : `<b>${gameSafe(name)}</> (${gameSafe(r.from)}): ${gameSafe(c)}`)));
       })
     );
   }
