@@ -1,3 +1,5 @@
+**NEVER PACE LOADS (owner, furious, 2026-10-26, said many times): every add goes out AT ONCE. Never a loop that waits for each bricks op to finish before sending the next, never gaps/sleeps between batches, never 'procedural' one-at-a-time placement. Drop ALL batch jobs into bridge/inbox in one go (pattern: ~/citygrid/blast.mjs / mapgen/citygrid_blast.mjs), then check the log once at the end.**
+
 # Brickadia building rules (what the game accepts, and what looks right)
 
 Read this before writing anything that places bricks. It is the shared
