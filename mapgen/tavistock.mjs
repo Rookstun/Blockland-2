@@ -43,7 +43,7 @@ export function tavistock({ seed = 1 } = {}) {
   const WT = 104;                                      // the wing's wall top
   const DOOR = 62, SILL = 26, HEAD = 62;
   const X0 = 30, Y0 = 270;                             // local origin: overhang + the driveway in front of the garage
-  const sidingC = [128, 160, 204], shutC = [244, 244, 240], roofC = [92, 94, 98], doorC = [138, 82, 40];
+  const sidingC = [[128, 160, 204], [214, 196, 150], [150, 176, 140], [196, 120, 110], [232, 230, 222], [170, 170, 176]][(seed - 1) % 6], shutC = [244, 244, 240], roofC = [92, 94, 98], doorC = [138, 82, 40];
   const brickC = [226, 222, 214], trimC = [244, 242, 236];
   const shade = (c, f) => c.map(v => Math.max(0, Math.min(255, Math.round(v * f))));
   const box = (x0, y0, z0, x1, y1, z1, m, label) => {
