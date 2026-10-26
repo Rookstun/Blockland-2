@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 const file = process.argv[2] ?? new URL('./brs4/dist.mjs', import.meta.url);
 let s = fs.readFileSync(file, 'utf8');
+await import('./patch_brs4_joints.mjs'); // joint links (servo-held grids); patches tools/brs4/dist.mjs
 if (s.includes('__brs4_componentDb')) { console.log('already patched'); process.exit(0); } // re-copy dist.mjs to re-patch
 const a = '//#region src/brdb/componentDb.ts\nvar aa = /* @__PURE__ */ new Map([';
 if (!s.includes(a)) throw new Error('componentDb anchor not found');

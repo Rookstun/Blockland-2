@@ -1,6 +1,6 @@
 // Pull the owner's own work out of the live Tavistock house (2026-10-26, owner: "save my garage and lights from
 // the world and put them into tavistock.mjs so a rebuild keeps them"). Input: a SaveRegion prefab of the house
-// (br.Prefab.SaveRegion "tavistock_live" 1285 405 150 320 440 170 0). Every brick NOT owned by the generator's
+// (br.Prefab.SaveRegion "tavistock_live" 1285 405 150 320 440 170 1: the last 1 takes moving grids too). Every brick NOT owned by the generator's
 // owner (Tavistock) is kept with its components and wires and written to mapgen/tavistock_owner.brz, positions
 // relative to the house origin (deploy: br.Prefab.Load "tavistock_owner" <origin> 0 16). Also prints the
 // generator bricks missing from the world (the owner removed them) as keys for tavistock.mjs REMOVED.
@@ -41,6 +41,43 @@ for (const [b, i] of keep) {
     owner_index: ownerIdx.get(b.owner_index), ...(c.length ? { components: c } : {}),
   }));
 }
+// moving grids (the garage door hanging on its servo): the entity as saved (location is in prefab space:
+// world = location - addedGlobalGridOffset), bricks in the grid's own frame. Needs SaveRegion's last arg 1.
+const off = r.prefabJson()?.addedGlobalGridOffset ?? { x: 0, y: 0, z: 0 };
+const ents = r.entityChunkIndex().chunks.flatMap(c => r.entityChunk(c.index));
+let ng = 0;
+const gridH = new Map();
+for (const gid of r.gridIds().filter(x => x !== 1)) {
+  const e = ents.find(x => x.persistentIndex === gid);
+  if (!e) throw Error(`grid ${gid} has no entity`);
+  const own = owners.UserNames[e.ownerIndex];
+  if (e.ownerIndex === gen) continue;
+  if (!ownerIdx.has(e.ownerIndex)) throw Error(`grid ${gid} owner ${own} owns nothing on the main grid`); // shortcut: owner added above
+  const gh = w.addBrickGrid({
+    type: e.typeName, owner_index: ownerIdx.get(e.ownerIndex), rotation: e.rotation, frozen: e.frozen, sleeping: e.sleeping, data: e.data,
+    location: { X: e.location.X - off.x - O[0], Y: e.location.Y - off.y - O[1], Z: e.location.Z - off.z - O[2] },
+    colors: Object.values(e.colors),
+  });
+  gridH.set(gid, gh);
+  // brs-js 4 reads a moving grid's bricks 1024 off on every axis (its chunk offset) but writes them as given;
+  // uncorrected, the test copy's door landed ~1.7k away from its servo
+  for (const b of r.bricks(gid)) w.addBrick({
+    asset: names[b.asset_name_index], size: b.size, position: b.position.map(v => v + 1024), direction: b.direction, rotation: b.rotation,
+    color: b.color, material: mats[b.material_index], material_intensity: b.material_intensity, visibility: b.visibility, collision: b.collision,
+    owner_index: ownerIdx.get(b.owner_index) ?? ownerIdx.get(e.ownerIndex),
+  }, gh);
+  ng++;
+}
+// joints: the servo holding the door grid (needs tools/patch_brs4_joints.mjs; brs-js 4 alone writes none and the
+// door loads loose and falls)
+const cs = r.componentChunk(1, chunks[0].index).soa;
+let nj = 0;
+cs.JointBrickIndices.forEach((bi, k) => {
+  const bh = handle.get(bi), gh = gridH.get(cs.JointEntityReferences[k]);
+  if (!bh || !gh) { if (bh || gh) throw Error('joint between the owner work and a generated brick'); return; }
+  w.registerJoint(bh, gh, cs.JointInitialRelativeOffsets[k], cs.JointInitialRelativeRotations[k]);
+  nj++;
+});
 let nw = 0;
 for (const { source, target } of wires.local) {
   const a = handle.get(source.brickIndex), t = handle.get(target.brickIndex);
@@ -62,7 +99,7 @@ for (let tries = 0; !bytes; tries++) {
   }
 }
 fs.writeFileSync(out, bytes);
-console.error(`kept ${keep.length} bricks, ${comps.filter(x => handle.has(x.brickIndex)).length} components, ${nw} wires -> ${out.pathname}`);
+console.error(`kept ${ng} moving grids, ${nj} joints, ${keep.length} bricks, ${comps.filter(x => handle.has(x.brickIndex)).length} components, ${nw} wires -> ${out.pathname}`);
 
 // generator bricks the owner removed (asset|position relative to the origin|size)
 const tav = JSON.parse(fs.readFileSync(process.env.GEN ?? 'tav.json'));
