@@ -14,6 +14,7 @@ const [ex0, ey0, ex1, ey1] = dun.entrance;
 const k = planSurfaceDungeon({
   seed: D.seed * 7 + 3, hole: [ex0 / 10, ey0 / 10, ex1 / 10, ey1 / 10], side: [0, -1],
   bounds: [3 * SPC, 3 * SPC, (C - 3) * SPC, (C - 3) * SPC], grid: 12 + D.levels, rooms: 3 + D.levels, theme: THEMES[which],
+  checkpoint: dun.entranceSide === 'S' || dun.entranceSide === 'N' ? [ex0 / 10 - 4, (ey0 + ey1) / 20] : [(ex0 + ex1) / 20, ey0 / 10 - 4],
 });
 const B = makeBuilder();
 for (const b of k.bricks) B.add(b, b.asset ?? 'brick');

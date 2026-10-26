@@ -27,7 +27,7 @@
 //      [[x, y, z]] local units, rooms, top (wall top, units) }
 import { buildFromPlan, COURSES } from './wallhouse.mjs';
 import { canvas, masked, wrapNull, roundTower, stone, VX, VZ } from './castle.mjs';
-import { greatHall, hallShell, portal, orientWedge, bondPut, HALL_UP } from './greathall.mjs';
+import { greatHall, hallShell, portal, orientWedge, bondPut, HALL_UP, GOLD } from './greathall.mjs';
 import { floors, furnish, KINDS } from './keeprooms.mjs';
 import { makeBuilder, FIXED } from './builder.mjs';
 import { worldBox } from './orient.mjs';
@@ -134,7 +134,7 @@ function toRuns({ grid, doors }, G) {
   return runs;
 }
 
-export function planSurfaceDungeon({ seed, hole, side, bounds, grid: G = 11, rooms: nRooms = 7, theme, hall: hallSize = 7 }) {
+export function planSurfaceDungeon({ seed, hole, side, bounds, grid: G = 11, rooms: nRooms = 7, theme, hall: hallSize = 7, checkpoint }) {
   const rng = makeRng(seed);
   const span = G * TILE + 1;
   const even = v => 2 * Math.round(v / 2);
@@ -166,12 +166,12 @@ export function planSurfaceDungeon({ seed, hole, side, bounds, grid: G = 11, roo
         model: { glass: false, floor: false, ceiling: true, roof: true },
       });
     } catch (e) { last = e.message; continue; }
-    return finish({ h, L, ox: ox + minX, oy: oy + minY, gx: ox, gy: oy, side, theme, seed, rng, hole });
+    return finish({ h, L, ox: ox + minX, oy: oy + minY, gx: ox, gy: oy, side, theme, seed, rng, hole, checkpoint });
   }
   throw new Error(`surface dungeon: no layout fits (${last})`);
 }
 
-function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
+function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole, checkpoint }) {
   const bricks = [];
   const U = 10;
   const top = COURSES * 12;
@@ -220,55 +220,177 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
     }
     return null;
   };
+  const extraDoors = new Map(); // doorways cut into enclosed pockets (key -> opening)
   // doors of a tile rect (grid tiles), as spans on its walls (keep frame)
   const doorsOf = r => {
     const inR = (x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h, out = [];
-    for (const key of L.doors) {
+    for (const key of [...L.doors, ...extraDoors.keys()]) {
       const [[ax, ay], [bx, by]] = key.split('|').map(t => t.split(',').map(Number));
       if (inR(ax, ay) === inR(bx, by)) continue;
       const [ix, iy, ex, ey] = inR(ax, ay) ? [ax, ay, bx, by] : [bx, by, ax, ay];
-      const o = opening(key);
+      const o = extraDoors.get(key) ?? opening(key);
       if (!o) continue;
       out.push({ side: ey !== iy ? (ey < iy ? 'S' : 'N') : (ex < ix ? 'W' : 'E'), a0: o.a0, a1: o.a1 });
     }
     return out;
   };
   // ---- second storey (owner 2026-10-25: "add a second floor"): the same rooms again over the first
-  // (walls repeated a storey up, the hall's ring left to the hall), the roof on top of them; a stair
-  // along a room wall: a switchback of 13 treads (rise 12, run 2 studs): 7 up along the wall, a landing,
-  // 6 back up beside them; landings both ends, clear of doorways and the dungeon's stairwell; the
-  // upper floor opens over both flights (holeUp) behind a railing
+  // (walls repeated a storey up, the hall's ring left to the hall), the roof on top of them.
+  // v2 (owner: "stairs dont go through ceilings and are placed abnormally. make them flush", "the room
+  // has a huge gap in the floor", "doors and walls are not flush", "a room inside the walls thats
+  // inaccessible"): an L stair tucked into a room corner, flush with both walls (7 treads along one
+  // wall, a corner landing, 6 along the other; rise 12, run 2 studs), the upper floor and the ceiling
+  // beams open over it; doorways are trimmed in the wall's own plane; upstairs, rooms the stair can't
+  // reach (their only door led into the hall) get a doorway cut to a reachable neighbour
   const top2 = 2 * top, frng = makeRng((seed ?? 1) * 97 + 5); // decoration draws: the keep's own rng (spawns) stays put
-  const holeK = hole && [hole[0] - ox, hole[1] - oy, hole[2] - ox, hole[3] - oy];
-  const keepOut = holeK ? [[holeK[0] - 6, holeK[1] - 6, holeK[2] + 6, holeK[3] + 6]] : [];
+  const out1 = r => [Math.floor(r[0]), Math.floor(r[1]), Math.ceil(r[2]), Math.ceil(r[3])];
+  const holeK = hole && out1([hole[0] - ox, hole[1] - oy, hole[2] - ox, hole[3] - oy]);
+  // the floor stops only at the dungeon's stairwell and the checkpoint's spot beside it
+  const keepOut = [...(holeK ? [holeK] : []), ...(checkpoint ? [out1([checkpoint[0] - ox - 1.5, checkpoint[1] - oy - 1.5, checkpoint[0] - ox + 1.5, checkpoint[1] - oy + 1.5])] : [])];
   const roomRect = r => [shx + r.x * TILE + 1, shy + r.y * TILE + 1, shx + (r.x + r.w) * TILE, shy + (r.y + r.h) * TILE];
-  const wallsOf = ([x0, y0, x1, y1]) => [
-    { side: 'S', len: x1 - x0, at: (a, d) => [x0 + a, y0 + d], dir: [1, 0] }, { side: 'N', len: x1 - x0, at: (a, d) => [x0 + a, y1 - d], dir: [1, 0] },
-    { side: 'W', len: y1 - y0, at: (a, d) => [x0 + d, y0 + a], dir: [0, 1] }, { side: 'E', len: y1 - y0, at: (a, d) => [x1 - d, y0 + a], dir: [0, 1] },
-  ];
-  const rectOf = (w, a0, d0, a1, d1) => { const [p, q] = w.at(a0, d0), [r, t] = w.at(a1, d1); return [Math.min(p, r), Math.min(q, t), Math.max(p, r), Math.max(q, t)]; };
   const meets = (A, B) => A[0] < B[2] && B[0] < A[2] && A[1] < B[3] && B[1] < A[3];
   const doorRect = (R, d) => { const [x0, y0, x1, y1] = R, w0 = d.a0 - 2, w1 = d.a1 + 2; return d.side === 'S' ? [w0, y0, w1, y0 + 5] : d.side === 'N' ? [w0, y1 - 5, w1, y1] : d.side === 'W' ? [x0, w0, x0 + 5, w1] : [x1 - 5, w0, x1, w1]; };
   const NT = 13;
+  // a room corner: K the inside corner, A and B the directions along its two walls; (s, t) = studs
+  // along A and along B from K (t is the distance off the A wall, s off the B wall)
+  const cornersOf = ([x0, y0, x1, y1]) => [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]
+    .flatMap(([kx, ky, sx, sy]) => [{ K: [kx, ky], A: [sx, 0], B: [0, sy] }, { K: [kx, ky], A: [0, sy], B: [sx, 0] }]);
+  const Lr = (C, s0, t0, s1, t1) => {
+    const p = [C.K[0] + C.A[0] * s0 + C.B[0] * t0, C.K[1] + C.A[1] * s0 + C.B[1] * t0], q = [C.K[0] + C.A[0] * s1 + C.B[0] * t1, C.K[1] + C.A[1] * s1 + C.B[1] * t1];
+    return [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])];
+  };
   let stair = null;
   for (const { r, i } of L.rooms.map((r, i) => ({ r, i })).filter(({ i }) => !(HR && i === L.hall)).sort((p, q) => q.r.w * q.r.h - p.r.w * p.r.h)) {
     const R = roomRect(r), ds = doorsOf(r).map(d => doorRect(R, d));
-    for (const w of wallsOf(R)) {
-      for (let a0 = 4; a0 + 18 <= w.len && !stair; a0++) {
-        const foot = rectOf(w, a0 - 3, 0, a0 + 18, 8), arrive = rectOf(w, a0 - 4, 3, a0, 7);
-        if (ds.some(d => meets(d, foot) || meets(d, arrive)) || keepOut.some(k => meets(k, foot))) continue;
-        stair = { i, R, w, a0, foot, holes: [rectOf(w, a0, 0, a0 + 17, 3), rectOf(w, a0 + 2, 3, a0 + 17, 6)], rail: rectOf(w, a0 - 1, 0, a0 + 18, 8), arrive };
-      }
-      if (stair) break;
+    if (R[2] - R[0] < 22 || R[3] - R[1] < 22) continue;
+    for (const C of cornersOf(R)) {
+      const foot = [Lr(C, 0, 0, 20, 5), Lr(C, 0, 0, 5, 18)];
+      if (foot.some(f => ds.some(d => meets(d, f)) || keepOut.some(k => meets(k, f)))) continue;
+      stair = { i, R, C, foot, holes: [Lr(C, 0, 0, 17, 4), Lr(C, 0, 0, 4, 15)], upFoot: [Lr(C, 0, 0, 18, 5), Lr(C, 0, 0, 5, 18)] };
+      break;
     }
     if (stair) break;
   }
   const holesUp = stair?.holes ?? [];
-  if (process.env.KEEPDBG) console.error(`stair: ${stair ? `room ${stair.i} wall ${stair.w.side} at ${stair.a0}` : 'NONE'}`);
+  if (process.env.KEEPDBG) console.error(`stair: ${stair ? `room ${stair.i} corner ${stair.C.K} A ${stair.C.A}` : 'NONE'}`);
   const clipRect = (b, R) => {
     if (!R || b.x1 <= R[0] || b.x0 >= R[2] || b.y1 <= R[1] || b.y0 >= R[3]) return [b];
     return [{ ...b, x1: R[0] }, { ...b, x0: R[2] }, { ...b, x0: Math.max(b.x0, R[0]), x1: Math.min(b.x1, R[2]), y1: R[1] }, { ...b, x0: Math.max(b.x0, R[0]), x1: Math.min(b.x1, R[2]), y0: R[3] }]
       .filter(p => p.x1 > p.x0 && p.y1 > p.y0);
+  };
+  // doors on each storey: the ground has all of them; upstairs not the gate nor into the hall, plus
+  // doorways cut so that every upstairs room and corridor is reachable from the stair
+  const parse = key => key.split('|').map(t => t.split(',').map(Number));
+  const Gn = L.grid.length, idAt = (x, y) => (x < 0 || y < 0 || x >= Gn || y >= Gn ? SOLID : L.grid[y][x]);
+  const isGateKey = key => { const [[ax, ay], [bx, by]] = parse(key); return (ax === gtx && ay === gty && bx === gtx + side[0] && by === gty + side[1]) || (bx === gtx && by === gty && ax === gtx + side[0] && ay === gty + side[1]); };
+  const intoHall = key => { const [[ax, ay], [bx, by]] = parse(key); return HR && (idAt(ax, ay) === L.hall || idAt(bx, by) === L.hall); };
+  // enclosed pockets: SOLID tiles not reachable from the grid's edge through SOLID tiles
+  const voids = [];
+  {
+    const out = new Set(), q = [];
+    for (let i = 0; i < Gn; i++) for (const [x, y] of [[i, 0], [i, Gn - 1], [0, i], [Gn - 1, i]]) if (idAt(x, y) === SOLID && !out.has(x + ',' + y)) { out.add(x + ',' + y); q.push([x, y]); }
+    while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy, k = nx + ',' + ny; if (nx < 0 || ny < 0 || nx >= Gn || ny >= Gn || out.has(k) || idAt(nx, ny) !== SOLID) continue; out.add(k); q.push([nx, ny]); } }
+    for (let y = 0; y < Gn; y++) for (let x = 0; x < Gn; x++) if (idAt(x, y) === SOLID && !out.has(x + ',' + y)) voids.push([x, y]);
+    if (process.env.KEEPDBG) {
+      const cov = ([x, y]) => { const cx = shx + x * TILE + 4, cy = shy + y * TILE + 4; return ['ceiling', 'roof'].map(k => h.boxes.some(b => b.kind === k && b.x0 <= cx && cx < b.x1 && b.y0 <= cy && cy < b.y1) ? k : '-').join('/'); };
+      console.error(`enclosed pockets: ${voids.length} tiles`, voids.map(v => v.join(',') + ' ' + cov(v)).join(' | '));
+    }
+  }
+  // owner 2026-10-25 ("theres a room inside the walls thats inaccessible"): each pocket becomes a
+  // room: a doorway cut from a neighbouring room or corridor (both storeys, clear of the stair)
+  const pockets = [];
+  {
+    const left = new Set(voids.map(v => v.join()));
+    for (const v0 of voids) {
+      if (!left.has(v0.join())) continue;
+      const comp = [], q = [v0]; left.delete(v0.join());
+      while (q.length) { const [x, y] = q.pop(); comp.push([x, y]); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = (x + dx) + ',' + (y + dy); if (left.has(k)) { left.delete(k); q.push([x + dx, y + dy]); } } }
+      let door = null;
+      for (const [x, y] of comp) {
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, g = idAt(nx, ny);
+          if (g === SOLID || (HR && g === L.hall) || door) continue;
+          const H = dy !== 0, l = H ? Math.max(y, ny) : Math.max(x, nx), c = (H ? shy : shx) + l * TILE, a0 = (H ? shx + x * TILE : shy + y * TILE) + 2;
+          const w = (a, k) => wallAt.has(H ? `${a},${c},${k}` : `${c},${a},${k}`);
+          let solid = true;
+          for (let a = a0 - 1; a <= a0 + 4 && solid; a++) for (let k = 0; k < 7; k++) if (!w(a, k)) { solid = false; break; }
+          const zone = H ? [a0 - 2, c - 5, a0 + 6, c + 6] : [c - 5, a0 - 2, c + 6, a0 + 6];
+          if (!solid || (stair && [...stair.foot, ...stair.upFoot].some(f => meets(f, zone)))) continue;
+          door = { key: edgeKey(x, y, nx, ny), o: { H, c, a0, a1: a0 + 4 } };
+        }
+      }
+      if (!door) continue;
+      extraDoors.set(door.key, door.o);
+      pockets.push({ tiles: comp, door });
+    }
+    if (process.env.KEEPDBG) console.error(`pockets opened: ${pockets.length} (${pockets.map(p => p.tiles.length).join(',')} tiles)`);
+  }
+  const upOpen = new Map(); // door key -> opening
+  for (const key of L.doors) if (!isGateKey(key) && !intoHall(key)) { const o = opening(key); if (o) upOpen.set(key, o); }
+  for (const [key, o] of extraDoors) upOpen.set(key, o);
+  if (stair) {
+    const solidUp = (x, y) => { const g = idAt(x, y); return g === SOLID || (HR && g === L.hall); };
+    const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let guard = 0; guard < 40; guard++) {
+      const seen = new Set(), q = [];
+      for (let y = 0; y < Gn; y++) for (let x = 0; x < Gn; x++) if (idAt(x, y) === stair.i) { seen.add(x + ',' + y); q.push([x, y]); }
+      while (q.length) {
+        const [x, y] = q.pop();
+        for (const [dx, dy] of N4) {
+          const nx = x + dx, ny = y + dy, k = nx + ',' + ny;
+          if (seen.has(k) || solidUp(nx, ny)) continue;
+          if (idAt(nx, ny) !== idAt(x, y) && !upOpen.has(edgeKey(x, y, nx, ny))) continue;
+          seen.add(k); q.push([nx, ny]);
+        }
+      }
+      // the first cut-off tile beside a reached one, through a plain stretch of wall
+      let cut = null;
+      for (let y = 0; y < Gn && !cut; y++) for (let x = 0; x < Gn && !cut; x++) {
+        if (solidUp(x, y) || seen.has(x + ',' + y)) continue;
+        for (const [dx, dy] of N4) {
+          const nx = x + dx, ny = y + dy;
+          if (!seen.has(nx + ',' + ny)) continue;
+          const H = dy !== 0, l = H ? Math.max(y, ny) : Math.max(x, nx), c = (H ? shy : shx) + l * TILE, a0 = (H ? shx + x * TILE : shy + y * TILE) + 2;
+          const w = (a, k) => wallAt.has(H ? `${a},${c},${k}` : `${c},${a},${k}`);
+          let solid = true;
+          for (let a = a0 - 1; a <= a0 + 4 && solid; a++) for (let k = 0; k < 7; k++) if (!w(a, k)) { solid = false; break; }
+          if (solid) { cut = { key: edgeKey(x, y, nx, ny), o: { H, c, a0, a1: a0 + 4 } }; break; }
+        }
+      }
+      if (!cut) { if (process.env.KEEPDBG) { let n = 0; for (let y = 0; y < Gn; y++) for (let x = 0; x < Gn; x++) if (!solidUp(x, y) && !seen.has(x + ',' + y)) n++; console.error(`upstairs: ${guard} doorways cut, ${n} tiles still cut off`); } break; }
+      upOpen.set(cut.key, cut.o);
+    }
+  }
+  // flush doorway trim: the wall's own cells round each opening become stone jambs, a lintel and a
+  // gold keystone (ground: every door; upstairs: upOpen), and upstairs cut doorways are opened
+  const cellKey = (o, a, k) => (o.H ? `${a},${o.c},${k}` : `${o.c},${a},${k}`);
+  const doorCells = new Map(), openUp = new Set(), arches = [];
+  const trimDoor = (o, k0) => {
+    for (let k = k0; k < k0 + 6; k++) for (const a of [o.a0 - 1, o.a1]) doorCells.set(cellKey(o, a, k), { asset: MB, color: T.trim });
+    for (let a = o.a0 - 1; a <= o.a1; a++) doorCells.set(cellKey(o, a, k0 + 6), { asset: MB, color: a === o.a0 + 1 || a === o.a0 + 2 ? GOLD : T.trim });
+    arches.push({ o, z: k0 * 12 + 60 });
+  };
+  for (const key of L.doors) { const o = opening(key); if (o) trimDoor(o, 0); }
+  for (const [, o] of extraDoors) { trimDoor(o, 0); for (let k = 0; k < 6; k++) for (let a = o.a0; a < o.a1; a++) openUp.add(cellKey(o, a, k)); }
+  for (const [key, o] of upOpen) {
+    trimDoor(o, COURSES);
+    if (!L.doors.has(key) || extraDoors.has(key)) for (let k = COURSES; k < COURSES + 6; k++) for (let a = o.a0; a < o.a1; a++) openUp.add(cellKey(o, a, k));
+  }
+  // one wall box, cell by cell where trimmed or opened, else whole
+  const emitWall = (b, dz, dk, base) => {
+    const alongX = b.x1 - b.x0 >= b.y1 - b.y0, n = alongX ? b.x1 - b.x0 : b.y1 - b.y0, course = b.course + dk;
+    const styles = [];
+    for (let i = 0; i < n; i++) {
+      const [x, y] = alongX ? [b.x0 + i, b.y0] : [b.x0, b.y0 + i], key = `${x},${y},${course}`;
+      styles.push(openUp.has(key) ? null : doorCells.get(key) ?? base);
+    }
+    if (styles.every(s => s === base)) return put(b.x0, b.y0, b.x1, b.y1, b.z0 + dz, b.z1 + dz, base);
+    for (let i = 0; i < n;) {
+      let j = i + 1;
+      while (j < n && styles[j] === styles[i] && styles[i] === base) j++;
+      if (styles[i]) alongX ? put(b.x0 + i, b.y0, b.x0 + j, b.y1, b.z0 + dz, b.z1 + dz, styles[i]) : put(b.x0, b.y0 + i, b.x1, b.y0 + j, b.z0 + dz, b.z1 + dz, styles[i]);
+      i = j;
+    }
   };
   for (const b of h.boxes) {
     if (b.kind === 'wall') {
@@ -277,9 +399,9 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
       if (b.course > 0) for (let x = b.x0; x < b.x1 && !over; x++) for (let y = b.y0; y < b.y1; y++) if (!wallAt.has(`${x},${y},${b.course - 1}`)) { over = true; break; }
       const k = Math.floor(rng() * 5);
       const c = b.course === 0 ? T.base : b.course === COURSES - 1 ? T.trim : shade(T.field[k % T.field.length], k);
-      put(b.x0, b.y0, b.x1, b.y1, b.z0, b.z1, over ? { asset: MB, color: c } : { color: c });
+      emitWall(b, 0, 0, over ? { asset: MB, color: c } : { color: c });
       const k2 = Math.floor(frng() * 5), c2 = b.course === 0 ? T.trim : b.course === COURSES - 1 ? T.trim : shade(T.field[k2 % T.field.length], k2);
-      for (const p of clipHall(b)) put(p.x0, p.y0, p.x1, p.y1, b.z0 + top, b.z1 + top, over ? { asset: MB, color: c2 } : { color: c2 });
+      for (const p of clipHall(b)) emitWall({ ...p, course: b.course }, top, COURSES, over ? { asset: MB, color: c2 } : { color: c2 });
     } else if (b.kind === 'ceiling') {
       for (const p of holesUp.reduce((bs, h) => bs.flatMap(q => clipRect(q, h)), clipHall(b))) put(p.x0, p.y0, p.x1, p.y1, p.z0, p.z1, { asset: MB, color: T.trim });
       for (const p of clipHall(b)) put(p.x0, p.y0, p.x1, p.y1, p.z0 + top, p.z1 + top, { asset: MB, color: T.trim });
@@ -292,6 +414,13 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
       }
       for (let x = p.x0; x < p.x1; x++) for (let y = p.y0; y < p.y1; y++) roofCells.add(x + ',' + y);
     }
+  }
+  // pointed heads in every trimmed doorway: two hanging wedges in its top course, in the wall plane
+  for (const { o, z } of arches) {
+    const mid = (o.a0 + o.a1) / 2, along = o.H ? [1, 0] : [0, 1];
+    const P = (p, q, b) => (o.H ? put(p, o.c, q, o.c + 1, z, z + 12, b) : put(o.c, p, o.c + 1, q, z, z + 12, b));
+    P(o.a0, mid, { asset: WEDGE, color: T.trim, wedge: { D: [-along[0], -along[1]], down: true } });
+    P(mid, o.a1, { asset: WEDGE, color: T.trim, wedge: { D: along, down: true } });
   }
   // the gate is a ground-floor door: upstairs its opening is walled up
   {
@@ -381,71 +510,90 @@ function finish({ h, L, ox, oy, gx, gy, side, theme: T, rng, seed, hole }) {
     if (g === SOLID || (HR && g === L.hall)) continue;
     tiles.push({ tx, ty, room: g });
   }
+  pockets.forEach((pk, n) => { for (const [tx, ty] of pk.tiles) tiles.push({ tx, ty, room: 1000 + n }); });
   const up = a => [a[0], a[1], a[2], a[3], a[4] + top, a[5] + top, a[6]];
   for (const a of floors({ tiles, sh: [shx, shy], TILE, wallAt: (x, y) => wallAt.has(`${x},${y},0`), keepOut, T, rng: frng })) put(...a);
   for (const a of floors({ tiles, sh: [shx, shy], TILE, wallAt: (x, y) => wallAt.has(`${x},${y},0`), keepOut: holesUp, T, rng: frng })) put(...up(a));
-  if (stair) { // flights in running bond under smooth treads, the landing, a pale stringer with wedge copes, the railing upstairs
-    const { w, a0 } = stair, FLR = 4, cz = c => (c === 0 ? [FLR, FLR + 8] : [FLR + 12 * c - 4, FLR + 12 * c + 8]);
+  if (stair) { // the L stair: running-bond fill, tan smooth treads, stringers in the walls' own stone with trim copes, a railing upstairs
+    const { C } = stair, FLR = 4, cz = c => (c === 0 ? [FLR, FLR + 8] : [FLR + 12 * c - 4, FLR + 12 * c + 8]);
     const fieldF = () => { const k = Math.floor(frng() * 5); return shade(T.field[k % T.field.length], k); };
-    const cheek = () => shade(T.trim, Math.floor(frng() * 5));
-    const B = (a, d, b, e, z0, z1, x) => put(...rectOf(w, a, d, b, e), z0, z1, x);
-    const bond = (a, d, b, e, z0, z1, col) => { if (b > a && e > d) bondPut(put, ...rectOf(w, a, d, b, e), z0, z1, Math.floor(z0 / 12), col); };
-    const segA = j => [a0 + 2 * (j - 1), a0 + 2 * j];         // treads 1..7 up along the wall (depth 0..3)
-    const segB = j => [a0 + 28 - 2 * j, a0 + 30 - 2 * j];     // treads 8..13 back beside them (depth 3..6)
+    const B = (s0, t0, s1, t1, z0, z1, x) => { if (s1 > s0 && t1 > t0) put(...Lr(C, s0, t0, s1, t1), z0, z1, x); };
+    const bond = (s0, t0, s1, t1, z0, z1) => { if (s1 > s0 && t1 > t0) bondPut(put, ...Lr(C, s0, t0, s1, t1), z0, z1, Math.floor(z0 / 12), fieldF); };
+    const T1 = j => [17 - 2 * j, 19 - 2 * j]; // treads 1..7 along A (s), rising toward the corner
+    const T2 = j => [3 + 2 * (j - 8), 5 + 2 * (j - 8)]; // treads 8..13 along B (t), rising away from it
     for (let c = 0; c < NT; c++) {
       const [z0, z1] = cz(c);
-      if (c < 7) { bond(a0 + 2 * c, 0, a0 + 14, 3, z0, z1, fieldF); bond(a0 + 14, 0, a0 + 17, 6, z0, z1, fieldF); } // flight A, the landing
-      const j0 = Math.max(8, c + 1);
-      bond(a0 + 2, 3, a0 + 30 - 2 * j0, 6, z0, z1, fieldF);                                                       // flight B
+      if (c < 7) { bond(3, 0, 17 - 2 * c, 3, z0, z1); bond(0, 0, 3, 3, z0, z1); }
+      bond(0, T2(Math.max(8, c + 1))[0], 3, 15, z0, z1);
     }
-    for (let j = 1; j <= 7; j++) B(...[segA(j)[0], 0, segA(j)[1], 3], FLR + 12 * j - 4, FLR + 12 * j, { asset: SMOOTH, color: T.dado });
-    B(a0 + 14, 0, a0 + 17, 6, FLR + 80, FLR + 84, { asset: SMOOTH, color: T.dado });
-    for (let j = 8; j <= NT; j++) B(segB(j)[0], 3, segB(j)[1], 6, FLR + 12 * j - 4, FLR + 12 * j, { asset: SMOOTH, color: T.dado });
-    // the stringer on flight B's open side and the landing's, rising with it
+    for (let j = 1; j <= 7; j++) B(T1(j)[0], 0, T1(j)[1], 3, FLR + 12 * j - 4, FLR + 12 * j, { asset: SMOOTH, color: T.dado });
+    B(0, 0, 3, 3, FLR + 80, FLR + 84, { asset: SMOOTH, color: T.dado });
+    for (let j = 8; j <= NT; j++) B(0, T2(j)[0], 3, T2(j)[1], FLR + 12 * j - 4, FLR + 12 * j, { asset: SMOOTH, color: T.dado });
+    // stringers on the open sides (flight 1: t 3..4 from s 4; flight 2: s 3..4 from t 4), a newel at the turn
     for (let c = 0; c <= NT; c++) {
-      const [z0, z1] = cz(c), j0 = Math.max(8, c);
-      if (j0 <= NT) bond(a0 + 2, 6, a0 + 30 - 2 * j0, 7, z0, z1, cheek);
-      if (c <= 7) bond(a0 + 14, 6, a0 + 17, 7, z0, z1, cheek);
+      const [z0, z1] = cz(c);
+      if (c <= 7) bond(4, 3, 19 - 2 * Math.max(1, c), 4, z0, z1);
+      const j0 = Math.max(8, c);
+      if (j0 <= NT) bond(3, Math.max(4, T2(j0)[0]), 4, 15, z0, z1);
+      if (c <= 7) B(3, 3, 4, 4, z0, z1, { color: fieldF() });
     }
-    for (let j = 8; j <= NT; j++) B(segB(j)[0], 6, segB(j)[1], 7, FLR + 12 * j + 8, FLR + 12 * j + 20, { asset: WEDGE, color: T.trim, wedge: { D: [-w.dir[0], -w.dir[1]], down: false } });
-    B(a0 + 14, 6, a0 + 17, 7, FLR + 96, FLR + 100, { asset: MB, color: T.trim });
-    // upstairs: a railing round the stairwell, open where flight B arrives
+    for (let j = 1; j <= 7; j++) B(Math.max(4, T1(j)[0]), 3, T1(j)[1], 4, FLR + 12 * j + 8, FLR + 12 * j + 20, { asset: WEDGE, color: T.trim, wedge: { D: [-C.A[0], -C.A[1]], down: false } });
+    for (let j = 8; j <= NT; j++) B(3, Math.max(4, T2(j)[0]), 4, T2(j)[1], FLR + 12 * j + 8, FLR + 12 * j + 20, { asset: WEDGE, color: T.trim, wedge: { D: C.B, down: false } });
+    B(3, 3, 4, 4, FLR + 92, FLR + 96, { asset: MB, color: T.trim });
+    // upstairs: posts and a rail round the stairwell, open where flight 2 arrives
     const z0 = top + FLR, RAIL = { asset: MB, color: T.trim };
-    const rail = (a, d, b, e) => { B(a, d, b, e, z0 + 24, z0 + 28, RAIL); const along = b - a >= e - d; for (let t = 0; t < (along ? b - a : e - d); t += 2) { const [p, q] = along ? [a + t + 0.2, d + 0.2] : [a + 0.2, d + t + 0.2]; B(p, q, p + 0.6, q + 0.6, z0, z0 + 24, RAIL); } };
-    rail(a0 - 1, 7, a0 + 18, 8); rail(a0 + 17, 0, a0 + 18, 7); rail(a0 - 1, 0, a0, 3); rail(a0, 2.6, a0 + 2, 3);
+    const rail = (s0, t0, s1, t1) => {
+      B(s0, t0, s1, t1, z0 + 24, z0 + 28, RAIL);
+      const alongS = s1 - s0 >= t1 - t0, n = alongS ? s1 - s0 : t1 - t0;
+      for (let k = 0; k < n; k += 2) { const [p, q] = alongS ? [s0 + k + 0.2, t0 + 0.2] : [s0 + 0.2, t0 + k + 0.2]; B(p, q, p + 0.6, q + 0.6, z0, z0 + 24, RAIL); }
+    };
+    rail(4, 4, 18, 5); rail(17, 0, 18, 4); rail(4, 5, 5, 15);
   }
 
-  // optional pieces (portals, furniture): each group goes in whole where it touches nothing, else not at all
+  // optional pieces (the gate's outer portal, furniture): each group goes in whole where it touches nothing, else not at all
   const groups = [];
   let noOpening = 0;
   for (const key of L.doors) {
     const o = opening(key);
     if (!o) { noOpening++; continue; }
-    const { H, ax, ay, bx, by } = o, d = { axis: H ? 0 : 1, c: o.c, a0: o.a0, a1: o.a1 };
-    const isGate = (ax === gtx && ay === gty && bx === gtx + side[0] && by === gty + side[1]) || (bx === gtx && by === gty && ax === gtx + side[0] && ay === gty + side[1]);
-    for (const s of [-1, 1]) {
-      const outside = isGate && s === (H ? side[1] : side[0]);
-      const field = () => { const k = Math.floor(frng() * 5); return shade(T.field[k % T.field.length], k); };
-      const tries = (outside ? [3, 2, 1] : [2, 1]).map(D => portal({ ...d, s, D, T, z0: outside ? 0 : 4, zTop: top - 4, field }));
-      groups.push({ alts: tries });
-      const intoHall = HR && (L.grid[ay]?.[ax] === L.hall || L.grid[by]?.[bx] === L.hall);
-      if (!isGate && !intoHall) groups.push({ alts: [2, 1].map(D => portal({ ...d, s, D, T, z0: 4, zTop: top - 4, field }).map(up)) });
-    }
+    if (!isGateKey(key)) continue; // inside doors are trimmed flush in the wall (above)
+    const field = () => { const k = Math.floor(frng() * 5); return shade(T.field[k % T.field.length], k); };
+    const s = o.H ? side[1] : side[0];
+    groups.push({ alts: [3, 2, 1].map(D => portal({ axis: o.H ? 0 : 1, c: o.c, a0: o.a0, a1: o.a1, s, D, T, z0: 0, zTop: top - 4, field })) });
   }
+  // the doors of a room upstairs (upOpen)
+  const doorsUpOf = r => {
+    const inR = (x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h, out = [];
+    for (const [key, o] of upOpen) {
+      const [[ax, ay], [bx, by]] = parse(key);
+      if (inR(ax, ay) === inR(bx, by)) continue;
+      const [ix, iy, ex, ey] = inR(ax, ay) ? [ax, ay, bx, by] : [bx, by, ax, ay];
+      out.push({ side: ey !== iy ? (ey < iy ? 'S' : 'N') : (ex < ix ? 'W' : 'E'), a0: o.a0, a1: o.a1 });
+    }
+    return out;
+  };
   const kinds = [...KINDS].sort(() => frng() - 0.5);
   L.rooms.forEach((r, i) => {
     if (i === L.hall && HR) return;
-    const R = [shx + r.x * TILE + 1, shy + r.y * TILE + 1, shx + (r.x + r.w) * TILE, shy + (r.y + r.h) * TILE];
+    const R = roomRect(r);
     const cxk = shx + (r.x + r.w / 2) * TILE, cyk = shy + (r.y + r.h / 2) * TILE;
     const kind = i === 0 ? 'entry' : kinds[(i - 1) % kinds.length];
     const here = stair?.i === i;
-    const fg = furnish({ R, doors: doorsOf(r), kind, top: top - 4, T, rng: frng, spawn: [cxk, cyk], hole: [...(i === 0 ? keepOut : []), ...(here ? [stair.foot] : [])] });
+    const fg = furnish({ R, doors: doorsOf(r), kind, top: top - 4, T, rng: frng, spawn: [cxk, cyk], hole: [...(i === 0 ? keepOut : []), ...(here ? stair.foot : [])], noBeams: here ? stair.foot : [] });
     const kind2 = kinds[(i + 2) % kinds.length];
-    const fg2 = furnish({ R, doors: doorsOf(r), kind: kind2, top: top - 4, T, rng: frng, spawn: [cxk, cyk], hole: here ? [stair.rail, stair.arrive] : [] });
+    const fg2 = furnish({ R, doors: doorsUpOf(r), kind: kind2, top: top - 4, T, rng: frng, spawn: [cxk, cyk], hole: here ? stair.upFoot : [] });
     for (const g of fg2) groups.push({ alts: [g.map(up)] });
-    if (process.env.KEEPDBG) console.error(`room ${i} ${kind} ${R.join(',')} doors ${doorsOf(r).length}: ${fg.length} groups`);
+    if (process.env.KEEPDBG) console.error(`room ${i} ${kind}/${kind2} ${R.join(',')} doors ${doorsOf(r).length}/${doorsUpOf(r).length}: ${fg.length}+${fg2.length} groups`);
     for (const g of fg) groups.push({ alts: [g] });
   });
+  // the pockets: a lamp under each ceiling and a pot on each floor, in the tile furthest from the door
+  for (const pk of pockets) {
+    const [[dx0, dy0]] = parse(pk.door.key);
+    const [fx, fy] = pk.tiles.reduce((b, t) => (Math.hypot(t[0] - dx0, t[1] - dy0) > Math.hypot(b[0] - dx0, b[1] - dy0) ? t : b));
+    const px = gx + (fx + 0.5) * TILE, py = gy + (fy + 0.5) * TILE;
+    for (const z of [top - 6, top2 - 6]) bricks.push({ asset: MB, size: [6, 6, 2], position: [px * U, py * U, z], color: T.glow, material: 'BMC_Glow', material_intensity: 5 });
+    pots.push([px * U, py * U, 4], [px * U, py * U, top + 4]);
+  }
   // lamps under the ceiling and spawners in the rooms (not the stairwell's, not the hall's)
   const spawns = [];
   L.rooms.forEach((r, i) => {

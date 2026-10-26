@@ -50,7 +50,7 @@ export function floors({ tiles, sh: [shx, shy], TILE, wallAt, keepOut, T, rng })
 // one room: R interior [x0, y0, x1, y1) keep frame, doors [{ side: 'S'|'N'|'W'|'E', a0, a1 }]
 // (spans on R's walls), kind, top (ceiling underside), centre spawn [x, y] or null
 // -> groups (arrays of put() argument lists)
-export function furnish({ R, doors, kind, top, T, rng, spawn, hole }) {
+export function furnish({ R, doors, kind, top, T, rng, spawn, hole, noBeams = [] }) {
   const groups = [];
   const [x0, y0, x1, y1] = R, W = x1 - x0, D = y1 - y0;
   const reserved = [];
@@ -73,8 +73,8 @@ export function furnish({ R, doors, kind, top, T, rng, spawn, hole }) {
   // ceiling beams across the shorter span, every 4 studs, clear of the lamp in the middle
   const cx0 = (x0 + x1) / 2, cy0 = (y0 + y1) / 2;
   let cx = cx0, cy = cy0;
-  if (W >= D) { for (let x = x0 + 3; x + 1 <= x1 - 2; x += 4) if (Math.abs(x + 0.5 - cx0) > 2) groups.push([[x, y0, x + 1, y1, top - 8, top, { asset: MB, color: DARKWOOD }]]); }
-  else for (let y = y0 + 3; y + 1 <= y1 - 2; y += 4) if (Math.abs(y + 0.5 - cy0) > 2) groups.push([[x0, y, x1, y + 1, top - 8, top, { asset: MB, color: DARKWOOD }]]);
+  if (W >= D) { for (let x = x0 + 3; x + 1 <= x1 - 2; x += 4) if (Math.abs(x + 0.5 - cx0) > 2 && !noBeams.some(([p, q, r, t]) => x < r && p < x + 1 && y0 < t && q < y1)) groups.push([[x, y0, x + 1, y1, top - 8, top, { asset: MB, color: DARKWOOD }]]); }
+  else for (let y = y0 + 3; y + 1 <= y1 - 2; y += 4) if (Math.abs(y + 0.5 - cy0) > 2 && !noBeams.some(([p, q, r, t]) => x0 < r && p < x1 && y < t && q < y + 1)) groups.push([[x0, y, x1, y + 1, top - 8, top, { asset: MB, color: DARKWOOD }]]);
   // sconces every ~9 studs along each wall, clear of doorways: bracket, cup, flame, light
   for (const w of walls) for (let a = 4; a <= w.len - 4; a += 9) {
     const [px, py] = w.at(a, 0);

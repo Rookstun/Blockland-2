@@ -513,6 +513,8 @@ for (const d of DUNGEONS) {
     seed: d.seed * 7 + 3, hole: [ex0 / 10, ey0 / 10, ex1 / 10, ey1 / 10], side: [dx, dy],
     bounds: [3 * SPC, 3 * SPC, (C - 3) * SPC, (C - 3) * SPC], grid: tune('keep.grid', 12, 'surface keep tiles per side (+ dungeon floors); 8 before the great hall') + d.levels,
     rooms: tune('keep.rooms', 3, 'surface keep rooms (+ dungeon floors)') + d.levels, theme: DTHEMES[d.theme],
+    // the checkpoint's spot (see 'checkpoints'): the keep's floor leaves it bare
+    checkpoint: d.out.entranceSide === 'S' || d.out.entranceSide === 'N' ? [ex0 / 10 - 4, (ey0 + ey1) / 20] : [(ex0 + ex1) / 20, ey0 / 10 - 4],
   });
   const [kx0, ky0, kx1, ky1] = [d.fx + Math.floor(d.keep.extent[0] / SPC) - 2, d.fy + Math.floor(d.keep.extent[1] / SPC) - 2,
     d.fx + Math.ceil(d.keep.extent[2] / SPC) + 1, d.fy + Math.ceil(d.keep.extent[3] / SPC) + 1];
