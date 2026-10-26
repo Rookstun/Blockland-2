@@ -32,7 +32,7 @@ export const HALL_UP = 360;            // the hall's walls over the keep's 156 (
 const KEEP_COURSES = 13;               // wallhouse courses under the hall's own
 const FL = 4, GD = 5, GH = 132, STEP = 60, SW = 5; // floor tiles, gallery depth / walking height over FL, pillar rise, stair band
 const K = 5;                           // cove steps
-const WIN = { n0: 8, arch: 19, w: 4, pitch: 10 }; // window courses n0..arch-1 open, arch course = wedges
+const WIN = { n0: 14, arch: 21, w: 4, pitch: 10 }; // over the second storey's roof // window courses n0..arch-1 open, arch course = wedges
 export const IRON = { asset: MB, color: [44, 44, 48], material: 'BMC_Metallic' };
 const SLATE = [[74, 82, 100], [66, 74, 92], [84, 92, 110]];
 const MARBLE = [[70, 130, 92], [62, 118, 84], [78, 140, 100]];
@@ -79,7 +79,7 @@ const windowsOn = (p, q) => {
 };
 
 // HI interior, HR wall ring (keep-frame studs); top = keep wall top (156); gate [x, y] keep frame
-export function hallShell({ put, HI, HR, top, T, rng, shade, roofCells, foot, gate }) {
+export function hallShell({ put, HI, HR, top, roofZ = top + 4, T, rng, shade, roofCells, foot, gate }) {
   const NUP = HALL_UP / 12, kz = n => top + n * 12;
   const field = () => { const k = Math.floor(rng() * 5); return shade(T.field[k % T.field.length], k); };
   const wx = windowsOn(HR[0] + 1, HR[2] - 1), wy = windowsOn(HR[1] + 1, HR[3] - 1);
@@ -122,7 +122,7 @@ export function hallShell({ put, HI, HR, top, T, rng, shade, roofCells, foot, ga
   const buttress = (x0, y0, x1, y1, out) => {
     const cells = []; for (let x = Math.floor(x0); x < x1; x++) for (let y = Math.floor(y0); y < y1; y++) cells.push(x + ',' + y);
     let z0;
-    if (cells.every(c => roofCells.has(c))) z0 = top + 4;
+    if (cells.every(c => roofCells.has(c))) z0 = roofZ;
     else if (!cells.some(c => foot.has(c)) && Math.hypot((x0 + x1) / 2 - gate[0], (y0 + y1) / 2 - gate[1]) >= 12) z0 = 0;
     else return;
     const z1 = kz(NUP - 3);

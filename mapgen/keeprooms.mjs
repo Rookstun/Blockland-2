@@ -59,7 +59,7 @@ export function furnish({ R, doors, kind, top, T, rng, spawn, hole }) {
     reserved.push(d.side === 'S' ? [w0, y0, w1, y0 + 5] : d.side === 'N' ? [w0, y1 - 5, w1, y1] : d.side === 'W' ? [x0, w0, x0 + 5, w1] : [x1 - 5, w0, x1, w1]);
   }
   if (spawn) reserved.push([spawn[0] - 2, spawn[1] - 2, spawn[0] + 2, spawn[1] + 2]);
-  if (hole) reserved.push(hole);
+  if (hole) reserved.push(...(Array.isArray(hole[0]) ? hole : hole.length ? [hole] : []));
   const hits = (a, b, c, d) => reserved.some(([p, q, r, s]) => a < r && p < c && b < s && q < d);
   const G = (list, foot) => { if (foot && hits(...foot)) { if (process.env.KEEPDBG) console.error("  furnish skip", kind, foot.map(v => +v.toFixed(1)).join(","), "reserved", reserved.filter(([p, q, r, s]) => foot[0] < r && p < foot[2] && foot[1] < s && q < foot[3]).map(r => r.join(",")).join(" ")); return false; } groups.push(list); if (foot) reserved.push(foot); return true; };
   const wood = () => WOOD[Math.floor(rng() * WOOD.length)];
