@@ -422,7 +422,10 @@ export function tavistock({ seed = 1 } = {}) {
   for (const [a, b] of [[300, 330]]) box(294, a, G, 296, b, 96, SCREEN, 'screen');
   for (const [a, b] of [[300, 330], [340, 380]]) box(474, a, G, 476, b, 96, SCREEN, 'screen');
   for (const [a, b] of [[300, 380], [390, 470]]) box(a, 384, G, b, 386, 96, SCREEN, 'screen');
-  light(385, 335, 150, [255, 236, 190]);
+  // owner screenshot 2026-10-26: the open roof courses (dark lip undersides) and the attic over the living room
+  // showed from the porch; a face-down boarded ceiling between the beams closes both
+  box(300, 290, 100, 470, 380, WT, { asset: TILE, color: [176, 132, 92], direction: 5 }, 'porch ceiling');
+  light(385, 335, 100, [255, 236, 190]);
 
   // ------------------------------------------------------------ the deck + yard --
   box(40, 300, 0, 290, 440, 20, { color: [120, 84, 60] }, 'deck skirt');
