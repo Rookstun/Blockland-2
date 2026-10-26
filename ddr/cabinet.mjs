@@ -72,12 +72,15 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
   };
 
   // ---- synth speakers on the chip's inner grid
-  const SYN = [...new Set(synths)].map(s => `BA_Synth_Basic_${s}`);
+  // non-synth speakers (car horns): pitch 1 = the sample's own pitch, not A440
+  const ASSET = { HornSmall: 'BA_AMB_Component_Horn_Car_Small', HornGeneric: 'BA_AMB_Component_Horn_Car_Generic' };
+  const asset = s => ASSET[s] ?? `BA_Synth_Basic_${s}`;
+  const SYN = [...new Set(synths.map(asset))];
   const maxX = Math.max(...gates.map(b => b.position[0] + GRID_OFFSET)), y0 = Math.min(...gates.map(b => b.position[1] + GRID_OFFSET));
   const gz = gates[0].position[2] + GRID_OFFSET;
   synths.forEach((s, v) => {
     const sp = w.addBrick({ asset: 'B_1x1F_Speaker', position: [maxX + 20 + (v % 4) * 10, y0 + Math.floor(v / 4) * 10, gz], color: [30, 30, 30], owner_index: owner,
-      components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: ext.length + SYN.indexOf(`BA_Synth_Basic_${s}`), VolumeMultiplier: 0, PitchMultiplier: 1,
+      components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: ext.length + SYN.indexOf(asset(s)), VolumeMultiplier: 0, PitchMultiplier: 1,
         InnerRadius: inner, MaxDistance: range, bSpatialization: true, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] }, { grid: chip.grid.grid });
     wireOut(`P${v}`, sp, 'Component_AudioEmitter', 'PitchMultiplier');
     wireOut(`V${v}`, sp, 'Component_AudioEmitter', 'VolumeMultiplier');

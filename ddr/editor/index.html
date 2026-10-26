@@ -172,7 +172,7 @@ const $ = id => document.getElementById(id);
 const api = async (url, opt) => { const r = await fetch(url, opt); const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || r.statusText), { data: j }); return j; };
 const status = s => { $('status').textContent = s; };
 const GROUPS = ['melody', 'bass', 'other', 'click'];
-const SYNTHS = ['Sine', 'Triangle', 'Square', 'Sawtooth'];
+const SYNTHS = ['Sine', 'Triangle', 'Square', 'Sawtooth', 'HornSmall', 'HornGeneric'];
 const ROLE_COL = { melody: '#ff46d2', bass: '#3cd2ff', other: '#a58cff', click: '#ffaa28', mute: '#444' };
 const GM = ['Piano', 'Chrom. perc', 'Organ', 'Guitar', 'Bass', 'Strings', 'Ensemble', 'Brass', 'Reed', 'Pipe', 'Synth lead', 'Synth pad', 'Synth FX', 'Ethnic', 'Percussive', 'SFX'];
 const titleOf = (base, cfg) => cfg.title ?? base.replace(/\s*\([^)]*\)?/g, '').replace(/^Cave Story - /, '').replace(/[_-]+/g, ' ').trim().toUpperCase();
@@ -329,8 +329,9 @@ function audio() {
   if (actx.state === 'suspended') actx.resume();
   return actx;
 }
-const OSC = { Sine: 'sine', Triangle: 'triangle', Square: 'square', Sawtooth: 'sawtooth' };
-const LOUD = { Sine: 1, Triangle: 1, Square: 0.5, Sawtooth: 0.55 };
+// shortcut: horns are previewed as a raw oscillator, not the real sample; play it in-game to hear them
+const OSC = { Sine: 'sine', Triangle: 'triangle', Square: 'square', Sawtooth: 'sawtooth', HornSmall: 'square', HornGeneric: 'sawtooth' };
+const LOUD = { Sine: 1, Triangle: 1, Square: 0.5, Sawtooth: 0.55, HornSmall: 0.5, HornGeneric: 0.55 };
 class Engine {
   // song = makeSong output; from = song time to start at (may be negative = lead in)
   constructor(song, from, { vol = 0.6, onTick, clap } = {}) {
