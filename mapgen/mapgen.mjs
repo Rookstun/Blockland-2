@@ -4899,7 +4899,7 @@ for (let x = 1; x < N - 1; x++)
     } else if (s === SAND) {
       if (r < 0.03) plant(x, y, 'B_Bush', [170, 168, 96]); // dune grass
     } else if (DUNE.includes(s) || s === DRYGRASS) {
-      if (r < 0.06) cactus(x, y);
+      if (r < 0.06) { if (r < 0.015) cactus(x, y); } // owner 2026-10-27 'too many cactuses': a quarter, the rest left bare
       else if (r < 0.05) plant(x, y, 'B_Branch', [[132, 104, 70], [118, 92, 62]][Math.floor(r2 * 2)], { rot: r2 < 0.5 ? 1 : 0 }); // dead scrub
       else if (s === DRYGRASS && r < 0.1) plant(x, y, 'B_Fern', [[176, 160, 90], [160, 146, 80]][Math.floor(r2 * 2)]); // dry tufts
     } else if (MESA.includes(s) && h < 100) {
