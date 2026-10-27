@@ -134,9 +134,83 @@ for (let j = 0; j < ROWS; j++) for (const side of ['S', 'N']) {
   }
 }
 
+// ---- owner's buildings (citygrid/stealme/*.brz, client Saved/Prefabs/stealme, 2026-10-26: "take all of those
+// models, integrate them into the GTA world"): packed onto the commercial / industrial lots, spanning
+// neighbouring and back-to-back lots (most are 1000-2000 wide, a lot is 640-1050 x 960). The three too big for
+// a block (mall, weed, grid) stand in a row south of the outer ring road. Bricks only: the prefabs' wire
+// gates, joints and hidden bricks are left out, like the city Tavistocks' fixtures.
+for (const L of lots) L.kind = F.zone((L.x0 + L.x1) / 2, (L.y0 + L.y1) / 2).kind;
+const SKIP = /^B_1x1_Gate|Reroute|Joint|Switch/;
+const DUPES = new Set(['dairy queef']); // same build as dairyqueen.brz
+const BIG = ['mall', 'weed', 'grid'];
+const brs4 = await import('../tools/brs4/dist.mjs');
+const models = fs.readdirSync(path.join(HERE, '../citygrid/stealme')).filter(f => f.endsWith('.brz')).map(f => f.slice(0, -4)).filter(n => !DUPES.has(n)).map(name => {
+  const r = brs4.WorldReader.from(fs.readFileSync(path.join(HERE, '../citygrid/stealme', name + '.brz')));
+  const g = r.globalData(), names = [...g.BasicBrickAssetNames, ...g.ProceduralBrickAssetNames];
+  const raw = [...r.bricks()].filter(b => b.visibility !== false && !SKIP.test(names[b.asset_name_index]));
+  const lo = [1e9, 1e9], hi = [-1e9, -1e9];
+  const bricks = raw.map(b => ({
+    asset: names[b.asset_name_index], size: [...b.size], position: [...b.position],
+    direction: b.direction, rotation: b.rotation, color: [...b.color], material: g.MaterialAssetNames[b.material_index], material_intensity: b.material_intensity,
+  }));
+  for (const b of bricks) { const [l, h] = worldBox(b); for (const i of [0, 1]) { lo[i] = Math.min(lo[i], l[i]); hi[i] = Math.max(hi[i], h[i]); } }
+  const c = [Math.round((lo[0] + hi[0]) / 20) * 10, Math.round((lo[1] + hi[1]) / 20) * 10];
+  for (const b of bricks) { b.position[0] -= c[0]; b.position[1] -= c[1]; }
+  return { name, bricks, w: Math.ceil((hi[0] - lo[0]) / 20) * 20, d: Math.ceil((hi[1] - lo[1]) / 20) * 20 };
+});
+const buildings = [];
+let modelGroup = 1e6;
+const placeModel = (m, cx, cy, r, lotIds) => {
+  const group = ++modelGroup; // the owner's own pieces may interlock: builder skips clashes within one model
+  let bad = 0;
+  for (const b of m.bricks) { const t = turnBrick(b, r); if (!B.add({ ...t, group, position: [cx + t.position[0], cy + t.position[1], t.position[2]] }, m.name)) bad++; }
+  if (bad) throw new Error(`${m.name} at ${cx},${cy}: ${bad} bricks dropped`);
+  buildings.push({ name: m.name, centre: [cx, cy], r, lots: lotIds });
+};
+// free ground = every non-residential lot, 40-unit cells
+const C = 40, freeCell = new Set();
+lots.forEach((L, li) => { if (L.kind !== 'residential') for (let x = L.x0; x < L.x1; x += C) for (let y = L.y0; y < L.y1; y += C) freeCell.add(Math.floor(x / C) + ',' + Math.floor(y / C)); });
+const cellsIn = (x0, y0, x1, y1) => { const out = []; for (let x = Math.floor(x0 / C); x < Math.ceil(x1 / C); x++) for (let y = Math.floor(y0 / C); y < Math.ceil(y1 / C); y++) out.push(x + ',' + y); return out; };
+const lotsUnder = (x0, y0, x1, y1) => lots.flatMap((L, li) => L.x0 < x1 && x0 < L.x1 && L.y0 < y1 && y0 < L.y1 ? [li] : []);
+const usedLot = new Set();
+const pool = models.filter(m => !BIG.includes(m.name)).sort((a, b) => b.w * b.d - a.w * a.d);
+for (let placed = true; placed;) { // round robin: every building once per pass, until nothing fits
+  placed = false;
+  for (const m of pool) {
+    if (buildings.filter(q => q.name === m.name).length >= 3) continue; // no street of nine churches
+    let spot = null;
+    for (const L of lots) {
+      if (L.kind === 'residential' || spot) continue;
+      const face = L.side === 'S' ? 0 : 2;
+      for (const r of [face, face + 1, (face + 3) % 4, (face + 2) % 4]) {
+        const [w, d] = r % 2 ? [m.d, m.w] : [m.w, m.d];
+        const y0 = L.side === 'S' ? L.y0 + 40 : L.y1 - 40 - d; // set back 40 from the sidewalk
+        for (let x0 = L.x0 + 40; x0 + w <= L.x1 + 2000 && !spot; x0 += C)
+          if (cellsIn(x0 - 40, y0 - 40, x0 + w + 40, y0 + d + 40).every(k => freeCell.has(k))) spot = { x0, y0, w, d, r };
+        if (spot) break;
+      }
+    }
+    if (!spot) continue;
+    const { x0, y0, w, d, r } = spot;
+    for (const k of cellsIn(x0 - 40, y0 - 40, x0 + w + 40, y0 + d + 40)) freeCell.delete(k);
+    const under = lotsUnder(x0, y0, x0 + w, y0 + d);
+    for (const li of under) usedLot.add(li);
+    placeModel(m, x0 + w / 2, y0 + d / 2, r, under.map(li => li + 1));
+    placed = true;
+  }
+}
+{ // the big three (and any building no lot fitted), side by side south of the outer ring, long side along the road
+  let x = OX + 200;
+  for (const m of models.filter(q => BIG.includes(q.name) || !buildings.some(b => b.name === q.name))) {
+    const r = m.d > m.w ? 1 : 0, [w, d] = r ? [m.d, m.w] : [m.w, m.d];
+    placeModel(m, x + w / 2, OY - 120 - d / 2, r, []);
+    x += w + 240;
+  }
+}
+
 const plots = [], houses = [], zoneTally = {};
 let hseed = SEED * 1000;
-for (const L of lots) {
+for (const [li, L] of lots.entries()) {
   const cxl = (L.x0 + L.x1) / 2, cyl = (L.y0 + L.y1) / 2, lw = L.x1 - L.x0, ld = L.y1 - L.y0;
   const z = F.zone(cxl, cyl), dens = F.density(cxl, cyl), inc = F.income(cxl, cyl), pop = F.pop(cxl, cyl), kind = z.kind;
   zoneTally[kind + ' ' + dens] = (zoneTally[kind + ' ' + dens] ?? 0) + 1;
@@ -163,7 +237,7 @@ for (const L of lots) {
     floor = h.W * h.D * (hk === 'splitlevel' ? 1.6 : 2);
     house = { kind: hk, seed, mirror, centre: [cx, cy], r, origin: [cx - (r ? -lx : lx), cy - (r ? -ly : ly)], W: h.W, D: h.D, bricks: h.count };
     houses.push(house);
-  } else if (kind !== 'residential') {
+  } else if (kind !== 'residential' && !usedLot.has(li)) {
     // empty plot for sale: commercial = light concrete flush with the sidewalk, industrial = dark gravel yard
     const pad = kind === 'commercial' ? { color: [168, 166, 160], z: 4, h: 4 } : { color: [86, 82, 76], z: 2, h: 2 };
     B.add({ asset: 'PB_DefaultTile', size: [lw / 2 - 10, ld / 2 - 10, pad.h], position: [cxl, cyl, pad.z], direction: 4, rotation: 0, color: pad.color }, kind + ' pad');
@@ -171,6 +245,7 @@ for (const L of lots) {
   const id = plots.length + 1;
   plots.push({
     id, name: `${kind === 'residential' ? (house ? 'Lot' : 'Vacant Lot') : kind === 'commercial' ? 'Commercial Lot' : 'Industrial Lot'} ${id}`,
+    building: buildings.find(q => q.lots.includes(li + 1))?.name ?? null,
     x: cxl, y: cyl, ground: 0, surface: kind === 'commercial' ? 8 : 0, half: Math.min(lw, ld) / 2, studs: Math.round(lw / 10),
     price: F.price(cxl, cyl, lw, ld, floor, kind), zone: { x0: L.x0, x1: L.x1, y0: L.y0, y1: L.y1, z0: 0, z1: 1300 },
     zoning: kind, weights: { r: +z.r.toFixed(3), c: +z.c.toFixed(3), i: +z.i.toFixed(3) }, density: dens, income: +inc.toFixed(3), population: +pop.toFixed(3),
@@ -185,10 +260,10 @@ fs.writeFileSync(path.join(OUT, 'bricks.json'), JSON.stringify(bricks));
 // owner: NEVER queue bricks: one file, one bricks op
 fs.writeFileSync(path.join(OUT, 'add.json'), JSON.stringify({ bricks, externalAssets: EXTERNAL_ASSETS }));
 fs.writeFileSync(path.join(OUT, 'plots.json'), JSON.stringify(plots, null, 1));
-fs.writeFileSync(path.join(OUT, 'city.json'), JSON.stringify({ seed: SEED, extent: EXT, downtown: F.downtown, colW, dropped, tiles: tally, zones: zoneTally, houses }, null, 1));
+fs.writeFileSync(path.join(OUT, 'city.json'), JSON.stringify({ seed: SEED, extent: EXT, downtown: F.downtown, colW, dropped, tiles: tally, zones: zoneTally, houses, buildings }, null, 1));
 writeFieldMap(path.join(OUT, 'fields.png'));
 const pr = plots.map(p => p.price).sort((a, b) => a - b);
-console.error(`city ${COLS}x${ROWS}, extent ${EXT.join(',')}, ${dropped.length} streets dropped, road tiles ${JSON.stringify(tally)}, ${lots.length} lots ${JSON.stringify(zoneTally)}, ${houses.length} houses (${houses.filter(h => h.kind === 'dutchcolonial').length} Dutch, ${houses.filter(h => h.kind === 'tavistock').length} Tavistock), prices ${pr[0]}..${pr.at(-1)} (median ${pr[pr.length >> 1]}), ${bricks.length} bricks -> ${OUT}`);
+console.error(`city ${COLS}x${ROWS}, extent ${EXT.join(',')}, ${dropped.length} streets dropped, road tiles ${JSON.stringify(tally)}, ${lots.length} lots ${JSON.stringify(zoneTally)}, ${houses.length} houses (${houses.filter(h => h.kind === 'dutchcolonial').length} Dutch, ${houses.filter(h => h.kind === 'tavistock').length} Tavistock), ${buildings.length} owner buildings ${JSON.stringify(Object.fromEntries(models.map(m => [m.name, buildings.filter(q => q.name === m.name).length])))}, prices ${pr[0]}..${pr.at(-1)} (median ${pr[pr.length >> 1]}), ${bricks.length} bricks -> ${OUT}`);
 
 /** three panels, north up, roads darkened: income (dark -> gold) | density (urban red, suburb sand,
  *  rural green; brighter = more people) | zoning triangle blend (R green, C blue, I orange) */
