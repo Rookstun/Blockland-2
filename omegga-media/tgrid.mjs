@@ -221,15 +221,19 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
   const sub = (start, n) => { const x = ig(C.Expr_String_Substring, { Input: '', Start: 0, Length: n }); wire(...data, x, 'Input'); wire(...start, x, 'Start'); return [x, 'Output']; };
   const digit = off => { const x = ig(C.Expr_String_Find, { Input: ALPHA, Search: '', Start: 0, bCaseSensitive: true }); wire(...sub(at(off), 1), x, 'Search'); return [x, 'Output']; };
   const tIdx = iop(C.Expr_MathAdd, iop(C.Expr_MathMultiply, digit(0), null, { InputB: num(B) }), digit(1));
-  const LET = 'ABCDEFGH';
-  const rowsOut = [];
-  for (let r = 0; r < L.k; r++) {
-    const f = ig(C.Expr_String_FormatText, { FormatString: Array.from({ length: L.k }, (_, c) => `<color="{${LET[c]}}">${GLYPH}</>`).join('') });
-    for (let c = 0; c < L.k; c++) wire(...sub(at(2 + (r * L.k + c) * 6), 6), f, `Input${LET[c]}`);
-    rowsOut.push(f);
-  }
-  const tf = ig(C.Expr_String_FormatText, { FormatString: Array.from({ length: L.k }, (_, r) => `{${LET[r]}}`).join('\n') });
-  rowsOut.forEach((f, r) => wire(f, 'Output', tf, `Input${LET[r]}`));
+  // FormatText has 7 inputs (A-G): longer joins chain through more FormatTexts (k > 7 tiles)
+  const LET = 'ABCDEFG';
+  const fmt = (srcs, item, sep = '') => {
+    if (srcs.length <= 7) {
+      const f = ig(C.Expr_String_FormatText, { FormatString: srcs.map((_, i) => item(LET[i])).join(sep) });
+      srcs.forEach((s, i) => wire(...s, f, `Input${LET[i]}`));
+      return [f, 'Output'];
+    }
+    const h = Math.ceil(srcs.length / 2);
+    return fmt([fmt(srcs.slice(0, h), item, sep), fmt(srcs.slice(h), item, sep)], c => `{${c}}`, sep);
+  };
+  const rowsOut = Array.from({ length: L.k }, (_, r) => fmt(Array.from({ length: L.k }, (_, c) => sub(at(2 + (r * L.k + c) * 6), 6)), c => `<color="{${c}}">${GLYPH}</>`));
+  const tf = fmt(rowsOut, c => `{${c}}`, '\n')[0];
   const refArr = ig(C.ArrayVar, { Value: { $elementType: 'WireValue', $array: Array.from({ length: T }, (_, t) => ({ $variant: 'BRSavedBrickRef',
     value: refs?.get(tilePos(L, t).join(',')) ?? { GridPersistentIndex: physics ? 2 : 1, ChunkIndex: { X: 0, Y: 0, Z: 0 }, BrickIndexInChunk: 0 } })) } });
   const getR = ig(C.Exec_ArrayVar_Get); wire(refArr, 'ArrayVarRef', getR, 'ArrayVarRef'); wire(...tIdx, getR, 'Index');

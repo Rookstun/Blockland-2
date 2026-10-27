@@ -1521,7 +1521,8 @@ module.exports = class Media {
     const id = crypto.randomBytes(3).toString('hex');
     // owner 2026-10-20 "1x1 pixel, 3x3 colors", 2026-10-23 "5x5 instead of 3x3": every tile one 1x1 micro brick (2 units) showing 5x5 blocks (160x90 picture);
     // lanes = receivers with their own owners (tgrid LANES: "more expensive ... less pixel tearing")
-    const cfg = { tw: 32, th: 18, k: 5, cell: 2 / 5, lanes: 6, ...(this.config['stream-tv'] ?? {}) };
+    // 2026-10-27 "too many bricks ... smaller pixel grid, heavier text screens": 16x9 tiles (2x2 micro, 4 units) of 10x10 blocks, same 160x90 picture, a quarter of the tiles
+    const cfg = { tw: 16, th: 9, k: 10, cell: 4 / 10, lanes: 6, ...(this.config['stream-tv'] ?? {}) };
     const tv = { id, event: `og.tv.${id}`, owner: { id: `7e1e0715-0000-4b0b-9a11-${crypto.randomBytes(6).toString('hex')}`, name: `${name}'s TV`, display_name: `${name}'s TV` }, cfg, player: name, made: Date.now() };
     const L = this.tg.tvLayout(cfg);
     const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
