@@ -75,7 +75,9 @@ const kindOf = (url, type = '') => {
 /** ffmpeg input options for a sniffed URL (the page's headers). */
 const ffInFor = c => {
   const h = Object.entries(c.headers).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}\r\n`).join('');
-  return ['-protocol_whitelist', 'http,https,tcp,tls,crypto', '-rw_timeout', '20000000', ...(h ? ['-headers', h] : [])];
+  // HLS: no Range header on the manifest (movy.sx's CDN answers Range with 500) + retry segments (it 503s at random)
+  const hls = c.kind === 'hls' ? ['-seekable', '0', '-seg_max_retry', '8'] : [];
+  return ['-protocol_whitelist', 'http,https,tcp,tls,crypto', '-rw_timeout', '20000000', ...hls, ...(h ? ['-headers', h] : [])];
 };
 
 async function launch() {
@@ -86,15 +88,20 @@ async function launch() {
   try { return await puppeteer.launch({ ...opts, args }); } catch { return puppeteer.launch({ ...opts, args: [...args, '--no-sandbox'] }); }
 }
 
+// frame.evaluate on a detached frame (iframe swapped by the page) throws synchronously, past .catch(): async wrapper
+const ev = async (f, ...a) => f.evaluate(...a);
+
 /** Presses play in every frame (videos unmuted, common player buttons clicked). */
 async function pokePlay(page, clickPage) {
   for (const f of page.frames()) {
-    await f.evaluate(sel => {
+    await ev(f, sel => {
       for (const v of document.querySelectorAll('video,audio')) { v.muted = false; v.volume = 1; if (v.paused) v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); }
       for (const s of sel) for (const el of document.querySelectorAll(s)) {
         const r = el.getBoundingClientRect();
         if (r.width > 8 && r.height > 8 && getComputedStyle(el).visibility !== 'hidden') { try { el.click(); } catch {} break; }
       }
+      // site 'Play' / 'Watch now' buttons on a film's page (movy.sx: no player until you press it)
+      for (const el of document.querySelectorAll('button,a,[role=button]')) if (/^\s*(play|play now|watch|watch now)\s*$/i.test(el.textContent) && el.getBoundingClientRect().width > 8) { try { el.click(); } catch {} break; }
     }, PLAY_SELECTORS).catch(() => {});
   }
   if (clickPage) {
@@ -114,7 +121,7 @@ async function pokePlay(page, clickPage) {
 /** The playing <video> in any frame: { frame, w, h } or null. */
 async function playingVideo(page) {
   for (const f of page.frames()) {
-    const v = await f.evaluate(() => {
+    const v = await ev(f, () => {
       let best = null;
       for (const el of document.querySelectorAll('video')) {
         if (el.readyState >= 2 && !el.paused && el.videoWidth && (!best || el.videoWidth * el.videoHeight > best.w * best.h)) best = { w: el.videoWidth, h: el.videoHeight, t: el.currentTime, d: el.duration };
@@ -131,7 +138,7 @@ async function probe(c) {
     const j = JSON.parse(await run('ffprobe', ['-v', 'error', ...ffInFor(c), '-show_entries', 'format=duration:stream=codec_type', '-of', 'json', c.url], 20_000));
     if (!j.streams?.some(s => s.codec_type === 'video')) return null;
     return { ...c, duration: Number(j.format?.duration) || Infinity, audio: j.streams.some(s => s.codec_type === 'audio') };
-  } catch { return null; }
+  } catch (e) { probe.err = String(e.message).split('\n').filter(Boolean).slice(-2).join(' | ').slice(0, 200); return null; }
 }
 
 /**
@@ -169,6 +176,8 @@ export async function browserSource(href, { tmp, log = console.log, waitMs = 25_
         const u = new URL(req.url());
         if (/^(data|blob|about|chrome):$/.test(u.protocol)) return req.continue();
         if (!/^https?:$/.test(u.protocol) || AD_HOST.test(u.hostname) || !(await publicHost(u.hostname))) return req.abort();
+        // a click on the player can be an ad link that takes the whole page away (movy.sx 2026-10-27): the main frame stays on the site
+        if (req.isNavigationRequest() && req.frame() === page.mainFrame() && page.mainFrame().url() !== 'about:blank' && u.hostname.replace(/^www\./, '') !== new URL(href).hostname.replace(/^www\./, '')) return req.respond({ status: 204 }); // abort = error page, 204 = stay put
         if (['image', 'font'].includes(req.resourceType())) return req.abort(); // speed
         add(req.url(), kindOf(req.url()), req.frame()?.url());
         req.continue();
@@ -207,7 +216,7 @@ export async function browserSource(href, { tmp, log = console.log, waitMs = 25_
         const live = c.duration === Infinity;
         return { v: st, a: c.audio ? st : null, duration: c.duration, page: href, hls: true, live, close: () => {} };
       }
-      log('[media] browser: no sniffed link opened in ffmpeg, trying a capture');
+      log(`[media] browser: no sniffed link opened in ffmpeg (${probe.err}), trying a capture`);
     }
     video ??= await playingVideo(page);
     if (!video) throw new Error('no video played on that page');
@@ -228,7 +237,7 @@ async function capture(page, video, { tmp, log, close, setFf, setPoll, href }) {
   setFf(ff);
   ff.stderr.on('data', d => log(`[media] browser capture ffmpeg: ${String(d).trim().slice(0, 200)}`));
   ff.stdin.on('error', () => {});
-  const started = await video.frame.evaluate(() => {
+  const started = await ev(video.frame, () => {
     let best = null;
     for (const el of document.querySelectorAll('video')) if (el.readyState >= 2 && !el.paused && (!best || el.videoWidth > best.videoWidth)) best = el;
     if (!best) return 'gone';
@@ -251,7 +260,7 @@ async function capture(page, video, { tmp, log, close, setFf, setPoll, href }) {
     if (busy) return;
     busy = true;
     try {
-      const b64 = await video.frame.evaluate(() => {
+      const b64 = await ev(video.frame, () => {
         const q = window.__capQ ?? [];
         window.__capQ = [];
         if (!q.length) return '';
@@ -265,7 +274,7 @@ async function capture(page, video, { tmp, log, close, setFf, setPoll, href }) {
       if (b64) { ff.stdin.write(Buffer.from(b64, 'base64')); lastData = Date.now(); }
       else if (Date.now() - lastData > 20_000) { log('[media] browser capture: the video stopped'); close(); }
       // keep it playing (players pause on blur / ads end)
-      if (Date.now() % 5000 < 500) await video.frame.evaluate(() => { for (const v of document.querySelectorAll('video')) if (v.paused && !v.ended) v.play().catch(() => {}); }).catch(() => {});
+      if (Date.now() % 5000 < 500) await ev(video.frame, () => { for (const v of document.querySelectorAll('video')) if (v.paused && !v.ended) v.play().catch(() => {}); }).catch(() => {});
     } catch (e) { log(`[media] browser capture ended (${String(e.message).slice(0, 80)})`); close(); }
     busy = false;
   }, 500);
