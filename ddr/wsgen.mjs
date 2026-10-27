@@ -3,7 +3,8 @@
 // (the Seat Control Splitter / Input Splitter gate) gives W/A/S/D =
 // UP/LEFT/DOWN/RIGHT, Q or E stops the song. The chart scrolls on the
 // cabinet's TextDisplay screen (out ports wired to the text bricks), the
-// music plays on synth speakers wired from P<v>/V<v>. DEBUG lines go to chat.
+// music plays on synth speakers wired from P<v>/V<v>, drums (chart.mjs DRUMS) on synth speakers from DP<d>/DA<d>:
+// each hit bumps dn<d>, and dn - Tween(dn, dur) is a 1 -> 0 envelope the game runs every frame. DEBUG lines go to chat.
 import { LANES } from './chart.mjs';
 
 // smooth scroll: each lane = K strip panels, each shows one arrow slid by its TextDisplay Offset
@@ -30,8 +31,8 @@ const q = s => JSON.stringify(s);
 const arr = (type, xs) => `[${xs.map(type === 'float' ? f : type === 'string' ? q : String).join(', ')}]`;
 const col = ([r, g, b]) => `ColorSRGB(${r}, ${g}, ${b}, 255)`;
 
-export function generate(songs, voiceDefs) {
-  const S = songs.length, V = voiceDefs.length, CLICK = voiceDefs.map(([, g]) => g === 'click'), L = [0, 1, 2, 3];
+export function generate(songs, voiceDefs, drumDefs = []) {
+  const S = songs.length, V = voiceDefs.length, DK = drumDefs.length, eachD = fn => [...Array(DK).keys()].map(fn).join(NL), CLICK = voiceDefs.map(([, g]) => g === 'click'), L = [0, 1, 2, 3];
   const lead = songs.map(s => Math.ceil(LEAD_SEC / s.rowDur) + 1);
   const offs = per => { const o = [0]; for (const x of per) o.push(o[o.length - 1] + x.length); return o; };
   const out = [];
@@ -55,6 +56,12 @@ export function generate(songs, voiceDefs) {
     D(`VP${v}`, 'float', ns.flat().map(n => n.pitch)); D(`VV${v}`, 'float', ns.flat().map(n => n.vol));
     D(`VO${v}`, 'int', offs(ns));
   }
+  for (let d = 0; d < DK; d++) {
+    const hs = songs.map(s => s.drums[d]);
+    D(`DT${d}`, 'float', hs.flat().map(h => h.t)); D(`DV${d}`, 'float', hs.flat().map(h => h.vol));
+    if (drumDefs[d].kind === 'tom') D(`DS${d}`, 'float', hs.flat().map(h => h.s));
+    D(`DO${d}`, 'int', offs(hs));
+  }
   // preview start per song: the PREVIEW-second window (1 s steps) with the most chart steps + notes
   const pvs = songs.map(s => {
     const ts = [...s.lanes.flatMap(l => l.map(n => n.t)), ...s.voices.flatMap(v => v.notes.map(n => n.t))].sort((a, b) => a - b);
@@ -70,6 +77,20 @@ export function generate(songs, voiceDefs) {
     let o = 0;
     D(`PVI${v}`, 'int', songs.map((s, i) => { const ns = s.voices[v]?.notes ?? []; let k = ns.findIndex(n => n.t >= pvs[i]); if (k < 0) k = ns.length; const r = o + k; o += ns.length; return r; }));
   }
+  for (let d = 0; d < DK; d++) {
+    let o = 0;
+    D(`PDI${d}`, 'int', songs.map((s, i) => { const hs = s.drums[d]; let k = hs.findIndex(h => h.t >= pvs[i]); if (k < 0) k = hs.length; const r = o + k; o += hs.length; return r; }));
+  }
+  // one Clock tick of drum d: a hit restarts its envelope
+  const drumStep = (d, fade) => `      if di${d} < de${d} && t >= DT${d}[di${d}] {
+        dn${d} = dn${d} + 1.0
+        dg${d} = DV${d}[di${d}]${fade}${drumDefs[d].kind === 'tom' ? `
+        ds${d} = DS${d}[di${d}]` : ''}
+        di${d} = di${d} + 1
+      }`;
+  const drumReset = (d, idx) => `  di${d} = ${idx}${d}[song]
+  de${d} = DO${d}[song + 1]
+  dg${d} = 0.0`;
   // one Clock tick of voice v at song time t, volume scaled by fade
   const voiceStep = (v, fade) => `      if vi${v} < ve${v} && t >= VT${v}[vi${v}] {
         vp${v} = VP${v}[vi${v}]
@@ -124,6 +145,11 @@ var vv${v}: float = 0.0
 var vo${v}: float = 0.0
 var va${v}: float = 0.0
 var vs${v}: float = 0.0`)}
+${eachD(d => `var di${d}: int = 0
+var de${d}: int = 0
+var dn${d}: float = 0.0
+var dg${d}: float = 0.0
+var ds${d}: float = 1.0`)}
 
 out title_t: string = title
 out judge_t: string = judge
@@ -140,11 +166,15 @@ out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
 ${eachV(v => `out P${v}: float = vp${v}
 out V${v}: float = ${CLICK[v] ? `vv${v}` : `min(vv${v}, Dampen(vv${v}, 0.025))`}`)}   // smooth voices tween only incoming; clicky ones snap
+${eachD(d => { const { kind, dur, hi, lo } = drumDefs[d]; return `let e${d} = min(1.0, max(0.0, dn${d} - Tween(dn${d}, ${f(dur)})))   // ${kind}
+out DP${d}: float = ds${d} * (${f(lo)} + ${f(hi - lo)} * e${d} * e${d})
+out DA${d}: float = dg${d} * e${d}`; })}
 
 mod silence() {
 ${eachV(v => `  vv${v} = 0.0
   va${v} = 0.0
   vo${v} = -9999.0`)}
+${eachD(d => `  dg${d} = 0.0`)}
 }
 
 
@@ -166,6 +196,7 @@ ${eachV(v => `  vi${v} = PVI${v}[song]
   vv${v} = 0.0
   va${v} = 0.0
   vo${v} = -9999.0`)}
+${eachD(d => drumReset(d, 'PDI'))}
   pt0 = ServerUptime() - PVS[song]
 }
 
@@ -200,7 +231,8 @@ ${eachV(v => `  vi${v} = VO${v}[song]
   ve${v} = VO${v}[song + 1]
   vv${v} = 0.0
   va${v} = 0.0
-  vo${v} = -9999.0`)}   // fresh voices: a stale note end kept the old note droning
+  vo${v} = -9999.0`)}
+${eachD(d => drumReset(d, 'DO'))}   // fresh voices: a stale note end kept the old note droning
   t0 = ServerUptime() + ${f(LEAD_SEC)}
   title = NAMES[song]
   state = 2
@@ -354,6 +386,7 @@ ${eachL(k => `      if ni${k} < ne${k} && tc > NT${k}[ni${k}] + ${f(W.good)} {
       }
       rcol${k} = if tc - flash${k} < 0.12 then ${col(LANE_ON[k])} else ${DIM_REC}`)}
 ${eachV(v => voiceStep(v, ''))}
+${eachD(d => drumStep(d, ''))}
       // the BPM light: a flash at each beat that fades over a quarter beat
       let beats = tc * BPM[song] / 60.0
       let ph = beats - floor(beats)
@@ -389,6 +422,7 @@ ${eachV(v => voiceStep(v, ''))}
     } else {
       let fade = min(1.0, min(t - PVS[song], (PVS[song] + ${f(PREVIEW)} - t) / 1.5))
 ${eachV(v => voiceStep(v, ' * fade'))}
+${eachD(d => drumStep(d, ' * fade'))}
     }
   }
 }

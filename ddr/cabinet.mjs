@@ -1,5 +1,5 @@
 // cabinet.mjs: the physical DDR machine (half scale, 1 player) around the chip.
-//   buildCabinet(compiledChipBrz, voiceSynths) -> prefab .brz bytes
+//   await buildCabinet(compiledChipBrz, voiceSynths, { drums: drumSynths }) -> prefab .brz bytes (Latest format)
 //
 // Prefab local, ground z = 0, the dancers face +y. The world is left-handed:
 // +x is the dancers' LEFT, so P1 (left stage) sits at +x and every lane row
@@ -11,11 +11,10 @@
 //           (y -2..0) wired from chip outs: title across the top, per player a
 //           score/combo, judgement, 4 receptors, 4 lanes of Offset-driven arrow sprites.
 //   towers, marquee; the chip (with its synth speakers) behind the cabinet.
-import * as brs from '../mapgen/lib/brs.mjs';
+import { bundle } from '../tools/wsbundle.mjs';
 import { K, STRIP_Z0, STRIP_H } from './wsgen.mjs';
 
 const OWNER = { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'soapstain22', display_name: 'renderman' };
-const GRID_OFFSET = 1024; // the writer adds -1024 to inner-grid positions
 const MB = 'PB_DefaultMicroBrick';
 const FACE_MINUS_Y = 13;  // orientation: text face toward -y (casinogen/ruins)
 const LANE_COL = [[255, 70, 210], [60, 210, 255], [90, 255, 120], [255, 170, 40]];
@@ -33,57 +32,33 @@ const METAL = c => ({ color: c, material: 'BMC_Metallic' });
 const TD = 'Component_TextDisplay';
 const PINK = [255, 60, 200], CYAN = [60, 200, 255], BODY = [18, 18, 24];
 
-export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {}) {
-  const r = brs.WorldReader.from(compiled);
-  const assets = r.brickAssets(), ext = r.externalAssets();
+// compiled = tools/wspkg chip bytes (Latest format); synths = the P/V voices' synths, drums = the DP/DA drum voices' synths
+export async function buildCabinet(compiled, synths, { drums = [], range = 3000, inner = 600 } = {}) {
+  // one hidden chip lying behind the cabinet; bare: the seat and screen wire straight to its port gates
+  const b = await bundle(compiled, { owner: OWNER, offset: [0, 42, 2], hide: true, bare: true });
+  const { w, O: owner } = b;
+  // non-synth speakers (car horns): pitch 1 = the sample's own pitch, not A440
+  const ASSET = { HornSmall: 'BA_AMB_Component_Horn_Car_Small', HornGeneric: 'BA_AMB_Component_Horn_Car_Generic' };
+  const asset = s => ASSET[s] ?? `BA_Synth_Basic_${s}`;
+  const SYN = [...new Set([...synths, ...drums].map(asset))];
+  const ext = [...b.ext, ...SYN.map(name => ({ type: 'BrickAudioDescriptor', name }))];
   const fontIdx = name => { let i = ext.findIndex(e => e.type === 'BrickFontDescriptor' && e.name === name); if (i < 0) { ext.push({ type: 'BrickFontDescriptor', name }); i = ext.length - 1; } return i; };
   TEXT.Font = fontIdx(FONT);
   const AF = fontIdx(ARROW_FONT);
-  const comps = g => { const out = new Map(); for (const { index } of r.brickChunkIndex(g)) for (const c of r.componentChunk(g, index).components) (out.get(c.brickIndex) ?? out.set(c.brickIndex, []).get(c.brickIndex)).push({ type: c.typeName, data: c.data }); return out; };
-  const wires = g => { const out = []; for (const { index } of r.brickChunkIndex(g)) { try { out.push(...r.wireChunk(g, index).local); } catch {} } return out; };
-
-  const w = new brs.World();
-  const owner = w.addOwner(OWNER);
   const box = (x0, y0, z0, x1, y1, z1, m = {}) => w.addBrick({ asset: MB, ...m, size: [Math.abs(x1 - x0) / 2, Math.abs(y1 - y0) / 2, (z1 - z0) / 2], position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], owner_index: owner });
   // a text panel on the cabinet front, x0..x1 (any order), z0..z1, facing the dancers
   const panel = (x0, x1, z0, z1, data) => w.addBrick({ asset: MB, color: [6, 6, 10], direction: FACE_MINUS_Y >> 2, rotation: FACE_MINUS_Y & 3,
     size: [Math.abs(x1 - x0) / 2, (z1 - z0) / 2, 1], position: [(x0 + x1) / 2, -1, (z0 + z1) / 2], owner_index: owner, components: [{ type: TD, data: { ...TEXT, ...data } }] });
+  const wireOut = (port, brick, component_type, target) => w.addWire(b.outSource(port), { brick, component_type, port: target });
 
-  // ---- the chip and its gates (the pin rerouters are dropped: the Seats wire straight in)
-  const chip = w.addMicrochip({ position: [0, 42, 2], owner_index: owner, planeExtent: { X: 128, Y: 128, Z: 2 } });
-  const gates = [...r.bricks(2)], gcomps = comps(2), ref = [];
-  for (let i = 0; i < gates.length; i++) {
-    const b = gates[i];
-    ref[i] = w.addBrick({ asset: assets[b.asset_name_index], size: b.size, position: b.position.map(v => v + GRID_OFFSET), direction: b.direction, rotation: b.rotation,
-      color: b.color, owner_index: owner, components: gcomps.get(i) ?? [] }, { grid: chip.grid.grid });
-  }
-  const local = wires(2);
-  for (const x of local) w.addWire({ brick: ref[x.source.brickIndex], component_type: x.source.componentType, port: x.source.port },
-    { brick: ref[x.target.brickIndex], component_type: x.target.componentType, port: x.target.port });
-  const outSrc = new Map(), inGate = new Map();
-  gcomps.forEach((cs, i) => { for (const c of cs) {
-    if (c.type === 'BrickComponentType_Internal_MicrochipOutput') { const feed = local.find(x => x.target.brickIndex === i); if (feed) outSrc.set(c.data.PortLabel, feed.source); }
-    if (c.type === 'BrickComponentType_Internal_MicrochipInput') inGate.set(c.data.PortLabel, i);
-  } });
-  const wireOut = (port, brick, component_type, target) => {
-    const src = outSrc.get(port);
-    if (!src) throw new Error(`no out port "${port}" (have ${[...outSrc.keys()].join(', ')})`);
-    w.addWire({ brick: ref[src.brickIndex], component_type: src.componentType, port: src.port }, { brick, component_type, port: target });
-  };
-
-  // ---- synth speakers on the chip's inner grid
-  // non-synth speakers (car horns): pitch 1 = the sample's own pitch, not A440
-  const ASSET = { HornSmall: 'BA_AMB_Component_Horn_Car_Small', HornGeneric: 'BA_AMB_Component_Horn_Car_Generic' };
-  const asset = s => ASSET[s] ?? `BA_Synth_Basic_${s}`;
-  const SYN = [...new Set(synths.map(asset))];
-  const maxX = Math.max(...gates.map(b => b.position[0] + GRID_OFFSET)), y0 = Math.min(...gates.map(b => b.position[1] + GRID_OFFSET));
-  const gz = gates[0].position[2] + GRID_OFFSET;
-  synths.forEach((s, v) => {
-    const sp = w.addBrick({ asset: 'B_1x1F_Speaker', position: [maxX + 20 + (v % 4) * 10, y0 + Math.floor(v / 4) * 10, gz], color: [30, 30, 30], owner_index: owner,
-      components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: ext.length + SYN.indexOf(asset(s)), VolumeMultiplier: 0, PitchMultiplier: 1,
-        InnerRadius: inner, MaxDistance: range, bSpatialization: true, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] }, { grid: chip.grid.grid });
-    wireOut(`P${v}`, sp, 'Component_AudioEmitter', 'PitchMultiplier');
-    wireOut(`V${v}`, sp, 'Component_AudioEmitter', 'VolumeMultiplier');
+  // ---- synth speakers on the chip's own plane, past its gates: voices then drums
+  const maxX = Math.max(...b.rootPos.map(p => p[0])), y0 = Math.min(...b.rootPos.map(p => p[1])), gz = b.rootPos[0][2];
+  [...synths.map((s, v) => [s, `P${v}`, `V${v}`]), ...drums.map((s, d) => [s, `DP${d}`, `DA${d}`])].forEach(([s, pp, vp], v) => {
+    const sp = b.addInside({ asset: 'B_1x1F_Speaker', position: [maxX + 20 + (v % 4) * 10, y0 + Math.floor(v / 4) * 10, gz], color: [30, 30, 30],
+      components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: b.ext.length + SYN.indexOf(asset(s)), VolumeMultiplier: 0, PitchMultiplier: 1,
+        InnerRadius: inner, MaxDistance: range, bSpatialization: true, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] });
+    wireOut(pp, sp, 'Component_AudioEmitter', 'PitchMultiplier');
+    wireOut(vp, sp, 'Component_AudioEmitter', 'VolumeMultiplier');
   });
 
   // ---- the floor: walkway to the cabinet, then a stage per player
@@ -110,9 +85,7 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
     // the seat on the centre panel: W/A/S/D go through the chip's input splitter
     const seat = w.addBrick({ asset: 'B_Seat', position: [sx, -80, 21], direction: 4, rotation: 0, color: [20, 20, 24], owner_index: owner,
       components: [{ type: 'Component_Internal_Seat', data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: 'Dance' } }] });
-    const ig = inGate.get('player');
-    if (ig === undefined) throw new Error('chip has no "player" input');
-    w.addWire({ brick: seat, component_type: 'Component_Internal_Seat', port: 'SittingCharacter' }, { brick: ref[ig], component_type: 'BrickComponentType_Internal_MicrochipInput', port: 'RER_Input' });
+    w.addWire({ brick: seat, component_type: 'Component_Internal_Seat', port: 'SittingCharacter' }, { brick: b.portIn('player'), component_type: 'BrickComponentType_Internal_MicrochipInput', port: 'RER_Input' });
     // safety bar behind, with a P1/P2 sign
     for (const x of [sx - 38, sx + 38]) box(x - 2, -122, 8, x + 2, -118, 54, METAL([200, 200, 210]));
     box(sx - 40, -122, 54, sx + 40, -118, 58, METAL([200, 200, 210]));
@@ -193,6 +166,5 @@ export function buildCabinet(compiled, synths, { range = 3000, inner = 600 } = {
   box(-96, -6, 162, 96, 36, 164, METAL([200, 200, 210]));
   box(-80, -8, 140, 80, -6, 142, GLOW(PINK, 4));
 
-  w.makePrefab({});
-  return w.toBrz({ externalAssets: [...ext, ...SYN.map(name => ({ type: 'BrickAudioDescriptor', name }))] });
+  return b.finish({ extraAssets: ext.slice(b.ext.length), description: 'DDR cabinet' });
 }

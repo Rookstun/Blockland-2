@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readMidi } from './midi.mjs';
-import { makeSong, VOICES } from './chart.mjs';
+import { makeSong, VOICES, DRUMS } from './chart.mjs';
 import { generate } from './wsgen.mjs';
 import { buildCabinet } from './cabinet.mjs';
 
@@ -36,9 +36,14 @@ for (const s of songs) s.voices = s.voices.filter((_, v) => used[v]);
 const voiceDefs = VDEF.filter((_, v) => used[v]);
 const synths = voiceDefs.map(([synth]) => synth);
 
-const src = generate(songs, voiceDefs);
+// keep only drums some song uses
+const usedD = DRUMS.map((_, d) => songs.some(s => s.drums[d].length));
+for (const s of songs) s.drums = s.drums.filter((_, d) => usedD[d]);
+const drumDefs = DRUMS.filter((_, d) => usedD[d]);
+console.log(`drums: ${drumDefs.map(d => d.kind).join(' ') || 'none'}`);
+const src = generate(songs, voiceDefs, drumDefs);
 fs.writeFileSync(join(here, 'ddr.gen.ws'), src);
-const sdk = join(here, '..', 'pikmin', 'tools', 'wirescript', 'pkg');
+const sdk = join(here, '..', 'tools', 'wspkg');   // the current compiler (Tween etc.), Latest format out
 const wasm = await import(pathToFileURL(join(sdk, 'wasm.js')).href);
 if (typeof wasm.default === 'function') await wasm.default({ module_or_path: fs.readFileSync(join(sdk, 'wasm_bg.wasm')) });
 const compile = wasm.wirescript_compile ?? wasm.default.wirescript_compile;
@@ -46,6 +51,7 @@ const compiled = compile(src, 'ddr', '{}', '{}');
 fs.writeFileSync(join(here, 'ddr.chip.brz'), new Uint8Array(compiled));
 console.log(`chip compiled: ${compiled.length} bytes`);
 if (args.includes('--chip-only')) process.exit(0);
-const out = buildCabinet(Buffer.from(compiled), synths);
+const out = await buildCabinet(new Uint8Array(compiled), synths, { drums: drumDefs.map(d => d.synth) });
 fs.writeFileSync(join(here, 'ddr.brz'), out);
-console.log(`wrote ddr.brz (${out.length} bytes)`);
+fs.writeFileSync(join(here, 'ddr.latest.brz'), out);   // already Latest: no tools/to_latest.mjs step
+console.log(`wrote ddr.brz + ddr.latest.brz (${out.length} bytes)`);

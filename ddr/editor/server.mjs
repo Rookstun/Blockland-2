@@ -44,9 +44,7 @@ async function build(log) {
   const b = await run(process.execPath, [join(DDR, 'build.mjs')], { cwd: DDR });
   log.push(b.out.trim());
   if (b.code !== 0) throw new Error('build failed');
-  const l = await run(process.execPath, [join(ROOT, 'tools', 'to_latest.mjs'), join(DDR, 'ddr.brz'), join(DDR, 'ddr.latest.brz')], { cwd: ROOT });
-  log.push(l.out.trim());
-  if (l.code !== 0) throw new Error('to_latest failed');
+  // build.mjs writes ddr.latest.brz itself (tools/wspkg output is already Latest)
   return { brz: fs.statSync(join(DDR, 'ddr.brz')).size, latest: fs.statSync(join(DDR, 'ddr.latest.brz')).size, chip: fs.statSync(join(DDR, 'ddr.chip.brz')).size };
 }
 async function deploy(log) {
