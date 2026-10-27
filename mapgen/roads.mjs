@@ -397,13 +397,15 @@ export function roadFurniture(B, net, { T, F, rnd, cuts = [], reserved = [], nam
       const [x, y] = at(s, rs * sg * 140), f = run.axis === 'x' ? [-sg, 0] : [0, -sg];
       if (!inCut(x, y) && !inRes(x, y) && speedSign(x, y, f, 80, mph)) st.speed++;
     }
-    const kind = run.inc >= 0.62 ? 'acorn' : run.inc >= 0.35 ? 'cobra' : 'wood', every = { acorn: 2, cobra: 3, wood: 4 }[kind];
-    for (let k = 1, side = 1; k < run.tiles.length - 1; k += every, side = -side) {
+    // the world caps light components (about 170 were free for the city): one SpotLight per head, staggered,
+    // closer on rich streets (still the income gradient), every run gets at least one
+    const kind = run.inc >= 0.62 ? 'acorn' : run.inc >= 0.35 ? 'cobra' : 'wood', every = { acorn: 4, cobra: 6, wood: 8 }[kind];
+    for (let k = Math.min(1, run.tiles.length - 1), side = 1; k < Math.max(2, run.tiles.length - 1); k += every, side = -side) {
       const s = run.s0 + k * T + T / 2;
-      for (const sg of kind === 'acorn' ? [1, -1] : [side]) {
+      for (const sg of [side]) {
         const [x, y] = at(s, sg * 150), toRoad = run.axis === 'x' ? [0, -sg] : [-sg, 0];
         if (inCut(x, y) || inRes(x, y)) continue;
-        if (streetlight(x, y, toRoad, kind)) { st.lights[kind] = (st.lights[kind] ?? 0) + 1; st.lightComponents += 2; }
+        if (streetlight(x, y, toRoad, kind)) { st.lights[kind] = (st.lights[kind] ?? 0) + 1; st.lightComponents += 1; }
       }
     }
   }
@@ -418,8 +420,8 @@ export function roadFurniture(B, net, { T, F, rnd, cuts = [], reserved = [], nam
       if (!box(x - 6, y - 6, 8, x + 6, y + 6, 24, BL, 'light base')) return false;
       box(x - 3, y - 3, 24, x + 3, y + 3, 140, BL, 'light pole');
       box(x - 5, y - 5, 140, x + 5, y + 5, 142, BL, 'light collar');
-      box(x - 7, y - 7, 142, x + 7, y + 7, 158, [250, 246, 232], 'light globe', { material: 'BMC_Glass', components: [glow(LED, 420, 5)] });
-      box(x - 9, y - 9, 158, x + 9, y + 9, 162, BL, 'light cap', { components: [spot(LED, 700)] });
+      box(x - 7, y - 7, 142, x + 7, y + 7, 158, [250, 246, 232], 'light globe', { material: 'BMC_Glass', components: [{ ...glow(LED, 700, 6), data: { ...glow(LED, 700, 6).data, bMatchBrickShape: false } }] });
+      box(x - 9, y - 9, 158, x + 9, y + 9, 162, BL, 'light cap');
       box(x - 2, y - 2, 162, x + 2, y + 2, 168, BL, 'light finial');
       return true;
     }
@@ -434,7 +436,7 @@ export function roadFurniture(B, net, { T, F, rnd, cuts = [], reserved = [], nam
     const hx0 = Math.min(h0[0], h1[0]) - (toRoad[0] ? 0 : 6), hx1 = Math.max(h0[0], h1[0]) + (toRoad[0] ? 0 : 6), hy0 = Math.min(h0[1], h1[1]) - (toRoad[1] ? 0 : 6), hy1 = Math.max(h0[1], h1[1]) + (toRoad[1] ? 0 : 6);
     box(hx0, hy0, armZ - 2, hx1, hy1, armZ + 6, [120, 124, 128], 'light head', { material: 'BMC_Metallic' });
     const col = kind === 'wood' || kind === 'cobra' ? SODIUM : LED;
-    box(hx0 + 2, hy0 + 2, armZ - 4, hx1 - 2, hy1 - 2, armZ - 2, [255, 236, 200], 'light lens', { material: 'BMC_Glass', components: [spot(col, 900), glow(col, 50, 3)] });
+    box(hx0 + 2, hy0 + 2, armZ - 4, hx1 - 2, hy1 - 2, armZ - 2, [255, 236, 200], 'light lens', { material: 'BMC_Glass', components: [spot(col, 900)] });
     return true;
   }
   return st;

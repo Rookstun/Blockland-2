@@ -95,7 +95,7 @@ export function buildFreeway(B, plan, { lots, F }) {
       const xa = edge + sx * (SLOPE - (k + 1) * 160), xb = xa + sx * 160, x0 = Math.min(xa, xb), x1 = Math.max(xa, xb), zb = 4 + 16 * k;
       for (const [a, b] of [[20, 340], [340, 620], [660, 940], [940, 1260]]) {
         if (zb > 0) box(x0, Y0 + a, 0, x1, Y0 + b, zb, CON, 'fill');
-        B.wedge(x0, Y0 + a, zb, x1, Y0 + b, zb + 16, -sx, 0, { color: ASPH }, 'freeway ramp');
+        for (let y = a; y < b; y += 160) B.wedge(x0, Y0 + y, zb, x1, Y0 + Math.min(b, y + 160), zb + 16, -sx, 0, { color: ASPH }, 'freeway ramp'); // micro wedges <= 160 across
       }
       for (const [a, b] of [[0, 20], [620, 660], [1260, 1280]]) box(x0, Y0 + a, 0, x1, Y0 + b, zb + 16 + 32, CON, 'barrier');
     }
@@ -117,7 +117,7 @@ export function buildFreeway(B, plan, { lots, F }) {
     for (let k = 0; k < 12; k++) {
       const xa = r.xe + r.sx * k * 160, xb = xa + r.sx * 160, x0 = Math.min(xa, xb), x1 = Math.max(xa, xb), zb = 4 + 16 * k;
       box(x0, A0, 0, x1, A1, zb, CON, 'fill');
-      B.wedge(x0, A0, zb, x1, A1, zb + 16, r.sx, 0, { color: ASPH }, 'freeway ramp');
+      for (let y = A0; y < A1; y += 120) B.wedge(x0, y, zb, x1, y + 120, zb + 16, r.sx, 0, { color: ASPH }, 'freeway ramp');
       box(x0, yb + 20, 0, x1, A0, zb + 16 + 32, CON, 'ramp wall'); box(x0, A1, 0, x1, yb + 300, zb + 16 + 32, CON, 'ramp wall');
     }
     // zone: slab joining the deck edge, outer wall only, closed at its far end
@@ -169,15 +169,14 @@ export function buildFreeway(B, plan, { lots, F }) {
   }
   const LED = { R: 226, G: 234, B: 255, A: 255 };
   const spot = { type: 'Component_SpotLight', data: { Rotation: { Pitch: 270, Yaw: 0, Roll: 0 }, InnerConeAngle: 45, OuterConeAngle: 80, bEnabled: true, Brightness: 12, Radius: 1400, Color: LED, bUseBrickColor: false, bCastShadows: false, RayTracingVisibility: 0 } };
-  const glow = { type: 'Component_PointLight', data: { bMatchBrickShape: true, bEnabled: true, Brightness: 3, Radius: 60, Color: LED, bUseBrickColor: false, bCastShadows: false, RayTracingVisibility: 0 } };
-  for (let x = XF0 + 320; x < XF1; x += 640) {
+  for (let x = XF0 + 320; x < XF1; x += 1920) { // the world caps light components: one spot per head, every 6 tiles
     const y = Y0 + 640;
     if (ramps.some(r => Math.abs((r.row === 1 ? r.z1 + 480 : r.z0 - 480) - x) < 60)) continue;
     if (!box(x - 4, y - 4, 228, x + 4, y + 4, 420, [150, 152, 156], 'light pole', { material: 'BMC_Metallic' })) continue;
     for (const sg of [-1, 1]) {
       box(x - 2, y + sg * 4, 412, x + 2, y + sg * 124, 416, [150, 152, 156], 'light arm', { material: 'BMC_Metallic' });
       box(x - 6, y + sg * 124, 408, x + 6, y + sg * 146, 418, [120, 124, 128], 'light head', { material: 'BMC_Metallic' });
-      box(x - 4, y + sg * 126, 406, x + 4, y + sg * 144, 408, [255, 236, 200], 'light lens', { material: 'BMC_Glass', components: [spot, glow] });
+      box(x - 4, y + sg * 126, 406, x + 4, y + sg * 144, 408, [255, 236, 200], 'light lens', { material: 'BMC_Glass', components: [spot] });
       st.lights++;
     }
   }

@@ -32,7 +32,7 @@ export async function buildSignals(net, { T, names }) {
     bCollisionEnabled_Interaction: true, bCollisionEnabled_Physics: true, Color: rgba(color), MaterialAlpha: 0, Material: 0 } });
   const point = (color, radius, b, on = false) => ({ type: C.PointLight.NAME, data: { bMatchBrickShape: true, bEnabled: on, Brightness: b, Radius: radius, Color: rgba(color), bUseBrickColor: false, bCastShadows: false, RayTracingVisibility: 0 } });
   const spot = color => ({ type: C.SpotLight.NAME, data: { Rotation: { Pitch: 270, Yaw: 0, Roll: 0 }, InnerConeAngle: 45, OuterConeAngle: 75, bEnabled: true, Brightness: 10, Radius: 1000, Color: rgba(color), bUseBrickColor: false, bCastShadows: false, RayTracingVisibility: 0 } });
-  const TEXT = { Font: 5, Rotation: -90, Skew: 0, Kerning: 0, LineHeight: 0.8, WidthScale: 1, LineOffset: 0, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },
+  const TEXT = { Font: 0, Rotation: -90, Skew: 0, Kerning: 0, LineHeight: 0.8, WidthScale: 1, LineOffset: 0, Anchor: { X: 0.5, Y: 0.5 }, Offset: { X: 0, Y: 0, Z: 0 },
     Color: rgba([250, 250, 250]), MaterialSlider: 10, ShadingWidth: 2, OutlineColor: rgba([20, 20, 20]), OutlineWidth: 0, ScuffWidth: 0, GraffitiDepthLimit: 5, GraffitiAngleLimit: 45,
     GraffitiLayer: 0, bEnabled: true, Face: 4, bAlignToWedge: false, bOverrideColor: true, Typeface: 0, Billboard: 0, Material: 1, Shading: 0, bFlipShading: false, Outline: 0,
     bSharpCorners: true, bSharpOutlines: true, bOverrideOutlineColor: true, bForeground: false, Text: '' };
@@ -76,14 +76,16 @@ export async function buildSignals(net, { T, names }) {
     const sel = new Map();
     const lensColor = (kind, b) => { const key = kind + b; if (!sel.has(key)) sel.set(key, ex(C.Expr_Select, { InputA: color(LENS[kind][1]), InputB: color(LENS[kind][0]), bSelectB: B[b] })); return sel.get(key); };
     const lens = (x0, y0, x1, y1, z0, z1, kind, b, radius = 70) => {
-      const h = box(x0, y0, z0, x1, y1, z1, LENS[kind][1], { material: 'BMC_Glow', components: [point(LENS[kind][0], radius, 6), changer(LENS[kind][1])] });
-      wire(B[b][0], B[b][1], { h, c: C.PointLight }, 'bEnabled');
+      // the world caps light components, so a lens is a glow brick whose colour the chip switches dim <-> lit
+      const h = box(x0, y0, z0, x1, y1, z1, LENS[kind][1], { material: 'BMC_Glow', components: [changer(LENS[kind][1])] });
+      void radius;
       const [cg, cp] = lensColor(kind, b);
       wire(cg, cp, { h, c: C.BrickPropertyChanger }, 'Color');
       st.lights++;
     };
     // ---- per inbound leg: pole on the far right corner, mast arm over the lane, head facing the driver
     const legDirs = new Set(n.legs.filter(l => l.nb).map(l => l.s));
+    const headsBefore = st.heads;
     for (const l of n.legs) {
       if (!l.nb || !l.inbound) continue;
       const d = [-l.v[0], -l.v[1]], r = right(d), ax = d[0] ? 'x' : 'y', ph = ax === 'x' ? 'x' : 'y';
@@ -107,7 +109,7 @@ export async function buildSignals(net, { T, names }) {
       // luminaire on the pole top: arm toward the road, cobra head with a down spot + lens glow
       rect(138, 142, 52, 136, 252, 256, STEEL, { material: 'BMC_Metallic' });
       rect(132, 148, 32, 52, 248, 258, [120, 124, 128], { material: 'BMC_Metallic' });
-      rect(134, 146, 34, 50, 246, 248, [255, 236, 200], { material: 'BMC_Glass', components: [spot([226, 234, 255]), point([226, 234, 255], 50, 3, true)] });
+      rect(134, 146, 34, 50, 246, 248, [255, 236, 200], { material: 'BMC_Glass', components: st.heads === headsBefore + 1 ? [spot([226, 234, 255])] : [] }); // light budget: one lit luminaire per junction
       // pedestrian heads: across leg d (peds look toward this pole from the corner across, facing -r) and across leg r (facing -d)
       const peds = [[d, r], [r, d]];
       for (const [crossDir, faceAway] of peds) {
@@ -129,7 +131,7 @@ export async function buildSignals(net, { T, names }) {
     st.junctions++;
   }
   w.makePrefab({});
-  return { bytes: w.toBrz({ bundle: { description: 'City traffic signals' } }), stats: st };
+  return { bytes: w.toBrz({ bundle: { description: 'City traffic signals' }, externalAssets: [{ type: 'BrickFontDescriptor', name: 'Bungee' }] }), stats: st };
 }
 
 // a lens rectangle in world coordinates from the leg frame (along a0..a1, lateral l0..l1) -> [x0, y0, x1, y1] for lens()
