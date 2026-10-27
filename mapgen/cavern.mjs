@@ -311,6 +311,7 @@ export function caveBricks(field, ctx) {
   // a wedge spike at (x, y) from zBase growing `dir` (+1 up, -1 down), base half width a, length L:
   // column (half c), a skirt ring of wedges round its foot (outer half a), a 4-wedge pyramid tip
   const spike = (x, y, zBase, dir, a, L, color, tipColor) => {
+    return; // owner 2026-10-27: no stalagmites/stalactites (look breakable like bushes, aren't); blocks still taken so gems/lights stay put
     a = ev(a); L = Math.max(8, Math.floor(L / 4) * 4); // (down: a column's two halves must not cross)
     const c = a >= 10 ? ev(a * 0.45) : a, hc = Math.round((a >= 10 ? 0.6 : 0.4) * L / 2) * 2, ht = L - hc, hs = a >= 10 ? Math.max(4, Math.round(L * 0.22 / 2) * 2) : 0;
     const put = (asset, dirs, ext, px, py, z0, z1, col) => {
