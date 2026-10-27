@@ -23,6 +23,7 @@ import { EXTERNAL_ASSETS, plaque } from './ruins.mjs';
 import { buildTree } from '../trees/tree.mjs';
 import { cityFields } from './cityfields.mjs';
 import { yard } from './yards.mjs';
+import { lawns } from './lawns.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
@@ -238,9 +239,23 @@ for (const [li, L] of lots.entries()) {
         if (!B.add({ ...t, position: [cx + t.position[0], cy + t.position[1], t.position[2]] }, hk)) bad++;
       }
       if (bad) throw new Error(`${hk} ${seed}: ${bad} bricks dropped`);
+      // driveway on to the road (owner 2026-10-26: "roads connect to the driveways, remove or lower the sidewalk"):
+      // the house's ground pieces on its street edge; the widest is the driveway, carried to the lot edge, and the
+      // sidewalk tiles in front of it are lowered to road level at the end (house.cut); a narrow one is the front walk
+      const ox = cx - (r ? -lx : lx), fy = cy - (r ? -ly : ly), sg = r ? -1 : 1, yE = L.side === 'S' ? L.y0 : L.y1;
+      const front = h.bricks.map(b => [b, ...worldBox(b)]).filter(([, l, u]) => l[1] <= 0 && l[2] <= 0 && u[2] <= 4)
+        .map(([b, l, u]) => ({ b, x0: Math.min(ox + sg * l[0], ox + sg * u[0]), x1: Math.max(ox + sg * l[0], ox + sg * u[0]) }));
+      const drive = front.filter(f => f.x1 - f.x0 >= 100).sort((a, b) => (b.x1 - b.x0) - (a.x1 - a.x0))[0], walk = front.find(f => f !== drive);
+      if (walk) house.walk = (walk.x0 + walk.x1) / 2;
+      if (drive) {
+        house.drive = [drive.x0, drive.x1];
+        const fe = fy - (fy - yE) % 2; // house fronts can sit on odd units: stop 1 short (micro brick, even halves)
+        if (fe !== yE && !B.box(drive.x0, Math.min(fe, yE), 0, drive.x1, Math.max(fe, yE), 4, { asset: 'PB_DefaultMicroBrick', color: drive.b.color }, 'driveway')) throw new Error(`${hk} ${seed}: driveway extension blocked`);
+        house.cut = { x0: drive.x0, x1: drive.x1, y0: L.side === 'S' ? yE - 40 : yE, y1: L.side === 'S' ? yE : yE + 40 };
+      }
     } });
     floor = h.W * h.D * (hk === 'splitlevel' ? 1.6 : 2);
-    house = { lot: li, kind: hk, seed, mirror, centre: [cx, cy], r, origin: [cx - (r ? -lx : lx), cy - (r ? -ly : ly)], W: h.W, D: h.D, bricks: h.count };
+    house = { lot: li, kind: hk, seed, mirror, centre: [cx, cy], r, origin: [cx - (r ? -lx : lx), cy - (r ? -ly : ly)], W: h.W, D: h.D, door: h.door, bricks: h.count };
     houses.push(house);
   } else if (kind !== 'residential' && !usedLot.has(li)) {
     // empty plot for sale: commercial = light concrete flush with the sidewalk, industrial = dark gravel yard
@@ -453,7 +468,16 @@ for (const h of houses) {
 }
 console.error('yards', JSON.stringify(yardTally));
 
-const bricks = B.bricks.map(({ label, ...b }) => b);
+// ---- lawns (lawns.mjs, owner 2026-10-26: hand-painted yards, worn paths, stones, rocks, storytelling): last, so the
+// ground raster fills round everything that stands
+console.error('lawns', JSON.stringify(lawns(B, { lots, houses, income: F.income, seed: SEED })));
+
+// curb cuts: sidewalk tiles (road tiles' 8-high pavers) in front of a driveway drop to road level (0..4)
+const cuts = houses.flatMap(h => h.cut ? [h.cut] : []);
+const curbCut = b => b.label.startsWith('road') && b.direction === 4 && b.position[2] + b.size[2] === 8 && cuts.some(c => b.position[0] + b.size[0] > c.x0 && b.position[0] - b.size[0] < c.x1 && b.position[1] > c.y0 && b.position[1] < c.y1);
+let nCut = 0;
+const bricks = B.bricks.map(({ label, ...b }) => curbCut({ label, ...b }) ? (nCut++, { ...b, size: [b.size[0], b.size[1], 2], position: [b.position[0], b.position[1], 2] }) : b);
+console.error('curb cuts', cuts.length, 'driveways,', nCut, 'sidewalk tiles lowered');
 fs.mkdirSync(OUT, { recursive: true });
 for (const f of fs.readdirSync(OUT).filter(f => /^add_\d+\.json$/.test(f))) fs.rmSync(path.join(OUT, f));
 fs.writeFileSync(path.join(OUT, 'bricks.json'), JSON.stringify(bricks));
