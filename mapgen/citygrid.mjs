@@ -253,6 +253,45 @@ for (const [li, L] of lots.entries()) {
   });
 }
 
+// ---- barriers between houses (owner 2026-10-26: "hedge picket and wood chain and tree barriers between
+// houses"): one kind per lot line (side lines between neighbours, back lines between back-to-back lots),
+// residential on both sides; richer streets get hedges / trees, poorer ones chain link. Pieces that would
+// touch a house frame are skipped, so a line can stop short of a garage.
+const BARRIERS = ['chain', 'wood', 'picket', 'hedge', 'trees'];
+const pickBarrier = (x, y) => BARRIERS[Math.min(4, Math.max(0, Math.floor(F.income(x, y) * 4 + rnd() * 2 - 0.5)))];
+const nearHouse = (x0, y0, x1, y1) => houses.some(h => { const hw = (h.W + 1) * 5 + 20, hd = (h.D + 1) * 5 + 20; return x0 < h.centre[0] + hw && h.centre[0] - hw < x1 && y0 < h.centre[1] + hd && h.centre[1] - hd < y1; });
+const barrierTally = {};
+function barrier(kind, along, e, a, b) { // a line at x = e (along 'y') or y = e (along 'x'), from a to b
+  const P = (u0, u1, v0, v1) => along === 'y' ? [v0, u0, v1, u1] : [u0, v0, u1, v1];
+  const put = (u0, u1, v0, v1, z0, z1, m) => { const [x0, y0, x1, y1] = P(u0, u1, v0, v1); return B.box(x0, y0, z0, x1, y1, z1, m, 'barrier ' + kind); };
+  const unit = (u0, u1, w, pieces) => { const [x0, y0, x1, y1] = P(u0, u1, e - w, e + w); if (nearHouse(x0, y0, x1, y1)) return; for (const p of pieces) if (!p()) return; barrierTally[kind] = (barrierTally[kind] ?? 0) + 1; };
+  const M = c => ({ asset: 'PB_DefaultBrick', color: c });
+  const leaf = [[46, 86, 38], [58, 98, 42], [40, 74, 34]];
+  if (kind === 'hedge') for (let u = a; u + 60 <= b; u += 60) // box hedge, 4 bricks tall, 2 studs thick
+    unit(u, u + 60, 10, [() => put(u, u + 60, e - 10, e + 10, 0, 48, M(leaf[(u / 60) % 3 | 0]))]);
+  if (kind === 'trees') for (let u = a + 30; u + 90 <= b; u += 140) // round-ish trees: trunk, wide crown, small top
+    unit(u, u + 60, 30, [() => put(u, u + 60, e - 30, e + 30, 48, 96, M(leaf[(u / 140) % 3 | 0])), () => put(u + 20, u + 40, e - 5, e + 5, 0, 48, M([92, 64, 40])), () => put(u + 10, u + 50, e - 20, e + 20, 96, 112, M(leaf[1]))]);
+  if (kind === 'picket') for (let u = a; u + 20 <= b; u += 20) // white pickets with two rails between them
+    unit(u, u + 20, 5, [() => put(u, u + 10, e - 5, e + 5, 0, 40, M([236, 234, 226])), () => put(u + 10, u + 20, e - 5, e + 5, 12, 16, M([236, 234, 226])), () => put(u + 10, u + 20, e - 5, e + 5, 28, 32, M([236, 234, 226]))]);
+  if (kind === 'wood') for (let u = a; u + 100 <= b; u += 100) // privacy fence, player height: post + 8 studs of boards
+    unit(u, u + 100, 10, [() => put(u, u + 20, e - 10, e + 10, 0, 64, M([96, 66, 42])), () => put(u + 20, u + 100, e - 5, e + 5, 0, 60, M([134, 96, 60]))]);
+  if (kind === 'chain') for (let u = a; u + 100 <= b; u += 100) // metal posts + see-through mesh
+    unit(u, u + 100, 5, [() => put(u, u + 10, e - 5, e + 5, 0, 60, { asset: 'PB_DefaultBrick', color: [150, 152, 156], material: 'BMC_Metallic' }),
+      () => put(u + 10, u + 100, e - 1, e + 1, 0, 56, { asset: 'PB_DefaultMicroBrick', color: [140, 142, 146], material: 'BMC_Glass' }),
+      () => put(u + 10, u + 100, e - 5, e + 5, 56, 60, { asset: 'PB_DefaultBrick', color: [150, 152, 156], material: 'BMC_Metallic' })]);
+}
+const res = L => L.kind === 'residential';
+for (const [i, L] of lots.entries()) {
+  const R = lots[i + 1];
+  // side line to the next lot on the same face; stop 40 short of the back line (that line's barrier)
+  if (R && R.side === L.side && R.y0 === L.y0 && R.x0 === L.x1 && res(L) && res(R))
+    barrier(pickBarrier(L.x1, (L.y0 + L.y1) / 2), 'y', L.x1, L.side === 'S' ? L.y0 : L.y0 + 40, L.side === 'S' ? L.y1 - 40 : L.y1);
+  // back line to every north lot behind a south lot
+  if (L.side === 'S' && res(L)) for (const N of lots) if (N.side === 'N' && N.y0 === L.y1 && res(N) && N.x0 < L.x1 && L.x0 < N.x1)
+    barrier(pickBarrier((Math.max(L.x0, N.x0) + Math.min(L.x1, N.x1)) / 2, L.y1), 'x', L.y1, Math.max(L.x0, N.x0) + 20, Math.min(L.x1, N.x1) - 20);
+}
+console.error('barriers', JSON.stringify(barrierTally));
+
 const bricks = B.bricks.map(({ label, ...b }) => b);
 fs.mkdirSync(OUT, { recursive: true });
 for (const f of fs.readdirSync(OUT).filter(f => /^add_\d+\.json$/.test(f))) fs.rmSync(path.join(OUT, f));
