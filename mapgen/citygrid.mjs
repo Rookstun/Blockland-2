@@ -19,7 +19,8 @@ import { turnBrick, worldBox } from './orient.mjs';
 import { dutchColonial } from './dutchcolonial.mjs';
 import { splitLevel } from './splitlevel.mjs';
 import { tavistock } from './tavistock.mjs';
-import { EXTERNAL_ASSETS } from './ruins.mjs';
+import { EXTERNAL_ASSETS, plaque } from './ruins.mjs';
+import { buildTree } from '../trees/tree.mjs';
 import { cityFields } from './cityfields.mjs';
 import { yard } from './yards.mjs';
 
@@ -209,7 +210,8 @@ for (let placed = true; placed;) { // round robin: every building once per pass,
   }
 }
 
-const plots = [], houses = [], zoneTally = {};
+const plots = [], zoneTally = {}, deferred = [];
+let houses = [];
 let hseed = SEED * 1000;
 for (const [li, L] of lots.entries()) {
   const cxl = (L.x0 + L.x1) / 2, cyl = (L.y0 + L.y1) / 2, lw = L.x1 - L.x0, ld = L.y1 - L.y0;
@@ -229,14 +231,16 @@ for (const [li, L] of lots.entries()) {
     const r = L.side === 'S' ? 0 : 2;
     const cy = L.side === 'S' ? L.y0 + set + fd / 2 : L.y1 - set - fd / 2;
     const lx = Math.round(fw / 2 / 10) * 10, ly = Math.round(fd / 2 / 10) * 10;
-    let bad = 0;
-    for (const b of h.bricks) {
-      const t = turnBrick({ ...b, position: [b.position[0] - lx, b.position[1] - ly, b.position[2]] }, r);
-      if (!B.add({ ...t, position: [cx + t.position[0], cy + t.position[1], t.position[2]] }, hk)) bad++;
-    }
-    if (bad) throw new Error(`${hk} ${seed}: ${bad} bricks dropped`);
+    deferred.push({ li, run: () => { // added after the park pick (park lots keep their rnd draws, so other houses stay put)
+      let bad = 0;
+      for (const b of h.bricks) {
+        const t = turnBrick({ ...b, position: [b.position[0] - lx, b.position[1] - ly, b.position[2]] }, r);
+        if (!B.add({ ...t, position: [cx + t.position[0], cy + t.position[1], t.position[2]] }, hk)) bad++;
+      }
+      if (bad) throw new Error(`${hk} ${seed}: ${bad} bricks dropped`);
+    } });
     floor = h.W * h.D * (hk === 'splitlevel' ? 1.6 : 2);
-    house = { kind: hk, seed, mirror, centre: [cx, cy], r, origin: [cx - (r ? -lx : lx), cy - (r ? -ly : ly)], W: h.W, D: h.D, bricks: h.count };
+    house = { lot: li, kind: hk, seed, mirror, centre: [cx, cy], r, origin: [cx - (r ? -lx : lx), cy - (r ? -ly : ly)], W: h.W, D: h.D, bricks: h.count };
     houses.push(house);
   } else if (kind !== 'residential' && !usedLot.has(li)) {
     // empty plot for sale: commercial = light concrete flush with the sidewalk, industrial = dark gravel yard
@@ -252,6 +256,154 @@ for (const [li, L] of lots.entries()) {
     zoning: kind, weights: { r: +z.r.toFixed(3), c: +z.c.toFixed(3), i: +z.i.toFixed(3) }, density: dens, income: +inc.toFixed(3), population: +pop.toFixed(3),
     house: house && { kind: house.kind, seed: house.seed, W: house.W, D: house.D },
   });
+}
+
+// ---- park (owner 2026-10-26: "make a park"): the all-residential block nearest downtown with no Tavistock (the
+// city Tavistocks carry fixture prefabs of their own owner) turns into a hedged park: gravel cross walks from four
+// gates to a ring round a real-water pond, a bandstand, flower beds, grown trees and benches. Its houses are still
+// rolled (and dropped), so every other lot keeps the house it had.
+const runs = [];
+for (const [li, L] of lots.entries()) if (L.side === 'S') {
+  const q = runs.at(-1);
+  if (q && q.y0 === L.y0 && q.x1 === L.x0) { q.x1 = L.x1; q.lots.push(li); } else runs.push({ x0: L.x0, x1: L.x1, y0: L.y0, lots: [li] });
+}
+const parkPick = runs.map(q => {
+  const y1 = q.y0 + DEPTH * T, back = lots.flatMap((L, li) => L.side === 'N' && L.y1 === y1 && L.x0 < q.x1 && q.x0 < L.x1 ? [li] : []);
+  const ids = [...q.lots, ...back];
+  const ok = back.every(li => lots[li].x0 >= q.x0 && lots[li].x1 <= q.x1) && ids.every(li => lots[li].kind === 'residential' && houses.find(h => h.lot === li)?.kind !== 'tavistock');
+  return ok && { x0: q.x0, x1: q.x1, y0: q.y0, y1, ids, d: Math.hypot((q.x0 + q.x1) / 2 - F.downtown[0], q.y0 + DEPTH * T / 2 - F.downtown[1]) };
+}).filter(Boolean).sort((a, b) => a.d - b.d)[0];
+if (!parkPick) throw new Error('no all-residential block without a Tavistock for the park');
+const parkLots = new Set(parkPick.ids);
+for (const li of parkLots) { lots[li].kind = 'park'; Object.assign(plots[li], { name: `Park ${li + 1}`, zoning: 'park', house: null, price: 0 }); }
+houses = houses.filter(h => !parkLots.has(h.lot));
+for (const d of deferred) if (!parkLots.has(d.li)) d.run();
+const parkStats = cityPark(parkPick);
+console.error('park', parkPick.x0, parkPick.y0, parkPick.x1, parkPick.y1, 'lots', parkPick.ids.map(li => li + 1).join(), JSON.stringify(parkStats));
+
+function cityPark({ x0: X0, x1: X1, y0: Y0, y1: Y1 }) {
+  const prnd = rng(SEED * 31 + 7), pick = a => a[Math.floor(prnd() * a.length)];
+  const CX = Math.round((X0 + X1) / 20) * 10, CY = Math.round((Y0 + Y1) / 20) * 10;
+  const HX = Math.floor(Math.min(X1 - CX, CX - X0) / 20) * 20 - 20, HY = Math.floor(Math.min(Y1 - CY, CY - Y0) / 20) * 20 - 20;
+  const MB = 'PB_DefaultMicroBrick', st = {};
+  const P = (x0, y0, z0, x1, y1, z1, color, label, extra) => {
+    const ok = B.box(CX + x0, CY + y0, z0, CX + x1, CY + y1, z1, { asset: MB, color, ...extra }, 'park ' + label);
+    if (ok) st[label] = (st[label] ?? 0) + 1;
+    return ok;
+  };
+  const free = (x0, y0, z0, x1, y1, z1) => B.free([CX + x0, CY + y0, z0], [CX + x1, CY + y1, z1]);
+  const HEDGE = [[52, 104, 44], [46, 96, 40], [60, 112, 50], [56, 100, 46]];
+  const GRAVEL = [[196, 188, 170], [184, 176, 158], [204, 198, 184], [190, 184, 168]];
+  const STONE = [150, 144, 134], PALE = [206, 198, 182], CUT = [170, 162, 150], WOOD = [[110, 76, 48], [134, 96, 60]], WHITE = [244, 242, 236];
+  const GATE = 60, PW = 50;
+  // hedge: 20 thick, 40 high, 80-long sections of shades, a gap in the middle of every side
+  const hedge = (alongX, c0, c1, a0, a1) => { for (let a = a0; a < a1; a += 80) { const b = Math.min(a1, a + 80), c = pick(HEDGE); if (alongX) P(a, c0, 0, b, c1, 40, c, 'hedge'); else P(c0, a, 0, c1, b, 40, c, 'hedge'); } };
+  for (const sg of [-1, 1]) {
+    const [y0, y1] = sg > 0 ? [HY - 20, HY] : [-HY, -HY + 20], [x0, x1] = sg > 0 ? [HX - 20, HX] : [-HX, -HX + 20];
+    for (const [a0, a1] of [[-HX, -GATE - 20], [GATE + 20, HX]]) hedge(true, y0, y1, a0, a1);
+    for (const [a0, a1] of [[-HY + 20, -GATE - 20], [GATE + 20, HY - 20]]) hedge(false, x0, x1, a0, a1);
+  }
+  for (const [gx, gy, alongX] of [[0, -HY + 10, true], [0, HY - 10, true], [-HX + 10, 0, false], [HX - 10, 0, false]])
+    for (const sg of [-1, 1]) { // gate pillars, capped
+      const px = alongX ? gx + sg * (GATE + 10) : gx, py = alongX ? gy : gy + sg * (GATE + 10);
+      P(px - 10, py - 10, 0, px + 10, py + 10, 52, CUT, 'pillar');
+      P(px - 12, py - 12, 52, px + 12, py + 12, 58, PALE, 'pillar');
+    }
+  // name board on the south gate's pillar caps
+  plaque({ put: (b, x, y, z) => B.add({ ...b, position: [x, y, z] }, 'park board'), facing: [0, -1], x: CX, y: CY - HY + 10, z: 70, w: GATE + 20, h: 12, color: [62, 92, 54],
+    text: pick(['Municipal Lawn of Sitting Down', 'Unofficial Duck Embassy', 'Park (Sic)', 'Grass: Now Free of Charge', 'Mandatory Leisure Zone']),
+    style: { Font: 1, LineHeight: 3.5, Color: { R: 240, G: 226, B: 170, A: 255 } } });
+  // pond, rim, ring walk and cross walks on a 10-unit raster, rows merged into runs
+  const RW = Math.round(Math.min(HX, HY) * 0.22 / 10) * 10, RIM = RW + 16, R0 = RIM + 24, R1 = R0 + 60;
+  const kindAt = (x, y) => {
+    const r = Math.hypot(x, y);
+    if (r < RW) return 'water';
+    if (r < RIM) return 'rim';
+    if (r >= R0 && r < R1) return 'walk';
+    if (r >= R1 && ((Math.abs(x) < PW && Math.abs(y) < HY) || (Math.abs(y) < PW && Math.abs(x) < HX))) return 'walk';
+    return null;
+  };
+  const WATER = { // = town.mjs WATER_ZONE_TOWN, filled to z 8
+    ZoneStartDistance: 0, ZoneEndDistance: 6, bIsBuildingZone: false, bIsLooseZone: false, bIsShareZone: false, bWater: true,
+    WaterScattering: { X: 0.000007, Y: 0.000018, Z: 0.000031 }, WaterAbsorption: { X: 0.0065, Y: 0.000708, Z: 0.000196 },
+    WaterFogIntensity: 0.0002, WaterFogScatteringColor: { R: 0.5, G: 1, B: 0.75, A: 1 }, WaterFogAmbientColor: { R: 0.1, G: 0.409524, B: 0.75, A: 1 },
+    WaterFogScatteringScale: 3, WaterFogAmbientScale: 0.25, bDetectPlayers: true, bDetectPlayers1: true, bDetectPlayers2: true, bDetectPlayers3: true,
+    bDetectEntities: false, bDetectProjectiles: false, TagFilter: '', ZoneWindForce: 0,
+  };
+  const C = 10;
+  for (let y = -HY; y < HY; y += C) {
+    let run = null;
+    const flush = xe => {
+      if (!run) return;
+      const [x0, k] = run;
+      if (k === 'water') P(x0, y, 0, xe, y + C, 2, [62, 78, 86], 'water', { components: [{ type: 'Component_Internal_AttachedZone', data: WATER }] });
+      else if (k === 'rim') { P(x0, y, 0, xe, y + C, 8, STONE, 'rim'); P(x0, y, 8, xe, y + C, 10, PALE, 'rim'); }
+      else for (let a = x0; a < xe; a += 80) P(a, y, 0, Math.min(xe, a + 80), y + C, 2, pick(GRAVEL), 'walk');
+      run = null;
+    };
+    for (let x = -HX; x <= HX; x += C) {
+      const k = x < HX ? kindAt(x + C / 2, y + C / 2) : null;
+      if (run && run[1] === k) continue;
+      flush(x);
+      if (k) run = [x, k];
+    }
+  }
+  for (let k = 0; k < 14; k++) { // lily pads on the water, a few in flower
+    const a = prnd() * Math.PI * 2, r = 30 + prnd() * (RW - 50), w = prnd() < 0.5 ? 6 : 8;
+    const x = Math.round(Math.cos(a) * r / 2) * 2, y = Math.round(Math.sin(a) * r / 2) * 2;
+    if (Math.hypot(Math.abs(x) + w, Math.abs(y) + w) > RW - 4 || !free(x - w, y - w, 8, x + w, y + w, 12)) continue;
+    P(x - w, y - w, 8, x + w, y + w, 10, [70, 132, 58], 'lily');
+    if (prnd() < 0.4) P(x - 2, y - 2, 10, x + 2, y + 2, 12, [240, 170, 200], 'lily');
+  }
+  // bandstand in the north-east quarter: plinth, white posts (player height + head room), stepped red roof
+  {
+    const gx = Math.round(HX / 20) * 10, gy = Math.round(HY / 20) * 10, R = 80;
+    P(gx - R - 6, gy - R - 6, 0, gx + R + 6, gy + R + 6, 4, CUT, 'bandstand');
+    P(gx - R, gy - R, 4, gx + R, gy + R, 8, PALE, 'bandstand');
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) P(gx + sx * (R - 8) - 4, gy + sy * (R - 8) - 4, 8, gx + sx * (R - 8) + 4, gy + sy * (R - 8) + 4, 84, WHITE, 'bandstand');
+    P(gx - R, gy - R, 84, gx + R, gy + R, 88, WHITE, 'bandstand');
+    for (let t = 0, w = R + 8; w > 6; t++, w -= 10) P(gx - w, gy - w, 88 + t * 6, gx + w, gy + w, 94 + t * 6, t & 1 ? [150, 46, 40] : [170, 56, 48], 'bandstand');
+  }
+  // raised flower beds in the other three quarters: stone kerb, soil, leaves with blooms
+  const BLOOM = [[220, 60, 70], [250, 200, 60], [180, 90, 200], [250, 140, 170], [250, 250, 240], [240, 120, 40]];
+  for (const [sx, sy] of [[-1, 1], [-1, -1], [1, -1]]) {
+    const bw = 200, bx0 = sx * Math.round(HX / 20) * 10 - bw / 2, by0 = sy * Math.round(HY / 20) * 10 - bw / 2;
+    P(bx0, by0, 0, bx0 + bw, by0 + bw, 4, STONE, 'bed');
+    P(bx0 + 4, by0 + 4, 4, bx0 + bw - 4, by0 + bw - 4, 6, [96, 70, 48], 'bed');
+    for (const [e0, e1, f0, f1] of [[0, bw, 0, 4], [0, bw, bw - 4, bw], [0, 4, 4, bw - 4], [bw - 4, bw, 4, bw - 4]]) P(bx0 + e0, by0 + f0, 4, bx0 + e1, by0 + f1, 10, CUT, 'bed');
+    const col = Math.floor(prnd() * BLOOM.length);
+    for (let i = 0; 12 + i * 14 + 8 <= bw - 8; i++) for (let j = 0; 12 + j * 14 + 8 <= bw - 8; j++) {
+      const x = bx0 + 12 + i * 14, y = by0 + 12 + j * 14;
+      P(x, y, 6, x + 8, y + 8, 10, [62, 118, 52], 'bed');
+      P(x + 2, y + 2, 10, x + 6, y + 6, 14, BLOOM[(col + Math.floor(i / 3)) % BLOOM.length], 'bed');
+    }
+  }
+  // benches beside the cross walks, facing them, whole or not at all
+  const bench = (x, y, fx, fy) => {
+    const ux = -fy, uy = fx, at = (a, b) => [x + a * ux + b * fx, y + a * uy + b * fy];
+    const [[p0, q0], [p1, q1]] = [at(-30, -12), at(30, 10)];
+    if (!free(Math.min(p0, p1), Math.min(q0, q1), 0, Math.max(p0, p1), Math.max(q0, q1), 42)) return;
+    const bx = (a0, b0, z0, a1, b1, z1, c) => { const [p, q] = at(a0, b0), [r, t] = at(a1, b1); P(Math.min(p, r), Math.min(q, t), z0, Math.max(p, r), Math.max(q, t), z1, c, 'bench'); };
+    for (const a of [-1, 1]) bx(a * 30, -8, 0, a * 24, 10, 14, CUT);
+    for (const [b0, b1] of [[-8, -2], [0, 6], [8, 10]]) bx(-30, b0, 14, 30, b1, 18, WOOD[1]);
+    for (const a of [-1, 1]) bx(a * 30, -12, 0, a * 24, -8, 40, WOOD[0]);
+    for (const z of [22, 32]) bx(-24, -12, z, 24, -8, z + 6, WOOD[1]);
+  };
+  for (let along = R1 + 80; along < Math.max(HX, HY) - 100; along += 240) for (const d of [1, -1]) {
+    if (along < HY - 100) { bench(PW + 22, d * along, -1, 0); bench(-(PW + 22), d * along, 1, 0); }
+    if (along < HX - 100) { bench(d * along, PW + 22, 0, -1); bench(d * along, -(PW + 22), 0, 1); }
+  }
+  // grown trees on a jittered grid, clear of walks / beds / benches (a tree goes in whole or not at all)
+  const KINDS = ['oak', 'cherry', 'birch', 'autumn', 'oak', 'willow'];
+  for (let tx = -HX + 90; tx <= HX - 90; tx += 200) for (let ty = -HY + 90; ty <= HY - 90; ty += 200) {
+    const x = tx + Math.round((prnd() - 0.5) * 8) * 10, y = ty + Math.round((prnd() - 0.5) * 8) * 10;
+    const bricks = buildTree(pick(KINDS), Math.floor(prnd() * 1e6), 0.8 + prnd() * 0.4);
+    if (!bricks.every(b => free(x + b.position[0] - b.size[0], y + b.position[1] - b.size[1], b.position[2] - b.size[2], x + b.position[0] + b.size[0], y + b.position[1] + b.size[1], b.position[2] + b.size[2]))) { st['tree skipped'] = (st['tree skipped'] ?? 0) + 1; continue; }
+    const group = ++modelGroup;
+    for (const b of bricks) B.add({ ...b, group, position: [CX + x + b.position[0], CY + y + b.position[1], b.position[2]] }, 'park tree');
+    st.tree = (st.tree ?? 0) + 1;
+  }
+  return st;
 }
 
 // ---- barriers between houses (owner 2026-10-26: "hedge picket and wood chain and tree barriers between
