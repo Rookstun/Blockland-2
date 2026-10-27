@@ -21,6 +21,7 @@ import { splitLevel } from './splitlevel.mjs';
 import { tavistock } from './tavistock.mjs';
 import { EXTERNAL_ASSETS } from './ruins.mjs';
 import { cityFields } from './cityfields.mjs';
+import { yard } from './yards.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
@@ -291,6 +292,14 @@ for (const [i, L] of lots.entries()) {
     barrier(pickBarrier((Math.max(L.x0, N.x0) + Math.min(L.x1, N.x1)) / 2, L.y1), 'x', L.y1, Math.max(L.x0, N.x0) + 20, Math.min(L.x1, N.x1) - 20);
 }
 console.error('barriers', JSON.stringify(barrierTally));
+
+// ---- yards (owner 2026-10-26: "yard subsystem"): mailbox, sheds, pools, patios, play sets, beds by income (yards.mjs)
+const yardTally = {};
+for (const h of houses) {
+  const L = lots.find(q => q.x0 <= h.centre[0] && h.centre[0] < q.x1 && q.y0 <= h.centre[1] && h.centre[1] < q.y1);
+  for (const [k, n] of Object.entries(yard(B, { lot: L, house: h, income: F.income(...h.centre), rnd }))) yardTally[k] = (yardTally[k] ?? 0) + n;
+}
+console.error('yards', JSON.stringify(yardTally));
 
 const bricks = B.bricks.map(({ label, ...b }) => b);
 fs.mkdirSync(OUT, { recursive: true });
