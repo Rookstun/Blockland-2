@@ -3210,6 +3210,8 @@ let carved = 0;
   const H0 = H.slice(), HC = H0.slice();
   for (const [c, h] of lotPre) HC[c] = h;
   const fitsMC = ({ x, y, dx, dy, h }) => {
+    // (2026-10-27) a forbidden cell (okCell: road tunnel, village, henge, swamp...) near the passage roofs it under the floor: sealed door
+    for (let k = -1; k <= 3; k++) for (let l = -2; l <= 2; l++) if (!okCell(x + dx * k - dy * l, y + dy * k + dx * l)) return false;
     for (let k = 1; k <= 12; k++) { // a real hill behind the door, or the tunnels have nowhere to go
       const cx = x + dx * k, cy = y + dy * k;
       if (!inMap(cx, cy) || HC[cx * N + cy] < h + CAVE.door + CAVE.cover + (k > 2 ? 1 : 0) + (k > 6 ? 3 : 0)) return false;
@@ -3257,10 +3259,14 @@ let carved = 0;
   // its floor flush with the shelf (tierMouths, before the field). The shelf in front of a mouth (mouthFront) does
   // not pull the passage ceiling down; every other tier wall face stays solid.
   const mouthCells = new Set(), mouthFront = new Set();
+  // (2026-10-27, owner: "caves dont have entrances") the open ground at a door (door cell + 3 cells out and the facade rows, +-3 across: the roof slope's reach)
+  // (and the low hillside beside it, under the door top) has its roof under the passage top; its 1.6/unit roof slope sealed the facade's first cell solid: those cells don't cap
+  const doorOpen = new Set();
   // roof limit at corner (x, y): next to a mouth passage cell, other tier cells (the shelf outside, the shut wall
   // faces beside it) do not pull the passage ceiling down
   const openWall = (cx, cy, x, y) => {
     if (!inMap(cx, cy)) return false;
+    if (doorOpen.has(cx * N + cy)) return true;
     const gx = (x - X0) / CELL, gy = (y - Y0) / CELL, hn = H[cx * N + cy];
     for (const ox of [Math.floor(gx - 1e-6), Math.floor(gx + 1e-6)]) for (const oy of [Math.floor(gy - 1e-6), Math.floor(gy + 1e-6)])
       if (inMap(ox, oy) && mouthCells.has(ox * N + oy) && tierMtn.cells[cx * N + cy] && !mouthCells.has(cx * N + cy)) return true; // its own roof still bounds every tile
@@ -3342,6 +3348,7 @@ let carved = 0;
   // each cave's nodes; all caves are carved as ONE field after the site loop (two caves may meet)
   const carveMC = s => {
     for (const c of s.facade) facades.add(c);
+    for (let k = -3; k <= CAVE.depth; k++) for (let l = -3; l <= 3; l++) { const cx = s.x + s.dx * k - s.dy * l, cy = s.y + s.dy * k + s.dx * l; if (inMap(cx, cy) && H[cx * N + cy] < s.h + CAVE.door) doorOpen.add(cx * N + cy); }
     const R0 = rng(Math.floor(hash(s.x, s.y, 501) * 4294967296));
     s.plan = planCave(s, { CELL, VZ, X0, Y0, rnd: R0, roofAt, floorMin, doorH: (s.h + 1) * VZ, doorHu: CAVE.door * VZ,
       len: Math.round(MCW.len * (0.7 + R0() * 0.6) * Math.sqrt(K) * 1.25), branch: MCW.branch, cavern: MCW.cavern });
@@ -3365,6 +3372,7 @@ let carved = 0;
     caves.push(s);
     // facade: the passage cells and their neighbours rise into a rock face
     s.facade = new Set();
+    for (const k of [-1, 0]) { const c = (s.x + s.dx * k) * N + s.y + s.dy * k; noSmooth[c] = 1; } // (2026-10-27) no smoothing ramp up the facade filling the doorway
     for (let k = 1; k < CAVE.depth; k++)
       for (let l = -2; l <= 2; l++) {
         const cx = s.x + s.dx * k - s.dy * l, cy = s.y + s.dy * k + s.dx * l;

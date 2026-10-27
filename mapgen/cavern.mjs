@@ -157,7 +157,8 @@ export function caveField(nodes, ctx) {
       const c = nd.zf + nd.hu * (nd.arch ? Math.pow(1 - d * d, 0.6) * (1 + 0.12 * noise(x / 23, y / 23, 9.7)) : nd.door ? Math.sqrt(1 - Math.pow(d, 4)) : Math.pow(1 - d * d, 0.7));
       const k = i * CW + j, o = corners.get(k);
       if (!o) corners.set(k, [f, c, nd.door ? 1 : 0]);
-      else { o[0] = Math.min(o[0], f); o[1] = Math.max(o[1], c); if (nd.door) o[2] = 1; }
+      // (2026-10-27) a door node owns the doorway's floor: a deep cavern under the mouth gave it a 1000-unit shaft
+      else { if (nd.door && !o[2]) o[0] = f; else if (nd.door || !o[2]) o[0] = Math.min(o[0], f); o[1] = Math.max(o[1], c); if (nd.door) o[2] = 1; }
     }
   }
   // the roof limit per corner: each cell's roof, rising ROOF_SLOPE units per unit away from the cell
