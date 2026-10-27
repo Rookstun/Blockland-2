@@ -8,13 +8,15 @@ const CITY = { id: "c1770000-0000-4b0b-9a11-00000000c177", name: "City" };
 const SIGNALS = { id: "c1770000-0000-4b0b-9a11-00000000519a", name: "City Signals" };
 const { bricks, externalAssets } = JSON.parse(fs.readFileSync(path.join(dir, "add.json"), "utf8"));
 const sig = path.join(dir, "citysignals.brz");
+// the world has one budget of components (lights, text, gates): clear BOTH owners before loading either
 const ops = [
   { op: "cmd", line: `br.Bricks.Clear ${CITY.id} 1`, captureMs: 0 },
+  ...(fs.existsSync(sig) ? [{ op: "cmd", line: `br.Bricks.Clear ${SIGNALS.id} 1`, captureMs: 500 }] : []),
   { op: "bricks", at: [0, 0, 0], owner: CITY, captureMs: 0, externalAssets, bricks },
 ];
 if (fs.existsSync(sig)) {
   fs.copyFileSync(sig, path.join(process.env.HOME, "omegga-server/data/Saved/Prefabs/citysignals.brz"));
-  ops.push({ op: "cmd", line: `br.Bricks.Clear ${SIGNALS.id} 1`, captureMs: 0 }, { op: "cmd", line: `br.Prefab.Load "citysignals" 0 0 0 0 16`, captureMs: 2000 });
+  ops.push({ op: "cmd", line: `br.Prefab.Load "citysignals" 0 0 0 0 16`, captureMs: 2000 });
 }
 const id = Date.now() + "_city.json";
 fs.writeFileSync(path.join(root, "inbox", id + ".tmp"), JSON.stringify({ ops }));

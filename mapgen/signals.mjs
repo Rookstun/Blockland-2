@@ -72,15 +72,13 @@ export async function buildSignals(net, { T, names }) {
     B.xG = and(ge(t, 26), lt(t, 46)); B.xY = and(ge(t, 46), lt(t, 50)); B.xR = not(and(ge(t, 26), lt(t, 50)));
     B.walkAcrossX = lt(t, 14); B.walkAcrossY = and(ge(t, 26), lt(t, 40)); // crossing an x-axis street = walking parallel to y traffic
     B.handAcrossX = not(B.walkAcrossX); B.handAcrossY = not(B.walkAcrossY);
-    const color = c => { const g = gate(C.Expr_MakeColorSRGB, { R: 0, G: 0, B: 0, A: 255 }); wire(...K(c[0]), g, 'R'); wire(...K(c[1]), g, 'G'); wire(...K(c[2]), g, 'B'); return [g, 'Output']; };
-    const sel = new Map();
-    const lensColor = (kind, b) => { const key = kind + b; if (!sel.has(key)) sel.set(key, ex(C.Expr_Select, { InputA: color(LENS[kind][1]), InputB: color(LENS[kind][0]), bSelectB: B[b] })); return sel.get(key); };
-    const lens = (x0, y0, x1, y1, z0, z1, kind, b, radius = 70) => {
-      // the world caps light components, so a lens is a glow brick whose colour the chip switches dim <-> lit
-      const h = box(x0, y0, z0, x1, y1, z1, LENS[kind][1], { material: 'BMC_Glow', components: [changer(LENS[kind][1])] });
-      void radius;
-      const [cg, cp] = lensColor(kind, b);
-      wire(cg, cp, { h, c: C.BrickPropertyChanger }, 'Color');
+    // the world caps components (lights, gates, changers alike), so a lens is a dim glass brick with a lit glow
+    // brick 2 units in front of it whose visibility the phase boolean drives directly (no colour gates)
+    const lens = (x0, y0, x1, y1, z0, z1, kind, b, f) => {
+      box(x0, y0, z0, x1, y1, z1, LENS[kind][1], { material: 'BMC_Glass' });
+      const [a0, a1] = f[0] ? [f[0] > 0 ? x1 : x0 - 2, f[0] > 0 ? x1 + 2 : x0] : [x0, x1], [c0, c1] = f[1] ? [f[1] > 0 ? y1 : y0 - 2, f[1] > 0 ? y1 + 2 : y0] : [y0, y1];
+      const lit = box(a0, c0, z0, a1, c1, z1, LENS[kind][0], { material: 'BMC_Glow', visibility: false, collision: false, components: [{ ...changer(LENS[kind][0]), data: { ...changer(LENS[kind][0]).data, bVisibility: false, bCollisionEnabled: false } }] });
+      wire(B[b][0], B[b][1], { h: lit, c: C.BrickPropertyChanger }, 'bVisibility');
       st.lights++;
     };
     // ---- per inbound leg: pole on the far right corner, mast arm over the lane, head facing the driver
@@ -99,9 +97,10 @@ export async function buildSignals(net, { T, names }) {
       rect(139, 141, 59, 61, 192, 196, DARK);
       rect(136, 144, 54, 66, 152, 192, [196, 168, 40]);
       rect(144, 146, 50, 70, 150, 194, DARK);
-      lens(...rectXY(at, 134, 136, 56, 64), 180, 188, 'red', ph + 'R');
-      lens(...rectXY(at, 134, 136, 56, 64), 168, 176, 'yellow', ph + 'Y');
-      lens(...rectXY(at, 134, 136, 56, 64), 156, 164, 'green', ph + 'G');
+      const toDriver = [-d[0], -d[1]];
+      lens(...rectXY(at, 134, 136, 56, 64), 180, 188, 'red', ph + 'R', toDriver);
+      lens(...rectXY(at, 134, 136, 56, 64), 168, 176, 'yellow', ph + 'Y', toDriver);
+      lens(...rectXY(at, 134, 136, 56, 64), 156, 164, 'green', ph + 'G', toDriver);
       st.heads++;
       // street name blade on the arm: the street being crossed
       const cross = n.legs.find(q => q.run && (q.v[0] ? 'x' : 'y') !== ax)?.run;
@@ -119,10 +118,10 @@ export async function buildSignals(net, { T, names }) {
         const c0 = [n.cx + d[0] * 140 + r[0] * 140 + f[0] * 4, n.cy + d[1] * 140 + r[1] * 140 + f[1] * 4];
         const L = f[0] ? [0, 1] : [1, 0], A = (o, lat) => [c0[0] + f[0] * o + L[0] * lat, c0[1] + f[1] * o + L[1] * lat];
         const rr = (o0, o1, l0, l1, z0, z1, col, extra) => { const [p, q] = A(o0, l0), [s, u] = A(o1, l1); return box(Math.min(p, s), Math.min(q, u), z0, Math.max(p, s), Math.max(q, u), z1, col, extra); };
-        rr(0, 10, -6, 6, 80, 106, DARK);
-        const [p0, q0] = A(10, -4), [p1, q1] = A(12, 4);
-        lens(Math.min(p0, p1), Math.min(q0, q1), Math.max(p0, p1), Math.max(q0, q1), 94, 102, 'hand', 'handAcross' + streetAx.toUpperCase(), 40);
-        lens(Math.min(p0, p1), Math.min(q0, q1), Math.max(p0, p1), Math.max(q0, q1), 83, 91, 'walk', 'walkAcross' + streetAx.toUpperCase(), 40);
+        rr(0, 10, -4, 4, 80, 106, DARK);
+        const [p0, q0] = A(10, -3), [p1, q1] = A(12, 3);
+        lens(Math.min(p0, p1), Math.min(q0, q1), Math.max(p0, p1), Math.max(q0, q1), 94, 102, 'hand', 'handAcross' + streetAx.toUpperCase(), f);
+        lens(Math.min(p0, p1), Math.min(q0, q1), Math.max(p0, p1), Math.max(q0, q1), 83, 91, 'walk', 'walkAcross' + streetAx.toUpperCase(), f);
         st.pedheads++;
       }
       // push button for the crosswalk ahead
