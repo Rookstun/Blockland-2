@@ -56,6 +56,7 @@ export const STAGES = [
   { id: 'tunnels', phase: 'carvers', title: 'Road tunnels', groups: [], writes: 'carved tunnel voxels', after: 'roads + voxels' },
   { id: 'sewers', phase: 'carvers', title: 'Town sewers', groups: [], writes: 'carved sewer voxels, kiosks', after: 'under the town paths' },
   { id: 'caves', phase: 'carvers', title: 'Caves', groups: ['caves'], writes: 'carved cave voxels', after: 'last carver; avoids tunnels and sewers' },
+  { id: 'keepGround', phase: 'carvers', title: 'Keep ground', groups: ['keep'], writes: 'H + voxels round the rebuilt surface keeps (flat, eased 60 studs out)', after: 'caves (no re-roll)' },
   { id: 'meshing', phase: 'surface', title: 'Greedy meshing', groups: [], writes: 'bricks (terrain)', after: 'voxels are final' },
   { id: 'dungeonBricks', phase: 'surface', title: 'Dungeon interiors', groups: [], writes: 'dungeon bricks', after: 'their buried shells are carved' },
   { id: 'smoothing', phase: 'surface', title: 'Wedge smoothing + ride surface', groups: ['smooth', 'road'], writes: 'micro wedges, ride surface', after: 'on the meshed terrain' },

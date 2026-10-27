@@ -18,6 +18,7 @@ import { orientFor, worldBox, ORIENT } from './orient.mjs';
 import { makeBuilder } from './builder.mjs';
 import { buildDungeon, SIZE as DSIZE, STOREY as DSTOREY, THEMES as DTHEMES } from './dungeon.mjs';
 import { planSurfaceDungeon } from './surfacedungeon.mjs';
+import { planSurfaceDungeon as planSurfaceDungeonLegacy } from './surfacedungeon_legacy.mjs';
 import { writePreview, rasterBricks } from './preview.mjs';
 import { buildSettlement, buildCamp, buildDetail, buildSign, placeName, EXTERNAL_ASSETS } from './ruins.mjs';
 import { FIXED as BUILDER_FIXED } from './builder.mjs';
@@ -277,7 +278,7 @@ const FOOTFLAG = [mat([150, 144, 136]), mat([134, 128, 120])];
 const FOOTSAND = mat([190, 164, 116]);
 const DRIVE = [mat([170, 168, 162], { asset: 'PB_DefaultTile' }), mat([160, 158, 152], { asset: 'PB_DefaultTile' })]; // (2026-10-25) the houses' concrete driveways
 const FOOT_MATS = [...FOOTPATH, ...FOOTFLAG, FOOTSAND, ...DRIVE];
-const GTA = tune('road.gta', 0, /* rolled back 2026-10-25 (owner: rollback immediately) */ 'asphalt roads with curbs, edge lines and a dashed centre line (0 = the old dirt ride surface)');
+const GTA = tune('road.gta', 0, /* rolled back 2026-10-25 (owner: "rollback immediately") */ 'asphalt roads with curbs, edge lines and a dashed centre line (0 = the old dirt ride surface)');
 const ROAD_SKIN = tune('road.skin', 2, 'asphalt skin over the ride surface, units');
 const ASPHALT = [54, 56, 60], CURB = [168, 166, 158], EDGE_LINE = [226, 226, 218], CENTRE_LINE = [226, 174, 34];
 const DRIVE_KINDS = new Set(['splitlevel', 'cottage', 'townhouse', 'dutchcolonial', 'georgian']);
@@ -514,37 +515,30 @@ for (const d of DUNGEONS) {
   const ways = [[-1, 0, px0 - d.fx], [1, 0, d.fx + C - 1 - px1], [0, -1, py0 - d.fy], [0, 1, d.fy + C - 1 - py1]];
   const [dx, dy] = ways.sort((a, b) => a[2] - b[2])[0];
   const SPC = CELL / 10; // studs per cell
+  // the pre-hall keep's plan (surfacedungeon_legacy.mjs) shapes the ground, the trench and the roads exactly
+  // as before; the rebuilt keep (d.keep, bigger) gets its own flat ground late (stage keepGround)
+  d.keepOld = planSurfaceDungeonLegacy({
+    seed: d.seed * 7 + 3, hole: [ex0 / 10, ey0 / 10, ex1 / 10, ey1 / 10], side: [dx, dy],
+    bounds: [3 * SPC, 3 * SPC, (C - 3) * SPC, (C - 3) * SPC], grid: 8 + d.levels,
+    rooms: tune('keep.rooms', 3, 'surface keep rooms (+ dungeon floors)') + d.levels, theme: DTHEMES[d.theme],
+  });
   d.keep = planSurfaceDungeon({
     seed: d.seed * 7 + 3, hole: [ex0 / 10, ey0 / 10, ex1 / 10, ey1 / 10], side: [dx, dy],
     bounds: [3 * SPC, 3 * SPC, (C - 3) * SPC, (C - 3) * SPC], grid: tune('keep.grid', 12, 'surface keep tiles per side (+ dungeon floors); 8 before the great hall') + d.levels,
-    rooms: tune('keep.rooms', 3, 'surface keep rooms (+ dungeon floors)') + d.levels, theme: DTHEMES[d.theme],
+    rooms: tune('keep.rooms', 3) + d.levels, theme: DTHEMES[d.theme],
     // the checkpoint's spot (see 'checkpoints'): the keep's floor leaves it bare
     checkpoint: d.out.entranceSide === 'S' || d.out.entranceSide === 'N' ? [ex0 / 10 - 4, (ey0 + ey1) / 20] : [(ex0 + ex1) / 20, ey0 / 10 - 4],
   });
-  const [kx0, ky0, kx1, ky1] = [d.fx + Math.floor(d.keep.extent[0] / SPC) - 2, d.fy + Math.floor(d.keep.extent[1] / SPC) - 2,
-    d.fx + Math.ceil(d.keep.extent[2] / SPC) + 1, d.fy + Math.ceil(d.keep.extent[3] / SPC) + 1];
+  const footOf = k => [d.fx + Math.floor(k.extent[0] / SPC) - 2, d.fy + Math.floor(k.extent[1] / SPC) - 2, d.fx + Math.ceil(k.extent[2] / SPC) + 1, d.fy + Math.ceil(k.extent[3] / SPC) + 1];
+  const [kx0, ky0, kx1, ky1] = footOf(d.keepOld);
+  d.newFoot = footOf(d.keep); d.roof = roof;
   for (let x = Math.min(kx0, px0); x <= Math.max(kx1, px1); x++)
     for (let y = Math.min(ky0, py0); y <= Math.max(ky1, py1); y++) {
       if (!((x >= kx0 && x <= kx1 && y >= ky0 && y <= ky1) || (x >= px0 && x <= px1 && y >= py0 && y <= py1))) continue;
       // level with the roof: cut over the footprint, filled where the keep overhangs low ground
       if (inBounds(x, y)) { H[x * N + y] = roof; trenchCell[x * N + y] = 1; apronCells.push(x * N + y); }
     }
-  // round the apron (owner 2026-10-25: "make the floors outside the building flat but then as they get
-  // farther tween into the geometry approx 60 studs"): the ground eases from the roof level back into
-  // the terrain over keep.blend cells (Chebyshev from the apron), never under the roof over the dungeon
-  {
-    const BL = tune('keep.blend', 15, 'cells round a surface keep easing its flat apron into the terrain (15 = 60 studs)');
-    for (let x = kx0 - BL; x <= kx1 + BL; x++)
-      for (let y = ky0 - BL; y <= ky1 + BL; y++) {
-        if (!inBounds(x, y)) continue;
-        const dd = Math.max(kx0 - x, x - kx1, ky0 - y, y - ky1), c = x * N + y;
-        if (dd <= 0 || trenchCell[c]) continue;
-        let h = Math.round(roof + (H[c] - roof) * smooth(0, BL, dd));
-        if (footDist(d, x, y) <= 0) h = Math.max(h, roof);
-        H[c] = h;
-      }
-  }
-  const gx = d.fx + Math.floor(d.keep.gate[0] / SPC), gy = d.fy + Math.floor(d.keep.gate[1] / SPC);
+  const gx = d.fx + Math.floor(d.keepOld.gate[0] / SPC), gy = d.fy + Math.floor(d.keepOld.gate[1] / SPC);
   let x = dx ? (dx < 0 ? kx0 : kx1) : gx, y = dy ? (dy < 0 ? ky0 : ky1) : gy;
   d.trenchWalk = { x, y, dx, dy, roof }; // re-walked after the river (see 'river')
   for (let k = 0; k < 160; k++) {
@@ -3484,6 +3478,45 @@ function previewOut(full) {
 }
 if (PREVIEW && !PREVIEW_FULL) { previewOut(false); process.exit(0); }
 
+stage('keepGround');
+// ------------------------------------------------------------ keep ground --
+// The rebuilt keeps (owner 2026-10-25) stand on more ground than the old ones the map was shaped for:
+// level their footprint (+ the old margin) to the dungeon's roof, then "make the floors outside the
+// building flat but then as they get farther tween into the geometry approx 60 studs": over
+// keep.blend cells (Chebyshev) the ground eases from the roof back to the terrain. Done late, on the
+// voxels (after the caves, which read the heightmap: no re-roll), and never under the roof over the
+// dungeon; road, path, river and tunnel cells keep their height, a column with a hollow (cave, sewer)
+// in the stretch it would lose is left alone. The flat cells join keepOut (no trees, plants or rocks).
+{
+  const BL = tune('keep.blend', 15, 'cells round a surface keep easing its flat apron into the terrain (15 = 60 studs)');
+  let levelled = 0, eased = 0, skipped = 0;
+  for (const d of DUNGEONS) {
+    const [kx0, ky0, kx1, ky1] = d.newFoot, roof = d.roof;
+    let mTop = 0; // the old apron's surface material
+    for (const c of apronCells) { const z = H[c]; const m = V[c * NZ + z]; if (m) { mTop = m; break; } }
+    for (let x = kx0 - BL; x <= kx1 + BL; x++)
+      for (let y = ky0 - BL; y <= ky1 + BL; y++) {
+        if (!inBounds(x, y)) continue;
+        const c = x * N + y, dd = Math.max(kx0 - x, x - kx1, ky0 - y, y - ky1), h = H[c];
+        if (dd > 0 && (roadGraded[c] || pathCell[c] || riverCell[c] || tunnelZ[c] >= 0 || trenchCell[c])) continue;
+        let t = dd <= 0 ? roof : Math.round(roof + (h - roof) * smooth(0, BL, dd));
+        if (footDist(d, x, y) <= 0) t = Math.max(t, roof);
+        if (t === h) continue;
+        const top = dd <= 0 && mTop ? mTop : V[c * NZ + h] || mTop;
+        if (t < h) {
+          let hollow = false;
+          for (let z = t + 1; z < h; z++) if (!V[c * NZ + z]) { hollow = true; break; }
+          if (hollow) { skipped++; continue; }
+          for (let z = t + 1; z <= h; z++) V[c * NZ + z] = 0;
+        } else for (let z = h + 1; z < t; z++) V[c * NZ + z] = V[c * NZ + h] || top;
+        V[c * NZ + t] = top;
+        H[c] = t;
+        if (dd <= 0) { keepOut[c] = 1; levelled++; } else eased++;
+      }
+  }
+  console.error(`keep ground: ${levelled} cells levelled, ${eased} eased into the terrain, ${skipped} left (hollow below)`);
+}
+
 stage('meshing');
 // --------------------------------------------------------- greedy meshing --
 const bricks = [];
@@ -5500,6 +5533,7 @@ const lawnStats = { patches: 0, tufts: 0, daisies: 0, pebbles: 0, rings: 0 };
     townB.add({ asset: 'PB_DefaultMicroBrick', size: [0, 1, 2].map(k => (hi[k] - lo[k]) / 2), position: [0, 1, 2].map(k => (lo[k] + hi[k]) / 2), color, collision: NOCOL, ...extra }, label);
     return true;
   };
+  const LAWN_PATCHES = false, LAWN_ROCKS = false; // owner 2026-10-23: the lawns lose tufts, clover patches, daisies and pebbles (fairy rings stay)
   const CLOVER = [[70, 132, 50], [62, 120, 46], [92, 150, 60]], BLADE = [[78, 140, 52], [96, 156, 62], [66, 124, 46], [124, 156, 70], [104, 146, 58]];
   const lawn = new Map(); // stud "a,b" -> top z, grass lots only
   for (let x = town.fx; x < town.fx + TOWN.cells; x++)
@@ -5526,7 +5560,6 @@ const lawnStats = { patches: 0, tufts: 0, daisies: 0, pebbles: 0, rings: 0 };
     for (let p = a; p < a1; p++) used.add(p + ',' + b);
     const [x0, y0] = W(a, b), [x1, y1] = W(a1, b + 1);
     if (!clearOf((x0 + x1) / 2, y0)) continue;
-  const LAWN_PATCHES = false, LAWN_ROCKS = false; // owner 2026-10-23: the lawns lose tufts, clover patches, daisies and pebbles (fairy rings stay)
     if (add([x0, y0, z], [x1, y1, z + 2], CLOVER[t], 'clover')) lawnStats.patches++;
   }
   // fairy rings: lawn studs with grass all round for 5 studs, spaced far apart
