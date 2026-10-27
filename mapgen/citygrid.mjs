@@ -24,42 +24,15 @@ import { buildTree } from '../trees/tree.mjs';
 import { cityFields } from './cityfields.mjs';
 import { yard } from './yards.mjs';
 import { lawns } from './lawns.mjs';
+import { roadNetwork, assignControl, roadSurface, roadFurniture, STREET_NAMES } from './roads.mjs';
+import { freewayPlan, buildFreeway } from './freeway.mjs';
+import { buildSignals, SIGNAL_OWNER } from './signals.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i < 0 ? d : process.argv[i + 1]; };
 const COLS = +arg('cols', 8), ROWS = +arg('rows', 6), OX = +arg('ox', 3000), OY = +arg('oy', -3000);
 const SEED = +arg('seed', 1), OUT = arg('out', path.join(HERE, 'out_citygrid'));
 const T = 320, DEPTH = 6; // tile size (units); block depth in tiles = two 960-deep lots back to back (Tavistock needs 820 + setback)
-
-// ---- road tiles: the owner's prefabs, local to the tile centre, with the sides each one opens to
-const SIDE = { '1,0': 'E', '-1,0': 'W', '0,1': 'N', '0,-1': 'S' };
-async function loadTiles() {
-  const brs = await import('../tools/brs4/dist.mjs');
-  const tiles = {};
-  for (const [name, open] of [['straight', ['N', 'S']], ['turn', ['E', 'S']], ['t', ['S', 'E', 'W']], ['cross', ['N', 'S', 'E', 'W']]]) {
-    const r = brs.WorldReader.from(fs.readFileSync(path.join(HERE, '../citygrid/prefabs', name + '.brz')));
-    const g = r.globalData(), names = [...g.BasicBrickAssetNames, ...g.ProceduralBrickAssetNames];
-    const raw = [...r.bricks()];
-    const lo = [1e9, 1e9], hi = [-1e9, -1e9];
-    for (const b of raw) { const [l, h] = worldBox(b); for (const i of [0, 1]) { lo[i] = Math.min(lo[i], l[i]); hi[i] = Math.max(hi[i], h[i]); } }
-    const c = [Math.round((lo[0] + hi[0]) / 2), Math.round((lo[1] + hi[1]) / 2)];
-    if (hi[0] - lo[0] !== T || hi[1] - lo[1] !== T) throw new Error(`${name} is not a ${T} tile`);
-    tiles[name] = {
-      open, bricks: raw.map(b => ({
-        asset: names[b.asset_name_index], size: [...b.size], position: [b.position[0] - c[0], b.position[1] - c[1], b.position[2]],
-        direction: b.direction, rotation: b.rotation, color: [...b.color], material: g.MaterialAssetNames[b.material_index], material_intensity: b.material_intensity,
-      })),
-    };
-  }
-  return tiles;
-}
-const turnSide = (s, r) => { const v = { E: [1, 0], N: [0, 1], W: [-1, 0], S: [0, -1] }[s]; let [x, y] = v; for (let i = 0; i < r; i++) [x, y] = [-y, x]; return SIDE[x + ',' + y]; };
-function tileFor(tiles, open) {
-  const want = [...open].sort().join();
-  for (const name of ['cross', 't', 'straight', 'turn']) for (let r = 0; r < 4; r++)
-    if (tiles[name].open.map(s => turnSide(s, r)).sort().join() === want) return { name, r };
-  throw new Error('no road tile opens to ' + want);
-}
 
 // ---- lattice: blocks 5-7 tiles wide, DEPTH deep; street segments then dropped by population
 const rnd = rng(SEED);
@@ -100,21 +73,19 @@ for (const k of seg) {
   else for (let tx = xLines[a]; tx <= xLines[a + 1]; tx++) road.add(tx + ',' + yLines[b]);
 }
 
-const tiles = await loadTiles();
+// ---- roads (roads.mjs, owner 2026-10-26: realistic roads, signals, signs, lights, medians by income; freeway.mjs:
+// elevated I-404 north of the ring with diamond interchanges). Same 32-stud tiles as the owner's road prefabs, now a
+// painted surface; own rng, so every lot and house roll stays where it was.
 const B = makeBuilder();
+const fw = freewayPlan({ xLines, seg, COLS, ROWS, NY, OX, OY, T, EXT, nsName: i => STREET_NAMES.ns(i) });
+const net = roadNetwork({ road, extra: fw.extra, OX, OY, T, F });
+assignControl(net, F);
+const streetName = run => run.name ?? (run.axis === 'x' ? STREET_NAMES.ew[Math.max(0, yLines.indexOf(run.tiles[0].ty)) % STREET_NAMES.ew.length] : STREET_NAMES.ns(Math.max(0, xLines.indexOf(run.tiles[0].tx))));
+const roadRnd = rng(SEED * 17 + 3);
+const surface = roadSurface(B, net, { T, F, rnd: roadRnd });
 const tally = {};
-for (const k of road) {
-  const [tx, ty] = k.split(',').map(Number);
-  const open = Object.entries({ E: [1, 0], W: [-1, 0], N: [0, 1], S: [0, -1] }).filter(([, [dx, dy]]) => road.has(tx + dx + ',' + (ty + dy))).map(([s]) => s);
-  if (open.length < 2) throw new Error(`dead end at ${k}`);
-  const { name, r } = tileFor(tiles, open);
-  tally[name] = (tally[name] ?? 0) + 1;
-  const cx = OX + tx * T + T / 2, cy = OY + ty * T + T / 2;
-  for (const b of tiles[name].bricks) {
-    const t = turnBrick(b, r);
-    if (!B.add({ ...t, position: [cx + t.position[0], cy + t.position[1], t.position[2]] }, 'road ' + name)) throw new Error('road overlap ' + k);
-  }
-}
+for (const n of net.nodes.values()) tally[n.control] = (tally[n.control] ?? 0) + 1;
+console.error('roads', net.tiles.size, 'tiles', net.runs.length, 'runs', JSON.stringify(tally), JSON.stringify(surface.stats), 'exits', fw.inter.map(q => q.name).join(', '));
 
 // ---- lots: along every E-W street face; a run of cells merged by dropped N-S streets is one frontage.
 // South-face lots front -y (r 0), north-face lots +y (r 2).
@@ -475,6 +446,13 @@ console.error('lawns', JSON.stringify(lawns(B, { lots, houses, income: F.income,
 // curb cuts: sidewalk tiles (road tiles' 8-high pavers) in front of a driveway drop to road level (0..4)
 const cuts = houses.flatMap(h => h.cut ? [h.cut] : []);
 const curbCut = b => b.label.startsWith('road') && b.direction === 4 && b.position[2] + b.size[2] === 8 && cuts.some(c => b.position[0] + b.size[0] > c.x0 && b.position[0] - b.size[0] < c.x1 && b.position[1] > c.y0 && b.position[1] < c.y1);
+const freeway = buildFreeway(B, fw, { lots, F });
+console.error('freeway', JSON.stringify(freeway.stats));
+// road furniture last of all (signs, name blades, streetlights), clear of driveway cuts, the freeway deck and signal corners
+const sigCorners = [...net.nodes.values()].filter(n => n.control === 'signal').map(n => ({ x0: n.cx - T / 2 - 10, x1: n.cx + T / 2 + 10, y0: n.cy - T / 2 - 10, y1: n.cy + T / 2 + 10 }));
+console.error('road furniture', JSON.stringify(roadFurniture(B, net, { T, F, rnd: roadRnd, cuts, reserved: [...freeway.reserved, ...sigCorners], names: streetName })));
+const signals = await buildSignals(net, { T, names: streetName });
+console.error('signals', JSON.stringify(signals.stats));
 let nCut = 0;
 const bricks = B.bricks.map(({ label, ...b }) => curbCut({ label, ...b }) ? (nCut++, { ...b, size: [b.size[0], b.size[1], 2], position: [b.position[0], b.position[1], 2] }) : b);
 console.error('curb cuts', cuts.length, 'driveways,', nCut, 'sidewalk tiles lowered');
@@ -484,6 +462,7 @@ fs.writeFileSync(path.join(OUT, 'bricks.json'), JSON.stringify(bricks));
 // owner: NEVER queue bricks: one file, one bricks op
 fs.writeFileSync(path.join(OUT, 'add.json'), JSON.stringify({ bricks, externalAssets: EXTERNAL_ASSETS }));
 fs.writeFileSync(path.join(OUT, 'plots.json'), JSON.stringify(plots, null, 1));
+fs.writeFileSync(path.join(OUT, 'citysignals.brz'), signals.bytes); // Prefab.Load, owner City Signals
 fs.writeFileSync(path.join(OUT, 'city.json'), JSON.stringify({ seed: SEED, extent: EXT, downtown: F.downtown, colW, dropped, tiles: tally, zones: zoneTally, houses, buildings }, null, 1));
 writeFieldMap(path.join(OUT, 'fields.png'));
 const pr = plots.map(p => p.price).sort((a, b) => a - b);
