@@ -17,7 +17,7 @@
 //   /eco check [player]  /eco top  /eco pay <player> <n> (anyone, from their own coins)
 // Unsafe (plain node) plugin, like tpa and duel.
 
-const KEYS = ['coins', 'XP', 'Level', 'SwordTier'];
+const KEYS = ['coins', 'XP', 'Level', 'SwordTier', 'up_ammo', 'up_regen', 'up_magnet', 'up_vamp', 'up_hp']; // up_* = upgrades/ panel levels
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clean = s => String(s).replace(/[<>"\\;]/g, '');
 
