@@ -1,8 +1,9 @@
 // ENEMY WEAPON DROPS (2026-10-28, owner: "remove chests for now and just make a weapon spawn from enemies and give
 // them a certain drop pool for each based on their tiers"; no spathas/sabres ever: "THEY ARE BROKEN").
 //   node weapondrop/gen.mjs -> weapondrop/out/wd_<catalog id>.brz + weapondrop/out/wd_pools.json
-// wd_<id>.brz = one loose physics grid: an invisible micro brick (physics + interaction collision only) carrying the
-//   weapon's ItemSpawn (bank template = shop stand settings, pickup OFF = display) + gyroscope + Button "Take <name>".
+// wd_<id>.brz = one loose physics grid: an invisible base brick (physics collision) carrying the weapon's ItemSpawn
+//   (bank template = shop stand settings, pickup OFF = display) + gyroscope, and an invisible sensor brick around the
+//   item (interaction only) with Button "Take <name>".
 //   (owner: "they need to be bank items": a plain pickup can't tell who took it, so nothing names the slot)
 //   click -> edge -> Var_Set taken -> edge (once) -> SendCustomEventGlobal chest.take (Character, catalog id)
 //   -> DestroySpawnedPrefab. The loot sky chip (chest/gen.mjs, -8580 -7400 8000) gives the weapon with the shop's
@@ -46,15 +47,21 @@ function build(cid) {
   const G = w.addBrickGrid({ location: { X: 0, Y: 0, Z: 0 }, frozen: false, owner_index: O,
     data: { BouyancyScale: 0.2, MassScale: 0.1, bEnableGravity: true, bUseNewMassCalculation: true, bReceivesDecals: true, EntityTag: '' } });
   const add = b => w.addBrick({ owner_index: O, direction: 4, rotation: 0, color: [200, 200, 200], ...b }, G);
-  const core = add({ asset: 'PB_DefaultMicroBrick', size: [6, 6, 10], position: [0, 0, 0], visibility: false,
-    collision: { player: false, weapon: false, interaction: true, tool: true, physics: true }, components: [
-    { type: 'Component_ItemSpawn', data: spawn },
-    { type: 'Component_Internal_Gyroscope', data: { bEnabled: true, bDiscoverable: true, Strength: 25, Damping: 1, MaxForce: 0, TargetAxis: { X: 0, Y: 0, Z: 1 } } },
+  // owner: "one block for the item to be on, one block for the click sensor": the item sits on `base` (physics only),
+  // `sensor` around the item takes the click (interaction only); both invisible
+  const base = add({ asset: 'PB_DefaultMicroBrick', size: [6, 6, 2], position: [0, 0, 0], visibility: false,
+    collision: { player: false, weapon: false, interaction: false, tool: true, physics: true }, components: [
+    { type: 'Component_ItemSpawn', data: { ...spawn, PickupOffsetDirection: 4, PickupOffsetDistance: 16 } },
+    { type: 'Component_Internal_Gyroscope', data: { bEnabled: true, bDiscoverable: true, Strength: 25, Damping: 1, MaxForce: 0, TargetAxis: { X: 0, Y: 0, Z: 1 } } }] });
+  const sensor = add({ asset: 'PB_DefaultMicroBrick', size: [10, 10, 14], position: [0, 0, 16], visibility: false,
+    collision: { player: false, weapon: false, interaction: true, tool: true, physics: false }, components: [
     { type: 'Component_Button', data: { PressSound: null, ReleaseSound: null, bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: `Take ${CAT[cid - 1].name}` } }] });
-  let gi = 0; // hidden gates in a column under the core (gate bricks are 10 wide)
-  const gate = (c, data = {}, size) => ({ h: add({ asset: c.BRICK, position: [0, 0, -20 - 12 * gi++], visibility: false, collision: false, ...(size ? { size } : {}), components: [{ type: c.NAME, data }] }), c });
+  // hidden gates in a ring round the base (gate bricks are 10 wide; a column under it hung 100 into the ground)
+  const RING = [[12, 0], [-12, 0], [0, 12], [0, -12], [12, 12], [-12, 12], [12, -12], [-12, -12]];
+  let gi = 0;
+  const gate = (c, data = {}, size) => ({ h: add({ asset: c.BRICK, position: [...RING[gi++], 0], visibility: false, collision: false, ...(size ? { size } : {}), components: [{ type: c.NAME, data }] }), c });
   const W = (a, ap, b, bp) => w.addWire({ brick: a.h, component_type: a.c.NAME, port: ap }, { brick: b.h, component_type: b.c.NAME, port: bp });
-  const btn = { h: core, c: { NAME: 'Component_Button' } };
+  const btn = { h: sensor, c: { NAME: 'Component_Button' } };
   const edge = gate(C.Expr_EdgeDetectorExec), set = gate(C.Exec_Var_Set, { Value: { $variant: 'bool', value: true } });
   const taken = gate(C.Var, { Value: { $variant: 'bool', value: false } }), once = gate(C.Expr_EdgeDetectorExec);
   const send = gate(C.Exec_SendCustomEventGlobal, { EventName: 'chest.take', DataIn1: { $variant: 'f64', value: 0 }, DataIn2: { $variant: 'i64', value: cid },
