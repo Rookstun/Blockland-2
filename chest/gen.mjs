@@ -23,7 +23,8 @@ const { World, WorldReader, brdb } = lib;
 const C = brdb.COMPONENTS;
 if (!World.prototype.registerJoint) throw Error('run node tools/patch_brs4.mjs first (joint links)');
 const CAT = JSON.parse(fs.readFileSync(path.join(ROOT, 'weaponbank', 'itemcatalog.json'), 'utf8'));
-export const IDS = CAT.map((e, i) => i + 1).filter(id => !/^soda_/.test(CAT[id - 1].prefab)); // the bank's weapons
+// the bank's weapons minus spathas and sabres (owner 2026-10-28: "REMOVE SPATHAS AND SABRES")
+export const IDS = CAT.map((e, i) => i + 1).filter(id => !/^soda_/.test(CAT[id - 1].prefab) && !['Weapon_Spatha', 'Weapon_Sabre'].includes(CAT[id - 1].item));
 const OPEN = Number(process.env.CHEST_OPEN ?? 120); // owner: "set its direction to the opposite"
 const MAP_OWNER = { id: '891c4675-d18a-4ce1-a465-f4193ffe8b39', name: 'abysmal garbage', display_name: 'renderman' };
 const GRID_DATA = { BouyancyScale: 0.2, MassScale: 0.5, bEnableGravity: true, bUseNewMassCalculation: true, bReceivesDecals: true, EntityTag: '' }; // the owner's lid
