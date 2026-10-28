@@ -14,6 +14,10 @@
 // is cut into 3 x 3 lots (about 48 studs); the middle lot is a garden or park, the rest hold
 // buildings whose doors face the nearest street.
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createHash } from 'crypto';
 import { planHouse, COURSES as WH_COURSES, even } from './wallhouse.mjs';
 import { planShop, SHOP_KINDS, WEAPON_KINDS } from './wallshop.mjs';
 import { shapedHouse } from './shapedhouse.mjs';
@@ -423,6 +427,17 @@ const georgianOf = (s, mirror) => { const k = s + ',' + mirror; if (!georgianCac
 // houses and cottages replace the town's shapedhouse homes and wallgen shops (smith houses stay)
 const faireCache = new Map();
 const faireOf = (s, fkind, small) => { const k = s + ',' + fkind + ',' + small; if (!faireCache.has(k)) faireCache.set(k, faire({ seed: s, kind: fkind, small })); return faireCache.get(k); };
+// (2026-10-28, owner: "world has to generate faster") the town plan tries many seeds per lot and only needs their
+// size: every try built a whole faire house (most of the 195 s terraces stage). Sizes are cached on disk, keyed by
+// the faire code's hash, so a later run builds only the houses it places.
+const FAIRE_DIMS = (() => {
+  const here = path.dirname(fileURLToPath(import.meta.url)), dir = path.join(here, '.cache'), file = path.join(dir, 'faire_dims.json');
+  const ver = createHash('sha1').update(['faire.mjs', 'builder.mjs', 'orient.mjs', 'floors.mjs'].map(f => { try { return fs.readFileSync(path.join(here, f), 'utf8'); } catch { return ''; } }).join('|')).digest('hex');
+  let dims = {}; try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); if (j.ver === ver) dims = j.dims; } catch {}
+  let dirty = false;
+  process.on('exit', () => { if (dirty) try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, JSON.stringify({ ver, dims })); } catch {} });
+  return (s, fkind, small) => { const k = s + ',' + fkind + ',' + small; if (!dims[k]) { const h = faireOf(s, fkind, small); dims[k] = { W: h.W, D: h.D, storeys: h.storeys }; dirty = true; } return dims[k]; };
+})();
 const TOWN_RES = { townSplit: 'splitlevel', townDutch: 'dutchcolonial' }, resSeed = s => 76000 + (s % 12);
 const FAIRE_KIND = { faireBooth: 'booth', faireHouse: 'house', faireCottage: 'cottage' };
 const SMALL_MAX = { cottage: [32, 20, 8], townhouse: [36, 24, 12] }; // W, D, E of the old small lots
@@ -446,7 +461,7 @@ function shapedSpec0(type, rnd, s, small = false) {
     return { builder: 'georgian', mirror, shape: 'rect', W: h.W - GROW, D: h.D - GROW, E: 0, storeys: 2, kind: 'georgian estate' };
   }
   if (FAIRE_KIND[type]) {
-    const fkind = FAIRE_KIND[type], h = faireOf(s, fkind, small);
+    const fkind = FAIRE_KIND[type], h = FAIRE_DIMS(s, fkind, small);
     return { builder: 'faire', fkind, small, shape: 'rect', W: h.W - GROW, D: h.D - GROW, E: 0, storeys: h.storeys, kind: 'faire ' + fkind };
   }
   const pool = HOUSE_TYPES[type] ?? HOUSE_TYPES.townhouse;

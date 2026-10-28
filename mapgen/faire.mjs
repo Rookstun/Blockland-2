@@ -295,10 +295,12 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
       }
     };
     const cornerCol = a => (corners[0] && a < a0 + 8) || (corners[1] && a >= a1 - 8);
-    const keyOf = c => c.join();
-    const matOf = k => ({ color: k.split(',').map(Number) });
+    // integer keys for whole-byte RGB (2026-10-28: string keys per 2-unit cell were most of the build's GC time)
+    const keyOf = c => c.length === 3 && c.every(v => (v & 255) === v) ? (c[0] << 16) | (c[1] << 8) | c[2] : c.join();
+    const matOf = k => ({ color: typeof k === 'number' ? [(k >> 16) & 255, (k >> 8) & 255, k & 255] : k.split(',').map(Number) });
+    const plank = [keyOf(shade(PAINT, 1)), keyOf(shade(PAINT, 0.93))];
     // inside: painted vertical planks (owner 2026-10-19)
-    emit('core', (a, z, top) => (cornerCol(a) ? keyOf(pat(a, z, top)[0]) : keyOf(shade(PAINT, Math.floor((a - a0) / 6) % 2 ? 0.93 : 1))), matOf, 'wall core');
+    emit('core', (a, z, top) => (cornerCol(a) ? keyOf(pat(a, z, top)[0]) : plank[Math.floor((a - a0) / 6) % 2 ? 1 : 0]), matOf, 'wall core');
     emit('skin', (a, z, top) => keyOf(pat(a, z, top)[0]), matOf, 'wall skin');
     emit('relief', (a, z, top) => { const [c, rel] = pat(a, z, top); return rel ? keyOf(c) : null; }, matOf, 'timber');
     // wrap the proud corner posts round the corner (front / back walls own the corners)

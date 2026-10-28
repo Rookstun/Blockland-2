@@ -48,14 +48,23 @@ export function mergeBricks(bricks) {
 /** drops every brick whose box overlaps one kept before it (the game rejects them on load: 262 on seed 2034897508);
  * fixed-size B_ props count touching as overlapping too (a turkey resting on a table top was rejected) */
 export function dropOverlaps(bricks, fixed) {
-  const CELL = 200, grid = new Map(), boxes = []; let k = 0;
+  // flat arrays + numeric cell keys (2026-10-28: the closure version took 140 s on 1.77M bricks)
+  const CELL = 200, grid = new Map(), B = new Float64Array(bricks.length * 7); let k = 0, nb = 0;
   for (const b of bricks) {
-    const [lo, hi] = worldBox(b, fixed), e = b.asset?.startsWith('B_') ? 0.5 : 0, cells = [];
-    for (let x = Math.floor(lo[0] / CELL); x <= Math.floor((hi[0] - 1) / CELL); x++) for (let y = Math.floor(lo[1] / CELL); y <= Math.floor((hi[1] - 1) / CELL); y++) cells.push(x + ',' + y);
-    const hit = cells.some(c => (grid.get(c) ?? []).some(j => { const [a0, a1, e2] = boxes[j], t = Math.max(e, e2); return [0, 1, 2].every(i => lo[i] < a1[i] + t && a0[i] < hi[i] + t); }));
+    const [lo, hi] = worldBox(b, fixed), e = b.asset?.startsWith('B_') ? 0.5 : 0;
+    const gx0 = Math.floor(lo[0] / CELL), gx1 = Math.floor((hi[0] - 1) / CELL), gy0 = Math.floor(lo[1] / CELL), gy1 = Math.floor((hi[1] - 1) / CELL);
+    let hit = false;
+    for (let gx = gx0; gx <= gx1 && !hit; gx++) for (let gy = gy0; gy <= gy1 && !hit; gy++) {
+      const list = grid.get((gx + 32768) * 65536 + gy + 32768); if (!list) continue;
+      for (let q = 0; q < list.length; q++) {
+        const o = list[q] * 7, t = Math.max(e, B[o + 6]);
+        if (lo[0] < B[o + 3] + t && B[o] < hi[0] + t && lo[1] < B[o + 4] + t && B[o + 1] < hi[1] + t && lo[2] < B[o + 5] + t && B[o + 2] < hi[2] + t) { hit = true; break; }
+      }
+    }
     if (hit) continue;
-    const j = boxes.push([lo, hi, e]) - 1; for (const c of cells) (grid.get(c) ?? grid.set(c, []).get(c)).push(j);
-    bricks[k++] = b;
+    const o = nb * 7; B[o] = lo[0]; B[o + 1] = lo[1]; B[o + 2] = lo[2]; B[o + 3] = hi[0]; B[o + 4] = hi[1]; B[o + 5] = hi[2]; B[o + 6] = e;
+    for (let gx = gx0; gx <= gx1; gx++) for (let gy = gy0; gy <= gy1; gy++) { const key = (gx + 32768) * 65536 + gy + 32768, l = grid.get(key); if (l) l.push(nb); else grid.set(key, [nb]); }
+    nb++; bricks[k++] = b;
   }
   const n = bricks.length - k; bricks.length = k; return n;
 }

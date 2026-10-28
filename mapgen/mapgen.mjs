@@ -1981,7 +1981,45 @@ const roadPaths = []; // every graded road: { P: [[x, y]...], z: [level...] } (c
     DUNGEONS.some(d => footDist(d, x, y) <= 2) || trenchCell[x * N + y] || hengeDist(x, y) <= HENGE.blend || (reserved[x * N + y] && !outpostCell[x * N + y]) || volcanoCell[x * N + y] !== 0;
   const wet = c => riverCell[c] || H[c] <= SEA;
   /** grade a routed road: profile, cut/fill, shoulders, tunnels; stamps pathCell */
-  const grade = (P, stop) => {
+  // LOMBARD BENDS (2026-10-27, owner screenshot of a road dropping straight off a cliff + Lombard Street: "make it like
+  // that, just the abrupt falloff path connection"): a stretch dropping more than a brick per cell becomes S-bends
+  // across the slope (legs SERP.gap cells apart, as wide as it takes to come down at SERP.grade bricks per cell);
+  // the owner's spot: the NW gate road climbing 1 brick per 4-stud cell all the way (the grade cap) never triggered at > 1
+  const SERP = { steep: tune('road.serpSteep', 0.5, 'Lombard bends: bricks of drop per cell that start a bend (the grade cap is 1 = 17 deg)'), grade: tune('road.serpGrade', 0.4, 'Lombard bends: target bricks of drop per cell of road'), gap: tune('road.serpGap', 5, 'Lombard bends: cells between legs'), maxW: tune('road.serpWidth', 16, 'Lombard bends: widest bend, cells') };
+  const serpentine = (P, stop) => {
+    const tH = ([x, y]) => Math.max(H[x * N + y], SEA + 1), out = [];
+    let i = 0, bends = 0;
+    while (i < P.length) {
+      let j = i;
+      while (j + 8 < P.length && Math.abs(tH(P[j + 8]) - tH(P[i])) > (8 + j - i) * SERP.steep) j += 2; // steeper than SERP.steep from i
+      if (j === i) { out.push(P[i++]); continue; }
+      let e = Math.min(P.length - 1, j + 8);
+      if (P.length - 1 - e < 12) e = P.length - 1; // a short leftover joins the bends (a gate lead bends end to end)
+      // (the town's south gate road ran down a cliff straight into a river crossing) the bends stop 2 cells short of water
+      for (let q = i + 1; q <= e; q++) { const c = P[q][0] * N + P[q][1]; if (riverCell[c] || H[c] <= SEA) { e = Math.max(i, q - 3); break; } }
+      if (e - i < 4) { out.push(...P.slice(i, e + 1)); i = e + 1; continue; }
+      const [x0, y0] = P[i], [x1, y1] = P[e], L = Math.hypot(x1 - x0, y1 - y0), drop = Math.abs(tH(P[e]) - tH(P[i]));
+      const k = Math.max(1, Math.round(L / SERP.gap)), need = drop / SERP.grade; // k half-waves of a sine across the slope
+      // a half sine of amplitude A over gap g is about g + 2A long: pick A so the run is long enough; narrower if that doesn't fit
+      let cells = null;
+      for (let A = Math.min(SERP.maxW / 2, Math.max(2, (need / k - L / k) / 2)); A >= 2 && !cells; A = A > 2 ? Math.max(2, A / 2) : 0) {
+        const ux = (x1 - x0) / L, uy = (y1 - y0) / L, cs = [];
+        for (let q = 0, Q = Math.ceil((L + 2 * A * k) * 3); q <= Q; q++) {
+          const t = q / Q, w = A * Math.sin(Math.PI * k * t);
+          const c = [Math.round(x0 + ux * L * t - uy * w), Math.round(y0 + uy * L * t + ux * w)], last = cs[cs.length - 1];
+          if (!last || last[0] !== c[0] || last[1] !== c[1]) cs.push(c);
+        }
+        if (cs.every(([x, y]) => inBounds(x, y) && !stop(x, y) && townDist(x, y) > 0 && !riverCell[x * N + y] && H[x * N + y] > SEA)) cells = cs;
+      }
+      if (cells) { out.push(...cells); bends += k; } else { out.push(...P.slice(i, e + 1)); console.error(`lombard bends: no room at ${P[i]}`); }
+      i = e + 1;
+    }
+    if (bends) console.error(`lombard bends: ${bends} on a road of ${P.length} cells`);
+    if (process.env.SERP_DEBUG) { const o = [town.fx + TOWN.cells / 2, town.fy + TOWN.cells / 2]; let m = 0, at = 0; for (let q = 0; q + 8 < P.length; q++) { const d = Math.abs(tH(P[q + 8]) - tH(P[q])); if (d > m) { m = d; at = q; } } console.error(`serp road from ${(P[0][0] - o[0]) * CELL},${(P[0][1] - o[1]) * CELL} len ${P.length}: steepest 8 cells drop ${m} at ${(P[at][0] - o[0]) * CELL},${(P[at][1] - o[1]) * CELL}`); }
+    return out;
+  };
+  const grade = (P0, stop) => {
+    const P = serpentine(P0, stop);
     const n = P.length, t = P.map(([x, y]) => { const c = x * N + y; return riverCell[c] ? NaN : Math.max(H[c], SEA + 1); });
     // (2026-10-21) a river crossing spans straight from bank to bank, at least a brick over
     // the water (was: down to the water at every river sample = a deck far under the road)
@@ -2063,7 +2101,13 @@ const roadPaths = []; // every graded road: { P: [[x, y]...], z: [level...] } (c
   const LEAD = 8;
   const gates = townPlan.exits.map(({ dir: [a, b], at }) => {
     const edge = [tx + at[0] / CELL + a, ty + at[1] / CELL + b];
-    return { dir: [a, b], edge, out: [edge[0] + a * LEAD, edge[1] + b * LEAD] };
+    // (2026-10-28, owner standing at the north gate: its 8-cell lead dropped 27 bricks = a cliff) a gate over a drop
+    // gets a longer lead so its Lombard bends have room: a lead of L cells bends into about 3.7 L of road at SERP.grade
+    const hAt = L => { const x = Math.round(edge[0] + a * L), y = Math.round(edge[1] + b * L); return inBounds(x, y) ? H[x * N + y] : null; };
+    let lead = LEAD; const h0 = hAt(0);
+    while (lead < 40 && h0 != null && hAt(lead + 2) != null && Math.abs(hAt(lead) - h0) > 3.7 * lead * SERP.grade) lead += 2;
+    if (lead > LEAD) console.error(`gate ${a},${b}: lead ${lead} cells (drop ${Math.abs(hAt(lead) - h0)})`);
+    return { dir: [a, b], edge, out: [edge[0] + a * lead, edge[1] + b * lead] };
   });
   townGates.push(...gates);
   const nearestGate = (x, y) => gates.reduce((p, q) => (Math.hypot(q.out[0] - x, q.out[1] - y) < Math.hypot(p.out[0] - x, p.out[1] - y) ? q : p));
@@ -2965,6 +3009,29 @@ if (tune('foot.on', 1, 'footpaths from the lone buildings to the roads (0 = none
 }
 
 if (process.env.MAPGEN_HDUMP) fs.writeFileSync(process.env.MAPGEN_HDUMP, Buffer.from(H.buffer, H.byteOffset, H.byteLength));
+
+stage('landforms');
+// (2026-10-28, owner: the landforms poster, "make all of these biomes") the ones the map lacked: landforms.mjs, on
+// cells well clear of everything placed so far (roads, rivers, paths dilated 4 cells), before the voxels
+const landKind = new Uint8Array(N * N);
+let landSites = [];
+if (tune('landforms', 1, 'poster landforms: mesas, karst, sinkholes, glacier, fjord, sea cliff, lagoon, cape, archipelago, dunes, reef, ridge, trench...')) {
+  const block = new Uint8Array(N * N), d = new Int8Array(N * N).fill(-1), q = [];
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) {
+    const c = x * N + y;
+    if (pathCell[c] || riverCell[c] || footCell[c] || roadGraded[c] || tunnelZ[c] >= 0 || bridgeZ[c] >= 0 || villagePaved[c] || outpostCell[c] || reserved[c] || keepOut[c]) { d[c] = 0; q.push(c); }
+    if (townDist(x, y) <= 14 || villageDist(x, y) <= VILLAGE.r + 6 || hengeDist(x, y) <= HENGE.blend + 4 || DUNGEONS.some(g => footDist(g, x, y) <= 8) ||
+      swampCell[c] || volcanoCell[c] || tierMtn.cells[c] || tierMtn.trail[c] || coveCell[c] || deltaCell[c]) block[c] = 1;
+  }
+  for (let h = 0; h < q.length; h++) { const c = q[h], x = (c / N) | 0, y = c % N; block[c] = 1; if (d[c] >= 4) continue; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (inBounds(nx, ny) && d[nx * N + ny] < 0) { d[nx * N + ny] = d[c] + 1; q.push(nx * N + ny); } } }
+  const { landforms } = await import('./landforms.mjs');
+  const r = landforms({ N, H, SEA, NZ, free: c => !block[c], desertW, snowW, hash, fbm2, noSmooth, seed: SEED });
+  landKind.set(r.cell); landSites = r.sites;
+  { const o = [town.fx + TOWN.cells / 2, town.fy + TOWN.cells / 2]; console.error('landform sites (live x,y): ' + r.sites.map(t => `${t.kind} ${(t.x - o[0]) * CELL},${(t.y - o[1]) * CELL}`).join(' | ')); }
+}
+const LIMESTONE = mat([204, 200, 186]), CHALK = mat([228, 226, 212]), ICE = mat([200, 226, 240], { asset: 'PB_DefaultTile' }), ICE_DEEP = mat([160, 198, 224]),
+  PEAT = mat([74, 60, 42]), PEATMOSS = [mat([108, 116, 68]), mat([96, 106, 60])], EJECTA = mat([138, 128, 114]), MESATOP = mat([200, 136, 92]),
+  REEFSAND = mat([236, 226, 190], { asset: 'PB_DefaultTile' }), TRENCHROCK = mat([40, 44, 52]);
 stage('voxels');
 // ----------------------------------------------------------------- voxels --
 const V = new Uint8Array(N * N * NZ);
@@ -3016,6 +3083,14 @@ for (let x = 0; x < N; x++)
     else if (deltaCell[x * N + y] === 4) [top, sub] = [h <= SEA - 3 ? SILT : SHALLOWS, SAND];
     else if (deltaCell[x * N + y] === 2) [top, sub] = [h <= SEA + 1 && hash(x, y, 1503) < 0.35 ? WETSAND : SAND, SAND];
     else if (deltaCell[x * N + y] === 3) [top, sub] = [MARSH[Math.floor((fbm2(wx / 240 + 9, wy / 240 - 4, 2) + 1) * 1.5 + hash(x, y, 1504) * 0.8) % 3], MUD];
+    else if (landKind[x * N + y]) [top, sub] = (() => { const k = landKind[x * N + y], wet = h <= SEA; switch (k) { // landforms.mjs KIND
+      case 1: return [MESATOP, MESA[shade & 1]]; case 22: return [MESA[shade & 1], MESA[shade & 1]]; case 18: return [MESA[shade & 1], MESA[1]];
+      case 2: return [GRASS[shade], LIMESTONE]; case 3: return [wet ? GRAVEL : GRASS[shade], LIMESTONE]; case 4: return [ICE, ICE_DEEP];
+      case 5: return [slope >= 3 ? ROCK[0] : SNOW, ROCK[0]]; case 6: return [PEATMOSS[shade & 1], PEAT]; case 7: return [slope >= 3 ? EJECTA : GRASS[shade], EJECTA];
+      case 8: return [wet ? GRAVEL : EJECTA, STONE]; case 9: return [wet ? GRAVEL : ROCK[shade & 1], ROCK[0]]; case 10: case 11: return [wet ? GRAVEL : GRASS[shade], CHALK];
+      case 12: return [SHALLOWS, SAND]; case 13: case 16: return [SAND, SAND]; case 14: case 15: return [GRASS[shade], SAND]; case 17: return [DUNE[shade & 1], DUNE[0]];
+      case 19: return [REEFSAND, SAND]; case 20: return [BASALT[shade & 1], BASALT[1]]; case 21: return [TRENCHROCK, TRENCHROCK]; default: return [GRASS[shade], DIRT];
+    } })();
     else if (riverCell[x * N + y]) [top, sub] = [GRAVEL, STONE];
     else if (villagePaved[x * N + y]) [top, sub] = [COBBLE, STONE];
     else if (swampCell[x * N + y]) [top, sub] = [h < SEA ? POOL_BED : fbm2(wx / 300 + 5, wy / 300) > 0.1 ? MUCK : MUD, MUD];
@@ -5101,6 +5176,12 @@ if (coves.length) {
     console.error(`cove: ${JSON.stringify(d.stats)}`);
   }
   console.error(`coves: ${rock} stone/moss bricks, ${small} small pieces`);
+}
+stage('landformDressing');
+{
+  const { dressLandforms } = await import('./landforms.mjs');
+  const n = dressLandforms({ sites: landSites, ground: (x, y) => (H[x * N + y] + 1) * VZ, cw: (x, y) => [X0 + x * CELL + CELL / 2, Y0 + y * CELL + CELL / 2], CELL, push: b => bricks.push(b), hash });
+  console.error(`landform dressing: ${n} bricks`);
 }
 stage('deltaDressing');
 // delta dressing (2026-10-15, see 'delta'): clumps of reeds and cattails on the marsh and

@@ -22,7 +22,7 @@ export function makeBuilder({ cell = 100 } = {}) {
   const cellsOf = ([lo, hi]) => {
     const out = [];
     for (let gx = Math.floor(lo[0] / cell); gx <= Math.floor((hi[0] - 1) / cell); gx++)
-      for (let gy = Math.floor(lo[1] / cell); gy <= Math.floor((hi[1] - 1) / cell); gy++) out.push(gx + ',' + gy);
+      for (let gy = Math.floor(lo[1] / cell); gy <= Math.floor((hi[1] - 1) / cell); gy++) out.push((gx + 32768) * 65536 + gy + 32768); // numeric keys: no string per cell
     return out;
   };
   function add(b, label = '') {
