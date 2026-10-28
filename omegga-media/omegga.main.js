@@ -1847,6 +1847,7 @@ module.exports = class Media {
       if (tv) cartAt = at;
       const world = p => T(p).map((v, i) => v + at[i]);
       const [fw, fh] = tiles ? [L.cols, L.rows] : [n, n];
+      let tuneP = null; // the soundtrack tuner chunk 0 starts (later chunks wait for it)
       const tgState = tiles ? this.tg.newState(L) : null; // what every tile shows (chunks build in order)
       const build = async k => {
         const dur = Math.min(chunkSec, seconds - k * chunkSec);
@@ -1895,7 +1896,16 @@ module.exports = class Media {
           try {
             await cut((src, pre) => run('ffmpeg', ['-v', 'error', '-y', '-ss', String(t0), '-t', String(dur), ...pre, '-i', src, '-vn', '-ac', '1', '-ar', '44100', wav], 300_000),
               quick?.a ?? quick?.v, () => fs.statSync(wav).size >= 44100 * 2 * (dur - 0.3));
-            audio = await this.buildAudioDevice(wav, { mode: 'voice', flags: [...SPEECH_FLAGS, '--no-control-buttons'] });
+            // per-video tuning (owner 2026-10-27 "closer to the source ... video by video"): chunk 0 starts the tuner on its own
+            // audio and plays with the speech flags (no start delay); later chunks use the video's cleanup chain + flags (cached per link)
+            const tuneKey = `stream|${link}`;
+            if (!k && this.config['stream-autotune'] !== false && !this.tuneCache?.has(tuneKey)) {
+              const copy = wav.replace(/\.wav$/, '_tune.wav');
+              fs.copyFileSync(wav, copy);
+              tuneP = this.autoTune(copy, tuneKey).catch(e => (console.error('[media] stream autotune', e.message), null)).finally(() => fs.rmSync(copy, { force: true }));
+            }
+            const t = k ? (this.tuneCache?.get(tuneKey) ?? await tuneP) : this.tuneCache?.get(tuneKey);
+            audio = await this.buildAudioDevice(wav, { mode: 'voice', flags: [...(t?.flags ?? SPEECH_FLAGS), '--no-control-buttons'], filter: t?.filter });
           } catch (e) { console.error(`[media] ogrid soundtrack ${k}`, e); }
           finally { fs.rmSync(wav, { force: true }); }
         }
