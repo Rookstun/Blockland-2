@@ -547,18 +547,7 @@ export function faire({ seed = 1, kind = 'booth', small = false, tiers = ['bronz
   // ============================================================ DRESSING ==
   const wallOf = name => W.filter(w => w.name === name);
   const dark = shade(timber, 0.8);
-  // blade sign on an iron rod, the name on both faces
-  {
-    const two = upTop, fw = wallOf(two ? 'ufront' : 'front')[0];
-    const face = fw.L.relief[0], rz = two ? U + 52 : F + 78, len = 40;
-    box(signA - 1, face - len, rz, signA + 1, face, rz + 2, { color: [40, 40, 44] }, 'sign rod');
-    box(signA - 1, face - 6, rz - 10, signA + 1, face, rz, { color: [40, 40, 44] }, 'sign rod brace');
-    const by0 = face - len + 4, by1 = face - 8, bz1 = rz - 4, bz0 = bz1 - 26;
-    for (const y of [by0 + 2, by1 - 4]) box(signA - 1, y, bz1, signA + 1, y + 2, rz, { color: [40, 40, 44] }, 'sign chain');
-    const put = (b, x, y, z) => { if (!B.add({ ...b, position: [X0 + x, Y0 + y, z] }, 'sign')) throw new Error(`faire ${seed}: sign dropped ${B.dropped.at(-1)}`); };
-    const style = { Font: font, Material: 2, LineHeight: 1.9, Color: { R: 250, G: 236, B: 196, A: 255 }, OutlineColor: { R: 30, G: 20, B: 16, A: 255 } };
-    for (const s of [-1, 1]) plaque({ put, text: signText, facing: [s, 0], x: signA + s, y: (by0 + by1) / 2, z: (bz0 + bz1) / 2, w: (by1 - by0) / 2, h: (bz1 - bz0) / 2, color: trim, style });
-  }
+  // (2026-10-28, owner screenshot 'DRAGONS SOLD OUT': "remove all these stupid signs") no blade sign; signText/font still picked so nothing re-rolls
   // windows: leaded glass (2 x 2 lead grid every 8 / 10), open shutters, a flower box under each
   for (const w of W) for (const o of w.open) {
     if (o.kind !== 'win') continue;
