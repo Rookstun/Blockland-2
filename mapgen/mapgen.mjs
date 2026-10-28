@@ -3025,7 +3025,7 @@ if (tune('landforms', 1, 'poster landforms: mesas, karst, sinkholes, glacier, fj
   }
   for (let h = 0; h < q.length; h++) { const c = q[h], x = (c / N) | 0, y = c % N; block[c] = 1; if (d[c] >= 4) continue; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (inBounds(nx, ny) && d[nx * N + ny] < 0) { d[nx * N + ny] = d[c] + 1; q.push(nx * N + ny); } } }
   const { landforms } = await import('./landforms.mjs');
-  const r = landforms({ N, H, SEA, NZ, free: c => !block[c], desertW, snowW, hash, fbm2, noSmooth, seed: SEED });
+  const r = landforms({ N, H, SEA, NZ, free: c => !block[c], desertW, snowW: (x, y) => Math.max(snowW(x, y), nordicSnowW(x, y)), hash, fbm2, noSmooth, seed: SEED });
   landKind.set(r.cell); landSites = r.sites;
   { const o = [town.fx + TOWN.cells / 2, town.fy + TOWN.cells / 2]; console.error('landform sites (live x,y): ' + r.sites.map(t => `${t.kind} ${(t.x - o[0]) * CELL},${(t.y - o[1]) * CELL}`).join(' | ')); }
 }

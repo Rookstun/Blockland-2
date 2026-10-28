@@ -86,18 +86,23 @@ export function landforms({ N, H, SEA, NZ, free, desertW, snowW, hash, fbm2, noS
     disc(s.x, s.y, r + 1.5, (c, d) => { if (!ok(c, KIND.SINK)) return; if (d <= r) { H[c] = SEA - 2 - Math.floor((1 - d / r) * 3); noSmooth[c] = d > r - 1.2 ? 1 : 0; } cell[c] = KIND.SINK; });
     claim(s.x, s.y, 8); add('sinkhole', s);
   }
+  if (process.env.LAND_DEBUG) { let a = 0, b = 0, c2 = 0; for (let c = 0; c < N * N; c++) { const [x, y] = xy(c); const w = snowW(x, y); if (w > 0.3) { a++; if (H[c] > SEA + 15) { b++; if (free(c)) c2++; } } } log(`glacier cells: snow ${a}, high ${b}, free ${c2}`); }
   // GLACIER: an ice tongue from a high snowy cell down its steepest descent, the surface smoothed
   for (const s of pick(2, 4, c => snowW(...xy(c)) > 0.3 && H[c] > SEA + 15)) {
-    let x = s.x, y = s.y; const path = [];
-    for (let k = 0; k < 90; k++) {
-      path.push([x, y]); let bx = x, by = y, bh = H[at(x, y)];
-      for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) if (inB(x + dx, y + dy) && H[at(x + dx, y + dy)] < bh) { bh = H[at(x + dx, y + dy)]; bx = x + dx; by = y + dy; }
-      if (bx === x && by === y) break; x = bx; y = by; if (H[at(x, y)] <= SEA + 4 || snowW(x, y) < 0.12) break;
+    // toward the lowest cell within 30 (flat snow fields had no strictly-downhill step), wobbling, while it's snowy and free
+    let lx = s.x, ly = s.y, lh = H[at(s.x, s.y)];
+    for (let k = 0; k < 64; k++) { const a = k / 64 * 6.28, x = Math.round(s.x + Math.cos(a) * 30), y = Math.round(s.y + Math.sin(a) * 30); if (inB(x, y) && H[at(x, y)] < lh && H[at(x, y)] > SEA) { lh = H[at(x, y)]; lx = x; ly = y; } }
+    const path = [], L = Math.hypot(lx - s.x, ly - s.y);
+    for (let t = 0; t <= L; t += 1) {
+      const x = Math.round(s.x + (lx - s.x) * t / L + Math.sin(t / 7) * 2), y = Math.round(s.y + (ly - s.y) * t / L + Math.cos(t / 9) * 2);
+      if (!inB(x, y) || !free(at(x, y)) || snowW(x, y) < 0.08) break; path.push([x, y]);
     }
+    // a steady descent along it (ice flows smooth)
+    const zs = path.map(([x, y]) => H[at(x, y)]), z0 = zs[0] ?? 0, z1 = zs[zs.length - 1] ?? 0;
     if (path.length < 15) continue;
     path.forEach(([px, py], i) => {
-      const w = 3 + 2.5 * Math.sin(Math.PI * i / path.length), z = H[at(px, py)];
-      disc(px, py, w, (c, d) => { if (ok(c, KIND.GLACIER) && H[c] >= z - 2) { H[c] = Math.round((H[c] + z * 2) / 3); cell[c] = KIND.GLACIER; } });
+      const w = 3 + 2.5 * Math.sin(Math.PI * i / path.length), z = Math.round(z0 + (z1 - z0) * i / Math.max(1, path.length - 1));
+      disc(px, py, w, (c, d) => { if (ok(c, KIND.GLACIER)) { H[c] = Math.round((H[c] + z * 3) / 4); cell[c] = KIND.GLACIER; } });
     });
     path.forEach(([px, py]) => claim(px, py, 4)); add('glacier', { ...s, len: path.length });
   }
