@@ -377,7 +377,7 @@ const WEAPON_NAMES = {
 // + (2026-10-28, owner: "when I said archive, I said remove ... get rid of that fucking library, get rid of that church ...
 //   I want these fucking little farm things gone, I want these little towers gone"): chapels, libraries, dining halls,
 //   vegetable gardens, hamlet fields + pens, watchtowers. Ghosted the same way (nothing else moves), never built.
-export const LEGACY = new Set(['tavern', 'warehouse', 'temple', 'bank', 'sodashack', 'sodamarket', 'chapel', 'library', 'dininghall', 'garden', 'field', 'watchtower', 'windmill']); // + windmills (owner 2026-10-28: "remove that too")
+export const LEGACY = new Set(['tavern', 'warehouse', 'temple', 'bank', 'sodashack', 'sodamarket', 'chapel', 'library', 'dininghall', 'garden', 'field', 'watchtower', 'windmill', 'casino']); // + windmills (owner 2026-10-28: "remove that too"), the casino ("remove casino")
 export const WEAPON_SHOP = { W: 52, D: 40, FC: 12 }; // studs: building W x D, forecourt FC deep
 // Houses (2026-10-03, owner): shapedhouse.mjs rect / L / T houses with rounded
 // roofs and attics; the blacksmith houses (HOUSE_SHOP_CHANCE) stay wallgen
@@ -511,7 +511,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // LEGACY types build as ghosts: every brick keeps its space, none reaches the output; their stands are dropped
   let ghosting = false;
   { const put0 = put; put = (b, ...r) => put0(ghosting ? { ...b, ghost: 1 } : b, ...r); }
-  const legacyBuild = (type, f) => { if (!LEGACY.has(type)) return f(); const n = stats.houseShops.length; ghosting = true; try { f(); } finally { ghosting = false; stats.houseShops.length = n; } };
+  const legacyBuild = (type, f) => { if (!LEGACY.has(type)) return f(); const n = stats.houseShops.length, cas = stats.casino; ghosting = true; try { f(); } finally { ghosting = false; stats.houseShops.length = n; stats.casino = cas; } }; // ghosts keep no stands, games or staff
 
   // furniture switch: while FURN > 0 every piece is furniture and is only laid when FURNITURE is on
   let FURN = 0;
