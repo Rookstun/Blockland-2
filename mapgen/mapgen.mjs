@@ -4409,8 +4409,7 @@ for (const d of DUNGEONS) for (const at of d.keepPots ?? []) pots.push({ at, whe
   // with their own hash salts and tries per slot, so nothing placed before them moves.
   const landmarks = { count: 0, kinds: {} };
   {
-    const want = { altar: tune('landmarks.altars', 6, 'altars to made-up gods (x K)'), brokensign: tune('landmarks.brokenSigns', 10, 'snapped fingerposts by the roads (x K)'),
-      library: tune('landmarks.libraries', 3, 'lone little libraries (x K)'), warehouse: tune('landmarks.warehouses', 3, 'LEGACY warehouses (x K)') };
+    const want = { altar: tune('landmarks.altars', 6, 'altars to made-up gods (x K)'), brokensign: tune('landmarks.brokenSigns', 10, 'snapped fingerposts by the roads (x K)') }; // (2026-10-28, owner: "archive" meant remove) no libraries / LEGACY warehouses
     let slot = 0;
     for (const [kind, n0] of Object.entries(want)) for (let n = 0, tries = 0, n1 = Math.round(n0 * K); n < n1; tries++) {
       if (tries >= 3000) { n++; slot++; tries = -1; continue; }
