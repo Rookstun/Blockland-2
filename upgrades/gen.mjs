@@ -9,7 +9,7 @@
 //   regen  heals level HP per second
 //   magnet bot kills: level*10% chance the kill pays coins straight to you (DamageLimit/20 + 5)
 //   vamp   heals level*5% of the damage you deal
-//   hp     max health 100 + 66.7 per level (game max health 500; the excess goes on as damage, regen never heals past it)
+//   hp     max health = skeleton_drop's level cap (100 +5%/XP level) + 66.7 per level (game max health 500; the excess goes on as damage, regen never heals past it)
 //   node upgrades/gen.mjs && node upgrades/build.mjs
 import { writeFileSync } from 'node:fs';
 export const UP = [
@@ -20,6 +20,8 @@ const AMMO = [['Arrow', 1], ['Light', 3], ['Medium', 2], ['Heavy', 1], ['Magnum'
 const TICK = 0.2, BASE_HP = 100, HP_PER = (500 - 100) / LEVELS, // game max health is set to 500: level 6 = all of it
   AMMO_EVERY = 5;
 const I = s => '${' + s + '}';
+// = skeleton_drop's level cap (100 +5% per XP level above 1) + Max HP upgrade; keep both in step
+const CAP = (c, lhp) => `${BASE_HP}.0 * (1.0 + 0.05 * (max(1.0, ${c}.GetLeaderboard("Level")) - 1.0)) + ${HP_PER.toFixed(4)} * ${lhp}`;
 
 // one block per column, lets only (a Var read after its Set in one exec chain is stale)
 // level reached with coins C from level c0: max L <= want with C >= 100 * (2^L - 2^c0)
@@ -83,7 +85,7 @@ on Clock(interval = ${TICK}) {
       let dt = n * ${TICK}
       let lRegen = p.GetLeaderboard("up_regen")
       let lHp = p.GetLeaderboard("up_hp")
-      let cap = min(d.DamageLimit, ${BASE_HP}.0 + ${HP_PER.toFixed(4)} * lHp)
+      let cap = min(d.DamageLimit, ${CAP('p', 'lHp')})
       let floorDmg = d.DamageLimit - cap
       // only touch damage when it changes (owner: the game's own regen healed past the level cap and
       // ticked the hurt sound forever); dead characters left alone
@@ -109,7 +111,7 @@ on CharacterDamaged() -> (victim, damage, attacker, attackerWeapon, attackerWeap
     let lVamp = ac.GetLeaderboard("up_vamp")
     if lVamp > 0 {
       let ad = attacker.GetDamage()
-      attacker.SetDamage(max(ad.DamageLimit - min(ad.DamageLimit, ${BASE_HP}.0 + ${HP_PER.toFixed(4)} * ac.GetLeaderboard("up_hp")), ad.Damage - damage * 0.05 * lVamp))
+      attacker.SetDamage(max(ad.DamageLimit - min(ad.DamageLimit, ${CAP('ac', 'ac.GetLeaderboard("up_hp")')}), ad.Damage - damage * 0.05 * lVamp))
     }
   }
 }

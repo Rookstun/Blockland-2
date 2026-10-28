@@ -122,7 +122,8 @@ ${pad}  fontSize = 22, justify = Center, outlineSize = 2, lifetime = 86400.0, te
 // character's health is over that, the excess goes on as damage: on spawn, on
 // level-up and on every HUD tick, so heals can't push it over either.
 const HP_MAX = 400, BASE_HP = 100, HP_PER_LEVEL = 0.05;
-const capHp = (ch, lvl, pad, k) => `${pad}let capMax${k} = ${BASE_HP}.0 * (1.0 + ${HP_PER_LEVEL} * (${lvl} - 1))
+// (2026-10-28) + the upgrades obelisk's Max HP level (leaderboard up_hp, 66.6667 each; upgrades/gen.mjs uses the same cap)
+const capHp = (ch, lvl, pad, k) => `${pad}let capMax${k} = ${BASE_HP}.0 * (1.0 + ${HP_PER_LEVEL} * (${lvl} - 1)) + 66.6667 * ${ch}.ControllerOf().GetLeaderboard("up_hp")
 ${pad}let capDmg${k} = ${ch}.GetDamage()
 ${pad}let capHp${k} = capDmg${k}.DamageLimit - capDmg${k}.Damage
 ${pad}if capHp${k} > capMax${k} {

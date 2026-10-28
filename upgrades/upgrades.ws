@@ -142,7 +142,7 @@ on Clock(interval = 0.2) {
       let dt = n * 0.2
       let lRegen = p.GetLeaderboard("up_regen")
       let lHp = p.GetLeaderboard("up_hp")
-      let cap = min(d.DamageLimit, 100.0 + 66.6667 * lHp)
+      let cap = min(d.DamageLimit, 100.0 * (1.0 + 0.05 * (max(1.0, p.GetLeaderboard("Level")) - 1.0)) + 66.6667 * lHp)
       let floorDmg = d.DamageLimit - cap
       // only touch damage when it changes (owner: the game's own regen healed past the level cap and
       // ticked the hurt sound forever); dead characters left alone
@@ -181,7 +181,7 @@ on CharacterDamaged() -> (victim, damage, attacker, attackerWeapon, attackerWeap
     let lVamp = ac.GetLeaderboard("up_vamp")
     if lVamp > 0 {
       let ad = attacker.GetDamage()
-      attacker.SetDamage(max(ad.DamageLimit - min(ad.DamageLimit, 100.0 + 66.6667 * ac.GetLeaderboard("up_hp")), ad.Damage - damage * 0.05 * lVamp))
+      attacker.SetDamage(max(ad.DamageLimit - min(ad.DamageLimit, 100.0 * (1.0 + 0.05 * (max(1.0, ac.GetLeaderboard("Level")) - 1.0)) + 66.6667 * ac.GetLeaderboard("up_hp")), ad.Damage - damage * 0.05 * lVamp))
     }
   }
 }
