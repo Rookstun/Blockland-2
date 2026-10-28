@@ -28,8 +28,13 @@ const bricks = []; let ext;
 for (const f of fs.readdirSync(DIR).filter(f => /^chunk_\d+\.json$/.test(f)).sort())
   for (const o of JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')).ops) if (o.op === 'bricks') { for (const b of o.bricks) bricks.push(b); ext ??= o.externalAssets; }
 log('loading', bricks.length);
-const r = await job([{ op: 'bricks', at: [0, 0, 0], bricks, owner: OWNER, externalAssets: ext, captureMs: 30000 }], 'all');
-log('loaded; warnings', (JSON.stringify(r).match(/overlapping/g) || []).length);
+// a 1.7M-brick bricks op is too big for the bridge job JSON (2026-10-27: nothing loaded, no error): write the brz here, ONE Prefab.Load
+const brs = await import(path.join(SRV, 'plugins/bridge/lib/brs.mjs')), assets = [], materials = [], ix = (l, n) => { const i = l.indexOf(n); return i < 0 ? l.push(n) - 1 : i; };
+const out = bricks.map(({ asset, material, label, group, ...b }) => ({ ...b, asset_name_index: ix(assets, asset ?? 'PB_DefaultBrick'), material_index: ix(materials, material ?? 'BMC_Plastic'), owner_index: 1 }));
+fs.writeFileSync(path.join(SRV, 'data/Saved/Prefabs/newworld_all.brz'), brs.writeBrzLegacy({ brick_assets: assets, materials, brick_owners: [{ ...OWNER, bricks: out.length }], bricks: out }, ext ? { externalAssets: ext } : {}));
+const r = await job([{ op: 'cmd', line: 'br.Prefab.Load "newworld_all" 0 0 0 0 16', captureMs: 40000 }], 'all');
+const txt = JSON.stringify(r); if (!/overlapping|Prefab/.test(txt) && !r.ok) throw new Error('load failed ' + txt.slice(0, 500));
+log('loaded; overlap lines', (txt.match(/overlapping[^"]*/g) || []).join(' '));
 await job([{ op: 'cmd', line: 'br.World.Save', captureMs: 5000 }], 'save'); await sleep(10000);
 // old extras -> nothing -> new: clears every old extra (some have their own owners), loads every new one
 const EMPTY = fs.mkdtempSync('/tmp/noex');
