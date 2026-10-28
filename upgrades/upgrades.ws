@@ -122,6 +122,8 @@ on GlobalCustomEvent("upg") -> (who: character, id: int) {
   }
   // every click answers with all of that player's levels
   ctrl.ShowChatMessage("<color=\"88ccff\">Ammo Regen ${ctrl.GetLeaderboard("up_ammo")} | Health Regen ${ctrl.GetLeaderboard("up_regen")} | Coin Magnet ${ctrl.GetLeaderboard("up_magnet")} | Vampirism ${ctrl.GetLeaderboard("up_vamp")} | Max HP ${ctrl.GetLeaderboard("up_hp")}</> | <color=\"f6ce2a\">${ctrl.GetLeaderboard("coins")} coins</>")
+  // the obelisk shows the clicker's levels (panel.mjs paints its tiles)
+  SendGlobalCustomEvent("upg.show", ctrl.GetLeaderboard("up_ammo"), ctrl.GetLeaderboard("up_regen"), ctrl.GetLeaderboard("up_magnet"), ctrl.GetLeaderboard("up_vamp"), ctrl.GetLeaderboard("up_hp"))
 }
 
 // one player per tick, round robin: each visit covers (players x 0.2 s)

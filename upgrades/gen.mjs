@@ -63,6 +63,8 @@ on GlobalCustomEvent("upg") -> (who: character, id: int) {
 ${buy}
   // every click answers with all of that player's levels
   ctrl.ShowChatMessage("<color=\\"88ccff\\">${UP.map(([k, n]) => `${n} ${I(`ctrl.GetLeaderboard("up_${k}")`)}`).join(' | ')}</> | <color=\\"f6ce2a\\">${I('ctrl.GetLeaderboard("coins")')} coins</>")
+  // the obelisk shows the clicker's levels (panel.mjs paints its tiles)
+  SendGlobalCustomEvent("upg.show", ${UP.map(([k]) => `ctrl.GetLeaderboard("up_${k}")`).join(', ')})
 }
 
 // one player per tick, round robin: each visit covers (players x ${TICK} s)
