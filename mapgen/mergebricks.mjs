@@ -45,6 +45,21 @@ export function mergeBricks(bricks) {
   return saved;
 }
 
+/** drops every brick whose box overlaps one kept before it (the game rejects them on load: 262 on seed 2034897508);
+ * fixed-size B_ props count touching as overlapping too (a turkey resting on a table top was rejected) */
+export function dropOverlaps(bricks, fixed) {
+  const CELL = 200, grid = new Map(), boxes = []; let k = 0;
+  for (const b of bricks) {
+    const [lo, hi] = worldBox(b, fixed), e = b.asset?.startsWith('B_') ? 0.5 : 0, cells = [];
+    for (let x = Math.floor(lo[0] / CELL); x <= Math.floor((hi[0] - 1) / CELL); x++) for (let y = Math.floor(lo[1] / CELL); y <= Math.floor((hi[1] - 1) / CELL); y++) cells.push(x + ',' + y);
+    const hit = cells.some(c => (grid.get(c) ?? []).some(j => { const [a0, a1, e2] = boxes[j], t = Math.max(e, e2); return [0, 1, 2].every(i => lo[i] < a1[i] + t && a0[i] < hi[i] + t); }));
+    if (hit) continue;
+    const j = boxes.push([lo, hi, e]) - 1; for (const c of cells) (grid.get(c) ?? grid.set(c, []).get(c)).push(j);
+    bricks[k++] = b;
+  }
+  const n = bricks.length - k; bricks.length = k; return n;
+}
+
 // self-check: node mergebricks.mjs
 if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}` || process.argv[1]?.endsWith('mergebricks.mjs')) {
   const assert = (await import('assert')).strict;
@@ -58,5 +73,6 @@ if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}` || proc
   // boxes merge on x then y into one slab
   const box = (x, y) => ({ asset: 'PB_DefaultMicroBrick', size: [5, 5, 2], position: [x, y, 2], color: [0, 0, 0] });
   const q = [box(0, 0), box(10, 0), box(0, 10), box(10, 10)]; assert.equal(mergeBricks(q), 3); assert.deepEqual(q[0].size, [10, 10, 2]);
+  const o = [box(0, 0), box(5, 0), box(20, 0)]; assert.equal(dropOverlaps(o), 1); assert.equal(o.length, 2);
   console.log('mergebricks ok');
 }

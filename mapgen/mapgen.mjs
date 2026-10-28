@@ -5823,6 +5823,7 @@ if (!DRY) {
   }
   // (owner 2026-10-27: 'neighboring bricks that could be extended should be extended') same-everything neighbours become one brick
   if (tune('output.merge', 1, 'merge neighbouring identical bricks (wedges along their length, boxes any axis)')) { const { mergeBricks } = await import('./mergebricks.mjs'); console.error(`merged bricks: -${mergeBricks(bricks)}`); }
+  { const { dropOverlaps } = await import('./mergebricks.mjs'); console.error(`overlapping bricks dropped (the game would reject them): ${dropOverlaps(bricks, BUILDER_FIXED)}`); }
   for (const f of fs.readdirSync(OUT)) if (/^chunk_\d+\.json$/.test(f)) fs.rmSync(path.join(OUT, f));
   // bottom-up, west to east, so the map rises out of the ground
   bricks.sort((a, b) => (a.position[2] - a.size[2]) - (b.position[2] - b.size[2]) || a.position[0] - b.position[0]);
