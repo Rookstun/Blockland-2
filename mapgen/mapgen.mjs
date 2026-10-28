@@ -4346,7 +4346,7 @@ for (const d of DUNGEONS) for (const at of d.keepPots ?? []) pots.push({ at, whe
       const o = at(cx, cy, H[c] + 1), w = wrap(o[0] - CELL / 2, o[1] - CELL / 2, o[2]);
       buildSign({ put: w.put, text, facing: out, broken });
       if (w.b.dropped.length) continue;
-      for (const { label, ...b } of w.b.bricks) if (keep(b)) bricks.push(b);
+      for (const { label, ...b } of w.b.bricks) if (keep(b)) bricks.push({ ...b, ghost: 1 }); // town/hamlet/ruins name signs: ghosts (owner 2026-10-28 "i still see signs")
       reserved[c] = 1;
       signs.push({ text, at: o.map(Math.round) });
       return true;
@@ -4794,7 +4794,8 @@ stage('fingerposts');
     const [wx, wy, wz] = at(x, y, H[x * N + y] + 1);
     const sb = signpost(boards, x + y).map(b => ({ ...b, position: [b.position[0] + wx, b.position[1] + wy, b.position[2] + wz] }));
     if (!sb.every(b => { const [lo, hi] = worldBox(b, BUILDER_FIXED); return shrineIdx.free(lo, hi); })) continue;
-    for (const b of sb) { bricks.push(b); shrineIdx.add(b); }
+    // (2026-10-28, owner: "i still see signs") fingerposts are ghosts: placed as before (nothing moves), never in the world
+    for (const b of sb) { const g = { ...b, ghost: 1 }; bricks.push(g); shrineIdx.add(g); }
     for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) { blocked[(x + a) * N + y + b] = 1; keepOut[(x + a) * N + y + b] = 1; }
     posts.push([x, y]);
   }
