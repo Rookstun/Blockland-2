@@ -7,7 +7,7 @@ Owner = renderman (in-game soapstain22, display name 'abysmal garbage'). Terse, 
 **NEVER QUEUE BRICKS, NEVER PACE (owner, furious, 2026-10-26, said many times): ALL bricks go in ONE `bricks` op in ONE job. No add_NNN batches, no chunking, no queue of jobs, no loop sending batches, no waits/sleeps/gaps, no 'procedural' one-at-a-time placement, no sitting watching a deploy. Wipe old builds with one `br.Bricks.Clear <owner> 1` (give every build its own owner), then the single bricks op.**
 
 ## Current state (2026-10-22)
-- ACTIVE WORLD = `test 2026-10-22` (cp of `site 2026-10-18`, for the owner's complaint fixes; AUTOLOAD still = `site 2026-10-18`, so a restart goes back to site). Main world = `site 2026-10-18` (map seed 2029224243 x2, params out_site_1021_params.json, MAPGEN_LENIENT=1, built with node --max-old-space-size=12288). Never load `site 2026-10-16` (micro-terrain experiment). Old RPG world `rizz` untouched since 10-16.
+- ACTIVE WORLD = `ok` (2026-10-27: new seed 2034897508 from mapgen/out_newseed, quests plugin off; SaveAs-made so Sandbox mode). Older: `backup pre_bushweapon site 2026-10-25`, `site 2026-10-18`.
 - Live map in site = out_site_1021full (river rework) + later deltas (cut walls, nobank, nosoda, notav, flush cabinets; newest base named in notes/mapgen.md + notes/shops.md). Not deployed yet: snow tier fix (~/tierdeploy), footpaths/grass tones. Details: notes/mapgen.md.
 
 ## Git
