@@ -2919,6 +2919,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
           }
       }
     };
+    // (2026-10-28, owner: "remove signs and fountain at spawn") the fountain, the notice boards and the statue
+    // plaques build as ghosts (space kept, nothing else moves), never in the world
+    ghosting = true;
     // ---- fountain: stepped octagonal basin, two tiers of bowls with falling water
     const BED = { color: [62, 78, 86] };
     ring(0, 4, 0, 144, { color: PALE });                 // step
@@ -2945,6 +2948,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       box(x - 4, y - 4, 32, x + 4, y + 4, 44, { asset: MB, color: CUT });
       box(x - 5, y - 5, 44, x + 5, y + 5, 52, { asset: MB, ...GLOW([255, 200, 120], 3) });
     }
+    ghosting = false;
     // a local frame at (x, y) whose front (+b) faces (fx, fy); a runs along it
     const frame = (x, y, fx, fy) => {
       const ux = -fy, uy = fx;
@@ -2983,7 +2987,9 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
       bx(-22, -22, 8, 22, 22, 44, { color: CUT });   // die
       bx(-26, -26, 44, 26, 26, 50, { color: PALE }); // cornice
       const [px, py] = at(0, 23);
+      ghosting = true;
       plaque({ put, text, facing: [fx, fy], x: px, y: py, z: 26, w: 18, h: 8, color: [60, 56, 52], style: { LineHeight: 3, Color: { R: 230, G: 190, B: 110, A: 255 } } });
+      ghosting = false;
       // the figure, about 1.4 players tall
       bx(-12, -6, 50, -2, 6, 90, MARBLE); bx(2, -6, 50, 12, 6, 90, MARBLE);   // legs
       bx(-14, -8, 90, 14, 8, 126, MARBLE);                                     // body
@@ -3008,6 +3014,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         for (const a of [-8, 0, 6]) bx(a, 8, 150, a + 2, 10, 154, BRONZE);     // crown points
       }
     }));
+    ghosting = true;
     // ---- notice boards: one each side behind the spawn point, both faces written
     NOTICES.forEach((n, k) => {
       const [cx, cy] = [[330, 0], [0, 330], [-330, 0], [0, -330]][k], [fx, fy] = toCentre(cx, cy);
@@ -3024,6 +3031,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
         plaque({ put, text, facing: [fx * s, fy * s], x: px, y: py, z: 67, w: 56, h: 34, color: [236, 228, 206], style });
       }
     });
+    ghosting = false;
   }
 
   // -------------------------------------------------------- soda market --
