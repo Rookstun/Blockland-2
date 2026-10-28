@@ -2799,7 +2799,7 @@ const CUT = {
   reach: tune('cut.reach', 3, 'cells from the road a cut wall reaches'),
   archMin: tune('cut.archMin', 6, 'bricks deep on both sides for an arch over the cut'),
   archGap: tune('cut.archGap', 10, 'road samples between arches'),
-  archChance: tune('cut.archChance', 0.6, 'share of deep-cut spots with an arch (tunnel mouths always)'),
+  archChance: tune('cut.archChance', 0, 'share of deep-cut spots with an arch (tunnel mouths always); 0 since 2026-10-28, owner: nothing over the roads'),
   clear: tune('cut.clear', 96, 'arch clearance over the road (units)'),
 };
 const cutRock = new Uint8Array(N * N), cutTop = new Int16Array(N * N), cutBase = new Int16Array(N * N);
@@ -2809,7 +2809,8 @@ if (CUT_ON) {
   let opened = 0;
   for (let c = 0; c < N * N; c++) {
     const zr = tunnelZ[c];
-    if (zr >= 0 && H[c] < zr + TUNNEL.high + 1) { H[c] = zr; tunnelZ[c] = -1; pathCell[c] = 1; roadGraded[c] = 1; opened++; }
+    if (zr >= 0) { H[c] = zr; // (owner 2026-10-28: "everything above a path, just remove it") every tunnel opens as a cut, not only the shallow ones
+      tunnelZ[c] = -1; pathCell[c] = 1; roadGraded[c] = 1; opened++; }
   }
   const road = c => roadGraded[c] && pathCell[c] && tunnelZ[c] < 0 && !deck[c] && !riverCell[c];
   const dist = new Uint8Array(N * N).fill(255), base = new Int16Array(N * N);
@@ -5839,6 +5840,26 @@ const SHIFT = [-(X0 + (town.fx + TOWN.cells / 2) * CELL), -(Y0 + (town.fy + TOWN
 // the map stays byte-identical. Live: cleared by bridge/tools/noflowers.py.
 // (owner 2026-10-10: "remove branches and twigs") B_Branch goes the same way
 // (owner 2026-10-12: "remove bushes that dont drop anything", "these ferns need to go") decorative B_Bush and B_Fern dropped too
+// (owner 2026-10-28: "everything above a path, just remove it") footpaths ran under eaves, porch
+// roofs and canopies with exactly a player's height of room: every brick that starts 2+ bricks over
+// a footpath cell's surface (up to 25 bricks up) and covers that cell is dropped
+if (tune('foot.clearAbove', 1, 'drop every brick hanging over a footpath (0 = keep)')) {
+  let k = 0; const dropped = {};
+  for (const b of bricks) {
+    const [lo, hi] = worldBox(b, BUILDER_FIXED);
+    let over = false;
+    for (let x = Math.floor((lo[0] + 2 - X0) / CELL); !over && x <= Math.floor((hi[0] - 2 - X0) / CELL); x++)
+      for (let y = Math.floor((lo[1] + 2 - Y0) / CELL); y <= Math.floor((hi[1] - 2 - Y0) / CELL); y++) {
+        if (!inBounds(x, y) || !footCell[x * N + y]) continue;
+        const floor = (H[x * N + y] + 1) * VZ;
+        if (lo[2] >= floor + 20 && lo[2] < floor + 300) { over = true; break; }
+      }
+    if (over) { dropped[b.asset ?? 'box'] = (dropped[b.asset ?? 'box'] ?? 0) + 1; continue; }
+    bricks[k++] = b;
+  }
+  console.error(`over footpaths: ${bricks.length - k} bricks dropped ${JSON.stringify(dropped)}`);
+  bricks.length = k;
+}
 const FLOWERS = new Set(['B_Flower', 'B_Small_Flower', 'B_Tulip', 'B_Rose', 'B_Lotus_1x1', 'B_Lotus_2x2', 'B_Branch', 'B_Fern', 'B_Leaf_Bush', 'B_Pumpkin']); // owner: "no flowers or any of that shit" (decorative B_Bush: dropped in the smashable block below)
 {
   let k = 0;
