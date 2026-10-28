@@ -8,16 +8,8 @@
 // player joins, or their XP is found lower than saved (XP never goes down, so
 // that means the game reset it), the saved values are written back.
 //
-// Items (owner 2026-10-11: "they NEED to keep the data"): the skeleton_drop
-// chip logs "[inv] <userId> slot0|..|slot9" (item classes) whenever a player's
-// slots change; they are kept here. The chip gives slots back itself after a
-// rejoin (it logs "[inv-restored] <userId>"); when it has nothing (a restart,
-// a new chip) the saved items are given back here (GiveItem, plain versions;
-// the arming sword is left to the chip, which gives it at the player's tier).
-// Names (2026-10-15): GiveItem gives plain items, so before giving them the
-// shop names go to the chip as catalog ids (itemcatalog.json index + 1, the
-// chip's copy) in leaderboards InvName0-9 + InvPend (how many); the chip turns
-// each matching plain item back into that shop's named item.
+// Items: the skeleton_drop chip's "[inv]" slot lines are still kept (used by /clear);
+// giving them back on join was removed 2026-10-28 (it gave stacks of knives; the weapon bank replaced it).
 //
 //   !progress        your saved values
 //   /eco give|take|set <player|all> <n>   change coins (host + config `allowed`); offline players too
@@ -28,7 +20,6 @@
 const KEYS = ['coins', 'XP', 'Level', 'SwordTier'];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const clean = s => String(s).replace(/[<>"\\;]/g, '');
-const CAT_ID = new Map(require('./itemcatalog.json').map((e, i) => [e.name, i + 1]));
 
 module.exports = class Progress {
   constructor(omegga, config, store) {
@@ -38,7 +29,6 @@ module.exports = class Progress {
     this.timer = null;
     this.busy = false;
     this.joined = new Map(); // userId -> join time (ms)
-    this.chipRestored = new Map(); // userId -> time the chip said it restored them
   }
 
   async init() {
@@ -106,27 +96,14 @@ module.exports = class Progress {
       if (slots.some(Boolean)) this.store.set('inv:' + m[1], { slots, names, at: Date.now() }).catch(() => {});
       return;
     }
-    const r = /\[inv-restored\] ([0-9a-f-]{36})/.exec(line);
-    if (r) this.chipRestored.set(r[1], Date.now());
   }
 
   async onJoin(p) {
-    const joinedAt = Date.now();
     await sleep((this.config?.joinDelay ?? 8) * 1000); // let them spawn first
     const player = this.omegga.getPlayer(p.id ?? p.name);
     if (!player) return;
-    // items: only when the chip had nothing to give back since they joined
-    const inv = await this.store.get('inv:' + player.id);
-    if (inv && !((this.chipRestored.get(player.id) ?? 0) >= joinedAt)) {
-      // GiveItem can only give plain items: the shop names come back only from the chip's own memory
-      const items = inv.slots.map((it, i) => ({ it, name: inv.names?.[i] })).filter(x => x.it && x.it !== 'Weapon_ArmingSword');
-      const ids = items.map(x => CAT_ID.get(x.name) ?? 0).filter(Boolean).slice(0, 10);
-      for (let j = 0; j < 10; j++) player.setLeaderboard('InvName' + j, ids[j] ?? 0);
-      player.setLeaderboard('InvPend', ids.length);
-      for (const x of items) player.giveItem(x.it);
-      if (items.length) this.omegga.whisper(player.name, `<color="8cf">Your items are back: ${items.map(x => clean(x.name ?? x.it.replace(/^Weapon_/, ''))).join(', ')}.</>`);
-      console.log(`[progress] gave ${player.name} ${items.map(x => x.it).join(', ')} (${ids.length} named)`);
-    } else player.setLeaderboard('InvPend', 0); // nothing given here: no stale names for later pickups
+    // item restore removed 2026-10-28 (owner: gave 15 knives, replaced by the weapon bank)
+    player.setLeaderboard('InvPend', 0);
     const saved = await this.store.get('p:' + player.id);
     if (!saved) return;
     if (saved.ecoPend) { // /eco changed their coins while they were offline

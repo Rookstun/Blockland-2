@@ -98,280 +98,280 @@ mod enemyHud(who: controller, bot: character) {
   who.DisplayText("<b>${BARS[seg]}</>  ${floor(left + 0.5)} / ${lim}", anchorX = 0.5, anchorY = 0.0, pivotX = 0.5, pivotY = 0.0, positionX = 0.0, positionY = 182.0,
     fontSize = 22, justify = Center, outlineSize = 2, lifetime = 5.0, textId = 52011)
 }
-// a purchase in the last 20 s of this item class's price -> its shop name
+// a purchase in the last 1800 s of this item class's price -> its shop name
 mod buyName(uid: string, it: entity) -> string {
   if it == $BRItemBase/Weapon_Bow {
-    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 20 {
+    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 1800 {
       invBuy.remove("${uid}:50")
       return "Bow"
     }
-    if invBuy.has("${uid}:20000") && GetUnixTime() - invBuy.get("${uid}:20000") <= 20 {
+    if invBuy.has("${uid}:20000") && GetUnixTime() - invBuy.get("${uid}:20000") <= 1800 {
       invBuy.remove("${uid}:20000")
       return "Magic Bow"
     }
-    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 20 {
+    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 1800 {
       invBuy.remove("${uid}:4000")
       return "Maple Bow"
     }
-    if invBuy.has("${uid}:400") && GetUnixTime() - invBuy.get("${uid}:400") <= 20 {
+    if invBuy.has("${uid}:400") && GetUnixTime() - invBuy.get("${uid}:400") <= 1800 {
       invBuy.remove("${uid}:400")
       return "Oak Bow"
     }
-    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 20 {
+    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 1800 {
       invBuy.remove("${uid}:1000")
       return "Willow Bow"
     }
-    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 20 {
+    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 1800 {
       invBuy.remove("${uid}:8000")
       return "Yew Bow"
     }
   } else if it == $BRItemBase/Weapon_BoltActionRifle {
-    if invBuy.has("${uid}:7000") && GetUnixTime() - invBuy.get("${uid}:7000") <= 20 {
+    if invBuy.has("${uid}:7000") && GetUnixTime() - invBuy.get("${uid}:7000") <= 1800 {
       invBuy.remove("${uid}:7000")
       return "Bolt-Action Rifle"
     }
   } else if it == $BRItemBase/Weapon_Derringer {
-    if invBuy.has("${uid}:300") && GetUnixTime() - invBuy.get("${uid}:300") <= 20 {
+    if invBuy.has("${uid}:300") && GetUnixTime() - invBuy.get("${uid}:300") <= 1800 {
       invBuy.remove("${uid}:300")
       return "Derringer"
     }
   } else if it == $BRItemBase/Weapon_HuntingShotgun {
-    if invBuy.has("${uid}:1800") && GetUnixTime() - invBuy.get("${uid}:1800") <= 20 {
+    if invBuy.has("${uid}:1800") && GetUnixTime() - invBuy.get("${uid}:1800") <= 1800 {
       invBuy.remove("${uid}:1800")
       return "Hunting Shotgun"
     }
   } else if it == $BRItemBase/Weapon_LeverActionRifle {
-    if invBuy.has("${uid}:3500") && GetUnixTime() - invBuy.get("${uid}:3500") <= 20 {
+    if invBuy.has("${uid}:3500") && GetUnixTime() - invBuy.get("${uid}:3500") <= 1800 {
       invBuy.remove("${uid}:3500")
       return "Lever-Action Rifle"
     }
   } else if it == $BRItemBase/Weapon_MagnumPistol {
-    if invBuy.has("${uid}:12000") && GetUnixTime() - invBuy.get("${uid}:12000") <= 20 {
+    if invBuy.has("${uid}:12000") && GetUnixTime() - invBuy.get("${uid}:12000") <= 1800 {
       invBuy.remove("${uid}:12000")
       return "Magnum"
     }
   } else if it == $BRItemBase/Weapon_Revolver {
-    if invBuy.has("${uid}:800") && GetUnixTime() - invBuy.get("${uid}:800") <= 20 {
+    if invBuy.has("${uid}:800") && GetUnixTime() - invBuy.get("${uid}:800") <= 1800 {
       invBuy.remove("${uid}:800")
       return "Revolver"
     }
   } else if it == $BRItemBase/Weapon_ArmingSword {
-    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 20 {
+    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 1800 {
       invBuy.remove("${uid}:8000")
       return "Adamant Sword"
     }
-    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 20 {
+    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 1800 {
       invBuy.remove("${uid}:2000")
       return "Black Sword"
     }
-    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 20 {
+    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 1800 {
       invBuy.remove("${uid}:50")
       return "Bronze Sword"
     }
-    if invBuy.has("${uid}:400") && GetUnixTime() - invBuy.get("${uid}:400") <= 20 {
+    if invBuy.has("${uid}:400") && GetUnixTime() - invBuy.get("${uid}:400") <= 1800 {
       invBuy.remove("${uid}:400")
       return "Iron Sword"
     }
-    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 20 {
+    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 1800 {
       invBuy.remove("${uid}:4000")
       return "Mithril Sword"
     }
-    if invBuy.has("${uid}:20000") && GetUnixTime() - invBuy.get("${uid}:20000") <= 20 {
+    if invBuy.has("${uid}:20000") && GetUnixTime() - invBuy.get("${uid}:20000") <= 1800 {
       invBuy.remove("${uid}:20000")
       return "Rune Sword"
     }
-    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 20 {
+    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 1800 {
       invBuy.remove("${uid}:1000")
       return "Steel Sword"
     }
   } else if it == $BRItemBase/Weapon_Zweihander {
-    if invBuy.has("${uid}:16000") && GetUnixTime() - invBuy.get("${uid}:16000") <= 20 {
+    if invBuy.has("${uid}:16000") && GetUnixTime() - invBuy.get("${uid}:16000") <= 1800 {
       invBuy.remove("${uid}:16000")
       return "Adamant 2h Sword"
     }
-    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 20 {
+    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 1800 {
       invBuy.remove("${uid}:4000")
       return "Black 2h Sword"
     }
-    if invBuy.has("${uid}:100") && GetUnixTime() - invBuy.get("${uid}:100") <= 20 {
+    if invBuy.has("${uid}:100") && GetUnixTime() - invBuy.get("${uid}:100") <= 1800 {
       invBuy.remove("${uid}:100")
       return "Bronze 2h Sword"
     }
-    if invBuy.has("${uid}:800") && GetUnixTime() - invBuy.get("${uid}:800") <= 20 {
+    if invBuy.has("${uid}:800") && GetUnixTime() - invBuy.get("${uid}:800") <= 1800 {
       invBuy.remove("${uid}:800")
       return "Iron 2h Sword"
     }
-    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 20 {
+    if invBuy.has("${uid}:8000") && GetUnixTime() - invBuy.get("${uid}:8000") <= 1800 {
       invBuy.remove("${uid}:8000")
       return "Mithril 2h Sword"
     }
-    if invBuy.has("${uid}:40000") && GetUnixTime() - invBuy.get("${uid}:40000") <= 20 {
+    if invBuy.has("${uid}:40000") && GetUnixTime() - invBuy.get("${uid}:40000") <= 1800 {
       invBuy.remove("${uid}:40000")
       return "Rune 2h Sword"
     }
-    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 20 {
+    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 1800 {
       invBuy.remove("${uid}:2000")
       return "Steel 2h Sword"
     }
   } else if it == $BRItemBase/Weapon_Knife {
-    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 20 {
+    if invBuy.has("${uid}:4000") && GetUnixTime() - invBuy.get("${uid}:4000") <= 1800 {
       invBuy.remove("${uid}:4000")
       return "Adamant Dagger"
     }
-    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 20 {
+    if invBuy.has("${uid}:1000") && GetUnixTime() - invBuy.get("${uid}:1000") <= 1800 {
       invBuy.remove("${uid}:1000")
       return "Black Dagger"
     }
-    if invBuy.has("${uid}:25") && GetUnixTime() - invBuy.get("${uid}:25") <= 20 {
+    if invBuy.has("${uid}:25") && GetUnixTime() - invBuy.get("${uid}:25") <= 1800 {
       invBuy.remove("${uid}:25")
       return "Bronze Dagger"
     }
-    if invBuy.has("${uid}:200") && GetUnixTime() - invBuy.get("${uid}:200") <= 20 {
+    if invBuy.has("${uid}:200") && GetUnixTime() - invBuy.get("${uid}:200") <= 1800 {
       invBuy.remove("${uid}:200")
       return "Iron Dagger"
     }
-    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 20 {
+    if invBuy.has("${uid}:2000") && GetUnixTime() - invBuy.get("${uid}:2000") <= 1800 {
       invBuy.remove("${uid}:2000")
       return "Mithril Dagger"
     }
-    if invBuy.has("${uid}:10000") && GetUnixTime() - invBuy.get("${uid}:10000") <= 20 {
+    if invBuy.has("${uid}:10000") && GetUnixTime() - invBuy.get("${uid}:10000") <= 1800 {
       invBuy.remove("${uid}:10000")
       return "Rune Dagger"
     }
-    if invBuy.has("${uid}:500") && GetUnixTime() - invBuy.get("${uid}:500") <= 20 {
+    if invBuy.has("${uid}:500") && GetUnixTime() - invBuy.get("${uid}:500") <= 1800 {
       invBuy.remove("${uid}:500")
       return "Steel Dagger"
     }
   } else if it == $BRItemBase/Weapon_Longsword {
-    if invBuy.has("${uid}:12000") && GetUnixTime() - invBuy.get("${uid}:12000") <= 20 {
+    if invBuy.has("${uid}:12000") && GetUnixTime() - invBuy.get("${uid}:12000") <= 1800 {
       invBuy.remove("${uid}:12000")
       return "Adamant Longsword"
     }
-    if invBuy.has("${uid}:3000") && GetUnixTime() - invBuy.get("${uid}:3000") <= 20 {
+    if invBuy.has("${uid}:3000") && GetUnixTime() - invBuy.get("${uid}:3000") <= 1800 {
       invBuy.remove("${uid}:3000")
       return "Black Longsword"
     }
-    if invBuy.has("${uid}:75") && GetUnixTime() - invBuy.get("${uid}:75") <= 20 {
+    if invBuy.has("${uid}:75") && GetUnixTime() - invBuy.get("${uid}:75") <= 1800 {
       invBuy.remove("${uid}:75")
       return "Bronze Longsword"
     }
-    if invBuy.has("${uid}:600") && GetUnixTime() - invBuy.get("${uid}:600") <= 20 {
+    if invBuy.has("${uid}:600") && GetUnixTime() - invBuy.get("${uid}:600") <= 1800 {
       invBuy.remove("${uid}:600")
       return "Iron Longsword"
     }
-    if invBuy.has("${uid}:6000") && GetUnixTime() - invBuy.get("${uid}:6000") <= 20 {
+    if invBuy.has("${uid}:6000") && GetUnixTime() - invBuy.get("${uid}:6000") <= 1800 {
       invBuy.remove("${uid}:6000")
       return "Mithril Longsword"
     }
-    if invBuy.has("${uid}:30000") && GetUnixTime() - invBuy.get("${uid}:30000") <= 20 {
+    if invBuy.has("${uid}:30000") && GetUnixTime() - invBuy.get("${uid}:30000") <= 1800 {
       invBuy.remove("${uid}:30000")
       return "Rune Longsword"
     }
-    if invBuy.has("${uid}:1500") && GetUnixTime() - invBuy.get("${uid}:1500") <= 20 {
+    if invBuy.has("${uid}:1500") && GetUnixTime() - invBuy.get("${uid}:1500") <= 1800 {
       invBuy.remove("${uid}:1500")
       return "Steel Longsword"
     }
   } else if it == $BRItemBase/Weapon_Sabre {
-    if invBuy.has("${uid}:10000") && GetUnixTime() - invBuy.get("${uid}:10000") <= 20 {
+    if invBuy.has("${uid}:10000") && GetUnixTime() - invBuy.get("${uid}:10000") <= 1800 {
       invBuy.remove("${uid}:10000")
       return "Adamant Scimitar"
     }
-    if invBuy.has("${uid}:2500") && GetUnixTime() - invBuy.get("${uid}:2500") <= 20 {
+    if invBuy.has("${uid}:2500") && GetUnixTime() - invBuy.get("${uid}:2500") <= 1800 {
       invBuy.remove("${uid}:2500")
       return "Black Scimitar"
     }
-    if invBuy.has("${uid}:63") && GetUnixTime() - invBuy.get("${uid}:63") <= 20 {
+    if invBuy.has("${uid}:63") && GetUnixTime() - invBuy.get("${uid}:63") <= 1800 {
       invBuy.remove("${uid}:63")
       return "Bronze Scimitar"
     }
-    if invBuy.has("${uid}:500") && GetUnixTime() - invBuy.get("${uid}:500") <= 20 {
+    if invBuy.has("${uid}:500") && GetUnixTime() - invBuy.get("${uid}:500") <= 1800 {
       invBuy.remove("${uid}:500")
       return "Iron Scimitar"
     }
-    if invBuy.has("${uid}:5000") && GetUnixTime() - invBuy.get("${uid}:5000") <= 20 {
+    if invBuy.has("${uid}:5000") && GetUnixTime() - invBuy.get("${uid}:5000") <= 1800 {
       invBuy.remove("${uid}:5000")
       return "Mithril Scimitar"
     }
-    if invBuy.has("${uid}:25000") && GetUnixTime() - invBuy.get("${uid}:25000") <= 20 {
+    if invBuy.has("${uid}:25000") && GetUnixTime() - invBuy.get("${uid}:25000") <= 1800 {
       invBuy.remove("${uid}:25000")
       return "Rune Scimitar"
     }
-    if invBuy.has("${uid}:1250") && GetUnixTime() - invBuy.get("${uid}:1250") <= 20 {
+    if invBuy.has("${uid}:1250") && GetUnixTime() - invBuy.get("${uid}:1250") <= 1800 {
       invBuy.remove("${uid}:1250")
       return "Steel Scimitar"
     }
   } else if it == $BRItemBase/Weapon_Spatha {
-    if invBuy.has("${uid}:11200") && GetUnixTime() - invBuy.get("${uid}:11200") <= 20 {
+    if invBuy.has("${uid}:11200") && GetUnixTime() - invBuy.get("${uid}:11200") <= 1800 {
       invBuy.remove("${uid}:11200")
       return "Adamant Spatha"
     }
-    if invBuy.has("${uid}:2800") && GetUnixTime() - invBuy.get("${uid}:2800") <= 20 {
+    if invBuy.has("${uid}:2800") && GetUnixTime() - invBuy.get("${uid}:2800") <= 1800 {
       invBuy.remove("${uid}:2800")
       return "Black Spatha"
     }
-    if invBuy.has("${uid}:70") && GetUnixTime() - invBuy.get("${uid}:70") <= 20 {
+    if invBuy.has("${uid}:70") && GetUnixTime() - invBuy.get("${uid}:70") <= 1800 {
       invBuy.remove("${uid}:70")
       return "Bronze Spatha"
     }
-    if invBuy.has("${uid}:560") && GetUnixTime() - invBuy.get("${uid}:560") <= 20 {
+    if invBuy.has("${uid}:560") && GetUnixTime() - invBuy.get("${uid}:560") <= 1800 {
       invBuy.remove("${uid}:560")
       return "Iron Spatha"
     }
-    if invBuy.has("${uid}:5600") && GetUnixTime() - invBuy.get("${uid}:5600") <= 20 {
+    if invBuy.has("${uid}:5600") && GetUnixTime() - invBuy.get("${uid}:5600") <= 1800 {
       invBuy.remove("${uid}:5600")
       return "Mithril Spatha"
     }
-    if invBuy.has("${uid}:28000") && GetUnixTime() - invBuy.get("${uid}:28000") <= 20 {
+    if invBuy.has("${uid}:28000") && GetUnixTime() - invBuy.get("${uid}:28000") <= 1800 {
       invBuy.remove("${uid}:28000")
       return "Rune Spatha"
     }
-    if invBuy.has("${uid}:1400") && GetUnixTime() - invBuy.get("${uid}:1400") <= 20 {
+    if invBuy.has("${uid}:1400") && GetUnixTime() - invBuy.get("${uid}:1400") <= 1800 {
       invBuy.remove("${uid}:1400")
       return "Steel Spatha"
     }
   } else if it == $BRItemBase/Weapon_SodaCan {
-    if invBuy.has("${uid}:15") && GetUnixTime() - invBuy.get("${uid}:15") <= 20 {
+    if invBuy.has("${uid}:15") && GetUnixTime() - invBuy.get("${uid}:15") <= 1800 {
       invBuy.remove("${uid}:15")
       return "Dragonfruit Fizz"
     }
-    if invBuy.has("${uid}:40") && GetUnixTime() - invBuy.get("${uid}:40") <= 20 {
+    if invBuy.has("${uid}:40") && GetUnixTime() - invBuy.get("${uid}:40") <= 1800 {
       invBuy.remove("${uid}:40")
       return "Ghost Pepper Pop"
     }
-    if invBuy.has("${uid}:20") && GetUnixTime() - invBuy.get("${uid}:20") <= 20 {
+    if invBuy.has("${uid}:20") && GetUnixTime() - invBuy.get("${uid}:20") <= 1800 {
       invBuy.remove("${uid}:20")
       return "Glacier Mint"
     }
-    if invBuy.has("${uid}:80") && GetUnixTime() - invBuy.get("${uid}:80") <= 20 {
+    if invBuy.has("${uid}:80") && GetUnixTime() - invBuy.get("${uid}:80") <= 1800 {
       invBuy.remove("${uid}:80")
       return "Gold Rush Tonic"
     }
-    if invBuy.has("${uid}:60") && GetUnixTime() - invBuy.get("${uid}:60") <= 20 {
+    if invBuy.has("${uid}:60") && GetUnixTime() - invBuy.get("${uid}:60") <= 1800 {
       invBuy.remove("${uid}:60")
       return "Kraken Ink Soda"
     }
-    if invBuy.has("${uid}:18") && GetUnixTime() - invBuy.get("${uid}:18") <= 20 {
+    if invBuy.has("${uid}:18") && GetUnixTime() - invBuy.get("${uid}:18") <= 1800 {
       invBuy.remove("${uid}:18")
       return "Mango Tango"
     }
-    if invBuy.has("${uid}:30") && GetUnixTime() - invBuy.get("${uid}:30") <= 20 {
+    if invBuy.has("${uid}:30") && GetUnixTime() - invBuy.get("${uid}:30") <= 1800 {
       invBuy.remove("${uid}:30")
       return "Starfruit Sparkle"
     }
-    if invBuy.has("${uid}:10") && GetUnixTime() - invBuy.get("${uid}:10") <= 20 {
+    if invBuy.has("${uid}:10") && GetUnixTime() - invBuy.get("${uid}:10") <= 1800 {
       invBuy.remove("${uid}:10")
       return "Swamp Brew"
     }
-    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 20 {
+    if invBuy.has("${uid}:50") && GetUnixTime() - invBuy.get("${uid}:50") <= 1800 {
       invBuy.remove("${uid}:50")
       return "Voidberry Nectar"
     }
-    if invBuy.has("${uid}:25") && GetUnixTime() - invBuy.get("${uid}:25") <= 20 {
+    if invBuy.has("${uid}:25") && GetUnixTime() - invBuy.get("${uid}:25") <= 1800 {
       invBuy.remove("${uid}:25")
       return "Volcano Cola"
     }
   } else if it == $BRItemBase/Weapon_GuardPistol {
-    if invBuy.has("${uid}:150") && GetUnixTime() - invBuy.get("${uid}:150") <= 20 {
+    if invBuy.has("${uid}:150") && GetUnixTime() - invBuy.get("${uid}:150") <= 1800 {
       invBuy.remove("${uid}:150")
       return "Guard Pistol"
     }
@@ -2447,6 +2447,19 @@ on Clock(interval = 0.25) {
       if !invLast.has(uid) || invLast.get(uid).Value != invLine {
         invLast.set(uid, invLine)
         PrintToConsole("[inv] ${uid} ${invLine}")
+        // weapon bank chip (weaponbank/): the named slots ("|name|..|"; the free Derringer by class), so purchases
+        // unlock weapons there and it knows what each player holds (one copy at a time)
+        let bk0 = if e0 == $BRItemBase/Weapon_Derringer && n0 == "" then "Derringer" else n0
+        let bk1 = if e1 == $BRItemBase/Weapon_Derringer && n1 == "" then "Derringer" else n1
+        let bk2 = if e2 == $BRItemBase/Weapon_Derringer && n2 == "" then "Derringer" else n2
+        let bk3 = if e3 == $BRItemBase/Weapon_Derringer && n3 == "" then "Derringer" else n3
+        let bk4 = if e4 == $BRItemBase/Weapon_Derringer && n4 == "" then "Derringer" else n4
+        let bk5 = if e5 == $BRItemBase/Weapon_Derringer && n5 == "" then "Derringer" else n5
+        let bk6 = if e6 == $BRItemBase/Weapon_Derringer && n6 == "" then "Derringer" else n6
+        let bk7 = if e7 == $BRItemBase/Weapon_Derringer && n7 == "" then "Derringer" else n7
+        let bk8 = if e8 == $BRItemBase/Weapon_Derringer && n8 == "" then "Derringer" else n8
+        let bk9 = if e9 == $BRItemBase/Weapon_Derringer && n9 == "" then "Derringer" else n9
+        SendGlobalCustomEvent("bank.inv", uid, "|${bk0}|${bk1}|${bk2}|${bk3}|${bk4}|${bk5}|${bk6}|${bk7}|${bk8}|${bk9}|")
       }
     }
     // one flagged slot per tick becomes its shop item (giveNamed is big: one call site)
@@ -2518,229 +2531,8 @@ on CharacterSpawned() -> (character) {
   let sc = character.ControllerOf()
   let suid = sc.GetUserId()
   if !invLive.has(suid) || invLive.get(suid) != 1 {
-    if invHas.has(suid) {
-      PrintToConsole("[inv-restored] ${suid}")
-      let it0 = invItem.get("${suid}:0").Value
-      let nm0 = invName.get("${suid}:0").Value
-      if nm0 == "" && it0 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 0, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 0, nm0, it0)
-      }
-      let it1 = invItem.get("${suid}:1").Value
-      let nm1 = invName.get("${suid}:1").Value
-      if nm1 == "" && it1 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 1, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 1, nm1, it1)
-      }
-      let it2 = invItem.get("${suid}:2").Value
-      let nm2 = invName.get("${suid}:2").Value
-      if nm2 == "" && it2 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 2, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 2, nm2, it2)
-      }
-      let it3 = invItem.get("${suid}:3").Value
-      let nm3 = invName.get("${suid}:3").Value
-      if nm3 == "" && it3 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 3, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 3, nm3, it3)
-      }
-      let it4 = invItem.get("${suid}:4").Value
-      let nm4 = invName.get("${suid}:4").Value
-      if nm4 == "" && it4 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 4, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 4, nm4, it4)
-      }
-      let it5 = invItem.get("${suid}:5").Value
-      let nm5 = invName.get("${suid}:5").Value
-      if nm5 == "" && it5 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 5, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 5, nm5, it5)
-      }
-      let it6 = invItem.get("${suid}:6").Value
-      let nm6 = invName.get("${suid}:6").Value
-      if nm6 == "" && it6 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 6, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 6, nm6, it6)
-      }
-      let it7 = invItem.get("${suid}:7").Value
-      let nm7 = invName.get("${suid}:7").Value
-      if nm7 == "" && it7 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 7, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 7, nm7, it7)
-      }
-      let it8 = invItem.get("${suid}:8").Value
-      let nm8 = invName.get("${suid}:8").Value
-      if nm8 == "" && it8 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 8, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 8, nm8, it8)
-      }
-      let it9 = invItem.get("${suid}:9").Value
-      let nm9 = invName.get("${suid}:9").Value
-      if nm9 == "" && it9 == $BRItemBase/Weapon_ArmingSword && sc.GetLeaderboard("SwordTier") > 0 {
-        let tier = character.ControllerOf().GetLeaderboard("SwordTier")
-        if tier == 1 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 0.50, itemName = "Bronze Sword", overrideColors = true, meshColors = [ColorSRGB(123, 72, 0, 255)])
-        } else if tier == 2 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 0.65, itemName = "Iron Sword", overrideColors = true, meshColors = [ColorSRGB(88, 86, 84, 255)])
-        } else if tier == 3 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 0.80, itemName = "Steel Sword", overrideColors = true, meshColors = [ColorSRGB(160, 160, 166, 255)])
-        } else if tier == 4 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 1.00, itemName = "Black Sword", overrideColors = true, meshColors = [ColorSRGB(26, 26, 28, 255)])
-        } else if tier == 5 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 1.20, itemName = "Mithril Sword", overrideColors = true, meshColors = [ColorSRGB(58, 58, 128, 255)])
-        } else if tier == 6 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 1.50, itemName = "Adamant Sword", overrideColors = true, meshColors = [ColorSRGB(42, 96, 56, 255)])
-        } else if tier == 7 {
-          character.SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = 9, damage = 2.00, itemName = "Rune Sword", overrideColors = true, meshColors = [ColorSRGB(38, 150, 178, 255)])
-        }
-      } else {
-        giveNamed(character, 9, nm9, it9)
-      }
-    } else if !invSeen.has(suid) || GetUnixTime() - invSeen.get(suid) > 30 {
+    // restore on rejoin removed 2026-10-28 (owner: replaced by the weapon bank)
+    if !invSeen.has(suid) || GetUnixTime() - invSeen.get(suid) > 30 {
       // no snapshot here (a restart or a new chip): the progress plugin gives back the rest from disk
       let tier = character.ControllerOf().GetLeaderboard("SwordTier")
       if tier == 1 {

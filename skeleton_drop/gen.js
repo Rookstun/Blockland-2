@@ -321,15 +321,8 @@ mod catName(id: int) -> string {
 `;
 const swordGive = (ch, c, pad) => `${pad}let suid = ${c}.GetUserId()
 ${pad}if !invLive.has(suid) || invLive.get(suid) != 1 {
-${pad}  if invHas.has(suid) {
-${pad}    PrintToConsole("[inv-restored] ${I('suid')}")
-` + Array.from({ length: SLOTS }, (_, k) => `${pad}    let it${k} = invItem.get("${I('suid')}:${k}").Value
-${pad}    let nm${k} = invName.get("${I('suid')}:${k}").Value
-${pad}    if nm${k} == "" && it${k} == $BRItemBase/Weapon_ArmingSword && ${c}.GetLeaderboard("SwordTier") > 0 {
-${swordAdv(ch, pad + '      ', k)}${pad}    } else {
-${pad}      giveNamed(${ch}, ${k}, nm${k}, it${k})
-${pad}    }
-`).join('') + `${pad}  } else if !invSeen.has(suid) || GetUnixTime() - invSeen.get(suid) > 30 {
+${pad}  // restore on rejoin removed 2026-10-28 (owner: replaced by the weapon bank)
+${pad}  if !invSeen.has(suid) || GetUnixTime() - invSeen.get(suid) > 30 {
 ${pad}    // no snapshot here (a restart or a new chip): the progress plugin gives back the rest from disk
 ${swordAdv(ch, pad + '    ', null)}${pad}  }
 ${pad}  invLive.set(suid, 1)
