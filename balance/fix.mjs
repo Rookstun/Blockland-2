@@ -116,6 +116,7 @@ async function fixQuestNpcs() {
   const loads = [...QUEST_CHIPS, ...npcs.map(n => [`qnpc_${n.id}`, ...n.at])].filter(([p]) => fs.existsSync(path.join(PREFABS, p + '.brz')));
   if (DRY) { say(`quest NPCs: would reload ${npcs.length} bodies + questchip + questhud`); return; }
   await job([cmd(`br.Bricks.Clear ${NPC_TALK} 1`, 3000)], 'qclr');
+  return say('quest NPCs: quests are off (owner 2026-10-27), bodies cleared, none reloaded');
   await sleep(2500);
   const res = await job(loads.map(([p, x, y, z]) => cmd(`br.Prefab.Load "${p}" ${x} ${y} ${z} 0 16`, 600)), 'qld');
   const fails = loads.filter((l, k) => bad(res[k]));
