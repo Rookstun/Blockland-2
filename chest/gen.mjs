@@ -8,7 +8,7 @@
 //   servo joint worked out for the closed lid (see the joint comment; lid rotation identity = closed = angle 0).
 //   lock button bHeld -> edge -> Toggle -> Select(0 shut / OPEN) -> servo TargetAngle
 //   item plate on the floor: the weapon's ItemSpawn (bank template, pickup off = display only) + a Button "Take <name>":
-//     edge -> SendCustomEventGlobal "chest.take" (Character, catalog id) -> DestroySpawnedPrefab (this grid)
+//     first click -> item hidden + SendCustomEventGlobal "chest.take" (Character, catalog id); 10 s later DestroySpawnedPrefab
 // loot.brz = sky chip at -8580 -7400 8000 (renderman): chest.take -> AddInventoryItemAdv with the shop's stats +
 //   InvName0/InvPend, so skeleton_drop names the slot and its bank.inv unlocks the weapon in the bank for good.
 // skeleton_drop (server bridge/balance/sd/skeleton_drop/gen.js) rolls CHEST_PCT per kill and spawns a random chest_<id>.
@@ -86,9 +86,9 @@ function build(id) {
     { type: 'Component_Button', data: { PressSound: 0, ReleaseSound: 1, bAllowNearbyInteraction: true, bHiddenInteraction: false, PromptCustomLabel: `Take ${e.name}` } }] }, B);
 
   // hidden gates inside the chest beside the item (a row under the floor stuck 60 out of the grid)
-  // two columns x -11 / +11 (gate bricks are 10 wide: closer ones overlap and the game drops them), above the item plate
+  // three columns x -11 / 0 / 11 (invisible, no collision; gate bricks are 10 wide: closer ones overlap and the game drops them), above the item plate
   let gi = 0;
-  const gate = (c, data = {}, size) => { const h = add({ asset: c.BRICK, position: [gi % 2 ? 11 : -11, -20 + 10 * Math.floor(gi / 2), 4], direction: 4, rotation: 0, color: [200, 200, 200],
+  const gate = (c, data = {}, size) => { const h = add({ asset: c.BRICK, position: [-11 + 11 * (gi % 3), -20 + 10 * Math.floor(gi / 3), 4], direction: 4, rotation: 0, color: [200, 200, 200],
     visibility: false, collision: false, ...(size ? { size } : {}), components: [{ type: c.NAME, data }] }, B); gi++; return { h, c }; };
   const W = (a, ac, ap, b, bc, bp) => w.addWire({ brick: a, component_type: ac, port: ap }, { brick: b, component_type: bc, port: bp });
   const g = (x, p, y, q) => W(x.h, x.c.NAME, p, y.h, y.c.NAME, q);
@@ -98,13 +98,24 @@ function build(id) {
   W(lock, 'Component_Button', 'bHeld', edge1.h, edge1.c.NAME, 'Input');
   g(edge1, 'OnRisingEdge', tog, 'Exec'); g(tog, 'Output', sel, 'bSelectB');
   W(sel.h, sel.c.NAME, 'Output', sv, C.Servo.NAME, 'TargetAngle');
-  const edge2 = gate(C.Expr_EdgeDetectorExec);
+  // take (owner 2026-10-28: "make the item dissapear the second someone clicks it, but keep the chest and give it a
+  // timer to destroy itself, like 10 seconds"): click -> taken = true (Var; a second click sets it again: no edge, no
+  // second item) -> item offset 100000 below (an ItemSpawn always draws: hidden/scale 0/pickup off don't hide it)
+  // + chest.take (clicker, catalog id) + Stopwatch restart -> expired -> DestroySpawnedPrefab
+  const edge2 = gate(C.Expr_EdgeDetectorExec), set = gate(C.Exec_Var_Set, { Value: { $variant: 'bool', value: true } });
+  const taken = gate(C.Var, { Value: { $variant: 'bool', value: false } }), edge3 = gate(C.Expr_EdgeDetectorExec);
+  const hide = gate(C.Expr_Select, { bSelectB: false, InputA: { $variant: 'f64', value: spawn.PickupOffsetDistance }, InputB: { $variant: 'f64', value: 100000 } });
   const send = gate(C.Exec_SendCustomEventGlobal, { EventName: 'chest.take', DataIn1: { $variant: 'f64', value: 0 }, DataIn2: { $variant: 'i64', value: id },
     ...Object.fromEntries([3, 4, 5, 6, 7, 8].map(i => ['DataIn' + i, { $variant: 'f64', value: 0 }])) }, [5, 5, 2]);
+  const timer = gate(C.Stopwatch, { Limit: 10, Time: 0, bRunning: false }), edge4 = gate(C.Expr_EdgeDetectorExec);
   const grid = gate(C.ReadBrickGrid), kill = gate(C.Exec_Entity_DestroySpawnedPrefab);
   W(plate, 'Component_Button', 'bHeld', edge2.h, edge2.c.NAME, 'Input');
+  g(edge2, 'OnRisingEdge', set, 'Exec'); g(taken, 'VarRef', set, 'VarRef');
+  g(taken, 'Value', edge3, 'Input'); g(taken, 'Value', hide, 'bSelectB');
+  W(hide.h, hide.c.NAME, 'Output', plate, 'Component_ItemSpawn', 'PickupOffsetDistance');
   W(plate, 'Component_Button', 'Character', send.h, send.c.NAME, 'DataIn1');
-  g(edge2, 'OnRisingEdge', send, 'ExecIn'); g(send, 'ExecOut', kill, 'Exec'); g(grid, 'BrickGrid', kill, 'Entity');
+  g(edge3, 'OnRisingEdge', send, 'ExecIn'); g(send, 'ExecOut', timer, 'Restart');
+  g(timer, 'Expired', edge4, 'Input'); g(edge4, 'OnRisingEdge', kill, 'Exec'); g(grid, 'BrickGrid', kill, 'Entity');
   w.makePrefab({ isPhysicsGrid: process.env.CHEST_PHYS !== '0' });
   return w.toBrz({ externalAssets: ext, bundle: { description: `Loot chest: ${e.name}` } });
 }
