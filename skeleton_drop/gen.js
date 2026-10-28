@@ -162,19 +162,7 @@ ${capHp('kc.CharacterOf()', 'lvl', '      ', 'K')}
   ${hud('kc', 'total', 'lvl', '      ')}
     }
 `;
-const SWORDS = [
-  ['Bronze', 150, 0.5, [123, 72, 0]],
-  ['Iron', 400, 0.65, [88, 86, 84]],
-  ['Steel', 1000, 0.8, [160, 160, 166]],
-  ['Black', 2000, 1.0, [26, 26, 28]],
-  ['Mithril', 4000, 1.2, [58, 58, 128]],
-  ['Adamant', 8000, 1.5, [42, 96, 56]],
-  ['Rune', 20000, 2.0, [38, 150, 178]],
-];
-if (BAL) for (const w of SWORDS) { const d = BAL.weapons?.[`${w[0]} Sword`]?.damage; if (d != null) w[2] = d; }
-// keep the shop sword across leave/rejoin: a coin drop of exactly a sword's
-// price (the shops charge by IncrementLeaderboardValue coins -price) records
-// "SwordTier"; a spawn after 30 s unseen (a join) gives that sword back.
+// purchase tracking for item naming (SwordTier sword give removed 2026-10-28: owner, glitched random Iron Sword)
 const swordTrack = (c, pad) => `${pad}let uid = ${c}.GetUserId()
 ${pad}let coinsNow = ${c}.GetLeaderboard("coins")
 ${pad}if invCoins.has(uid) {
@@ -184,7 +172,6 @@ ${pad}  // can name the item that turns up (buyName, by item class + price)
 ${pad}  if spent > 0 {
 ${pad}    invBuy.set("${I('uid')}:${I('spent')}", GetUnixTime())
 ${pad}  }
-` + SWORDS.map(([n, p], i) => `${pad}  ${i ? '} else ' : ''}if spent == ${p} {\n${pad}    ${c}.SetLeaderboard("SwordTier", ${i + 1})\n`).join('') + `${pad}  }
 ${pad}}
 ${pad}invCoins.set(uid, coinsNow)
 ${pad}invSeen.set(uid, GetUnixTime())
@@ -193,12 +180,8 @@ ${pad}invSeen.set(uid, GetUnixTime())
 // player is online (invLive 1) the HUD loop snapshots every slot's item into
 // invItem "<uid>:<slot>"; ControllerLeft stops the snapshots (invLive 0) so
 // the copy survives; the first spawn after a (re)join puts each item back in
-// its slot. Shop swords come back with their tier (SwordTier) stats. With no
-// snapshot yet, the old rule: a spawn after 30 s unseen re-adds the sword.
+// its slot.
 const SLOTS = 10;
-const swordAdv = (ch, pad, slotArg) => `${pad}let tier = ${ch}.ControllerOf().GetLeaderboard("SwordTier")
-` + SWORDS.map(([n, p, d, [r, g, b]], i) => `${pad}${i ? '} else ' : ''}if tier == ${i + 1} {\n${pad}  ${ch}.${slotArg === null ? 'AddInventoryItemAdv($BRItemBase/Weapon_ArmingSword' : `SetInventoryItemAdv($BRItemBase/Weapon_ArmingSword, slot = ${slotArg}`}, damage = ${d.toFixed(2)}, itemName = "${n} Sword", overrideColors = true, meshColors = [ColorSRGB(${r}, ${g}, ${b}, 255)])\n`).join('') + `${pad}}
-`;
 // (owner 2026-10-14) inventory is checked every INV_EVERY s per player and
 // kept BY NAME: a slot that changes gets the shop name of what turned up (a
 // purchase of that item's price in the last BUY_KEEP s, see itemcatalog.json),
@@ -322,10 +305,6 @@ mod catName(id: int) -> string {
 `;
 const swordGive = (ch, c, pad) => `${pad}let suid = ${c}.GetUserId()
 ${pad}if !invLive.has(suid) || invLive.get(suid) != 1 {
-${pad}  // restore on rejoin removed 2026-10-28 (owner: replaced by the weapon bank)
-${pad}  if !invSeen.has(suid) || GetUnixTime() - invSeen.get(suid) > 30 {
-${pad}    // no snapshot here (a restart or a new chip): the progress plugin gives back the rest from disk
-${swordAdv(ch, pad + '    ', null)}${pad}  }
 ${pad}  invLive.set(suid, 1)
 ${pad}}
 ${pad}invSeen.set(suid, GetUnixTime())
