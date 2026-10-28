@@ -377,7 +377,7 @@ const WEAPON_NAMES = {
 // + (2026-10-28, owner: "when I said archive, I said remove ... get rid of that fucking library, get rid of that church ...
 //   I want these fucking little farm things gone, I want these little towers gone"): chapels, libraries, dining halls,
 //   vegetable gardens, hamlet fields + pens, watchtowers. Ghosted the same way (nothing else moves), never built.
-export const LEGACY = new Set(['tavern', 'warehouse', 'temple', 'bank', 'sodashack', 'sodamarket', 'chapel', 'library', 'dininghall', 'garden', 'field', 'watchtower']);
+export const LEGACY = new Set(['tavern', 'warehouse', 'temple', 'bank', 'sodashack', 'sodamarket', 'chapel', 'library', 'dininghall', 'garden', 'field', 'watchtower', 'windmill']); // + windmills (owner 2026-10-28: "remove that too")
 export const WEAPON_SHOP = { W: 52, D: 40, FC: 12 }; // studs: building W x D, forecourt FC deep
 // Houses (2026-10-03, owner): shapedhouse.mjs rect / L / T houses with rounded
 // roofs and attics; the blacksmith houses (HOUSE_SHOP_CHANCE) stay wallgen
@@ -2704,7 +2704,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
     });
     // a landmark on the outskirts (2026-10-08): a windmill, a watchtower, or (a few) neither
     const lm = rnd(vs, 310);
-    if (lm < 0.4) landmark(windmill, [160, 90], [560, 480, 400, 320], edge, vs);
+    if (lm < 0.4) landmark((...q) => legacyBuild('windmill', () => windmill(...q)), [160, 90], [560, 480, 400, 320], edge, vs);
     else if (lm < 0.8) landmark((...q) => legacyBuild('watchtower', () => watchtower(...q)), [60, 60], [560, 480, 400, 320], edge, vs);
     propsAlong(plan.paths, 160, edge, vs, village.desert ? PROP_KINDS.filter(k => k !== 'hay' && k !== 'planter') : PROP_KINDS);
     // shop stands (2026-10-06): a ring round the green, buttons toward the well,
@@ -3289,7 +3289,7 @@ export function build({ put, orientFor, rnd, village = null, plan, riverAt = () 
   // (2026-10-14) the soda market beside one of the main roads
   placeWeaponShops(plan.paths);
   placeSodaMarket(plan.paths);
-  landmark(windmill, [160, 90], [1900, 1700, 1500], plan.edgeR, 502);
+  landmark((...q) => legacyBuild('windmill', () => windmill(...q)), [160, 90], [1900, 1700, 1500], plan.edgeR, 502);
   // houses along every path: shops near the plaza, homes further out
   // (2026-10-10, owner: "make the houses more dense"): step 160 -> 80, margin 40 -> 30,
   // then back lots between the rows (infill), smaller houses there

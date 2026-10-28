@@ -21,7 +21,6 @@ import { planSurfaceDungeon } from './surfacedungeon.mjs';
 import { planSurfaceDungeon as planSurfaceDungeonLegacy } from './surfacedungeon_legacy.mjs';
 import { writePreview, rasterBricks } from './preview.mjs';
 import { buildSettlement, buildCamp, buildDetail, buildSign, placeName, EXTERNAL_ASSETS } from './ruins.mjs';
-import { buildLandmark, LANDMARKS } from './landmarks.mjs';
 import { FIXED as BUILDER_FIXED } from './builder.mjs';
 import { treeVoxels } from '../trees/tree.mjs';
 import { makeOccupancy, placeVoxelProp } from './props.mjs';
@@ -4403,43 +4402,6 @@ for (const d of DUNGEONS) for (const at of d.keepPots ?? []) pots.push({ at, whe
     for (const { label, ...b } of w.b.bricks) if (keep(b)) bricks.push(b);
     reserved[i] = 1; if (two) reserved[x2 * N + y2] = 1;
     details.kinds[kind] = (details.kinds[kind] || 0) + 1; details.count++; n++; tries = -1;
-  }
-  // landmarks (landmarks.mjs, owner 2026-10-28): altars to made-up gods, snapped fingerposts, little libraries,
-  // LEGACY warehouses; a level footprint of free cells, the front toward the nearest road. After the details
-  // with their own hash salts and tries per slot, so nothing placed before them moves.
-  const landmarks = { count: 0, kinds: {} };
-  {
-    const want = { altar: tune('landmarks.altars', 6, 'altars to made-up gods (x K)'), brokensign: tune('landmarks.brokenSigns', 10, 'snapped fingerposts by the roads (x K)') }; // (2026-10-28, owner: "archive" meant remove) no libraries / LEGACY warehouses
-    let slot = 0;
-    for (const [kind, n0] of Object.entries(want)) for (let n = 0, tries = 0, n1 = Math.round(n0 * K); n < n1; tries++) {
-      if (tries >= 3000) { n++; slot++; tries = -1; continue; }
-      const { w, d } = LANDMARKS[kind];
-      const x = 6 + Math.floor(hash(slot, tries, 701) * (N - 18)), y = 6 + Math.floor(hash(slot, tries, 702) * (N - 18)), h = H[x * N + y];
-      if (h <= SEA + 1 || townDist(x, y) <= TOWN.blend + 4 || villageDist(x, y) <= VILLAGE.r + 4 || hengeDist(x, y) <= 5) continue;
-      if (kind === 'brokensign' ? pathDist[x * N + y] > 1.5 : pathDist[x * N + y] < 2) continue; // fingerposts by a road, the rest off it
-      // each facing: footprint (cw x cd cells) level and free; keep the one whose front looks at the nearest road
-      let best = null;
-      for (const f of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
-        const cw = f[0] ? d : w, cd = f[0] ? w : d;
-        if (!inBounds(x + cw, y + cd)) continue;
-        let ok = true;
-        for (let a = 0; a < cw && ok; a++) for (let b = 0; b < cd && ok; b++) { const c = (x + a) * N + y + b; ok = H[c] === h && okCell(c) && (kind === 'brokensign' || pathDist[c] >= 2); }
-        if (!ok) continue;
-        const fc = [Math.max(0, x + (f[0] > 0 ? cw : f[0] < 0 ? -1 : (cw >> 1))), Math.max(0, y + (f[1] > 0 ? cd : f[1] < 0 ? -1 : (cd >> 1)))];
-        const pd = pathDist[Math.min(N - 1, fc[0]) * N + Math.min(N - 1, fc[1])];
-        if (!best || pd < best.pd) best = { f, cw, cd, pd };
-      }
-      if (!best) continue;
-      const { f, cw, cd } = best;
-      const o = at(x, y, h + 1), w0 = wrap(o[0] - CELL / 2, o[1] - CELL / 2, o[2]);
-      const st = buildLandmark(kind, { seed: 16000 + slot, rnd: townRnd, put: w0.put, orientFor, facing: f, god: kind === 'altar' ? makeGod(16000 + slot, townRnd) : null, name: placeName(16000 + slot, townRnd) });
-      if (w0.b.dropped.length) continue;
-      for (const { label, ...b } of w0.b.bricks) if (keep(b)) bricks.push(b);
-      potAt(w0, o[0] - CELL / 2, o[1] - CELL / 2, o[2], st.pots, kind);
-      for (let a = 0; a < cw; a++) for (let b = 0; b < cd; b++) reserved[(x + a) * N + y + b] = 1;
-      landmarks.kinds[kind] = (landmarks.kinds[kind] || 0) + 1; landmarks.count++; n++; slot++; tries = -1;
-    }
-    console.error(`landmarks ${landmarks.count} ${JSON.stringify(landmarks.kinds)}`);
   }
   console.error(`settlements ${ruins.length} (${ruins.reduce((a, v) => a + (v.goblins || 0), 0)} goblins), camps ${camps.length} (${camps.reduce((a, c) => a + c.goblins, 0)} goblins), details ${details.count} ${JSON.stringify(details.kinds)}${offGridDrops ? `, ${offGridDrops} off-grid pieces dropped` : ''}`);
 }
