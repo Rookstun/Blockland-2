@@ -14,6 +14,7 @@ import { witherspoon } from './witherspoon.mjs';
 import { derwent } from './derwent.mjs';
 import { dutchColonial } from './dutchcolonial.mjs';
 import { splitLevel } from './splitlevel.mjs';
+import { chateaureve } from './chateaureve.mjs';
 
 const HOST = 'pzedlo.hopto.org', GAP = 300;
 const [X0, Y0] = [+(process.argv[2] ?? 2000), +(process.argv[3] ?? 2000)];
@@ -26,6 +27,7 @@ const HOUSES = [
   { name: 'Derwent House', id: id('de9e1'), make: derwent },
   { name: 'Dutch Colonial', id: id('d07c4'), make: () => dutchColonial({ seed: 1 }) },
   { name: 'Split Level', id: id('5b17'), make: () => splitLevel({ seed: 1 }) },
+  { name: 'Chateau Reve', id: id('c4a7e0'), make: chateaureve, fixtures: 'chateaureve' },
 ];
 
 const local = f => new URL(f, import.meta.url).pathname.replace(/^\/(\w:)/, '$1');

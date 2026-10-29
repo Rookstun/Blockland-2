@@ -23,8 +23,9 @@ const WHITE = [244, 242, 236];
 // load the prefab at centre + (lx, ly). --owner ID NAME: another owner (city copies, not wiped with the main house)
 const argv = process.argv.slice(2), opt = k => argv.includes(k) ? argv[argv.indexOf(k) + 1] : null;
 const turn = +(opt('--turn') ?? 0);
-// --house whitetail: the White Tail Ridge house's fixtures (same format)
-const { fixtures } = opt('--house') === 'whitetail' ? (await import('./whitetail.mjs')).whitetail() : tavistock();
+// --house NAME: another house built on this template (mapgen/NAME.mjs exporting NAME(): whitetail, chateaureve)
+const house = opt('--house') ?? 'tavistock';
+const { fixtures } = house === 'tavistock' ? tavistock() : (await import(`./${house}.mjs`))[house]();
 if (turn === 2) {
   const n = ([x, y, z]) => [-x, -y, z];
   for (const r of fixtures.rooms) { r.lamps.forEach(l => { l.at = n(l.at); }); r.switch.at = n(r.switch.at); r.switch.normal = r.switch.normal.map(v => -v); }
