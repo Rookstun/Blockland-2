@@ -101,11 +101,15 @@ export function whitetail({ seed = 1 } = {}) {
       }
     }
   }
+  function stuccoRows(axis, line, a0, a1, z0, z1, openings, t, label) {
+    for (let z = z0; z < z1; z += 8) course(axis, line, a0, a1, z, Math.min(z1, z + 8), openings, shade(STUCCO, Math.floor(z / 8) % 2 ? 0.97 : 1), label, t);
+  }
   // a wall: 10 deep on [line, line + 10]. neg / pos = the z from which that face is outside brick (a 4-deep skin
-  // on the -/+ side; plaster below it), null = indoors. The core is plaster in one piece (no seams indoors); ends
-  // get capped in brick where a face is outside (a plaster core end showed as a strip at corners: tavistock pass 8)
-  function wall(axis, line, a0, a1, z0, z1, { neg = null, pos = null, ops = [], label = 'wall', paint = false, caps = [true, true] } = {}) {
-    WALLS.push({ axis, line, a0, a1, z0, z1, openings: ops });
+  // on the -/+ side; plaster below it), null = indoors; stucco = tan stucco instead of brick. The core is plaster in
+  // one piece (no seams indoors); caps = brick over an end only where that end shows OUTSIDE (a plaster core end
+  // showed as a strip at corners: tavistock pass 8; capping every end put brick strips inside rooms, owner 10-28)
+  function wall(axis, line, a0, a1, z0, z1, { neg = null, pos = null, ops = [], label = 'wall', paint = false, caps = [false, false], stucco = false, trim = null } = {}) {
+    WALLS.push({ axis, line, a0, a1, z0, z1, openings: trim ?? ops });   // trim: the openings room trim sees (an arch = its bounding box)
     if (paint || (neg == null && pos == null)) return course(axis, line, a0, a1, z0, z1, ops, paint ? [200, 196, 188] : PLASTER, label);
     const c0 = line + (neg != null ? 4 : 0), c1 = line + 10 - (pos != null ? 4 : 0);
     const ca0 = a0 + (caps[0] ? 4 : 0), ca1 = a1 - (caps[1] ? 4 : 0);
@@ -114,12 +118,12 @@ export function whitetail({ seed = 1 } = {}) {
     for (const [from, t0] of [[neg, line], [pos, line + 6]]) {
       if (from == null) continue;
       if (from > z0) course(axis, t0, a0, a1, z0, Math.min(z1, from), ops, PLASTER, label + ' skin', 4);
-      if (from < z1) brickRows(axis, t0, a0, a1, Math.max(z0, from), z1, ops, 4, label + ' brick');
+      if (from < z1) (stucco ? stuccoRows : brickRows)(axis, t0, a0, a1, Math.max(z0, from), z1, ops, 4, label + ' brick');
     }
   }
   // windows (tavistock windowIn): slim white frame in the outer half, meeting rail, glass, stone sill; on brick a
   // white lintel with a keystone over the head
-  function windowIn(axis, line, out, o, { sill = true, lintel = true } = {}) {
+  function windowIn(axis, line, out, o, { sill = true, lintel = true, mull = [] } = {}) {
     const T = { color: WHITE };
     const pb = (a, b, z, zt, m, lab, t0 = line, t1 = line + 10) => axis === 'x' ? box(a, t0, z, b, t1, zt, m, lab) : box(t0, a, z, t1, b, zt, m, lab);
     const f0 = out < 0 ? line : line + 4, f1 = f0 + 6;
@@ -131,6 +135,7 @@ export function whitetail({ seed = 1 } = {}) {
     pb(o.a0 + 2, o.a1 - 2, mz - 2, mz, T, 'meeting rail', line + 4, line + 6);
     pb(o.a0 + 2, o.a1 - 2, o.z0 + 2, mz - 2, GLASS, 'glass', line + 4, line + 6);
     pb(o.a0 + 2, o.a1 - 2, mz, o.z1 - 2, GLASS, 'glass', line + 4, line + 6);
+    for (const m of mull) pb(m, m + 2, o.z0 + 2, o.z1 - 2, T, 'mullion', out < 0 ? line + 2 : line + 6, out < 0 ? line + 4 : line + 8);
     const p0 = out < 0 ? line - 2 : line + 10, p1 = p0 + 2;
     if (sill) pb(o.a0 - 2, o.a1 + 2, o.z0 - 4, o.z0, { color: STONE }, 'sill', p0, p1);
     if (lintel) {
@@ -180,7 +185,9 @@ export function whitetail({ seed = 1 } = {}) {
       for (const [z0, z1, t, kind] of bands(R.z0, R.z1)) {
         let a0 = lo, a1 = hi;
         if (axis === 'y') { if (has.y0) a0 += t; if (has.y1) a1 -= t; }
-        let spans = ws.filter(w => w.z0 <= z0 && w.z1 >= z1).map(w => [Math.max(a0, w.a0), Math.min(a1, w.a1)]).filter(([p, q]) => q > p);
+        // spans of neighbouring walls merged: a band split at a wall joint showed as a seam (owner screenshot 10-28)
+        let spans = ws.filter(w => w.z0 <= z0 && w.z1 >= z1).map(w => [Math.max(a0, w.a0), Math.min(a1, w.a1)]).filter(([p, q]) => q > p).sort((u, v) => u[0] - v[0])
+          .reduce((m, sp) => (m.length && sp[0] <= m.at(-1)[1] ? (m.at(-1)[1] = Math.max(m.at(-1)[1], sp[1]), m) : [...m, [...sp]]), []);
         const parts = [];
         for (const o of ops) {
           const door = o.z0 <= R.z0 + 2;
@@ -252,10 +259,16 @@ export function whitetail({ seed = 1 } = {}) {
   // M: main block x 300..580, y 30..350, side gable, ridge band y 180..200, 10 per course; the kitchen / great room
   // flue (x 390..430, y 330..350) goes up through the back slope
   const MRZ = TOP + 10 * 16, FLUE = [390, 330, 430, 350];
-  lay('y', courses(180, MRZ, -1, 16, 10), () => [[300, 580]], -1, 'main roof');
+  // the front cross gable over the dining room / bedroom 1 (x 330..440, ridge band 380..390): M's front courses
+  // i >= 11 give way to it (M course 10 + k meets its course k), so the two slopes meet in valleys
+  const CRZ = TOP + 10 * 5;
+  lay('y', courses(180, MRZ, -1, 16, 10), b => b.i >= 11 ? minus(300, 580, [[380 - 10 * (b.i - 10), 390 + 10 * (b.i - 10)]]) : [[300, 580]], -1, 'main roof');
+  lay('x', courses(380, CRZ, -1, 5, 10), b => [[20, 70 - 10 * b.i]], -1, 'cross gable roof');
+  lay('x', courses(390, CRZ, 1, 5, 10), b => [[20, 70 - 10 * b.i]], 1, 'cross gable roof');
+  ridge(380, 20, 390, 70, CRZ, 10, 'cross gable');
   lay('y', courses(200, MRZ, 1, 15, 10), b => hit(b, FLUE[1], FLUE[3]) ? minus(300, 580, [[FLUE[0], FLUE[2]]]) : [[300, 580]], 1, 'main roof');
   ridge(300, 180, 580, 200, MRZ, 10, 'main');
-  box(300, 30, TOP, 580, 40, TOP + 10, { color: WHITE }, 'frieze');
+  box(300, 30, TOP, 340, 40, TOP + 10, { color: WHITE }, 'frieze'); box(430, 30, TOP, 580, 40, TOP + 10, { color: WHITE }, 'frieze');
   box(300, 340, TOP, 390, 350, TOP + 10, { color: WHITE }, 'frieze'); box(430, 340, TOP, 580, 350, TOP + 10, { color: WHITE }, 'frieze');
   // tower: x 200..310, y -20..260, front gable, ridge band x 250..260, 14 per course; left slope over the W roof,
   // right slope stops at M's gable wall (x 300) except in front of M (y < 30)
@@ -279,14 +292,14 @@ export function whitetail({ seed = 1 } = {}) {
   // F: family room x 390..630, y 350..490, ridge band x 500..510
   const FRZ = WT + 8 + 8 * 10;
   lay('x', courses(500, FRZ, -1, 11, 8), () => [[350, 490]], -1, 'family roof');
-  lay('x', courses(510, FRZ, 1, 12, 8), () => [[350, 490]], 1, 'family roof');
+  lay('x', courses(510, FRZ, 1, 12, 8), b => b.a0 >= 580 ? [[340, 490]] : [[350, 490]], 1, 'family roof');
   ridge(500, 350, 510, 490, FRZ, 8, 'family');
-  // garage: front gable over x 580..730, y -140..200, ridge band x 640..650; its left eave sits on the balcony deck
-  // over the garage's left bay (x 490..580, in front of M), so bedroom 2 keeps its front window (as a balcony door)
-  const GRZ = WT + 10 * 8;
-  lay('x', courses(640, GRZ, -1, 6, 10), () => [[-140, 200]], -1, 'garage roof');
-  lay('x', courses(650, GRZ, 1, 8, 10), () => [[-140, 200]], 1, 'garage roof');
-  ridge(640, -140, 650, 200, GRZ, 10, 'garage');
+  // garage: front gable x 480..730, y -140..200, ridge band x 600..610; its left slope only in front of M (y < 30) or
+  // right of it (low enough by M that bedroom 2's small front window clears it, as in the photos)
+  const GRZ = WT + 8 * 12;
+  lay('x', courses(600, GRZ, -1, 12, 8), b => b.a0 >= 580 ? [[-140, 200]] : [[-140, 30]], -1, 'garage roof');
+  lay('x', courses(610, GRZ, 1, 12, 8), () => [[-140, 200]], 1, 'garage roof');
+  ridge(600, -140, 610, 200, GRZ, 8, 'garage');
 
   // ------------------------------------------------------- basement (z 0..100) --
   const P = PAPERS, D = (a0, a1, z = G) => op(a0, a1, z, z + DOOR);
@@ -327,13 +340,13 @@ export function whitetail({ seed = 1 } = {}) {
 
   // ------------------------------------------------------- ground floor exterior --
   // W wing: office front (2 windows), left side (bedroom 2, bath 1), back (bath)
-  const offW = [op(40, 76, G + SILL, G + HEAD), op(124, 160, G + SILL, G + HEAD)];
-  wall('x', 0, 0, 200, GRADE, WT, { neg: GRADE, ops: offW, label: 'office front' }); offW.forEach(o => windowIn('x', 0, -1, o));
+  const offW = op(50, 150, G + SILL - 10, G + HEAD + 4);   // the photos: one wide window across the office front
+  wall('x', 0, 0, 200, GRADE, WT, { neg: GRADE, ops: [offW], label: 'office front', caps: [true, false] }); windowIn('x', 0, -1, offW, { mull: [82, 116] });
   gable('x', 0, 100, 110, WRZ, 8, 10, 0, 200);
   const sideW = [op(170, 206, G + SILL, G + HEAD), op(254, 290, G + SILL, G + HEAD), op(400, 436, G + SILL, G + HEAD)];
   wall('y', 0, 10, 470, GRADE, WT, { neg: GRADE, ops: sideW, label: 'wing left', caps: [false, false] }); sideW.forEach(o => windowIn('y', 0, -1, o));
   const wbW = [op(130, 166, G + SILL + 10, G + HEAD)];
-  wall('x', 470, 0, 210, GRADE, WT, { pos: GRADE, ops: wbW, label: 'wing back' }); wbW.forEach(o => windowIn('x', 470, 1, o));
+  wall('x', 470, 0, 210, GRADE, WT, { pos: GRADE, ops: wbW, label: 'wing back', caps: [true, true] }); wbW.forEach(o => windowIn('x', 470, 1, o));
   gable('x', 470, 100, 110, WRZ, 8, 10, 0, 210);
   // tower: the portal (a round arch laid course by course, stone imposts + keystone), the recessed front door wall,
   // the side walls to TOP (outside above the wing roof), the back wall over the great room
@@ -343,12 +356,11 @@ export function whitetail({ seed = 1 } = {}) {
     const dz = Math.max(0, z + 3 - ARCH.spring), hw = Math.round(Math.sqrt(Math.max(0, ARCH.r * ARCH.r - dz * dz)) / 2) * 2;
     if (hw > 0) archOps.push(op(ARCH.c - hw, ARCH.c + hw, z, z + 6));
   }
-  wall('x', -10, 200, 310, GRADE, TOP, { neg: GRADE, pos: GRADE, ops: archOps, label: 'portal' });
+  wall('x', -10, 200, 310, GRADE, TOP, { neg: GRADE, pos: GRADE, ops: archOps, label: 'portal', caps: [true, true] });
   box(ARCH.c - ARCH.r - 6, -14, ARCH.spring - 6, ARCH.c - ARCH.r + 2, -10, ARCH.spring, { color: STONE }, 'impost');
   box(ARCH.c + ARCH.r - 2, -14, ARCH.spring - 6, ARCH.c + ARCH.r + 6, -10, ARCH.spring, { color: STONE }, 'impost');
   box(ARCH.c - 4, -14, ARCH.spring + ARCH.r - 4, ARCH.c + 4, -10, ARCH.spring + ARCH.r + 10, { color: STONE }, 'arch keystone');
-  const tgW = op(244, 266, TOP + 14, TOP + 40);
-  gable('x', -10, 250, 260, TRZ, 14, 5, 200, 310, [tgW], BRICK); windowIn('x', -10, -1, tgW, { lintel: false });
+  gable('x', -10, 250, 260, TRZ, 14, 5, 200, 310, [], BRICK);   // no window up here (owner: 'isnt even there')
   const fd = op(240, 270, G, G + DOOR), lites = [op(214, 232, G, G + DOOR), op(278, 296, G, G + DOOR)], transom = op(214, 296, G + DOOR + 4, G + DOOR + 18);
   wall('x', 100, 210, 300, GRADE, TOP, { neg: GRADE, ops: [fd, ...lites, transom], label: 'front door wall', caps: [false, false] });
   for (const o of [...lites, transom]) box(o.a0, 104, o.z0, o.a1, 106, o.z1, GLASS, 'sidelite');
@@ -364,45 +376,50 @@ export function whitetail({ seed = 1 } = {}) {
   wall('x', 250, 210, 300, G - 4, TOP, { pos: WT, ops: [op(214, 254, G, G + DOOR + 6)], label: 'tower back', caps: [false, false] });
   gable('x', 250, 250, 260, TRZ, 14, 5, 200, 300);
   // M: front (dining, laundry, the upper floor), sides, back above the great room / kitchen
-  const dinW = [op(330, 366, G + SILL - 10, G + HEAD), op(384, 420, G + SILL - 10, G + HEAD)], lauW = [op(452, 478, G + SILL + 10, G + HEAD)];
-  const upW = [op(330, 366, U + SILL, U + HEAD), op(384, 420, U + SILL, U + HEAD), op(456, 474, U + SILL + 10, U + HEAD)], balc = op(520, 550, U, U + DOOR);
-  wall('x', 30, 300, 500, GRADE, TOP, { neg: GRADE, ops: [...dinW, ...lauW, ...upW.slice(0, 3)], label: 'main front', caps: [false, false] });
-  wall('x', 30, 500, 580, GC + 4, TOP, { neg: GC + 4, ops: [balc], label: 'main front over garage', caps: [false, true] });
-  [...dinW, ...lauW, ...upW].forEach(o => windowIn('x', 30, -1, o));
-  box(balc.a0 - 4, 26, U, balc.a0, 30, U + DOOR + 4, { color: WHITE }, 'balcony door casing'); box(balc.a1, 26, U, balc.a1 + 4, 30, U + DOOR + 4, { color: WHITE }, 'balcony door casing');
-  box(balc.a0, 26, U + DOOR, balc.a1, 30, U + DOOR + 4, { color: WHITE }, 'balcony door head');
+  // the photos: a tan stucco centre gable (x 330..440) with a triple window below and a tall round-arched window up
+  // under the gable; brick either side: the laundry window, the Jack-and-Jill's and bedroom 2's small windows
+  const dinW = op(350, 420, G + SILL - 10, G + HEAD), lauW = op(452, 478, G + SILL + 10, G + HEAD);
+  const jjW = op(456, 474, U + SILL + 10, U + HEAD), b2W = op(502, 518, U + 40, U + 62);
+  const AW = { c: 384, r: 30, spring: U + 40 }, archW = [op(354, 414, U + 20, AW.spring)];
+  const archHw = z => Math.round(Math.sqrt(Math.max(0, AW.r * AW.r - (z - AW.spring) ** 2)) / 2) * 2;
+  for (let z = AW.spring; z < AW.spring + AW.r; z += 6) { const hw = archHw(z + 3); if (hw > 0) archW.push(op(AW.c - hw, AW.c + hw, z, z + 6)); }
+  wall('x', 30, 300, 330, GRADE, TOP, { neg: GRADE, label: 'main front', caps: [true, false] });
+  wall('x', 30, 330, 440, GRADE, TOP, { neg: GRADE, stucco: true, ops: [dinW, ...archW], trim: [dinW, op(354, 414, U + 20, AW.spring + AW.r)], label: 'main front gable' });
+  wall('x', 30, 440, 500, GRADE, TOP, { neg: GRADE, ops: [lauW, jjW], label: 'main front' });
+  wall('x', 30, 500, 580, GC + 4, TOP, { neg: GC + 4, ops: [b2W], label: 'main front over garage', caps: [false, true] });
+  windowIn('x', 30, -1, dinW, { mull: [372, 396] }); [lauW, jjW, b2W].forEach(o => windowIn('x', 30, -1, o));
+  for (const o of archW) box(o.a0, 34, o.z0, o.a1, 36, o.z1, GLASS, 'arched window glass');
+  for (const o of archW) for (const m of [364, 384, 404]) if (m >= o.a0 && m + 2 <= o.a1) box(m, 32, o.z0, m + 2, 34, o.z1, { color: WHITE }, 'arched window mullion');
+  box(350, 26, archW[0].z0 - 4, 418, 30, archW[0].z0, { color: STONE }, 'arched window sill');
+  gable('x', 30, 380, 390, CRZ, 10, 4, 330, 440);
   wall('y', 300, 40, 210, G - 4, TOP, { paint: true, ops: [op(120, 190, G, G + DOOR + 10)], label: 'foyer|dining' });
   wall('y', 300, 250, 340, GC + 4, TOP, { neg: GC + 4, label: 'main left over great room', caps: [false, false] });   // (from 250: it closes the stair hole's back corner)
   gable('y', 300, 180, 200, MRZ, 10, 15, 40, 340);
   const kitW = op(250, 290, G + 34, G + HEAD), bed3W = op(260, 296, U + SILL, U + HEAD), mgW = op(180, 200, MRZ - 60, MRZ - 30);
   wall('y', 570, 40, 180, GC + 4, TOP, { pos: GC + 4, label: 'main right over garage', caps: [false, false] });
+  wall('y', 570, 180, 190, WT, TOP, { pos: WT, label: 'main right over the garage back wall' });   // was a slot to the sky (owner 10-28)
   wall('y', 570, 190, 340, G - 4, TOP, { pos: GRADE, ops: [kitW, bed3W], label: 'main right', caps: [false, false] });
   [kitW, bed3W].forEach(o => windowIn('y', 570, 1, o));
   gable('y', 570, 180, 200, MRZ, 10, 15, 40, 340, [mgW]); windowIn('y', 570, 1, mgW, { lintel: false });
   // (no upper windows at the back: the family room roof rises against this wall)
-  wall('x', 340, 300, 390, GC + 4, TOP, { pos: WT, label: 'main back', caps: [false, false] });
-  wall('x', 340, 430, 580, GC + 4, TOP, { pos: WT, label: 'main back', caps: [false, false] });
+  wall('x', 340, 300, 390, GC + 4, TOP, { pos: WT, label: 'main back', caps: [true, false] });
+  wall('x', 340, 430, 580, GC + 4, TOP, { pos: WT, label: 'main back', caps: [false, true] });
   // garage: front (window + gable window), left, the +x side with its two overhead doors, back
-  const garW = op(626, 664, GRADE + 34, GRADE + 70), garGW = op(636, 654, WT + 16, WT + 44);
-  wall('x', -130, 490, 720, GRADE, WT, { neg: GRADE, ops: [garW], label: 'garage front' }); windowIn('x', -130, -1, garW);
-  gable('x', -130, 640, 650, GRZ, 10, 7, 580, 720, [garGW]); windowIn('x', -130, -1, garGW, { lintel: false });
+  // the photos: the garage's stucco front gable with one tall window running up into it
+  const garW = op(584, 626, GRADE + 30, WT + 30);
+  wall('x', -130, 490, 720, GRADE, WT, { neg: GRADE, ops: [garW], label: 'garage front', caps: [true, true] }); windowIn('x', -130, -1, garW, { mull: [604] });
+  gable('x', -130, 600, 610, GRZ, 8, 11, 490, 720, [garW]);
   wall('y', 490, -120, 30, GRADE, WT, { neg: GRADE, label: 'garage left', caps: [false, false] });
   const gd = [op(-110, -30, GRADE + 4, GRADE + 76), op(0, 160, GRADE + 4, GRADE + 76)];
   wall('y', 710, -120, 180, GRADE, WT, { pos: GRADE, ops: gd, label: 'garage side', caps: [false, false] });
   const gbd = op(660, 690, GRADE + 4, GRADE + 4 + DOOR);
-  wall('x', 180, 570, 720, GRADE, WT, { pos: GRADE, ops: [gbd], label: 'garage back' });
-  gable('x', 180, 640, 650, GRZ, 10, 7, 580, 720);
-  // the left eave's knee wall over the balcony, the deck on the garage ceiling, a railing on the wall tops
-  wall('y', 580, -120, 30, GC + 4, GRZ - 60, { neg: GC + 4, label: 'garage knee wall', caps: [false, false] });
-  box(500, -120, GC + 4, 580, 30, WT, { color: [150, 110, 80] }, 'balcony deck');
-  for (let y = -126; y < 30; y += 12) box(490, y, WT, 494, y + 4, WT + 30, { color: WHITE }, 'baluster');
-  for (let x = 502; x < 580; x += 12) box(x, -130, WT, x + 4, -126, WT + 30, { color: WHITE }, 'baluster');
-  box(490, -130, WT + 30, 494, 30, WT + 34, { color: WHITE }, 'balcony rail'); box(494, -130, WT + 30, 580, -126, WT + 34, { color: WHITE }, 'balcony rail');
+  wall('x', 180, 570, 720, GRADE, WT, { pos: GRADE, ops: [gbd], label: 'garage back', caps: [false, true] });
+  gable('x', 180, 600, 610, GRZ, 8, 11, 580, 720);
   for (const g of gd) {
     for (let z = g.z0, k = 0; z < g.z1; z += 20, k++) {
       const zt = Math.min(g.z1, z + 20);
-      box(713, g.a0, z, 717, g.a1, zt - 2, { color: WHITE }, 'garage door');
-      box(713, g.a0, zt - 2, 715, g.a1, zt, { color: shade(WHITE, 0.85) }, 'garage door groove');
+      box(713, g.a0, z, 717, g.a1, zt - 2, { color: [196, 182, 120] }, 'garage door');
+      box(713, g.a0, zt - 2, 715, g.a1, zt, { color: [170, 156, 100] }, 'garage door groove');
       if (k === 2) for (let y = g.a0 + 6; y + 10 <= g.a1 - 4; y += 16) box(717, y, z + 6, 719, y + 10, z + 14, GLASS, 'garage door lite');
     }
     box(720, g.a0 - 4, g.z0, 724, g.a0, g.z1 + 4, { color: WHITE }, 'garage trim'); box(720, g.a1, g.z0, 724, g.a1 + 4, g.z1 + 4, { color: WHITE }, 'garage trim');
@@ -421,16 +438,16 @@ export function whitetail({ seed = 1 } = {}) {
   wall('y', 200, 260, 440, G - 4, WT, { pos: WT, label: 'wing|great room', caps: [false, false] });
   wall('y', 200, 440, 470, G - 4, WT, { pos: GRADE, label: 'wing|terrace', caps: [false, false] });
   const famW = [op(420, 456, G + SILL, G + HEAD), op(470, 506, G + SILL, G + HEAD), op(520, 556, G + SILL, G + HEAD), op(570, 600, G + SILL, G + HEAD)];
-  wall('x', 470, 390, 620, GRADE, WT, { pos: GRADE, ops: famW, label: 'family back' }); famW.forEach(o => windowIn('x', 470, 1, o));
+  wall('x', 470, 390, 620, GRADE, WT, { pos: GRADE, ops: famW, label: 'family back', caps: [true, true] }); famW.forEach(o => windowIn('x', 470, 1, o));
   const famR = [op(370, 406, G + SILL, G + HEAD), op(420, 456, G + SILL, G + HEAD)];
   wall('y', 610, 350, 470, GRADE, WT, { pos: GRADE, ops: famR, label: 'family right', caps: [false, false] }); famR.forEach(o => windowIn('y', 610, 1, o));
-  wall('x', 340, 580, 620, GRADE, WT, { neg: GRADE, label: 'family front' });
+  wall('x', 340, 580, 620, GRADE, WT, { neg: GRADE, label: 'family front', caps: [false, true] });
+  wall('x', 340, 570, 580, G - 4, GC + 4, { label: 'kitchen corner' });   // was an open slot by the kitchen window wall
   gable('x', 340, 500, 510, FRZ, 8, 10, 580, 630);
   gable('x', 470, 500, 510, FRZ, 8, 10, 390, 630);
-  const famDoor = op(440, 470, G, G + DOOR);
   wall('y', 390, 370, 440, G - 4, WT, { neg: WT, ops: [op(380, 430, G, G + DOOR + 10)], label: 'great room|family', caps: [false, false] });
-  wall('y', 390, 440, 470, G - 4, WT, { neg: GRADE, ops: [famDoor], label: 'family|terrace', caps: [false, false] });
-  gable('x', 580, 290, 300, BRZ, 8, 8, 210, 390);
+  wall('y', 390, 440, 470, G - 4, WT, { neg: GRADE, label: 'family|terrace' });
+  gable('x', 580, 290, 300, BRZ, 8, 9, 200, 400);
   // fireplaces: the office's (on the left wall, outside chimney); the two-sided one between the great room and the
   // family room, its flue up through the upper floor and M's back slope
   fireplace(10, 60, 24, 120, G, 'office fireplace');
@@ -443,7 +460,8 @@ export function whitetail({ seed = 1 } = {}) {
   }
   for (const [a, b] of [[380, 406], [414, 440]]) { box(a, 324, G + 10, b, 356, G + 32, { color: [30, 28, 28] }, 'firebox'); box(a + 2, 326, G + 8, b - 2, 354, G + 10, GLOW([255, 120, 40], 3), 'embers'); box(a, 324, G + 8, a + 2, 356, G + 10, { color: [30, 28, 28] }, 'firebox'); box(b - 2, 324, G + 8, b, 356, G + 10, { color: [30, 28, 28] }, 'firebox'); }
   box(376, 310, G + 38, 444, 370, G + 42, { color: [112, 70, 40] }, 'mantel');
-  for (let z = G + 42, k = 0; z < MRZ - 20; z += 12, k++) box(FLUE[0], FLUE[1], z, FLUE[2], FLUE[3], Math.min(MRZ - 20, z + 12), { color: shade(BRICK, [1, 0.93, 1.05, 0.97][k % 4]) }, 'flue');
+  for (let z = G + 42, k = 0; z < GC; z += 12, k++) box(380, 310, z, 440, 370, Math.min(GC, z + 12), { color: shade(BRICK, [1, 0.93, 1.05, 0.97][k % 4]) }, 'chimney breast');   // owner: no gap over the mantel
+  for (let z = GC, k = 0; z < MRZ - 20; z += 12, k++) box(FLUE[0], FLUE[1], z, FLUE[2], FLUE[3], Math.min(MRZ - 20, z + 12), { color: shade(BRICK, [1, 0.93, 1.05, 0.97][k % 4]) }, 'flue');
   box(FLUE[0] - 2, FLUE[1] - 2, MRZ - 20, FLUE[2] + 2, FLUE[3] + 2, MRZ - 14, { color: STONE }, 'flue cap');
 
   // ------------------------------------------------------- ground floor interior --
@@ -526,7 +544,7 @@ export function whitetail({ seed = 1 } = {}) {
     ['ensuite', [430, 330, 440, 340], 'bathroom'], ['attic', [310, 260, 380, 340], 'garage'],
   ];
   for (const [k, R, f] of F2) floor(f, R, U, 'u' + k);
-  for (const R of [[310, 40, 430, 160], [440, 40, 490, 160], [500, 40, 570, 160], [310, 170, 440, 250], [440, 170, 570, 220], [450, 230, 570, 340], [390, 260, 440, 330]]) ceiling(...R, UC);
+  for (const R of [[310, 40, 430, 160], [440, 40, 490, 160], [500, 40, 570, 160], [310, 170, 440, 250], [440, 170, 570, 220], [450, 230, 570, 340], [390, 260, 440, 330], [310, 260, 380, 340]]) ceiling(...R, UC);
   ceiling(500, -120, 710, 180, GC, 'garage ceiling');
   finishRoom({ x0: 310, y0: 40, x1: 430, y1: 160, z0: U, z1: UC }, { paper: P[4] });
   finishRoom({ x0: 440, y0: 40, x1: 490, y1: 160, z0: U, z1: UC }, { paper: P[3], wains: { kind: 'stripe', cols: [[10, [244, 244, 240]], [10, [236, 236, 232]]] } });
@@ -622,11 +640,9 @@ export function whitetail({ seed = 1 } = {}) {
     { name: 'laundry', axis: 'x', line: 130, a0: 450, a1: 480, z0: G },
     { name: 'mud', axis: 'y', line: 490, a0: 150, a1: 180, z0: G },
     { name: 'powder', axis: 'x', line: 250, a0: 400, a1: 430, z0: G },
-    { name: 'family to terrace', axis: 'y', line: 390, a0: famDoor.a0, a1: famDoor.a1, z0: G },
     { name: 'garage back', axis: 'x', line: 180, a0: gbd.a0, a1: gbd.a1, z0: gbd.z0 },
     { name: 'bedroom 1', axis: 'x', line: 160, a0: 380, a1: 410, z0: U },
     { name: 'bedroom 2', axis: 'x', line: 160, a0: 500, a1: 530, z0: U },
-    { name: 'bedroom 2 balcony', axis: 'x', line: 30, a0: balc.a0, a1: balc.a1, z0: U },
     { name: 'jj to bedroom 1', axis: 'y', line: 430, a0: 80, a1: 110, z0: U },
     { name: 'jj to bedroom 2', axis: 'y', line: 490, a0: 80, a1: 110, z0: U },
     { name: 'bedroom 3', axis: 'x', line: 220, a0: 460, a1: 490, z0: U },
