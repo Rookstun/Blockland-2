@@ -25,7 +25,7 @@ const argv = process.argv.slice(2), opt = k => argv.includes(k) ? argv[argv.inde
 const turn = +(opt('--turn') ?? 0);
 // --house NAME: another house built on this template (mapgen/NAME.mjs exporting NAME(): whitetail, chateaureve)
 const house = opt('--house') ?? 'tavistock';
-const { fixtures } = house === 'tavistock' ? tavistock() : (await import(`./${house}.mjs`))[house]();
+const built = house === 'tavistock' ? tavistock() : (await import(`./${house}.mjs`))[house](), { fixtures } = built;
 if (turn === 2) {
   const n = ([x, y, z]) => [-x, -y, z];
   for (const r of fixtures.rooms) { r.lamps.forEach(l => { l.at = n(l.at); }); r.switch.at = n(r.switch.at); r.switch.normal = r.switch.normal.map(v => -v); }
@@ -88,6 +88,8 @@ for (const d of fixtures.doors) {
   wire(panel, 'Switch', 'bEnabled', sel, 'Expr_Select', 'bSelectB');
   wire(sel, 'Expr_Select', 'Output', servo, 'Servo', 'TargetAngle');
 }
+// --with-house: the house's own bricks in the same prefab (one paste in the client's Saved/Prefabs)
+if (argv.includes('--with-house')) for (const b of built.bricks) add(b);
 const out = opt('--out') ?? new URL('./tavistock_fixtures.brz', import.meta.url).pathname.replace(/^\/(\w:)/, '$1');
 fs.writeFileSync(out, w.toBrz({ bundle: { description: 'Tavistock fixtures: lamps, switches, doors' }, externalAssets: ASSETS }));
 console.error(`fixtures: ${fixtures.rooms.length} switches, ${nLamps} lamps, ${fixtures.doors.length} doors -> ${out}`);
