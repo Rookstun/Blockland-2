@@ -247,32 +247,32 @@
     "Bow": {
       "item": "Weapon_Bow",
       "damage": 0.5,
-      "speed": 2
+      "speed": 1
     },
     "Magic Bow": {
       "item": "Weapon_Bow",
       "damage": 1.5,
-      "speed": 3.75
+      "speed": 1.75
     },
     "Maple Bow": {
       "item": "Weapon_Bow",
       "damage": 1.1,
-      "speed": 2.75
+      "speed": 1.45
     },
     "Oak Bow": {
       "item": "Weapon_Bow",
       "damage": 0.8,
-      "speed": 2.25
+      "speed": 1.15
     },
     "Willow Bow": {
       "item": "Weapon_Bow",
       "damage": 1,
-      "speed": 2.5
+      "speed": 1.3
     },
     "Yew Bow": {
       "item": "Weapon_Bow",
       "damage": 1.3,
-      "speed": 3.25
+      "speed": 1.6
     },
     "Derringer": {
       "item": "Weapon_Derringer",
