@@ -6,6 +6,7 @@
 //   { op: 'players' }                        -> [{ name, id, pos }]
 //   { op: 'cmd', line, captureMs? }          -> console lines seen during captureMs
 //   { op: 'bricks', bricks, at, owner?, absolute? } -> loads bricks as a prefab
+//       a brick may carry owner: { id, name } (several owners in one load)
 //       absolute: true places bricks at their own coordinates and ignores `at`
 //       bricks: [{ position:[x,y,z], size:[hx,hy,hz], color:[r,g,b], asset?, material? }]
 //               in game units (stud = 10, plate = 4), size is half-extents
@@ -29,6 +30,8 @@ const OWNERS = {
   default: { id: '3f9b2d71-6c4e-4a8b-9e15-7d20c1a4b5e6', name: 'Claude Build' },
 };
 const ownerFor = name => {
+  // a real player: { id, name }
+  if (name && typeof name === 'object' && name.id) return { id: name.id, name: name.name ?? name.id };
   if (!name || name === 'default') return OWNERS.default;
   // derive a deterministic uuid from the name
   let h = 2166136261;
@@ -158,7 +161,7 @@ module.exports = class Plugin {
     return [0, 0, 0];
   }
 
-  async loadBricks({ bricks, at, owner: ownerName, absolute, captureMs }) {
+  async loadBricks({ bricks, at, owner: ownerName, absolute, captureMs, externalAssets }) {
     if (!Array.isArray(bricks) || !bricks.length) throw new Error('no bricks');
     const owner = ownerFor(ownerName);
     const [x, y, z] = absolute ? [0, 0, 0] : await this.resolveAt(at);
@@ -168,17 +171,27 @@ module.exports = class Plugin {
       if (i === -1) i = list.push(name) - 1;
       return i;
     };
-    const out = bricks.map(({ asset, material, ...b }) => ({
+    // a brick's own `owner` ({ id, name }) puts several owners in one load (each build wipeable by Bricks.Clear)
+    const owners = [owner];
+    const ownerIndex = o => {
+      if (!o) return 1;
+      const w = ownerFor(o);
+      const i = owners.findIndex(q => q.id === w.id);
+      return (i === -1 ? owners.push(w) - 1 : i) + 1;
+    };
+    const out = bricks.map(({ asset, material, owner: brickOwner, ...b }) => ({
       // colors pass straight through as RGB (swapping to BGR turned grass blue in-game)
       ...b,
       asset_name_index: index(assets, asset ?? 'PB_DefaultBrick'),
       material_index: index(materials, material ?? 'BMC_Plastic'),
-      owner_index: 1,
+      owner_index: ownerIndex(brickOwner),
     }));
-    const save = { brick_assets: assets, materials, brick_owners: [{ ...owner, bricks: out.length }], bricks: out };
+    const counts = owners.map((_, i) => out.filter(b => b.owner_index === i + 1).length);
+    const save = { brick_assets: assets, materials, brick_owners: owners.map((o, i) => ({ ...o, bricks: counts[i] })), bricks: out };
     const ref = `omegga_bridge_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     const file = path.join(this.prefabDir, ref + '.brz');
-    fs.writeFileSync(file, this.brs.writeBrzLegacy(save));
+    // externalAssets: [{ type, name }] that component data refers to by index (e.g. a TextDisplay Font: BrickFontDescriptor/MonaspaceXenon)
+    fs.writeFileSync(file, this.brs.writeBrzLegacy(save, externalAssets ? { externalAssets } : {}));
     // atOriginalPosition (1 = bricks keep their saved coordinates),
     // orientation=16 (upright), same as the terrain plugin
     const lines = [];
