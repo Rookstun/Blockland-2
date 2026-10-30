@@ -1,7 +1,7 @@
 // Farm plot (2026-10-29, owner clipboard farm_clip.brz: planter of light-brown dirt + 24 B_Small_Flower,
 // grey stone basin with a water zone, metal bucket (physics grid) with a bearing-jointed handle).
 // Loop: dip the bucket in the basin -> water shows inside it; tip it ~90 deg -> splash, bucket empties;
-// tipped over the dirt -> dirt turns dark brown, after GROW s the hidden flowers appear; click the dirt
+// tipped over the dirt -> dirt turns dark brown, the hidden flower stacks grow a layer every GROW/3 s; click the dirt
 // (Button) when grown -> flowers hide, dirt dries, a flower bundle prop spawns.
 // Two hidden chips talk by global events (multi-farm safe):
 //   farm chip (world grid): basin zone Entered (tag 'bucket') -> farm.fill {bucket location};
@@ -44,7 +44,7 @@ world.forEach((b, i) => {
     own[0].data = { ...own[0].data, bDetectEntities: true };
     basin = { c: C.AttachedZone, h: w.addBrick(copy(b, pos, { components: own })) };
   } else if (assets[b.asset_name_index] === 'B_Small_Flower') {
-    flowers.push({ c: C.BrickPropertyChanger, h: w.addBrick(copy(b, pos, { ...hid, color: FLOWER, components: [changer(FLOWER, false, false)] })) });
+    flowers.push({ z: b.position[2], c: C.BrickPropertyChanger, h: w.addBrick(copy(b, pos, { ...hid, color: FLOWER, components: [changer(FLOWER, false, false)] })) });
   } else if (b.color.join() === DRY.join()) {
     const zone = { ...comps.get(`1:${world.findIndex((_, j) => comps.has(`1:${j}`))}`)[0].data, bWater: false, bDetectEntities: true,
       bDetectPlayers: false, bDetectPlayers1: false, bDetectPlayers2: false, bDetectPlayers3: false, bDetectProjectiles: false,
@@ -152,17 +152,22 @@ const propPath = w.addPrefab(prop.toBrz({ bundle: { description: 'farm harvest: 
   const wet = g(C.Var, { Value: num(0) });
   const wetB = g(C.Expr_CompareGreater, { InputA: num(0), InputB: num(0.5) });
   const sw = g(C.Stopwatch, { Limit: GROW, Time: 0, bRunning: false });
-  const ripe = g(C.Expr_CompareGreaterOrEqual, { InputA: num(0), InputB: num(GROW) });
-  const grown = g(C.Expr_LogicalAND, { bInputA: false, bInputB: false });
+  // stacks grow one flower at a time: layer k (bottom = 0) shows at GROW*(k+1)/layers; top layer = harvestable
+  const layers = [...new Set(flowers.map(f => f.z))].sort((a, b) => a - b);
+  const stage = layers.map((z, k) => {
+    const at = g(C.Expr_CompareGreaterOrEqual, { InputA: num(0), InputB: num(GROW * (k + 1) / layers.length) });
+    const on = g(C.Expr_LogicalAND, { bInputA: false, bInputB: false });
+    wire(sw, 'Time', at, 'InputA'); wire(wetB, 'bOutput', on, 'bInputA'); wire(at, 'bOutput', on, 'bInputB');
+    for (const f of flowers.filter(f => f.z === z)) wire(on, 'bOutput', f, 'bVisibility');
+    return on;
+  });
+  const grown = stage.at(-1);
   const dry = g(C.Expr_MakeColorSRGB, { R: DRY[0], G: DRY[1], B: DRY[2], A: 255 });
   const wetC = g(C.Expr_MakeColorSRGB, { R: WET[0], G: WET[1], B: WET[2], A: 255 });
   const col = g(C.Expr_Select, { bSelectB: false });
   wire(wet, 'Value', wetB, 'InputA');
-  wire(sw, 'Time', ripe, 'InputA');
-  wire(wetB, 'bOutput', grown, 'bInputA'); wire(ripe, 'bOutput', grown, 'bInputB');
   wire(dry, 'Output', col, 'InputA'); wire(wetC, 'Output', col, 'InputB'); wire(wetB, 'bOutput', col, 'bSelectB');
   wire(col, 'Output', DC, 'Color');
-  for (const f of flowers) wire(grown, 'bOutput', f, 'bVisibility');
   // pour over the dirt while dry -> wet + start growing
   const onPour = g(C.Event_CustomGlobal, { EventName: 'farm.pour', bIsObjectEvent: false, ...evData('DataOut') }, big);
   const over = g(C.Exec_Branch, { bCond: false });
