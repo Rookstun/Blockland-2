@@ -271,6 +271,8 @@ const GRASS_FAM = [[62, 112, 50], [84, 140, 58], [104, 160, 62], [128, 152, 66],
 const GRASS_LIGHT = [0.84, 0.94, 1.04, 1.13];
 const GRASS_TONES = GRASS_FAM.map(c => GRASS_LIGHT.map(k => mat(c.map(v => Math.min(255, Math.round(v * k))))));
 GRASS.push(...GRASS_TONES.flat());
+const JUNGLE = [mat([34, 96, 40]), mat([42, 110, 46]), mat([30, 86, 36])]; // the jungle floor (2026-10-29)
+GRASS.push(...JUNGLE);
 // footpaths (2026-10-22): packed earth in the wild, flagstones on the building's own lot,
 // sandier earth in the desert
 const FOOTPATH = [mat([150, 124, 88]), mat([140, 114, 80]), mat([158, 134, 98])];
@@ -1624,6 +1626,61 @@ const shrubW = (x, y) => {
   const rho = Math.hypot(x - shrubSite.x, y - shrubSite.y) * (1 + 0.25 * fbm2(wx / 2000 + 71, wy / 2000 - 23, 3));
   return 1 - smooth(SHRUB.r - SHRUB.blend / 2, SHRUB.r + SHRUB.blend / 2, rho);
 };
+
+stage('jungle');
+// ----------------------------------------------------------------- jungle --
+// (owner 2026-10-29: "a jungle biome with gigantic trees players can jump and climb up") a surface-only
+// biome like the shrubland: deep green floor, thick ferns and bushes, no ordinary trees; the giant
+// climbable trees are the 'jungleTrees' stage. Clear of the town, desert, swamp, snow, volcano and shrubland.
+const JUNG = { r: Math.round(tune('jungle.r', 40, 'radius, cells (x K)') * K), blend: Math.round(tune('jungle.blend', 16, 'blend, cells (x K)') * K) };
+const jungleSite = (() => {
+  if (!tune('jungle.on', 1, 'jungle biome (0 = none)')) return null;
+  const tx = town.fx + TOWN.cells / 2, ty = town.fy + TOWN.cells / 2, R = JUNG.r;
+  let best = null;
+  for (let cx = 30; cx < N - 30; cx += 6)
+    for (let cy = 30; cy < N - 30; cy += 6) {
+      if (Math.hypot(cx - tx, cy - ty) < TOWN.cells / 2 + TOWN.blend + R + 10 * K) continue;
+      if (swampRho(cx, cy) < SWAMP.r + SWAMP.blend + R) continue;
+      if (Math.hypot(cx - desert.x, cy - desert.y) < DESERT.r + DESERT.blend + R) continue;
+      if (Math.hypot(cx - formerVolcano.x, cy - formerVolcano.y) < VOLC.r * 1.3 + R + 10 || tailOff(cx * N + cy)) continue;
+      if (Math.hypot(cx - snowSite.x, cy - snowSite.y) < SNOWB.r + SNOWB.blend + R) continue;
+      if (shrubSite && Math.hypot(cx - shrubSite.x, cy - shrubSite.y) < SHRUB.r + SHRUB.blend + R) continue;
+      const land = landShare(cx, cy, R);
+      if (land < 0.7) continue;
+      const score = (1 - land) * 2 + Math.abs(progress(cx, cy) - 0.6) + hash(cx, cy, 441) * 0.1;
+      if (!best || score < best.score) best = { x: cx, y: cy, score };
+    }
+  if (best) console.error(`jungle: cells ${best.x},${best.y}, r ${R}`); else console.error('jungle: no site');
+  return best;
+})();
+const jungleW = (x, y) => {
+  if (!jungleSite) return 0;
+  const wx = X0 + x * CELL, wy = Y0 + y * CELL;
+  const rho = Math.hypot(x - jungleSite.x, y - jungleSite.y) * (1 + 0.25 * fbm2(wx / 2000 + 83, wy / 2000 - 37, 3));
+  return 1 - smooth(JUNG.r - JUNG.blend / 2, JUNG.r + JUNG.blend / 2, rho);
+};
+
+// giant-tree pads: a jittered grid of cells in the jungle, ground levelled to the pad centre (radius 4, eased out to 9)
+// so each giant stands on dead-flat ground; roads and sites placed later simply veto a pad (jungleTrees checks)
+const jungleSpots = [];
+if (jungleSite) {
+  const PAD = { r: 5, e: 10 };
+  for (let bx = 0; bx < N; bx += 15)
+    for (let by = 0; by < N; by += 15) {
+      const x = bx + 6 + Math.floor(hash(bx, by, 451) * 4), y = by + 6 + Math.floor(hash(bx, by, 452) * 4), c = x * N + y;
+      if (x < 14 || y < 14 || x >= N - 14 || y >= N - 14 || jungleW(x, y) < 0.8 || H[c] <= SEA + 4 || riverD[c] < 14) continue;
+      let wet = false;
+      for (let dx = -PAD.e; dx <= PAD.e && !wet; dx += 3) for (let dy = -PAD.e; dy <= PAD.e; dy += 3) if (H[(x + dx) * N + y + dy] <= SEA + 2) { wet = true; break; }
+      if (wet) continue;
+      const h0 = H[c];
+      for (let dx = -PAD.e; dx <= PAD.e; dx++) for (let dy = -PAD.e; dy <= PAD.e; dy++) {
+        const j = (x + dx) * N + y + dy, w = 1 - smooth(PAD.r, PAD.e, Math.hypot(dx, dy));
+        if (w > 0) H[j] = Math.round(H[j] + (h0 - H[j]) * w);
+      }
+      jungleSpots.push([x, y]);
+    }
+  console.error(`jungle: ${jungleSpots.length} tree pads`);
+}
 
 stage('villages');
 // --------------------------------------------------------------- villages --
@@ -3071,7 +3128,7 @@ for (let x = 0; x < N; x++)
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) slope = Math.max(slope, Math.abs(hAt(x + dx, y + dy) - h));
     const shade = Math.floor((fbm2(wx / 900 + 7, wy / 900, 2) + 1) * 1.5) % 3;
     const nearWater = h <= SEA + 1;
-    let dw = 0, sw = 0, shw = 0;
+    let dw = 0, sw = 0, shw = 0, jw = 0;
     const plaza = false; // dungeons are buried now: no paved plazas
     let top, sub;
     if (plaza) [top, sub] = [PLAZA, STONE];
@@ -3112,6 +3169,7 @@ for (let x = 0; x < N; x++)
       [top, sub] = slope >= 5 ? [DEADROCK[shade & 1], DEADROCK[1]] : fbm2(wx / 380 + 61, wy / 380 - 7, 2) > 0.22 ? [ROT, DEADSOIL] : [DEADGRASS[shade], DEADSOIL];
     else if ((sw = Math.max(snowW(x, y), nordicSnowW(x, y))) > 0.55 || (sw > 0.25 && hash(x, y, 412) < (sw - 0.25) / 0.3)) [top, sub] = slope >= 7 && h > SEA + 6 ? [ROCK[shade & 1], ROCK[shade & 1]] : [SNOW, ROCK[0]];
     else if (h > 118 + noise2(wx / 400, wy / 400) * 8) [top, sub] = [SNOW, ROCK[0]];
+    else if ((jw = jungleW(x, y)) > 0.5 || (jw > 0.15 && hash(x, y, 442) < (jw - 0.15) / 0.35)) [top, sub] = slope >= 5 ? [ROCK[shade & 1], ROCK[shade & 1]] : [JUNGLE[shade], DIRT];
     else if ((shw = shrubW(x, y)) > 0.5 || (shw > 0.15 && hash(x, y, 432) < (shw - 0.15) / 0.35)) [top, sub] = slope >= 4 ? [ROCK[shade & 1], ROCK[shade & 1]] : [SCRUB[shade & 1], DIRT];
     else if (slope >= 4 || h > 96) [top, sub] = [ROCK[shade & 1], ROCK[shade & 1]];
     else [top, sub] = [grassAt(x, y, h, wx, wy), DIRT];
@@ -4420,6 +4478,7 @@ for (let bx = 0; bx < N; bx += 4)
     const snowy = s === SNOW && Math.max(snowW(x, y), nordicSnowW(x, y)) > 0.3 && H[x * N + y] < 140; // the snow biome's pines (2026-10-10)
     const dead = deathW[x * N + y] > 0.3 && (DEADGRASS.includes(s) || s === ROT); // the death forest: dead black trees, packed close
     if (!GRASS.includes(s) && !(ROCK.includes(s) && H[x * N + y] < 100) && !snowy && !dead) continue;
+    if (JUNGLE.includes(s)) continue; // the jungle has only its giants (next stage)
     const h = H[x * N + y];
     if (V[vi(x, y, h)] === 0) continue; // a cave mouth ate the ground
     const forest = fbm2((X0 + x * CELL) / 1500, (Y0 + y * CELL) / 1500, 2);
@@ -4536,6 +4595,53 @@ for (let bx = 2; bx < N; bx += 7)
     boulders++;
     boulderCells.push(x * N + y);
   }
+stage('jungleTrees');
+// ------------------------------------------------------------ giant trees --
+// (owner 2026-10-29) one giant per 15x15 cells of jungle floor: a 10-stud trunk, a spiral of ledges round it
+// (8 per turn, each STEP up, the ring's 40-unit ledges about 14 apart: jumpable) and a canopy deck
+// round a hole the last ledge steps out of. Ledges, trunk and deck are plain bricks; the trunk is two
+// crossed boxes (an octagon) so no ledge ever overlaps it.
+const giants = { count: 0, bricks: 0 };
+{
+  const STEP = 18, TR = 50, BARK = [[84, 58, 36], [72, 50, 32]], LEAF_J = [[26, 110, 40], [36, 126, 48], [22, 96, 36]];
+  const box = (x, y, z, sx, sy, sz, color) => { bricks.push({ asset: 'PB_DefaultBrick', position: [x, y, z], size: [sx, sy, sz], color }); giants.bricks++; };
+  const RING = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+  const why = { hill: 0, bad: 0, tried: 0, slope: 0, ramp: 0, path: 0, other: 0 };
+  // per 15x15 block: the first jungle cell (scanned from a hashed start) with dead-flat ground under the foot
+  const flatFoot = (x, y, h) => {
+    for (let dx = -6; dx <= 6; dx++) for (let dy = -6; dy <= 6; dy++) {
+      const xx = x + dx, yy = y + dy, j = xx * N + yy;
+      if (!inMap(xx, yy) || hAt(xx, yy) > h + 18 || hAt(xx, yy) <= SEA) { why.hill++; return false; }
+      if (Math.max(Math.abs(dx), Math.abs(dy)) <= 3 && (H[j] !== h || rampCol[j] || capCol[j] || pathCell[j] || keepOut[j] || reserved[j] || canopyLow[j] || townNear[j] || riverCell[j] || villageDist(xx, yy) <= VILLAGE.r + 3)) { why[H[j] !== h ? 'slope' : rampCol[j] || capCol[j] ? 'ramp' : pathCell[j] || keepOut[j] || reserved[j] ? 'path' : 'other']++; return false; }
+    }
+    return true;
+  };
+  for (const [x, y] of jungleSpots) {
+      why.tried++;
+      if (V[vi(x, y, H[x * N + y])] === 0 || !flatFoot(x, y, H[x * N + y])) { why.bad++; continue; }
+      const h = H[x * N + y], n = 22 + Math.floor(hash(x, y, 454) * 14);
+      const [wx, wy, g] = at(x, y, h + 1), top = STEP * n;
+      // trunk: a wide box and two thin strips, an octagon with notched corners
+      box(wx, wy, g + top / 2, TR, TR - 10, top / 2, BARK[0]);
+      box(wx, wy + TR - 5, g + top / 2, TR - 10, 5, top / 2, BARK[1]); box(wx, wy - TR + 5, g + top / 2, TR - 10, 5, top / 2, BARK[1]);
+      // ledges: face ledges at TR+20, corner ledges at TR+10 (the notch of the octagon), the turn alternates
+      const a0 = Math.floor(hash(x, y, 455) * 8);
+      for (let k = 0; k < n; k++) {
+        const [dx, dy] = RING[(a0 + k) % 8], d = dx && dy ? TR + 10 : TR + 20;
+        box(wx + dx * d, wy + dy * d, g + STEP * (k + 1) - 4, 20, 20, 4, BARK[k & 1].map(v => v + 22));
+      }
+      // canopy deck: a ring of four slabs round a 200-unit hole, top one step above the last ledge, drooping skirts
+      const zc = g + top + STEP - 6;
+      box(wx + 160, wy, zc, 60, 220, 6, LEAF_J[0]); box(wx - 160, wy, zc, 60, 220, 6, LEAF_J[1]);
+      box(wx, wy + 160, zc, 100, 60, 6, LEAF_J[2]); box(wx, wy - 160, zc, 100, 60, 6, LEAF_J[0]);
+      box(wx + 220, wy, zc - 14, 10, 200, 8, LEAF_J[1]); box(wx - 220, wy, zc - 14, 10, 200, 8, LEAF_J[2]);
+      box(wx, wy + 220, zc - 14, 200, 10, 8, LEAF_J[0]); box(wx, wy - 220, zc - 14, 200, 10, 8, LEAF_J[1]);
+      treeAt.push([wx, wy, 230]);
+      for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) canopyLow[(x + dx) * N + y + dy] = 1; // plants (blocked, below) keep off the foot
+      giants.count++;
+    }
+  console.error(`jungle giants: ${giants.count} trees, ${giants.bricks} bricks ${JSON.stringify(why)}`);
+}
 stage('plants');
 // ---------------------------------------------------------------- plants --
 // Brickadia's plant bricks over the grass (ferns and bushes in the woods,
@@ -4954,7 +5060,13 @@ for (let x = 1; x < N - 1; x++)
     if (h <= SEA + 1 || townNear[i] || keepOut[i] || pathCell[i] || villageDist(x, y) <= VILLAGE.r + 1 || hengeDist(x, y) <= 0 || reserved[x * N + y]) continue;
     if (trenchCell[i]) continue;
     const forest = fbm2(wx / 1500, wy / 1500, 2), meadow = fbm2(wx / 700 + 300, wy / 700 - 40, 3);
-    if (GRASS.includes(s)) {
+    if (JUNGLE.includes(s)) {
+      // jungle: ferns and bushes packed thick
+      if (r > 0.55) continue;
+      const a = pickW([['B_Fern', 50], ['B_Leaf_Bush', 20], ['B_Bush', 14], ['B_Small_Flower', 8], ['B_Branch', 8]], r2);
+      const col = a === 'B_Branch' ? [92, 66, 42] : a === 'B_Small_Flower' ? BLOOM[Math.floor(hash(x, y, 23) * BLOOM.length)] : [[30, 100, 44], [40, 118, 50], [24, 84, 38]][Math.floor(hash(x, y, 23) * 3)];
+      plant(x, y, a, col, { rot: a === 'B_Branch' && hash(x, y, 24) < 0.5 ? 1 : 0 }) || (a === 'B_Leaf_Bush' && plant(x, y, 'B_Bush', col));
+    } else if (GRASS.includes(s)) {
       if (forest > 0.08) {
         if (r > 0.34) continue;
         const a = pickW([['B_Fern', 30], ['B_Bush', 14], ['B_Leaf_Bush', 12], ['B_Pine_Tree', 9], ['B_Branch', 8], ['B_Small_Flower', 6], ['B_Rose', 3]], r2);
