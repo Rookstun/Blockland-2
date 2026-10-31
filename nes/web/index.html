@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8"><title>NES</title>
+<style>body{background:#111;color:#ccc;font:14px monospace;text-align:center}canvas{width:768px;height:720px;image-rendering:pixelated;background:#000}</style>
+<p>Drop a .nes file or <input type="file" id="f" accept=".nes"> · arrows, X = A, Z = B, Enter = Start, Shift = Select</p>
+<canvas id="c" width="256" height="240"></canvas>
+<script type="module">
+import { NES } from '../src/nes.mjs';
+const ctx = document.getElementById('c').getContext('2d'), img = ctx.createImageData(256, 240), px = new Uint32Array(img.data.buffer);
+const KEYS = { KeyX: 1, KeyZ: 2, ShiftRight: 4, ShiftLeft: 4, Enter: 8, ArrowUp: 16, ArrowDown: 32, ArrowLeft: 64, ArrowRight: 128 };
+let nes = null, held = 0, audio = null, queue = [], qpos = 0;
+addEventListener('keydown', e => { if (KEYS[e.code]) { held |= KEYS[e.code]; e.preventDefault(); } });
+addEventListener('keyup', e => { if (KEYS[e.code]) { held &= ~KEYS[e.code]; e.preventDefault(); } });
+function startAudio() {
+  audio = new AudioContext({ sampleRate: 44100 });
+  const node = audio.createScriptProcessor(1024, 0, 1);
+  node.onaudioprocess = ev => {
+    const out = ev.outputBuffer.getChannelData(0);
+    for (let i = 0; i < out.length; i++) {
+      if (!queue.length) { out[i] = 0; continue; }
+      out[i] = queue[0][qpos++]; if (qpos >= queue[0].length) { queue.shift(); qpos = 0; }
+    }
+  };
+  node.connect(audio.destination);
+}
+async function load(file) {
+  nes = new NES(new Uint8Array(await file.arrayBuffer()));
+  if (!audio) startAudio();
+}
+document.getElementById('f').onchange = e => load(e.target.files[0]);
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); load(e.dataTransfer.files[0]); });
+function loop() {
+  if (nes) {
+    nes.buttons[0] = held;
+    if (queue.length < 6) { px.set(nes.frame()); queue.push(nes.apu.take()); ctx.putImageData(img, 0, 0); } // audio queue paces the emulation
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
