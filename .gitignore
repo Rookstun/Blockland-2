@@ -25,3 +25,6 @@ wordle/wrb.brz
 tools/brs4/
 tools/wspkg/
 mapgen/.cache/
+
+nes/roms/
+nes/out/
