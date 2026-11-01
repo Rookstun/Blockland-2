@@ -22,12 +22,12 @@ const CL = { hero: gun(C7.hero, 0), hero2: gun(C7.hero2, 0), rip: gun(C7.rip, 0)
 const SPRITES = {
   hero: CL.hero, heroL: CL.hero.map(mir), hero2: CL.hero2, hero2L: CL.hero2.map(mir),
   heroP: CL.heroP, heroPL: CL.heroP.map(mir), rip: CL.rip, ripL: CL.rip.map(mir),
-  thug: ['ccccc', 'c2e2c', '.222.', '97779', '.777.', '.8.8.', '.8.8.', '.e.e.'],
-  thugL: ['ccccc', 'c2e2c', '.222.', '97779', '.777.', '.8.8.', '.8.8.', '.e.e.'].map(mir),
-  big: ['.22222.', '.2e2e2.', '.22222.', '7777777', '7777777', '7777777', '.77.77.', '.ee.ee.'],
-  bigL: ['.22222.', '.2e2e2.', '.22222.', '7777777', '7777777', '7777777', '.77.77.', '.ee.ee.'].map(mir),
-  mayor: ['.2222222.', '.2e222e2.', '.2222222.', '.2255522.', '888888888', '888888888', '888888888', '888888888', '.88...88.', '.88...88.', '.ee...ee.'],
-  mayorL: ['.2222222.', '.2e222e2.', '.2222222.', '.2255522.', '888888888', '888888888', '888888888', '888888888', '.88...88.', '.88...88.', '.ee...ee.'].map(mir),
+  thug: ['.eee.', 'e2e2e', '.222.', '66566', '.656.', '.b.b.', '.b.b.', '.e.e.'],
+  thugL: ['.eee.', 'e2e2e', '.222.', '66566', '.656.', '.b.b.', '.b.b.', '.e.e.'].map(mir),
+  big: ['.eeeee.', '.2e2e2.', '.22222.', '6665666', '6665666', '6665666', '.bb.bb.', '.ee.ee.'],
+  bigL: ['.eeeee.', '.2e2e2.', '.22222.', '6665666', '6665666', '6665666', '.bb.bb.', '.ee.ee.'].map(mir),
+  mayor: ['.2222222.', '.2e222e2.', '.2222222.', '.2255522.', 'eee666eee', 'eee656eee', 'eeeeeeeee', 'eeeeeeeee', '.ee...ee.', '.ee...ee.', '.44...44.'],
+  mayorL: ['.2222222.', '.2e222e2.', '.2222222.', '.2255522.', 'eee666eee', 'eee656eee', 'eeeeeeeee', 'eeeeeeeee', '.ee...ee.', '.ee...ee.', '.44...44.'].map(mir),
   vial: ['.6.', '6f6', '.6.'],
   heart: ['.f.', '666', '666'],
   gib: ['53', '35'],
@@ -40,10 +40,10 @@ const SN = Object.keys(SPRITES), S = Object.fromEntries(SN.map((k, i) => [k, i])
 const KSPR = [0, S.thug, S.big, S.vial, S.heart, S.mayor];
 const KHP = [0, 3, 6, 0, 0, 30];
 const STAGEMSG = [
-  'THE CARNIVAL. Everyone here is snack-shaped.',
-  'THE MALL. Security guards. Chewy ones.',
-  'CITY HALL. The mayor is full of crack.',
-  'THE AFTERLIFE. Still hungry.',
+  'THE OFFICE. Everyone here is on a deadline. Yours.',
+  'THE CUBICLES. Middle management. Chewy.',
+  'HUMAN RESOURCES. Mandatory fun.',
+  'THE C-SUITE. The CEO is full of crack.',
 ];
 
 function bgCity() {
@@ -62,11 +62,25 @@ function bgCity() {
 }
 
 
-function bgRoad() {
-  const b = bgCity();
-  for (let y = 22; y < H; y++) for (let x = 0; x < W; x++) b[y * W + x] = y === 22 ? 10 : 11;
+function bgRoad() { // the office floor (name kept from the street version)
+  let seed = 777; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const b = Array(W * H).fill(10);
+  const set = (x, y, c) => { if (x >= 0 && x < W && y >= 0 && y < H) b[y * W + x] = c; };
+  const rect = (x0, y0, w, h, c) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, c); };
+  rect(0, 0, W, 3, 11); for (let x = 3; x < W; x += 14) rect(x, 1, 7, 2, 15);          // ceiling tiles + light panels
+  for (let x = 3; x < W - 8; x += 15) {                                                  // windows on a night skyline
+    rect(x, 4, 11, 11, 11); rect(x + 1, 5, 9, 9, 1);
+    for (let i = 0; i < 4; i++) set(x + 1 + Math.floor(rnd() * 9), 5 + Math.floor(rnd() * 4), 6);
+    for (let k = 0; k < 4; k++) { const bw = 2 + Math.floor(rnd() * 2), bh = 3 + Math.floor(rnd() * 4); rect(x + 1 + k * 2, 14 - bh, bw, bh, 8); set(x + 1 + k * 2, 14 - bh + 1, 4); }
+    rect(x + 5, 4, 1, 11, 11);
+  }
+  rect(0, 21, W, 1, 11);                                                                  // baseboard
+  rect(0, 22, W, H - 22, 8); rect(0, 22, W, 1, 11);                                       // carpet
+  for (let y = 24; y < H; y += 4) for (let x = (y / 4) % 2 * 4; x < W; x += 8) rect(x, y, 4, 1, 7);
+  for (let x = 6; x < W - 12; x += 22) { rect(x, 18, 12, 3, 13); rect(x + 3, 14, 6, 4, 11); rect(x + 4, 15, 4, 2, 9); rect(x + 5, 18, 1, 1, 11); } // desks + monitors
+  for (const x of [1, 29, 51]) { rect(x, 19, 3, 2, 13); rect(x, 15, 3, 4, 9); set(x + 1, 14, 9); }                                  // plants
+  rect(W - 6, 15, 4, 6, 6); rect(W - 6, 12, 4, 3, 7);                                     // water cooler
   return b;
-
 }
 
 // music (original): 0 title fanfare, 1 flight, 2 boss, 3 level clear, 4 going soft
@@ -609,13 +623,7 @@ mod playTick() {
             khp[k] -= 1
             kst[k] = 2
             if khp[k] <= 0 {
-              if kind != 5 && Random(0, 2) == 0 {
-                kcr[k] = 1
-                khp[k] = 1
-                kst[k] = 0
-                say("DOWN! CURBSTOMP HIM (SPACE)", 30)
-                sfx(${FX.hit})
-              } else { killFoe(k, false) }
+              killFoe(k, false)
             } else if fxId < 0 { sfx(${FX.hit}) }
           }
         }
@@ -774,7 +782,7 @@ mod powerOn() {
   setScene()
   clearAll()
   playSong(0)
-  say("SPACE start. WASD move, E M16. SPAM SPACE to cook crack, SPACE near someone rips, near a crawler stomps.", 100000)
+  say("SPACE start. WASD move, E M16. SPAM SPACE to cook crack, SPACE near someone rips.", 100000)
 }
 mod powerOff() {
   booted = false
