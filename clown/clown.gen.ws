@@ -131,6 +131,9 @@ var aP1: float = 1.0
 var aV1: float = 0.0
 var aP2: float = 1.0
 var aV2: float = 0.0
+var aP3: float = 1.0
+var aV3: float = 0.0
+var shotT: int = 0
 
 @right out strip0: string = st0
 @right out strip1: string = st1
@@ -150,6 +153,8 @@ var aV2: float = 0.0
 @right out V1: float = aV1
 @right out P2: float = aP2
 @right out V2: float = aV2
+@right out P3: float = aP3
+@right out V3: float = aV3
 @right out state_: int = state
 
 // ---------- helpers
@@ -225,6 +230,12 @@ mod audio() {
       aV2 = 0.0
     }
   } else { aV2 = 0.0 }
+  // gun shots: a burst of white noise
+  if shotT > 0 {
+    aP3 = 1.0
+    aV3 = 0.7
+    shotT -= 1
+  } else { aV3 = 0.0 }
 }
 
 // ---------- drawing
@@ -524,7 +535,7 @@ mod playTick() {
       bx[b] = hx + 7.5 + fc * 8.0
       bf[b] = hf
       bvx[b] = fc * 2.4
-      if fxId < 0 { sfx(0) }
+      shotT = 3
     }
   }
   for i in 0..NB {
@@ -708,6 +719,8 @@ mod powerOff() {
   aV0 = 0.0
   aV1 = 0.0
   aV2 = 0.0
+  aV3 = 0.0
+  shotT = 0
   msg = ""
   hud = ""
   st0 = ""

@@ -28,12 +28,13 @@ if (ds.some(d => /error/i.test(d.severity))) throw Error('wirescript errors');
 const compiled = new Uint8Array(compile(gen.src, name, '{}', '{}'));
 console.log(`chip compiled, ${compiled.length} bytes`);
 
-const SYN = [...new Set(gen.synths)].map(s => `BA_Synth_Basic_${s}`);
+const synName = s => s === 'Noise' ? 'BA_Synth_Noise_White' : `BA_Synth_Basic_${s}`; // 'Noise' = white noise (gun shots)
+const SYN = [...new Set(gen.synths)].map(synName);
 function speakers(b) {
   const maxX = Math.max(...b.rootPos.map(p => p[0])), y0 = Math.min(...b.rootPos.map(p => p[1])), z = b.rootPos[0][2];
   gen.synths.forEach((s, v) => {
     const sp = b.addInside({ asset: 'B_1x1F_Speaker', position: [maxX + 20 + v * 10, y0, z], color: [30, 30, 30],
-      components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: b.ext.length + SYN.indexOf(`BA_Synth_Basic_${s}`), VolumeMultiplier: 0, PitchMultiplier: 1,
+      components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: b.ext.length + SYN.indexOf(synName(s)), VolumeMultiplier: 0, PitchMultiplier: 1,
         InnerRadius: 200, MaxDistance: 1200, bSpatialization: true, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] });
     for (const [port, target] of [[`P${v}`, 'PitchMultiplier'], [`V${v}`, 'VolumeMultiplier']])
       b.w.addWire(b.outSource(port), { brick: sp, component_type: 'Component_AudioEmitter', port: target });
