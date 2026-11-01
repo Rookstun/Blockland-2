@@ -28,7 +28,7 @@ if (ds.some(d => /error/i.test(d.severity))) throw Error('wirescript errors');
 const compiled = new Uint8Array(compile(gen.src, name, '{}', '{}'));
 console.log(`chip compiled, ${compiled.length} bytes`);
 
-const synName = s => s === 'Noise' ? 'BA_Synth_Noise_White' : `BA_Synth_Basic_${s}`; // 'Noise' = white noise (gun shots)
+const synName = s => s === 'Noise' ? 'BA_Synth_Noise_White' : s === 'NoisePink' ? 'BA_Synth_Noise_Pink' : `BA_Synth_Basic_${s}`; // 'Noise' = white noise, 'NoisePink' = pink (clown gun shots)
 const SYN = [...new Set(gen.synths)].map(synName);
 function speakers(b) {
   const maxX = Math.max(...b.rootPos.map(p => p[0])), y0 = Math.min(...b.rootPos.map(p => p[1])), z = b.rootPos[0][2];

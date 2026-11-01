@@ -39,6 +39,7 @@ const SN = Object.keys(SPRITES), S = Object.fromEntries(SN.map((k, i) => [k, i])
 // kinds (kt): 1 thug 2 big guy 3 crack 4 heart 5 the mayor (boss every 5th wave)
 const KSPR = [0, S.thug, S.big, S.vial, S.heart, S.mayor];
 const KHP = [0, 3, 6, 0, 0, 30];
+const DOORX = [10, 32, 52];
 const STAGEMSG = [
   'THE OFFICE. Everyone here is on a deadline. Yours.',
   'THE CUBICLES. Middle management. Chewy.',
@@ -73,6 +74,7 @@ function bgRoad() { // a corridor of lockers (name kept from the street version)
     rect(x + 5, 14, 1, 2, 4);
     set(x + 3, 12, 15);
   }
+  for (const dx of DOORX) { rect(dx - 1, 3, 8, 18, 11); rect(dx, 4, 6, 17, 13); rect(dx + 1, 6, 4, 4, 1); set(dx + 4, 14, 4); } // doors
   rect(0, 21, W, 1, 10);                                                   // base rail
   rect(0, 22, W, H - 22, 10);                                              // tile floor
   for (let y = 22; y < H; y += 4) rect(0, y, W, 1, 11);
@@ -95,7 +97,7 @@ const SONGS = [
 ];
 const SFX = {
   shoot: [2.0, 1.6], hit: [1.2, 0.8], kill: [0.6, 0.9, 1.4], hurt: [0.4, 0.3, 0.25, 0.2], pill: [1.0, 1.26, 1.5, 2.0],
-  heart: [1.5, 2.0], big: [0.3, 0.4, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8], boss: [0.35, 0.3, 0.35, 0.3, 0.25], ready: [2.0, 2.5, 3.0],
+  heart: [1.5, 2.0], big: [0.3, 0.4, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8], boss: [0.35, 0.3, 0.35, 0.3, 0.25], ready: [2.0, 2.5, 3.0], scream: [2.2, 2.9, 2.4, 3.0, 2.5, 3.1, 2.6, 2.0, 1.6],
 };
 const FX = Object.fromEntries(Object.keys(SFX).map((k, i) => [k, i]));
 
@@ -153,6 +155,7 @@ const KSPR = ${A(KSPR)}
 const KW = ${A(KW)}
 const KH = ${A(KH)}
 const KHP = ${A(KHP)}
+const DOORX = ${A(DOORX)}
 const STAGEMSG = ${AS(STAGEMSG)}
 const OPEN = ${AS(OPEN)}
 const CLOSE = ${AS(CLOSE)}
@@ -221,6 +224,7 @@ var khp: int[] = ${zeros(NK)}
 var kst: int[] = ${zeros(NK)}
 var kcd: int[] = ${zeros(NK)}
 var kcr: int[] = ${zeros(NK)}
+var kpan: int[] = ${zeros(NK)}
 var ga: int[] = ${zeros(NG)}
 var gx: float[] = ${zeros(NG, '0.0')}
 var gy: float[] = ${zeros(NG, '0.0')}
@@ -254,7 +258,7 @@ var aP2: float = 1.0
 var aV2: float = 0.0
 var aP3: float = 1.0
 var aV3: float = 0.0
-var shotT: int = 0
+var shotV: float = 0.0
 
 ${strips.map(k => `@right out strip${k}: string = st${k}`).join('\n')}
 @right out msg_: string = msg
@@ -344,11 +348,8 @@ mod audio() {
     }
   } else { aV2 = 0.0 }
   // gun shots: a burst of white noise
-  if shotT > 0 {
-    aP3 = 1.0
-    aV3 = 0.7
-    shotT -= 1
-  } else { aV3 = 0.0 }
+  aV3 = shotV
+  shotV = if shotV < 0.03 then 0.0 else shotV * 0.6
 }
 
 // ---------- drawing
@@ -445,6 +446,16 @@ mod draw() {
     for k in 0..NK {
       if kt[k] > 0 && ky[k] >= hf { drawSpr(sprOf(k), floor(kx[k]), floor(ky[k]) - (if kcr[k] > 0 then 4 else KH[kt[k]]), if kst[k] > 0 then 1 else 0) }
     }
+    for k in 0..NK {
+      if kt[k] > 0 && kpan[k] > 0 && t % 6 < 3 { fillRect(floor(kx[k]) + KW[kt[k]] / 2, floor(ky[k]) - KH[kt[k]] - 3, 1, 2, 4) }
+    }
+    if state == 3 && t % 8 < 5 {
+      fillRect(${W - 10}, 10, 2, 1, 4)
+      fillRect(${W - 8}, 11, 2, 1, 4)
+      fillRect(${W - 6}, 12, 2, 1, 4)
+      fillRect(${W - 8}, 13, 2, 1, 4)
+      fillRect(${W - 10}, 14, 2, 1, 4)
+    }
     for g in 0..NG {
       if ga[g] > 0 { drawSpr(${S.gib}, floor(gx[g]), floor(gy[g]), 0) }
     }
@@ -490,8 +501,10 @@ mod spawnFoe(kind: int) {
   let k = kt.find(0)
   if k >= 0 {
     kt[k] = kind
-    kx[k] = if Random(0, 1) == 0 then ${W}.0 else -9.0
-    ky[k] = 25.0 + Random(0, 9) * 1.0
+    kx[k] = DOORX[Random(0, 2)] + 3.0 - KW[kind] * 0.5
+    ky[k] = 25.0 + Random(0, 2) * 1.0
+    kpan[k] = if kind == 1 && Random(0, 99) < 35 then 1 else 0
+    if kpan[k] > 0 { sfx(${FX.scream}) }
     khp[k] = KHP[kind]
     kst[k] = 0
     kcr[k] = 0
@@ -507,6 +520,7 @@ mod spawnPickup(kind: int, x: float, y: float) {
     kcd[v] = 300
     kst[v] = 0
     kcr[v] = 0
+    kpan[v] = 0
   }
 }
 mod spawnGibs(x: float, f: float, n: int) {
@@ -543,7 +557,7 @@ mod killFoe(k: int, rip: bool) {
   let kind = kt[k]
   score += (if kind == 1 then 100 else (if kind == 2 then 250 else 1000)) * (if rip then 2 else 1)
   spawnGibs(kx[k], ky[k], if rip then 6 else 3)
-  sfx(${FX.kill})
+  sfx(${FX.scream})
   kills += 1
   let px = kx[k]
   let py = ky[k]
@@ -616,7 +630,7 @@ mod playTick() {
       bx[b] = hx + 7.5 + fc * 8.0
       bf[b] = hf
       bvx[b] = fc * 2.4
-      shotT = 3
+      shotV = 0.7
     }
   }
   for i in 0..NB {
@@ -725,7 +739,12 @@ mod playTick() {
         }
       } else {
         alive += 1
-        if kcr[k] > 0 {
+        if kpan[k] > 0 {
+          let fdir = if kx[k] + KW[kind] * 0.5 > hx + 7.5 then 1.0 else -1.0
+          kx[k] = kx[k] + fdir * 0.55
+          ky[k] = max(25.0, min(34.0, ky[k] + (Random(0, 2) - 1) * 0.3))
+          if kx[k] < -10.0 || kx[k] > ${W}.0 + 2.0 { kt[k] = 0 }
+        } else if kcr[k] > 0 {
           let cdx = hx + 7.5 - (kx[k] + KW[kind] * 0.5)
           let cdy = hf - ky[k]
           if ab(cdx) > 3.0 { kx[k] = kx[k] + (if cdx > 0.0 then 0.08 else -0.08) }
@@ -778,7 +797,7 @@ mod playTick() {
     stT = 0
     score += 200 * wave
     playSong(3)
-    say("WAVE " .. wave .. " CLEARED! +" .. 200 * wave, 100000)
+    say("WAVE " .. wave .. " CLEARED! +" .. 200 * wave .. "  GO RIGHT >>>", 100000)
   }
 }
 
@@ -801,7 +820,7 @@ mod powerOff() {
   aV1 = 0.0
   aV2 = 0.0
   aV3 = 0.0
-  shotT = 0
+  shotV = 0.0
   msg = ""
   hud = ""
 ${strips.map(k => `  st${k} = ""`).join('\n')}
@@ -847,10 +866,14 @@ ${debug ? `    kL = left || dbk.Contains("l")
     } else if state == 1 {
       playTick()
     } else if state == 3 {
-      if stT > 80 {
+      playTick()
+      if hx >= ${W - 16}.0 && stT > 20 {
         wave += 1
         state = 1
         stT = 0
+        hx = 1.0
+        setScene()
+        clearAll()
         startWave()
         playSong(if wave % 5 == 0 then 2 else 1)
       }
@@ -878,5 +901,5 @@ ${debug ? `    kL = left || dbk.Contains("l")
   }
 }
 `;
-  return { src, W, H, STRIP, PAL, synths: ['Square', 'Triangle', 'Square', 'Noise'] };
+  return { src, W, H, STRIP, PAL, synths: ['Square', 'Triangle', 'Square', 'NoisePink'] };
 }
