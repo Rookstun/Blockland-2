@@ -66,9 +66,9 @@ const FINAL = ['You lit all 13 candles and read every sign.', 'Say their names. 
 const NCANDLE = 13, NSIGN = SIGNS.length, NP = POIS.length;
 for (const p of [...POIS.map(p => p[4]), FINAL]) for (const l of p) if (l.length > 60) throw Error('line too long: ' + l);
 
-const SONGS = [{ eighth: 5, loop: 1,
-  lead: 'E5:4 D5:2 C5:2 D5:4 R:4 | G4:4 A4:2 B4:2 C5:6 R:2 | E5:4 D5:2 C5:2 D5:4 E5:4 | G5:4 E5:4 D5:8',
-  bass: 'C3:8 G2:8 | A2:8 E2:8 | C3:8 G2:8 | F2:8 G2:8' }];
+const SONGS = [{ eighth: 3, loop: 1,
+  lead: 'A4:1 C5:1 E5:1 A5:1 E5:1 C5:1 A4:1 C5:1 | B4:1 D5:1 F5:1 B5:1 F5:1 D5:1 B4:1 D5:1 | C5:1 E5:1 G5:1 C6:1 G5:1 E5:1 C5:1 E5:1 | D5:1 F5:1 A5:1 D6:1 A5:1 F5:1 D5:1 A5:1 | E5:2 G#5:2 B5:2 E6:2 | A5:4 R:4',
+  bass: 'A2:2 A2:2 A2:2 E3:2 | G2:2 G2:2 G2:2 D3:2 | C3:2 C3:2 C3:2 G3:2 | D3:2 D3:2 D3:2 A3:2 | E3:2 E3:2 E3:2 B3:2 | A2:8' }];
 const SFX = { light: [2.0, 2.5, 3.0, 3.0], read: [1.5, 1.8], done: [1.0, 1.26, 1.5, 2.0, 2.5, 3.0] };
 const FX = Object.fromEntries(Object.keys(SFX).map((k, i) => [k, i]));
 
@@ -278,16 +278,16 @@ mod audio() {
   }
   if mp0 > 0.0 {
     aP0 = mp0
-    aV0 = if md0 <= 1 then 0.0 else 0.25 * max(0.4, 1.0 - mt0 * 0.04)
+    aV0 = if md0 <= 1 then 0.0 else 0.6 * max(0.5, 1.0 - mt0 * 0.04)
   } else { aV0 = 0.0 }
   if mp1 > 0.0 {
     aP1 = mp1
-    aV1 = if md1 <= 1 then 0.0 else 0.4
+    aV1 = if md1 <= 1 then 0.0 else 0.7
   } else { aV1 = 0.0 }
   if fxId >= 0 {
     if fxI < FXL[fxId] {
       aP2 = FXP[FXO[fxId] + fxI]
-      aV2 = 0.4
+      aV2 = 0.6
       fxI += 1
     } else {
       fxId = -1
