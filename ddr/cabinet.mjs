@@ -55,7 +55,7 @@ export async function buildCabinet(compiled, synths, { drums = [], range = 3000,
   const maxX = Math.max(...b.rootPos.map(p => p[0])), y0 = Math.min(...b.rootPos.map(p => p[1])), gz = b.rootPos[0][2];
   [...synths.map((s, v) => [s, `P${v}`, `V${v}`]), ...drums.map((s, d) => [s, `DP${d}`, `DA${d}`])].forEach(([s, pp, vp], v) => {
     const sp = b.addInside({ asset: 'B_1x1F_Speaker', position: [maxX + 20 + (v % 4) * 10, y0 + Math.floor(v / 4) * 10, gz], color: [30, 30, 30],
-      components: [{ type: 'Component_AudioEmitter', data: { bEnabled: false /* speakers off (owner 2026-11-01: they BLAST at a song's start) */, AudioDescriptor: b.ext.length + SYN.indexOf(asset(s)), VolumeMultiplier: 0, PitchMultiplier: 1,
+      components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: b.ext.length + SYN.indexOf(asset(s)), VolumeMultiplier: 0, PitchMultiplier: 1,
         InnerRadius: inner, MaxDistance: range, bSpatialization: true, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] });
     wireOut(pp, sp, 'Component_AudioEmitter', 'PitchMultiplier');
     wireOut(vp, sp, 'Component_AudioEmitter', 'VolumeMultiplier');

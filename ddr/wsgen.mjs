@@ -165,10 +165,10 @@ out off${k}${j}: vector = so${k}${j}`).join(NL)}
 out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
 ${eachV(v => `out P${v}: float = vp${v}
-out V${v}: float = ${CLICK[v] ? `vv${v}` : `min(vv${v}, Dampen(vv${v}, 0.025))`}`)}   // smooth voices tween only incoming; clicky ones snap
+out V${v}: float = if state == 1 || state == 2 then ${CLICK[v] ? `vv${v}` : `min(vv${v}, Dampen(vv${v}, 0.025))`} else 0.0`)}   // smooth voices tween only incoming; clicky ones snap
 ${eachD(d => { const { kind, dur, hi, lo } = drumDefs[d]; return `let e${d} = min(1.0, max(0.0, dn${d} - Tween(dn${d}, ${f(dur)})))   // ${kind}
 out DP${d}: float = ds${d} * (${f(lo)} + ${f(hi - lo)} * e${d} * e${d})
-out DA${d}: float = dg${d} * e${d}`; })}
+out DA${d}: float = if state == 1 || state == 2 then dg${d} * e${d} else 0.0`; })}
 
 mod silence() {
 ${eachV(v => `  vv${v} = 0.0
