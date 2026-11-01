@@ -332,8 +332,18 @@ mod finish() {
   addTop(pts, ctrl.GetUserName())
   judge = "\${grade}  \${pts}"
   jcol = ColorSRGB(255, 225, 60, 255)
-  info = "P\${nP} G\${nG} OK\${nO} X\${nM}"
-  comboTxt = "MAX \${maxCombo}  +\${coins}c"
+  // the stats sit in the middle of the screen (the lane panels), one per lane, not on the narrow side panels
+  info = ""
+  comboTxt = ""
+  st04 = "P\${nP}"
+  st14 = "G\${nG}"
+  st24 = "O\${nO}"
+  st34 = "X\${nM}"
+  st03 = "MAX"
+  st13 = "\${maxCombo}"
+  st23 = ""
+  st33 = "+\${coins}c"
+${[0, 1, 2, 3].map(k => [4, 3].map(j => `  so${k}${j} = Vec(0.0, 0.0, 0.0)`).join('\n')).join('\n')}
   title = "\${NAMES[song]}\\nCLEARED!\\n↑ NEXT"
   BroadcastChatMessage("<color=\\"ff60d0\\">\${ctrl.GetUserName()} danced \${NAMES[song]}: \${grade} (\${pts})</>")
 }
