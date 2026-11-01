@@ -74,7 +74,7 @@ function bgRoad() { // a corridor of lockers (name kept from the street version)
     rect(x + 5, 14, 1, 2, 4);
     set(x + 3, 12, 15);
   }
-  for (const dx of DOORX) { rect(dx - 1, 3, 8, 18, 11); rect(dx, 4, 6, 17, 13); rect(dx + 1, 6, 4, 4, 1); set(dx + 4, 14, 4); } // doors
+  for (const dx of DOORX) { rect(dx - 1, 3, 8, 18, 11); rect(dx, 4, 6, 17, 0); } // doorways (the panel slides in the chip)
   rect(0, 21, W, 1, 10);                                                   // base rail
   rect(0, 22, W, H - 22, 10);                                              // tile floor
   for (let y = 22; y < H; y += 4) rect(0, y, W, 1, 11);
@@ -235,6 +235,9 @@ var bt: int[] = ${zeros(NB)}
 var bx: float[] = ${zeros(NB, '0.0')}
 var bf: float[] = ${zeros(NB, '0.0')}
 var bvx: float[] = ${zeros(NB, '0.0')}
+var dop: float[] = [0.0, 0.0, 0.0]
+var dT: int[] = [0, 0, 0]
+var nextDoor: int = 0
 var rx: int[] = []
 var ry: int[] = []
 var rw: int[] = []
@@ -434,6 +437,11 @@ mod draw() {
   rh.clear()
   let fx: int = floor(hx)
   let hfy: int = floor(hf)
+  for d in 0..3 {
+    let pw: int = floor(6.0 * (1.0 - dop[d]))
+    if pw > 0 { fillRect(DOORX[d], 4, pw, 17, 13) }
+    if pw > 2 { fillRect(DOORX[d] + pw - 2, 14, 1, 1, 4) }
+  }
   if state == 0 {
     drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, ${(W - 15) >> 1}, 13 + (t / 10) % 2, 0)
   } else {
@@ -496,12 +504,16 @@ mod clearAll() {
   }
   for i in 0..NG { ga[i] = 0 }
   for i in 0..NB { bt[i] = 0 }
+  for d in 0..3 {
+    dT[d] = 0
+    dop[d] = 0.0
+  }
 }
 mod spawnFoe(kind: int) {
   let k = kt.find(0)
   if k >= 0 {
     kt[k] = kind
-    kx[k] = DOORX[Random(0, 2)] + 3.0 - KW[kind] * 0.5
+    kx[k] = DOORX[nextDoor] + 3.0 - KW[kind] * 0.5
     ky[k] = 25.0 + Random(0, 2) * 1.0
     kpan[k] = if kind == 1 && Random(0, 99) < 35 then 1 else 0
     if kpan[k] > 0 { sfx(${FX.scream}) }
@@ -708,11 +720,21 @@ mod playTick() {
     }
   }
 
+  // doors slide open before someone comes out and close after
+  for d in 0..3 {
+    if dT[d] > 0 {
+      dT[d] -= 1
+      dop[d] = min(1.0, dop[d] + 0.2)
+    } else { dop[d] = max(0.0, dop[d] - 0.15) }
+  }
+  if spawnT < 14.0 && toSpawn > 0 { dT[nextDoor] = 30 }
+
   // spawns
   spawnT = spawnT - 1.0
   if spawnT <= 0.0 && toSpawn > 0 && alive < 4 {
     spawnFoe(if toSpawn == 1 && wave % 5 == 0 then 5 else (if Random(0, 99) < min(45, wave * 8) then 2 else 1))
     toSpawn -= 1
+    nextDoor = Random(0, 2)
     spawnT = 50.0 - min(30, wave * 3) * 1.0
   }
 
