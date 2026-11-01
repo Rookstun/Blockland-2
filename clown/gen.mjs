@@ -705,6 +705,14 @@ mod playTick() {
           let cdy = hf - ky[k]
           if ab(cdx) > 3.0 { kx[k] = kx[k] + (if cdx > 0.0 then 0.08 else -0.08) }
           if ab(cdy) > 1.0 { ky[k] = ky[k] + (if cdy > 0.0 then 0.06 else -0.06) }
+          let sx: int = floor(kx[k] + KW[kind] * 0.5)
+          let sy: int = floor(ky[k]) - 1
+          for q in 0..3 {
+            if sx + q >= 0 && sx + q < ${W} {
+              bg[sy * ${W} + sx + q] = 5
+              put(sx + q, sy, 5)
+            }
+          }
         } else if kst[k] > 0 { kst[k] -= 1 } else {
           let dx = hx + 7.5 - (kx[k] + KW[kind] * 0.5)
           let dy = hf - ky[k]
