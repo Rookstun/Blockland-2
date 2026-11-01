@@ -17,7 +17,7 @@ const C7 = {
 };
 // the M16: stock/handle on the shoulder side, barrel pointing right, muzzle flash when firing
 const gun = (rows, flash) => rows.map(pad).map((r, i) =>
-  i === 5 ? r.slice(0, 11) + '.bb' + (flash ? '4' : '.') : i === 6 ? r.slice(0, 11) + 'bbb' + (flash ? '4' : 'b') : r);
+  i === 5 ? r.slice(0, 11) + '.66' + (flash ? '4' : '.') : i === 6 ? r.slice(0, 11) + '666' + (flash ? '4' : '6') : r);
 const CL = { hero: gun(C7.hero, 0), hero2: gun(C7.hero2, 0), rip: gun(C7.rip, 0), heroP: gun(C7.hero, 1) };
 const SPRITES = {
   hero: CL.hero, heroL: CL.hero.map(mir), hero2: CL.hero2, hero2L: CL.hero2.map(mir),
@@ -68,8 +68,10 @@ function bgRoad() {
 const SONGS = [
   { eighth: 3, loop: 1, lead: 'G4:1 C5:1 E5:1 G5:3 E5:2 G5:8 | A5:2 G5:2 F5:2 E5:2 D5:4 R:4',
     bass: 'C3:2 G2:2 C3:2 G2:2 C3:2 G2:2 C3:2 G2:2 | F2:2 C3:2 F2:2 C3:2 G2:2 D3:2 G2:2 D3:2' },
-  { eighth: 3, loop: 1, lead: 'A4:1 A4:1 C5:1 A4:1 E5:2 D5:2 | C5:1 C5:1 D5:1 C5:1 B4:4 | A4:1 A4:1 C5:1 A4:1 E5:2 G5:2 | F5:2 E5:2 D5:2 B4:2',
-    bass: 'A2 A2 A2 A2 F2 F2 G2 G2 | A2 A2 A2 A2 E2 E2 E2 E2 | A2 A2 A2 A2 F2 F2 G2 G2 | D2 D2 D2 D2 E2 E2 G#2 G#2' },
+  // gameplay: Primus-ish, 7/8 bouncy bass riff (D), chromatic walk-down on bar 4, nasal square lead
+  { eighth: 3, loop: 1,
+    lead: 'A4:2 R:1 G4:1 A4:1 C5:2 | D5:2 R:1 C5:1 A4:1 G4:2 | A#4:2 R:1 A4:1 G4:1 A#4:2 | E5:1 D#5:1 D5:1 C#5:1 C5:1 B4:1 A4:1',
+    bass: 'D2:1 D3:1 R:1 D3:1 F3:1 E3:1 D3:1 | D2:1 D3:1 R:1 D3:1 A2:1 C3:1 D3:1 | G2:1 G3:1 R:1 G3:1 A#3:1 A3:1 G3:1 | A2:1 A3:1 G#3:1 G3:1 F#3:1 F3:1 E3:1' },
   { eighth: 2, loop: 1, lead: 'E5:1 D#5:1 E5:1 B4:1 C5:2 A4:2 | E5:1 D#5:1 E5:1 B4:1 D5:2 G#4:2',
     bass: 'A2 A2 E2 E2 A2 A2 E2 E2 | G#2 G#2 E2 E2 G#2 G#2 E2 E2' },
   { eighth: 3, loop: 0, lead: 'G5:1 G5:1 G5:1 C6:6 B5:1 C6:6', bass: 'C3:2 E3:2 G3:2 C3:8' },
