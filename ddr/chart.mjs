@@ -17,10 +17,10 @@ export const VOICES = [['Triangle', 'melody'], ['Triangle', 'melody'], ['Triangl
 // (lo + (hi - lo) * env^2) (a fast drop: the kick's thump), volume = vol * env. keys = GM drum notes (channel 10).
 export const DRUMS = [
   { kind: 'kick', synth: 'Sine', keys: [35, 36], dur: 0.16, hi: 0.5, lo: 0.12, vol: 2.2 },
-  { kind: 'snare', synth: 'Square', keys: [37, 38, 39, 40], dur: 0.11, hi: 1.1, lo: 0.55, vol: 0.9 },
-  { kind: 'hat', synth: 'Square', keys: [42, 44, 46, 54, 69, 70, 75, 80, 81], dur: 0.04, hi: 9.5, lo: 8.6, vol: 0.35 },
+  { kind: 'snare', synth: 'Noise', keys: [37, 38, 39, 40], dur: 0.11, hi: 1.1, lo: 0.55, vol: 0.6 },
+  { kind: 'hat', synth: 'NoisePink', keys: [42, 44, 46, 54, 69, 70, 75, 80, 81], dur: 0.04, hi: 9.5, lo: 8.6, vol: 0.3 },
   { kind: 'tom', synth: 'Triangle', keys: [41, 43, 45, 47, 48, 50, 60, 61, 62, 63, 64, 65, 66], dur: 0.2, hi: 0.7, lo: 0.32, vol: 1.6 },
-  { kind: 'cymbal', synth: 'Sawtooth', keys: [49, 51, 52, 53, 55, 56, 57, 59], dur: 0.45, hi: 9.5, lo: 8.0, vol: 0.25 },
+  { kind: 'cymbal', synth: 'NoisePink', keys: [49, 51, 52, 53, 55, 56, 57, 59], dur: 0.45, hi: 9.5, lo: 8.0, vol: 0.25 },
 ];
 // percussive GM patches (piano, chromatic perc, guitar, pizzicato/harp, square/saw leads, ethnic plucks, percussive)
 const CLICK_PROGS = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 24, 25, 26, 27, 28, 45, 46, 80, 81, 104, 105, 106, 107, 108, 112, 113, 114, 115]);

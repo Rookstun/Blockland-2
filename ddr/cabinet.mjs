@@ -38,7 +38,7 @@ export async function buildCabinet(compiled, synths, { drums = [], range = 3000,
   const b = await bundle(compiled, { owner: OWNER, offset: [0, 42, 2], hide: true, bare: true });
   const { w, O: owner } = b;
   // non-synth speakers (car horns): pitch 1 = the sample's own pitch, not A440
-  const ASSET = { HornSmall: 'BA_AMB_Component_Horn_Car_Small', HornGeneric: 'BA_AMB_Component_Horn_Car_Generic' };
+  const ASSET = { HornSmall: 'BA_AMB_Component_Horn_Car_Small', HornGeneric: 'BA_AMB_Component_Horn_Car_Generic', Noise: 'BA_Synth_Noise_White', NoisePink: 'BA_Synth_Noise_Pink' };
   const asset = s => ASSET[s] ?? `BA_Synth_Basic_${s}`;
   const SYN = [...new Set([...synths, ...drums].map(asset))];
   const ext = [...b.ext, ...SYN.map(name => ({ type: 'BrickAudioDescriptor', name }))];
