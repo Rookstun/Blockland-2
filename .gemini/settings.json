@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "brickadia": { "command": "node", "args": ["tools/mcp/brickadia-mcp.mjs"], "trust": true }
+  }
+}

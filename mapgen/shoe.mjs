@@ -57,7 +57,7 @@ box(WALL + 4, WALL + 4, FLOOR + 4, 110, 64, FLOOR + 22, { color: [120, 80, 50] }
 box(WALL + 6, WALL + 6, FLOOR + 22, 108, 62, FLOOR + 30, { color: [200, 70, 70] }, 'blanket');
 box(WALL + 6, WALL + 6, FLOOR + 30, 40, 62, FLOOR + 36, { color: WHITE }, 'pillow');
 box(230, 100, FLOOR + 4, 290, 140, FLOOR + 34, { color: [110, 76, 48] }, 'table');
-box(228, 98, FLOOR + 34, 292, 142, FLOOR + 38, { asset: TILE, color: [220, 200, 150] }, 'table top');
+box(225, 95, FLOOR + 34, 295, 145, FLOOR + 38, { asset: TILE, color: [220, 200, 150] }, 'table top');
 box(250, 112, FLOOR + 38, 260, 122, FLOOR + 44, { color: [60, 60, 66] }, 'lamp base');
 box(248, 110, FLOOR + 44, 262, 124, FLOOR + 58, { color: [255, 196, 120], material: 'BMC_Glow', material_intensity: 6 }, 'lamp');
 box(300, 100, FLOOR + 4, 316, 116, FLOOR + 20, { color: [90, 60, 40] }, 'stool');
