@@ -1,0 +1,10 @@
+{
+  "name": "joinloc",
+  "description": "Join message with the player's approximate location and ping: 'Poop has joined from New York, US: 2ms (WOW)'. Location comes from a local DB-IP table (no IP leaves the server).",
+  "author": "pooper",
+  "config": {
+    "geoDir": { "description": "Folder with geo.json + geo.bin (node mkgeo.mjs <dbip csv.gz> <dir>)", "type": "string", "default": "/home/max/geo" },
+    "delayMs": { "description": "Wait after a join before reading the ping", "type": "number", "default": 3000 }
+  },
+  "commands": []
+}
