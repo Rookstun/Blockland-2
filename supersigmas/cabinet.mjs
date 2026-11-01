@@ -69,10 +69,12 @@ function speakers(b) {
   const wireFrom = (port, brick, target) => w.addWire({ brick: b.portOut(port), component_type: OUTC, port: 'RER_Output' }, { brick, component_type: C.TextDisplay.NAME, port: target });
   const wireTo = (src, port) => w.addWire(src, { brick: b.portIn(port), component_type: INC, port: 'RER_Input' });
 
+  // 48 cells = the owner's 26-wide panel; wider pictures widen panel + cabinet (clown: 64)
+  const PW = Math.ceil(13 * gen.W / 48), BW = PW + 2;
   // ---- the owner's cabinet (clipboard bricks, rotated into this frame)
-  box(-15, 2, 24, 15, 22, 50);     // head behind the screen
-  box(-15, -8, 50, 15, 22, 58, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: title, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
-  box(-15, -8, 0, 15, 22, 24);     // base / desk
+  box(-BW, 2, 24, BW, 22, 50);     // head behind the screen
+  box(-BW, -8, 50, BW, 22, 58, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: title, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
+  box(-BW, -8, 0, BW, 22, 24);     // base / desk
   w.addBrick({ asset: 'PB_DefaultBrick', color: GREY, size: [5, 5, 6], position: [0, -22, 6], owner_index: O }); // stool
   const seat = w.addBrick({ asset: 'B_Seat', position: [0, -23, 23], direction: 4, rotation: 0, color: [255, 255, 255], owner_index: O,
     components: [{ type: C.Seat.NAME, data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: `Play ${title}` } }] });
@@ -81,14 +83,14 @@ function speakers(b) {
   const CELL = 0.5, base = hex(gen.PAL[0]);
   const Z1 = 48, SH = gen.STRIP * CELL;
   for (let k = 0; k < gen.H / gen.STRIP; k++) {
-    const s = box(-13, 0, Z1 - (k + 1) * SH, 13, 2, Z1 - k * SH, { color: base,
+    const s = box(-PW, 0, Z1 - (k + 1) * SH, PW, 2, Z1 - k * SH, { color: base,
       components: text({ LineHeight: +(CELL * 0.645).toFixed(4), WidthScale: 2, Color: rgba(base) }) });
     wireFrom(`strip${k}`, s, 'Text');
   }
   const z0 = Z1 - gen.H * CELL; // 30
-  const hud = box(-13, 0, z0 - 2, 13, 2, z0, { color: base, components: text({ LineHeight: 0.8, Color: rgba([248, 208, 64]) }) });
+  const hud = box(-PW, 0, z0 - 2, PW, 2, z0, { color: base, components: text({ LineHeight: 0.8, Color: rgba([248, 208, 64]) }) });
   wireFrom('hud_', hud, 'Text');
-  const msg = box(-13, 0, 26, 13, 2, z0 - 2, { color: base, components: text({ LineHeight: 0.8, Color: rgba([240, 240, 240]) }) });
+  const msg = box(-PW, 0, 26, PW, 2, z0 - 2, { color: base, components: text({ LineHeight: 0.8, Color: rgba([240, 240, 240]) }) });
   wireFrom('msg_', msg, 'Text');
   const titleB = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, 42], visibility: false, collision: false, owner_index: O,
     components: text({ Font: font('Bungee'), LineHeight: 2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });

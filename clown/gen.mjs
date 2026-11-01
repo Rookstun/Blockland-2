@@ -4,7 +4,7 @@
 // drop crack; 3 crack = HIGH (fast, invulnerable, wide jaws, double points). Spikes hurt, hearts heal.
 //   inputs: tick, seated, left right up down, big (Space/RMB = jump), fire (LMB/E = bite); outputs strip0..8, msg_, hud_, title_, P/V 0..2
 
-export const W = 48, H = 36, STRIP = 4;
+export const W = 64, H = 36, STRIP = 4;
 export const PAL = ['0b0820', '1c2050', 'f4a6b0', 'c86478', 'f8d040', 'd02828', 'f4f4f4', '3a6ae0',
   '1c2a80', '48c048', '50506a', '2a2a3a', 'a040d0', 'f08020', '101010', 'ffd8e0'];
 
@@ -400,7 +400,7 @@ mod draw() {
   let fx: int = floor(hx)
   let hfy: int = floor(hf)
   if state == 0 {
-    drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, 17, 13 + (t / 10) % 2, 0)
+    drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, ${(W - 15) >> 1}, 13 + (t / 10) % 2, 0)
   } else {
     for k in 0..NK {
       if kt[k] > 0 && ky[k] < hf { drawSpr(KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - KH[kt[k]], if kst[k] > 0 then 1 else 0) }
@@ -564,7 +564,7 @@ mod playTick() {
   }
   if kU { hf = hf - 0.45 }
   if kD { hf = hf + 0.45 }
-  hx = max(0.0, min(33.0, hx))
+  hx = max(0.0, min(${W - 15}.0, hx))
   hf = max(25.0, min(34.0, hf))
 
   // M16 (E / LMB, hold)
