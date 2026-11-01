@@ -133,7 +133,7 @@ export function shapedHouse({ shape = 'L', W = 40, D = 24, E = 16, storeys = 2, 
   const runs = lib.normalizeRuns([...outline, ...inner], { ...lib.CONFIG, MARGIN: 0 });
   const nOut = outline.length;
   const config = {
-    ...lib.CONFIG, WALL_COURSES: COURSES, DOOR_OPEN_COURSES: 6, /* lib.js caps doors at 6 (owner 2026-10-10) */ WINDOW_SILL_COURSES: 4, WINDOW_OPEN_COURSES: 5,
+    ...lib.CONFIG, WALL_COURSES: COURSES, DOOR_OPEN_COURSES: 6, /* lib.js caps doors at 6 (owner 2026-10-10) */ WINDOW_SILL_COURSES: 3, WINDOW_OPEN_COURSES: 5, /* sill at the waist: 3 bricks (owner 2026-11-01, player is 5 bricks tall) */
     CORNER_SNAP: 1, MARGIN: 0, STOREYS: storeys, FLOOR_MAX: 32, FLOOR_H,
   };
   config.BASE_Z = C / 2;

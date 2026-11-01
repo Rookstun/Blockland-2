@@ -22,7 +22,7 @@ const CONFIG = {
   ...lib.CONFIG,
   WALL_COURSES: COURSES,
   DOOR_OPEN_COURSES: 6,                  // 72-unit doorways (lib.js caps doors at 6 courses, owner 2026-10-10)
-  WINDOW_SILL_COURSES: 4,
+  WINDOW_SILL_COURSES: 3,                // sill at the waist (owner 2026-11-01: windows were too high; player is 5 bricks tall)
   WINDOW_OPEN_COURSES: 5,
   CORNER_SNAP: 1,                        // the plan is exact; nothing to snap
   MARGIN: 0,

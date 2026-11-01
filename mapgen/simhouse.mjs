@@ -451,10 +451,10 @@ const JOBS = {
 // and opening heights (wallgen courses), glazing bars (columns x rows), frame
 // colour, and outside either shutters, a flower box or a stone ledge
 const WINDOW_STYLES = [
-  { name: 'colonial', w: 4, sill: 4, open: 6, bars: [2, 3], frame: WHITE, outside: 'shutters', shutter: [46, 92, 70] },
+  { name: 'colonial', w: 4, sill: 3, open: 6, bars: [2, 3], frame: WHITE, outside: 'shutters', shutter: [46, 92, 70] },
   { name: 'picture', w: 6, sill: 3, open: 7, bars: [3, 1], frame: [56, 56, 60], outside: 'flowers' },
   { name: 'tall', w: 4, sill: 2, open: 9, bars: [2, 4], frame: [236, 232, 220], outside: 'ledge' },
-  { name: 'cottage', w: 2, sill: 4, open: 5, bars: [1, 2], frame: [110, 78, 50], outside: 'shutters', shutter: [130, 50, 46] },
+  { name: 'cottage', w: 2, sill: 3, open: 5, bars: [1, 2], frame: [110, 78, 50], outside: 'shutters', shutter: [130, 50, 46] },
 ];
 // a glazed opening, local world units: along `axis` from a0 to a1, through the
 // wall from t0 to t1, z0..z1; frame and bars 2 wide, panes between
