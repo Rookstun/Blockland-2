@@ -330,20 +330,29 @@ mod finish() {
     best.set(key, pts)
   }
   addTop(pts, ctrl.GetUserName())
-  judge = "\${grade}  \${pts}"
+  // results in the middle of the screen, one short word or number per lane panel (a lane fits about 3 characters):
+  // labels over values so nothing overlaps; grade and score on the bottom rows
   jcol = ColorSRGB(255, 225, 60, 255)
-  // the stats sit in the middle of the screen (the lane panels), one per lane, not on the narrow side panels
   info = ""
   comboTxt = ""
-  st04 = "P\${nP}"
-  st14 = "G\${nG}"
-  st24 = "O\${nO}"
-  st34 = "X\${nM}"
-  st03 = "MAX"
-  st13 = "\${maxCombo}"
-  st23 = ""
-  st33 = "+\${coins}c"
-${[0, 1, 2, 3].map(k => [4, 3].map(j => `  so${k}${j} = Vec(0.0, 0.0, 0.0)`).join('\n')).join('\n')}
+  judge = ""
+  st05 = "PRF"
+  st15 = "GRT"
+  st25 = "OK"
+  st35 = "MIS"
+  st04 = "\${nP}"
+  st14 = "\${nG}"
+  st24 = "\${nO}"
+  st34 = "\${nM}"
+  st13 = "MAX"
+  st33 = "COIN"
+  st12 = "\${maxCombo}"
+  st32 = "+\${coins}"
+  st01 = "GRADE"
+  st31 = "SCORE"
+  st00 = grade
+  st30 = "\${pts}"
+${[0, 1, 2, 3].map(k => [5, 4, 3, 2, 1, 0].map(j => `  so${k}${j} = Vec(0.0, 0.0, 0.0)`).join('\n')).join('\n')}
   title = "\${NAMES[song]}\\nCLEARED!\\n↑ NEXT"
   BroadcastChatMessage("<color=\\"ff60d0\\">\${ctrl.GetUserName()} danced \${NAMES[song]}: \${grade} (\${pts})</>")
 }
