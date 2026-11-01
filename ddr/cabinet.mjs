@@ -108,7 +108,7 @@ export async function buildCabinet(compiled, synths, { drums = [], range = 3000,
   box(-70, 0, 16, 70, 2, 120, { color: [4, 4, 6] });
   // the screen, in front of the black back, panels edge to edge (no gaps): title on top,
   // receptors + 4 lanes in the middle, score/combo on the dancer's left (+x), judgement on the right
-  const title = panel(70, -70, 98, 120, { Text: 'SIT DOWN TO DANCE', Color: rgba([255, 120, 230]), LineHeight: 4.5 });
+  const title = panel(70, -70, 98, 120, { Text: 'SIT DOWN TO DANCE', Color: rgba([255, 120, 230]), LineHeight: 3.5 });
   wireOut('title_t', title, TD, 'Text');
   const info = panel(70, 32, 78, 98, { Text: '', LineHeight: 6, Color: rgba([255, 255, 255]) });
   wireOut('info_t', info, TD, 'Text');
