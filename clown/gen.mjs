@@ -28,6 +28,7 @@ const SPRITES = {
   vial: ['.6.', '6f6', '.6.'],
   heart: ['.f.', '666', '666'],
   gib: ['53', '35'],
+  crawl: ['.....22.', '.77772e2', '777777..', '.8...8..'],
   bul: ['44'],
 };
 const SN = Object.keys(SPRITES), S = Object.fromEntries(SN.map((k, i) => [k, i]));
@@ -175,6 +176,7 @@ var inv: int = 0
 var crack: int = 0
 var cookM: int = 0
 var near: bool = false
+var stomped: bool = false
 var kills: int = 0
 var wave: int = 1
 var waveTot: int = 1
@@ -203,6 +205,7 @@ var ky: float[] = ${zeros(NK, '0.0')}
 var khp: int[] = ${zeros(NK)}
 var kst: int[] = ${zeros(NK)}
 var kcd: int[] = ${zeros(NK)}
+var kcr: int[] = ${zeros(NK)}
 var ga: int[] = ${zeros(NG)}
 var gx: float[] = ${zeros(NG, '0.0')}
 var gy: float[] = ${zeros(NG, '0.0')}
@@ -403,13 +406,13 @@ mod draw() {
     drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, ${(W - 15) >> 1}, 13 + (t / 10) % 2, 0)
   } else {
     for k in 0..NK {
-      if kt[k] > 0 && ky[k] < hf { drawSpr(KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - KH[kt[k]], if kst[k] > 0 then 1 else 0) }
+      if kt[k] > 0 && ky[k] < hf { drawSpr(if kcr[k] > 0 then ${S.crawl} else KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - (if kcr[k] > 0 then 4 else KH[kt[k]]), if kst[k] > 0 then 1 else 0) }
     }
     if state != 5 && (inv == 0 || t % 4 < 2) {
       drawSpr((if eatT > 0 then ${S.rip} else (if punchT > 0 then ${S.heroP} else (if moving && (t / 4) % 2 == 1 then ${S.hero2} else ${S.hero}))) + (if fc < 0 then 1 else 0), fx, hfy - 9, 0)
     }
     for k in 0..NK {
-      if kt[k] > 0 && ky[k] >= hf { drawSpr(KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - KH[kt[k]], if kst[k] > 0 then 1 else 0) }
+      if kt[k] > 0 && ky[k] >= hf { drawSpr(if kcr[k] > 0 then ${S.crawl} else KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - (if kcr[k] > 0 then 4 else KH[kt[k]]), if kst[k] > 0 then 1 else 0) }
     }
     for g in 0..NG {
       if ga[g] > 0 { drawSpr(${S.gib}, floor(gx[g]), floor(gy[g]), 0) }
@@ -445,7 +448,10 @@ mod ab(x: float) -> float {
   return max(x, 0.0 - x)
 }
 mod clearAll() {
-  for k in 0..NK { kt[k] = 0 }
+  for k in 0..NK {
+    kt[k] = 0
+    kcr[k] = 0
+  }
   for i in 0..NG { ga[i] = 0 }
   for i in 0..NB { bt[i] = 0 }
 }
@@ -457,6 +463,7 @@ mod spawnFoe(kind: int) {
     ky[k] = 25.0 + Random(0, 9) * 1.0
     khp[k] = KHP[kind]
     kst[k] = 0
+    kcr[k] = 0
     kcd[k] = 30
   }
 }
@@ -468,6 +475,7 @@ mod spawnPickup(kind: int, x: float, y: float) {
     ky[v] = y
     kcd[v] = 300
     kst[v] = 0
+    kcr[v] = 0
   }
 }
 mod spawnGibs(x: float, f: float, n: int) {
@@ -587,11 +595,19 @@ mod playTick() {
       else {
         for k in 0..NK {
           let kind = kt[k]
-          if bt[i] > 0 && kind > 0 && kind != 3 && kind != 4 && bx[i] >= kx[k] && bx[i] <= kx[k] + KW[kind] && ab(ky[k] - bf[i]) < 3.0 {
+          if bt[i] > 0 && kind > 0 && kind != 3 && kind != 4 && kcr[k] == 0 && bx[i] >= kx[k] && bx[i] <= kx[k] + KW[kind] && ab(ky[k] - bf[i]) < 3.0 {
             bt[i] = 0
             khp[k] -= 1
             kst[k] = 2
-            if khp[k] <= 0 { killFoe(k, false) } else if fxId < 0 { sfx(${FX.hit}) }
+            if khp[k] <= 0 {
+              if kind != 5 && Random(0, 2) == 0 {
+                kcr[k] = 1
+                khp[k] = 1
+                kst[k] = 0
+                say("DOWN! CURBSTOMP HIM (SPACE)", 30)
+                sfx(${FX.hit})
+              } else { killFoe(k, false) }
+            } else if fxId < 0 { sfx(${FX.hit}) }
           }
         }
       }
@@ -607,7 +623,21 @@ mod playTick() {
       if fdx > -3.0 && fdx < 19.0 && ab(ky[k] - hf) < 4.0 { near = true }
     }
   }
+  stomped = false
   if kJ && !pJ {
+    for k in 0..NK {
+      if kt[k] > 0 && kcr[k] > 0 && !stomped && ab(kx[k] + KW[kt[k]] * 0.5 - (hx + 7.5)) < 10.0 && ab(ky[k] - hf) < 3.5 {
+        stomped = true
+        spawnGibs(kx[k], ky[k], 5)
+        killFoe(k, false)
+        score += 100
+        eatT = 6
+        sfx(${FX.big})
+        say("CURBSTOMP", 25)
+      }
+    }
+  }
+  if kJ && !pJ && !stomped {
     if crack > 0 && near {
       crack -= 1
       sfx(${FX.big})
@@ -670,7 +700,12 @@ mod playTick() {
         }
       } else {
         alive += 1
-        if kst[k] > 0 { kst[k] -= 1 } else {
+        if kcr[k] > 0 {
+          let cdx = hx + 7.5 - (kx[k] + KW[kind] * 0.5)
+          let cdy = hf - ky[k]
+          if ab(cdx) > 3.0 { kx[k] = kx[k] + (if cdx > 0.0 then 0.08 else -0.08) }
+          if ab(cdy) > 1.0 { ky[k] = ky[k] + (if cdy > 0.0 then 0.06 else -0.06) }
+        } else if kst[k] > 0 { kst[k] -= 1 } else {
           let dx = hx + 7.5 - (kx[k] + KW[kind] * 0.5)
           let dy = hf - ky[k]
           let sp = if kind == 1 then 0.22 else (if kind == 2 then 0.14 else 0.1)
@@ -722,7 +757,7 @@ mod powerOn() {
   setScene()
   clearAll()
   playSong(0)
-  say("SPACE start. WASD move, E M16. SPAM SPACE to cook crack, SPACE near someone rips.", 100000)
+  say("SPACE start. WASD move, E M16. SPAM SPACE to cook crack, SPACE near someone rips, near a crawler stomps.", 100000)
 }
 mod powerOff() {
   booted = false
