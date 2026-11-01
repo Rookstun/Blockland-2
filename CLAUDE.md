@@ -7,12 +7,15 @@ Owner = renderman (in-game soapstain22, display name 'abysmal garbage'). Terse, 
 **NEVER QUEUE BRICKS, NEVER PACE (owner, furious, 2026-10-26, said many times): ALL bricks go in ONE `bricks` op in ONE job. No add_NNN batches, no chunking, no queue of jobs, no loop sending batches, no waits/sleeps/gaps, no 'procedural' one-at-a-time placement, no sitting watching a deploy. Wipe old builds with one `br.Bricks.Clear <owner> 1` (give every build its own owner), then the single bricks op.**
 
 ## Current state (2026-10-22)
-- ACTIVE WORLD = `ok` (2026-10-28: seed 2034897508, live build mapgen/out_land3 = landforms + Lombard bends, loaded by bridge-tools/newworld.mjs; quests plugin off; SaveAs-made so Sandbox mode). Older: `backup pre_bushweapon site 2026-10-25`, `site 2026-10-18`.
+- ACTIVE WORLD = `fun` (seen in the log 2026-11-01; what it holds is not written down yet: check before world edits). Before that `ok` (2026-10-28: seed 2034897508, live build mapgen/out_land3 = landforms + Lombard bends, loaded by bridge-tools/newworld.mjs; quests plugin off; SaveAs-made so Sandbox mode). Older: `backup pre_bushweapon site 2026-10-25`, `site 2026-10-18`.
 - Live map in site = out_site_1021full (river rework) + later deltas (cut walls, nobank, nosoda, notav, flush cabinets; newest base named in notes/mapgen.md + notes/shops.md). Not deployed yet: snow tier fix (~/tierdeploy), footpaths/grass tones. Details: notes/mapgen.md.
 
 ## Git
 - Workspace is a LOCAL git repo (no remote = private; core.autocrlf false). Commit after each change; prefer git over new `.pre_*` backups. .gitignore drops mapgen/out*, editor cache, vendored tools, corpus data. Other sessions commit here too: commit only your own hunks.
 - Windows edits: Python `open(..., newline='')`; `sed -i` turns CRLF files (town.mjs) into LF.
+
+## Gemini stand-in
+- `gemini --yolo` in this folder runs Gemini CLI as a sub for Claude: GEMINI.md = build playbook (imports this file + BUILDING.md), .gemini/settings.json = the brickadia MCP. Standalone builds must pass `node tools/gemini/ship.mjs JOB.json [--deploy]` (grid/overlap/owner/one-op checks, south+east previews, Clear owner + ONE bricks op). Use it for Claude builds too. CLI needs a login or GEMINI_API_KEY (not set up as of 2026-11-01).
 
 ## MCP / Eyes
 - `.mcp.json` server `brickadia` = tools/mcp/brickadia-mcp.mjs: players, cmd, job (raw bridge ops), frog, log (tail/grep game log), screenshot (gamecap).
