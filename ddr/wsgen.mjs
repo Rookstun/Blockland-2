@@ -46,6 +46,7 @@ export function generate(songs, voiceDefs, drumDefs = []) {
   D('LEAD', 'int', lead);
   D('BPM', 'int', songs.map(s => s.bpm));
   D('STEPS', 'int', songs.map(s => s.steps));
+  D('DIFF', 'int', songs.map(s => Math.max(1, Math.min(10, Math.round(s.steps / s.length * 1.6)))));  // difficulty 1-10 from the steps a second
   for (const k of L) {
     D(`NT${k}`, 'float', songs.flatMap(s => s.lanes[k].map(n => n.t)));
     D(`NO${k}`, 'int', offs(songs.map(s => s.lanes[k])));
@@ -116,6 +117,7 @@ var rowD: float = 0.1
 var sync: float = 0.0       // /ddrsync: chart delay vs the music, seconds
 var title: string = "SIT DOWN TO DANCE"
 var best: Map<string, int>
+var topn: Map<string, string>
 var score: int = 0
 var combo: int = 0
 var maxCombo: int = 0
@@ -200,6 +202,16 @@ ${eachD(d => drumReset(d, 'PDI'))}
   pt0 = ServerUptime() - PVS[song]
 }
 
+// the panel while nothing is being played: the selected song's high score and difficulty
+mod showHigh() {
+  let tp = best.get("\${song}:top")
+  let tn = topn.get("\${song}:top")
+  judge = "HIGH SCORE"
+  jcol = ColorSRGB(255, 225, 60, 255)
+  info = if tp.Found then "\${tn.Value}  \${tp.Value}" else "NO SCORE YET"
+  comboTxt = "LV \${DIFF[song]}/10"
+}
+
 mod menu() {
 ${dbg('menu')}
   state = 1
@@ -208,7 +220,8 @@ ${dbg('menu')}
   let key = "\${song}:\${player.ControllerOf().GetUserId()}"
   let b = best.get(key)
   let bestTxt = if b.Found then "BEST \${b.Value}" else "NO SCORE YET"
-  title = "◄ \${NAMES[song]} ►\\n\${BPM[song]} BPM  \${STEPS[song]} STEPS\\n\${bestTxt}\\n← → PICK  ↑ START  Q STOP"
+  title = "◄ \${NAMES[song]} ►\\n\${BPM[song]} BPM  \${STEPS[song]} STEPS  LV \${DIFF[song]}\\n\${bestTxt}\\n← → PICK  ↑ START  SPACE STOP"
+  showHigh()
 }
 
 mod start() {
@@ -291,6 +304,12 @@ mod finish() {
   if !b.Found || pts > b.Value {
     best.set(key, pts)
   }
+  let tk = "\${song}:top"
+  let tp = best.get(tk)
+  if !tp.Found || pts > tp.Value {
+    best.set(tk, pts)
+    topn.set(tk, ctrl.GetUserName())
+  }
   judge = "\${grade}  \${pts}"
   jcol = ColorSRGB(255, 225, 60, 255)
   info = "P\${nP} G\${nG} OK\${nO} X\${nM}"
@@ -336,6 +355,7 @@ ${dbg('seat state=\${state} sat=\${player != none}')}
     silence()
     clearScreen()
     title = "SIT DOWN TO DANCE"
+    showHigh()
   } else {
     menu()
   }
@@ -355,9 +375,9 @@ on ChatCommand("ddrsync", "DDR: shift the arrows vs the music, in ms (+ = arrows
   BroadcastChatMessage("<color=\\"ff60d0\\">DDR sync now \${floor(sync * 1000.0 + 0.5)} ms</>")
 }
 
-// Q or E: stop the song, back to song select
-on inp.PressedQ || inp.PressedE {
-  if (inp.PressedQ || inp.PressedE) && state == 2 {
+// Space: stop the song, back to song select
+on inp.Up > 0.5 {
+  if inp.Up > 0.5 && state == 2 {
 ${dbg('stopped')}
     menu()
   }
