@@ -68,6 +68,8 @@ var hi: int = 0
 var hp: int = 5
 var inv: int = 0
 var crack: int = 0
+var cookM: int = 0
+var near: bool = false
 var kills: int = 0
 var wave: int = 1
 var waveTot: int = 1
@@ -320,6 +322,8 @@ mod draw() {
     }
     for i in 0..5 { put(1 + i * 2, 0, if i < hp then 5 else 11) }
     for i in 0..5 { put(13 + i * 2, 0, if i < crack then 6 else 11) }
+    let cb: int = min(100, cookM) * 16 / 100
+    for i in 0..16 { put(1 + i, 2, if cookM > 0 && i < cb then 13 else bg[2 * 48 + 1 + i]) }
     let rem: int = toSpawn + alive
     let prog: int = (waveTot - rem) * 46 / max(1, waveTot)
     for i in 0..46 { put(1 + i, 1, if i < prog then 9 else 11) }
@@ -465,6 +469,7 @@ mod newGame() {
   score = 0
   hp = 5
   crack = 1
+  cookM = 0
   kills = 0
   wave = 1
   hx = 10.0
@@ -527,9 +532,18 @@ mod playTick() {
       }
     }
   }
-  // rip in half (Space / RMB), costs one crack
+  // Space / RMB: rips whoever is in the jaws (costs a crack), otherwise MASH it to cook crack
+  if cookM > 0 { cookM = max(0, cookM - 1) }
+  near = false
+  for k in 0..NK {
+    let kind = kt[k]
+    if kind > 0 && kind != 3 && kind != 4 {
+      let fdx = (kx[k] + KW[kind] * 0.5 - (hx + 7.5)) * fc
+      if fdx > -3.0 && fdx < 19.0 && ab(ky[k] - hf) < 4.0 { near = true }
+    }
+  }
   if kJ && !pJ {
-    if crack > 0 {
+    if crack > 0 && near {
       crack -= 1
       sfx(6)
       eatT = 10
@@ -546,7 +560,18 @@ mod playTick() {
           }
         }
       }
-    } else { say("No crack. Beat some out of them.", 30) }
+    } else {
+      cookM += 12
+      if cookM >= 100 {
+        cookM = 0
+        crack = min(5, crack + 1)
+        sfx(4)
+        say("COOKED 1 CRACK", 25)
+      } else {
+        if fxId < 0 { sfx(1) }
+        say("COOKING... KEEP SPAMMING " .. cookM .. "%", 10)
+      }
+    }
   }
 
   // spawns
@@ -632,7 +657,7 @@ mod powerOn() {
   setScene()
   clearAll()
   playSong(0)
-  say("SPACE start. WASD move, E M16, SPACE rips (costs crack).", 100000)
+  say("SPACE start. WASD move, E M16. SPAM SPACE to cook crack, SPACE near someone rips.", 100000)
 }
 mod powerOff() {
   booted = false
