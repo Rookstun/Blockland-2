@@ -8,15 +8,17 @@ export const W = 48, H = 36, STRIP = 4;
 export const PAL = ['0b0820', '1c2050', 'f4a6b0', 'c86478', 'f8d040', 'd02828', 'f4f4f4', '3a6ae0',
   '1c2a80', '48c048', '50506a', '2a2a3a', 'a040d0', 'f08020', '101010', 'ffd8e0'];
 
-const pad = r => '..' + r + '..';
+const pad = r => '....' + r + '....';
 const mir = r => [...r].reverse().join('');
 const C7 = {
   hero: ['dd...dd', '.ddddd.', '.6e6e6.', '.66566.', '.65556.', '.22222.', '2222222', '.2...2.', '.55.55.'],
   hero2: ['dd...dd', '.ddddd.', '.6e6e6.', '.66566.', '.65556.', '.22222.', '2222222', '..2.2..', '..5.5..'],
   rip: ['dd...dd', '.ddddd.', '.6e6e6.', '.65556.', '.5eee5.', '.22222.', '2222222', '.2...2.', '.55.55.'],
 };
-const CL = { hero: C7.hero.map(pad), hero2: C7.hero2.map(pad), rip: C7.rip.map(pad) };
-CL.heroP = CL.hero.map((r, i) => i === 6 ? '..222222222' : r);
+// the M16: stock/handle on the shoulder side, barrel pointing right, muzzle flash when firing
+const gun = (rows, flash) => rows.map(pad).map((r, i) =>
+  i === 5 ? r.slice(0, 11) + '.bb' + (flash ? '4' : '.') : i === 6 ? r.slice(0, 11) + 'bbb' + (flash ? '4' : 'b') : r);
+const CL = { hero: gun(C7.hero, 0), hero2: gun(C7.hero2, 0), rip: gun(C7.rip, 0), heroP: gun(C7.hero, 1) };
 const SPRITES = {
   hero: CL.hero, heroL: CL.hero.map(mir), hero2: CL.hero2, hero2L: CL.hero2.map(mir),
   heroP: CL.heroP, heroPL: CL.heroP.map(mir), rip: CL.rip, ripL: CL.rip.map(mir),
@@ -26,6 +28,7 @@ const SPRITES = {
   vial: ['.6.', '6f6', '.6.'],
   heart: ['5.5', '555', '.5.'],
   gib: ['53', '35'],
+  bul: ['44'],
 };
 const SN = Object.keys(SPRITES), S = Object.fromEntries(SN.map((k, i) => [k, i]));
 // kinds (kt): 1 thug 2 big guy 3 crack 4 heart 5 the mayor (boss every 5th wave)
@@ -89,7 +92,7 @@ const AS = xs => `[${xs.map(q).join(', ')}]`;
 
 
 export function generate({ debug = false } = {}) {
-  const NK = 10, NG = 10, NS = H / STRIP, HALF = H / 2;
+  const NK = 10, NG = 10, NB = 8, NS = H / STRIP, HALF = H / 2;
   const spr = [], soff = [], sw = [], sh = [];
   for (const k of SN) {
     const rows = SPRITES[k]; soff.push(spr.length); sw.push(rows[0].length); sh.push(rows.length);
@@ -122,6 +125,7 @@ const W = ${W}
 const H = ${H}
 const NK = ${NK}
 const NG = ${NG}
+const NB = ${NB}
 const BGROAD = ${A(bgRoad())}
 const SPR = ${A(spr)}
 const SOFF = ${A(soff)}
@@ -201,6 +205,10 @@ var gy: float[] = ${zeros(NG, '0.0')}
 var gfl: float[] = ${zeros(NG, '0.0')}
 var gvx: float[] = ${zeros(NG, '0.0')}
 var gvy: float[] = ${zeros(NG, '0.0')}
+var bt: int[] = ${zeros(NB)}
+var bx: float[] = ${zeros(NB, '0.0')}
+var bf: float[] = ${zeros(NB, '0.0')}
+var bvx: float[] = ${zeros(NB, '0.0')}
 var rx: int[] = []
 var ry: int[] = []
 var rw: int[] = []
@@ -388,7 +396,7 @@ mod draw() {
   let fx: int = floor(hx)
   let hfy: int = floor(hf)
   if state == 0 {
-    drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, 19, 13 + (t / 10) % 2, 0)
+    drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, 17, 13 + (t / 10) % 2, 0)
   } else {
     for k in 0..NK {
       if kt[k] > 0 && ky[k] < hf { drawSpr(KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - KH[kt[k]], if kst[k] > 0 then 1 else 0) }
@@ -401,6 +409,9 @@ mod draw() {
     }
     for g in 0..NG {
       if ga[g] > 0 { drawSpr(${S.gib}, floor(gx[g]), floor(gy[g]), 0) }
+    }
+    for i in 0..NB {
+      if bt[i] > 0 { drawSpr(${S.bul}, floor(bx[i]), floor(bf[i]) - 5, 0) }
     }
     for i in 0..5 { put(1 + i * 2, 0, if i < hp then 5 else 11) }
     for i in 0..5 { put(13 + i * 2, 0, if i < crack then 6 else 11) }
@@ -430,6 +441,7 @@ mod ab(x: float) -> float {
 mod clearAll() {
   for k in 0..NK { kt[k] = 0 }
   for i in 0..NG { ga[i] = 0 }
+  for i in 0..NB { bt[i] = 0 }
 }
 mod spawnFoe(kind: int) {
   let k = kt.find(0)
@@ -545,23 +557,35 @@ mod playTick() {
   }
   if kU { hf = hf - 0.45 }
   if kD { hf = hf + 0.45 }
-  hx = max(0.0, min(37.0, hx))
+  hx = max(0.0, min(33.0, hx))
   hf = max(25.0, min(34.0, hf))
 
-  // punch (E / LMB)
-  if kS && !pS && pcd == 0 {
-    pcd = 8
-    punchT = 4
-    sfx(${FX.shoot})
-    for k in 0..NK {
-      let kind = kt[k]
-      if kind > 0 && kind != 3 && kind != 4 {
-        let fdx = (kx[k] + KW[kind] * 0.5 - (hx + 5.5)) * fc
-        if fdx > -2.0 && fdx < 11.0 && ab(ky[k] - hf) < 3.0 {
-          khp[k] -= 1
-          kst[k] = 8
-          kx[k] = kx[k] + fc * 2.0
-          if khp[k] <= 0 { killFoe(k, false) } else { sfx(${FX.hit}) }
+  // M16 (E / LMB, hold)
+  if kS && pcd == 0 {
+    let b = bt.find(0)
+    if b >= 0 {
+      pcd = 3
+      punchT = 2
+      bt[b] = 1
+      bx[b] = hx + 7.5 + fc * 8.0
+      bf[b] = hf
+      bvx[b] = fc * 2.4
+      if fxId < 0 { sfx(${FX.shoot}) }
+    }
+  }
+  for i in 0..NB {
+    if bt[i] > 0 {
+      bx[i] = bx[i] + bvx[i]
+      if bx[i] < -2.0 || bx[i] > ${W}.0 { bt[i] = 0 }
+      else {
+        for k in 0..NK {
+          let kind = kt[k]
+          if bt[i] > 0 && kind > 0 && kind != 3 && kind != 4 && bx[i] >= kx[k] && bx[i] <= kx[k] + KW[kind] && ab(ky[k] - bf[i]) < 3.0 {
+            bt[i] = 0
+            khp[k] -= 1
+            kst[k] = 2
+            if khp[k] <= 0 { killFoe(k, false) } else if fxId < 0 { sfx(${FX.hit}) }
+          }
         }
       }
     }
@@ -575,7 +599,7 @@ mod playTick() {
       for k in 0..NK {
         let kind = kt[k]
         if kind > 0 && kind != 3 && kind != 4 {
-          let fdx = (kx[k] + KW[kind] * 0.5 - (hx + 5.5)) * fc
+          let fdx = (kx[k] + KW[kind] * 0.5 - (hx + 7.5)) * fc
           if fdx > -3.0 && fdx < 19.0 && ab(ky[k] - hf) < 4.0 {
             if kind == 5 {
               khp[k] -= 10
@@ -604,7 +628,7 @@ mod playTick() {
       if kind == 3 || kind == 4 {
         kcd[k] -= 1
         if kcd[k] <= 0 { kt[k] = 0 }
-        else if ab(kx[k] + 1.0 - (hx + 5.5)) < 6.0 && ab(ky[k] - hf) < 3.0 {
+        else if ab(kx[k] + 1.0 - (hx + 7.5)) < 6.0 && ab(ky[k] - hf) < 3.0 {
           if kind == 3 {
             crack = min(5, crack + 1)
             score += 50
@@ -620,7 +644,7 @@ mod playTick() {
       } else {
         alive += 1
         if kst[k] > 0 { kst[k] -= 1 } else {
-          let dx = hx + 5.5 - (kx[k] + KW[kind] * 0.5)
+          let dx = hx + 7.5 - (kx[k] + KW[kind] * 0.5)
           let dy = hf - ky[k]
           let sp = if kind == 1 then 0.22 else (if kind == 2 then 0.14 else 0.1)
           if ab(dx) > 7.0 { kx[k] = kx[k] + (if dx > 0.0 then sp else 0.0 - sp) }
@@ -671,7 +695,7 @@ mod powerOn() {
   setScene()
   clearAll()
   playSong(0)
-  say("SPACE start. WASD move, E punch, SPACE rips (costs crack).", 100000)
+  say("SPACE start. WASD move, E M16, SPACE rips (costs crack).", 100000)
 }
 mod powerOff() {
   booted = false
