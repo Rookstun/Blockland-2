@@ -11,12 +11,12 @@ export const PAL = ['0b0820', '1c2050', 'f4a6b0', 'c86478', 'f8d040', 'd02828', 
 const pad = r => '..' + r + '..';
 const mir = r => [...r].reverse().join('');
 const C7 = {
-  hero: ['dd...dd', '.ddddd.', '.6e6e6.', '.66566.', '.65556.', '.ccccc.', '4ccccc4', '.c...c.', '.55.55.'],
-  hero2: ['dd...dd', '.ddddd.', '.6e6e6.', '.66566.', '.65556.', '.ccccc.', '4ccccc4', '..c.c..', '..5.5..'],
-  rip: ['dd...dd', '.ddddd.', '.6e6e6.', '.65556.', '.5eee5.', '.ccccc.', '4ccccc4', '.c...c.', '.55.55.'],
+  hero: ['dd...dd', '.ddddd.', '.6e6e6.', '.66566.', '.65556.', '.22222.', '2222222', '.2...2.', '.55.55.'],
+  hero2: ['dd...dd', '.ddddd.', '.6e6e6.', '.66566.', '.65556.', '.22222.', '2222222', '..2.2..', '..5.5..'],
+  rip: ['dd...dd', '.ddddd.', '.6e6e6.', '.65556.', '.5eee5.', '.22222.', '2222222', '.2...2.', '.55.55.'],
 };
 const CL = { hero: C7.hero.map(pad), hero2: C7.hero2.map(pad), rip: C7.rip.map(pad) };
-CL.heroP = CL.hero.map((r, i) => i === 6 ? '..4ccccc444' : r);
+CL.heroP = CL.hero.map((r, i) => i === 6 ? '..222222222' : r);
 const SPRITES = {
   hero: CL.hero, heroL: CL.hero.map(mir), hero2: CL.hero2, hero2L: CL.hero2.map(mir),
   heroP: CL.heroP, heroPL: CL.heroP.map(mir), rip: CL.rip, ripL: CL.rip.map(mir),
