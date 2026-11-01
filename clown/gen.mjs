@@ -1,51 +1,41 @@
-// clown/gen.mjs: CRACK CLOWN, a side-scrolling gore-clown game (reskin of superpenisman) in one microchip (wirescript, Super Sigmas
-// engine: W x H block framebuffer, dirty rows -> text strips). Original art, music and writing.
-// Wangtown at night: fly (W A S D), laser vision (LMB / E, hold), THE BIG ONE (Space / RMB) when the meter is full.
-// 3 levels (Blue Balls Gang, Prudebots, Purity Rings) each ending in a boss (Dr. Flaccid, the Blue Balls Baron, the
-// Censor), then the next day, harder. Stiffness pills = more beams, hearts = stiffness (hp).
-// Logic runs every tick; the picture is drawn on even ticks (rows 0-17 encoded) and rows 18-35 encoded on odd ones.
-//   inputs: tick, seated, left right up down, big (Space/RMB), fire (LMB/E); outputs strip0..8, msg_, hud_, title_, P/V 0..2
+// clown/gen.mjs: CRACK CLOWN, a side-scrolling beat em up in one microchip (wirescript, Super Sigmas
+// engine: W x H block framebuffer, dirty rows -> text strips). Original game: the clown runs right on his own,
+// SPACE / W jumps, E / LMB bites (rips a person in half, eats them). Fat people take two bites. Dead people may
+// drop crack; 3 crack = HIGH (fast, invulnerable, wide jaws, double points). Spikes hurt, hearts heal.
+//   inputs: tick, seated, left right up down, big (Space/RMB = jump), fire (LMB/E = bite); outputs strip0..8, msg_, hud_, title_, P/V 0..2
+
 export const W = 48, H = 36, STRIP = 4;
 export const PAL = ['0b0820', '1c2050', 'f4a6b0', 'c86478', 'f8d040', 'd02828', 'f4f4f4', '3a6ae0',
   '1c2a80', '48c048', '50506a', '2a2a3a', 'a040d0', 'f08020', '101010', 'ffd8e0'];
 
+const pad = r => '..' + r + '..';
+const mir = r => [...r].reverse().join('');
+const C7 = {
+  hero: ['dd...dd', '.ddddd.', '.6e6e6.', '.66566.', '.65556.', '.ccccc.', '4ccccc4', '.c...c.', '.55.55.'],
+  hero2: ['dd...dd', '.ddddd.', '.6e6e6.', '.66566.', '.65556.', '.ccccc.', '4ccccc4', '..c.c..', '..5.5..'],
+  rip: ['dd...dd', '.ddddd.', '.6e6e6.', '.65556.', '.5eee5.', '.ccccc.', '4ccccc4', '.c...c.', '.55.55.'],
+};
+const CL = { hero: C7.hero.map(pad), hero2: C7.hero2.map(pad), rip: C7.rip.map(pad) };
+CL.heroP = CL.hero.map((r, i) => i === 6 ? '..4ccccc444' : r);
 const SPRITES = {
-  hero: ['dd.dd.....', '.d6666d33.', '3366e6e663', '3366666333', '.55.......'],
-  hero2: ['dd.dd.....', 'd.6666d33.', '3366e6e663', '3366666333', '5.5.......'],
-  beam: ['44'],
-  ball: ['.22.', '2e2e', '2222', '.33.'],
-  prude: ['aaaaa', 'a6a6a', 'aaaaa', 'aeeea', 'a.a.a'],
-  ring: ['.464.', '4...4', '4...4', '4...4', '.444.'],
-  pill: ['.6.', '666', '.6.'],
+  hero: CL.hero, heroL: CL.hero.map(mir), hero2: CL.hero2, hero2L: CL.hero2.map(mir),
+  heroP: CL.heroP, heroPL: CL.heroP.map(mir), rip: CL.rip, ripL: CL.rip.map(mir),
+  thug: ['ccccc', 'c2e2c', '.222.', '97779', '.777.', '.8.8.', '.8.8.', '.e.e.'],
+  big: ['.22222.', '.2e2e2.', '.22222.', '7777777', '7777777', '7777777', '.77.77.', '.ee.ee.'],
+  mayor: ['.2222222.', '.2e222e2.', '.2222222.', '.2255522.', '888888888', '888888888', '888888888', '888888888', '.88...88.', '.88...88.', '.ee...ee.'],
+  vial: ['.6.', '6f6', '.6.'],
   heart: ['5.5', '555', '.5.'],
-  ebul: ['cc'],
-  flaccid: ['..2222....', '.222222...', '22e22e22..', '22222222..', '2.2ee2.22.', '...2222222', '.....22222', '......2222', '.......33.'],
-  baron: ['...eeeee...', '...eeeee...', '.eeeeeeeee.', '.777...777.', '77677.77677', '77777.77777', '7eee7.7eee7', '.888...888.'],
-  censor: ['55555555555555', '5eeeeeeeeeeee5', '5ee66eeee66ee5', '5ee6eeeeee6ee5', '5eeeeeeeeeeee5', '55555555555555'],
+  gib: ['53', '35'],
 };
 const SN = Object.keys(SPRITES), S = Object.fromEntries(SN.map((k, i) => [k, i]));
-// enemy kinds (kt): 1 blue ball (zigzags) 2 prudebot (shoots) 3 purity ring (homes in) 4 stiffness pill 5 heart
-const KSPR = [0, S.ball, S.prude, S.ring, S.pill, S.heart];
-const KSP = [0, 0.45, 0.35, 0.3, 0.3, 0.3];
-const KHP = [0, 1, 3, 2, 0, 0];
-const KSC = [0, 100, 250, 200, 0, 0];
-const BOSS = [S.flaccid, S.baron, S.censor];
-const BHP = [25, 35, 45];
-const GOAL = [600, 750, 900];
-const LVMSG = [
+// kinds (kt): 1 thug 2 big guy 3 crack 4 heart 5 the mayor (boss every 5th wave)
+const KSPR = [0, S.thug, S.big, S.vial, S.heart, S.mayor];
+const KHP = [0, 3, 6, 0, 0, 30];
+const STAGEMSG = [
   'THE CARNIVAL. Everyone here is snack-shaped.',
   'THE MALL. Security guards. Chewy ones.',
   'CITY HALL. The mayor is full of crack.',
-];
-const BINTRO = [
-  "THE DENTIST: 'Open wide. No, YOU open wide.'",
-  "THE COP: 'Put down the person.'",
-  "THE MAYOR: 'I am the crack.'",
-];
-const BDEFEAT = [
-  'The dentist comes apart at the root. Delicious.',
-  'The cop is two cops now. You eat both.',
-  'The mayor is a pile of crack. You inhale it.',
+  'THE AFTERLIFE. Still hungry.',
 ];
 
 function bgCity() {
@@ -61,6 +51,14 @@ function bgCity() {
     x += bw + 1 + Math.floor(rnd() * 3); }
   for (let y = 34; y < H; y++) for (let x = 0; x < W; x++) set(x, y, 14);
   return b;
+}
+
+
+function bgRoad() {
+  const b = bgCity();
+  for (let y = 22; y < H; y++) for (let x = 0; x < W; x++) b[y * W + x] = y === 22 ? 10 : 11;
+  return b;
+
 }
 
 // music (original): 0 title fanfare, 1 flight, 2 boss, 3 level clear, 4 going soft
@@ -89,14 +87,15 @@ const A = xs => `[${xs.join(', ')}]`;
 const AF = xs => `[${xs.map(fl).join(', ')}]`;
 const AS = xs => `[${xs.map(q).join(', ')}]`;
 
+
 export function generate({ debug = false } = {}) {
-  const NK = 8, NB = 9, NE = 10, NS = H / STRIP, HALF = H / 2;
+  const NK = 10, NG = 10, NS = H / STRIP, HALF = H / 2;
   const spr = [], soff = [], sw = [], sh = [];
   for (const k of SN) {
     const rows = SPRITES[k]; soff.push(spr.length); sw.push(rows[0].length); sh.push(rows.length);
     for (const row of rows) { if (row.length !== rows[0].length) throw Error(`sprite ${k}`); for (const c of row) spr.push(c === '.' ? -1 : parseInt(c, 16)); }
   }
-  const KW = KSPR.map((s, i) => i ? sw[s] : 0), KH = KSPR.map((s, i) => i ? sh[s] : 0);
+  const KW = KSPR.map((x, i) => i ? sw[x] : 0), KH = KSPR.map((x, i) => i ? sh[x] : 0);
   const voices = [[], []], vo = [[], []], vl = [[], []];
   for (const s of SONGS) [s.lead, s.bass].forEach((txt, v) => { const n = parseVoice(txt, s.eighth); vo[v].push(voices[v].length); vl[v].push(n.length); voices[v].push(...n); });
   const fxp = [], fxo = [], fxl = [];
@@ -105,6 +104,7 @@ export function generate({ debug = false } = {}) {
   const BLK = Array.from({ length: W + 1 }, (_, n) => '█'.repeat(n));
   const zeros = (n, z = '0') => `[${Array(n).fill(z).join(', ')}]`;
   const strips = Array.from({ length: NS }, (_, k) => k);
+
 
   const src = `// GENERATED by clown/gen.mjs: edit that, not this file.
 // CRACK CLOWN: one game step per 'tick' (20 Hz) while 'seated'; picture at 10 fps (two ticks a frame).
@@ -121,9 +121,8 @@ export function generate({ debug = false } = {}) {
 const W = ${W}
 const H = ${H}
 const NK = ${NK}
-const NB = ${NB}
-const NE = ${NE}
-const BGCITY = ${A(bgCity())}
+const NG = ${NG}
+const BGROAD = ${A(bgRoad())}
 const SPR = ${A(spr)}
 const SOFF = ${A(soff)}
 const SW = ${A(sw)}
@@ -131,15 +130,8 @@ const SH = ${A(sh)}
 const KSPR = ${A(KSPR)}
 const KW = ${A(KW)}
 const KH = ${A(KH)}
-const KSP = ${AF(KSP)}
 const KHP = ${A(KHP)}
-const KSC = ${A(KSC)}
-const BOSS = ${A(BOSS)}
-const BHP = ${A(BHP)}
-const GOAL = ${A(GOAL)}
-const LVMSG = ${AS(LVMSG)}
-const BINTRO = ${AS(BINTRO)}
-const BDEFEAT = ${AS(BDEFEAT)}
+const STAGEMSG = ${AS(STAGEMSG)}
 const OPEN = ${AS(OPEN)}
 const CLOSE = ${AS(CLOSE)}
 const BLK = ${AS(BLK)}
@@ -167,31 +159,27 @@ var msgT: int = 0
 var hud: string = ""
 var booted: bool = false
 
-var state: int = -1         // -1 off, 0 title, 1 flying (boss when bossOn), 3 level clear, 4 victory, 5 game over
+var state: int = -1         // -1 off, 0 title, 1 fighting, 3 wave clear, 5 game over
 var stT: int = 0
 var t: int = 0
-var day: int = 1
-var lv: int = 1
 var score: int = 0
 var hi: int = 0
 var hp: int = 5
 var inv: int = 0
-var pow: int = 1
-var bigM: int = 0
-var bigT: int = 0
-var fireT: int = 0
-var hx: float = 6.0
-var hy: float = 16.0
-var dist: float = 0.0
+var crack: int = 0
+var kills: int = 0
+var wave: int = 1
+var waveTot: int = 1
+var toSpawn: int = 0
+var alive: int = 0
 var spawnT: float = 0.0
-var bossOn: bool = false
-var bossX: float = 48.0
-var bossY: float = 12.0
-var bossV: float = 0.3
-var bossHp: int = 0
-var bossMax: int = 1
-var bossT: int = 0
-var bossF: int = 0
+var pcd: int = 0
+var punchT: int = 0
+var eatT: int = 0
+var fc: int = 1
+var moving: bool = false
+var hx: float = 10.0
+var hf: float = 30.0
 var kL: bool = false
 var kR: bool = false
 var kU: bool = false
@@ -204,17 +192,15 @@ var pS: bool = false
 var kt: int[] = ${zeros(NK)}
 var kx: float[] = ${zeros(NK, '0.0')}
 var ky: float[] = ${zeros(NK, '0.0')}
-var kvy: float[] = ${zeros(NK, '0.0')}
 var khp: int[] = ${zeros(NK)}
-var ba: int[] = ${zeros(NB)}
-var bx: float[] = ${zeros(NB, '0.0')}
-var by: float[] = ${zeros(NB, '0.0')}
-var bdy: float[] = ${zeros(NB, '0.0')}
-var ea: int[] = ${zeros(NE)}
-var ex: float[] = ${zeros(NE, '0.0')}
-var ey: float[] = ${zeros(NE, '0.0')}
-var evx: float[] = ${zeros(NE, '0.0')}
-var evy: float[] = ${zeros(NE, '0.0')}
+var kst: int[] = ${zeros(NK)}
+var kcd: int[] = ${zeros(NK)}
+var ga: int[] = ${zeros(NG)}
+var gx: float[] = ${zeros(NG, '0.0')}
+var gy: float[] = ${zeros(NG, '0.0')}
+var gfl: float[] = ${zeros(NG, '0.0')}
+var gvx: float[] = ${zeros(NG, '0.0')}
+var gvy: float[] = ${zeros(NG, '0.0')}
 var rx: int[] = []
 var ry: int[] = []
 var rw: int[] = []
@@ -271,6 +257,7 @@ mod overlap(ax: float, ay: float, aw: float, ah: float, bx0: float, by0: float, 
   return ax < bx0 + bw && bx0 < ax + aw && ay < by0 + bh && by0 < ay + ah
 }
 
+
 // ---------- sound
 mod audio() {
   if song >= 0 {
@@ -323,6 +310,7 @@ mod audio() {
   } else { aV2 = 0.0 }
 }
 
+// ---------- drawing
 // ---------- drawing
 mod eraseRect(x: int, y: int, w: int, h: int) {
   for j in 0..w * h {
@@ -382,7 +370,7 @@ mod encRow(r: int) {
   rows[r] = s .. OPEN[c0] .. BLK[n] .. CLOSE[c0]
 }
 mod setScene() {
-  bg.copyFrom(BGCITY)
+  bg.copyFrom(BGROAD)
   fb.copyFrom(bg)
   for i in 0..H { dirty[i] = 1 }
   rx.clear()
@@ -390,6 +378,7 @@ mod setScene() {
   rw.clear()
   rh.clear()
 }
+
 mod draw() {
   for i in 0..rx.length() { eraseRect(rx[i], ry[i], rw[i], rh[i]) }
   rx.clear()
@@ -397,35 +386,27 @@ mod draw() {
   rw.clear()
   rh.clear()
   let fx: int = floor(hx)
-  let fy: int = floor(hy)
+  let hfy: int = floor(hf)
   if state == 0 {
     drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, 19, 13 + (t / 10) % 2, 0)
   } else {
-    if bigT > 0 { fillRect(fx + 9, fy + 1, ${W} - fx - 9, 3, if bigT % 4 < 2 then 4 else 6) }
     for k in 0..NK {
-      if kt[k] > 0 { drawSpr(KSPR[kt[k]], floor(kx[k]), floor(ky[k]), 0) }
+      if kt[k] > 0 && ky[k] < hf { drawSpr(KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - KH[kt[k]], if kst[k] > 0 then 1 else 0) }
     }
-    for i in 0..NB {
-      if ba[i] > 0 { drawSpr(${S.beam}, floor(bx[i]), floor(by[i]), 0) }
-    }
-    for i in 0..NE {
-      if ea[i] > 0 { drawSpr(${S.ebul}, floor(ex[i]), floor(ey[i]), 0) }
-    }
-    if bossOn { drawSpr(BOSS[lv - 1], floor(bossX), floor(bossY), if bossF > 0 then 1 else 0) }
     if state != 5 && (inv == 0 || t % 4 < 2) {
-      drawSpr(if (t / 4) % 2 == 0 then ${S.hero} else ${S.hero2}, fx, fy, 0)
+      drawSpr((if eatT > 0 then ${S.rip} else (if punchT > 0 then ${S.heroP} else (if moving && (t / 4) % 2 == 1 then ${S.hero2} else ${S.hero}))) + (if fc < 0 then 1 else 0), fx, hfy - 9, 0)
+    }
+    for k in 0..NK {
+      if kt[k] > 0 && ky[k] >= hf { drawSpr(KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - KH[kt[k]], if kst[k] > 0 then 1 else 0) }
+    }
+    for g in 0..NG {
+      if ga[g] > 0 { drawSpr(${S.gib}, floor(gx[g]), floor(gy[g]), 0) }
     }
     for i in 0..5 { put(1 + i * 2, 0, if i < hp then 5 else 11) }
-    for i in 0..3 { put(13 + i * 2, 0, if i < pow then 7 else 11) }
-    let bm: int = bigM * 16 / 100
-    for i in 0..16 { put(31 + i, 0, if i < bm then (if bigM >= 100 && t % 8 < 4 then 6 else 4) else 11) }
-    if bossOn {
-      let hb: int = bossHp * ${W - 2} / bossMax
-      for i in 0..${W - 2} { put(1 + i, 1, if i < hb then 12 else 11) }
-    } else {
-      let prog: int = min(${W - 2}, floor(dist / GOAL[lv - 1] * ${W - 2}.0))
-      for i in 0..${W - 2} { put(1 + i, 1, if i < prog then 9 else 11) }
-    }
+    for i in 0..5 { put(13 + i * 2, 0, if i < crack then 6 else 11) }
+    let rem: int = toSpawn + alive
+    let prog: int = (waveTot - rem) * ${W - 2} / max(1, waveTot)
+    for i in 0..${W - 2} { put(1 + i, 1, if i < prog then 9 else 11) }
   }
 }
 mod encode(r0: int, r1: int) {
@@ -443,49 +424,56 @@ ${strips.map(k => `  if sdirty[${k}] > 0 {
 }
 
 // ---------- spawning
+mod ab(x: float) -> float {
+  return max(x, 0.0 - x)
+}
 mod clearAll() {
   for k in 0..NK { kt[k] = 0 }
-  for i in 0..NB { ba[i] = 0 }
-  for i in 0..NE { ea[i] = 0 }
+  for i in 0..NG { ga[i] = 0 }
 }
-mod spawnEnemy(kind: int, y: float) {
+mod spawnFoe(kind: int) {
   let k = kt.find(0)
   if k >= 0 {
     kt[k] = kind
-    kx[k] = ${W}.0
-    ky[k] = y
-    kvy[k] = if Random(0, 1) == 0 then 0.35 else -0.35
+    kx[k] = if Random(0, 1) == 0 then ${W}.0 else -9.0
+    ky[k] = 25.0 + Random(0, 9) * 1.0
     khp[k] = KHP[kind]
+    kst[k] = 0
+    kcd[k] = 30
   }
 }
-mod spawnEB(x: float, y: float, vx: float, vy: float) {
-  let i = ea.find(0)
-  if i >= 0 {
-    ea[i] = 1
-    ex[i] = x
-    ey[i] = y
-    evx[i] = vx
-    evy[i] = vy
+mod spawnPickup(kind: int, x: float, y: float) {
+  let v = kt.find(0)
+  if v >= 0 {
+    kt[v] = kind
+    kx[v] = x
+    ky[v] = y
+    kcd[v] = 300
+    kst[v] = 0
   }
 }
-mod shoot(dy: float) {
-  let i = ba.find(0)
-  if i >= 0 {
-    ba[i] = 1
-    bx[i] = hx + 9.0
-    by[i] = hy + 2.0
-    bdy[i] = dy
+mod spawnGibs(x: float, f: float, n: int) {
+  for j in 0..n {
+    let i = ga.find(0)
+    if i >= 0 {
+      ga[i] = 1
+      gx[i] = x + j * 1.0
+      gy[i] = f - 5.0
+      gfl[i] = f
+      gvx[i] = (j * 1.0 - n * 0.5) * 0.3
+      gvy[i] = 0.0 - 0.9 - Random(0, 6) * 0.1
+    }
   }
 }
 
 // ---------- damage
-mod hurt() {
-  if inv == 0 && bigT == 0 {
-    hp -= 1
-    inv = 40
+mod hurt(d: int) {
+  if inv == 0 {
+    hp -= d
+    inv = 30
     sfx(${FX.hurt})
-    if pow > 1 { pow -= 1 }
     if hp <= 0 {
+      hp = 0
       state = 5
       stT = 0
       if score > hi { hi = score }
@@ -494,212 +482,184 @@ mod hurt() {
     } else { say("OW. Honks left " .. hp .. "/5", 25) }
   }
 }
-mod kill(k: int) {
+mod killFoe(k: int, rip: bool) {
   let kind = kt[k]
-  score += KSC[kind] * lv
-  if bigM < 100 {
-    bigM = min(100, bigM + 8)
-    if bigM >= 100 {
-      sfx(${FX.ready})
-      say("RIP-HALF is ready! SPACE!", 40)
-    } else { sfx(${FX.kill}) }
-  } else { sfx(${FX.kill}) }
-  let r = Random(0, 11)
-  kt[k] = if r == 0 then 4 else (if r == 1 && hp < 5 then 5 else 0)
-}
-mod levelClear() {
-  bossOn = false
-  clearAll()
-  state = 3
-  stT = 0
-  score += 1000 * lv
-  if score > hi { hi = score }
-  playSong(3)
-  say(BDEFEAT[lv - 1] .. " +" .. 1000 * lv, 100000)
-}
-mod bossHit(n: int) {
-  bossHp -= n
-  bossF = 3
-  sfx(${FX.hit})
-  if bossHp <= 0 { levelClear() }
+  score += (if kind == 1 then 100 else (if kind == 2 then 250 else 1000)) * (if rip then 2 else 1)
+  spawnGibs(kx[k], ky[k], if rip then 6 else 3)
+  sfx(${FX.kill})
+  kills += 1
+  let px = kx[k]
+  let py = ky[k]
+  kt[k] = 0
+  if rip {
+    eatT = 10
+    hp = min(5, hp + 1)
+    say(if kills % 2 == 0 then "RIPPED IN HALF. *munch*" else "tastes like chicken", 25)
+  }
+  let r = Random(0, 5)
+  if r < 2 { spawnPickup(3, px, py) }
+  else if r == 2 { spawnPickup(4, px, py) }
 }
 
-// ---------- levels
-mod startLevel() {
+mod startWave() {
+  waveTot = min(14, 3 + wave * 2) + (if wave % 5 == 0 then 1 else 0)
+  toSpawn = waveTot
+  spawnT = 20.0
+  alive = 0
+  say("WAVE " .. wave .. " - " .. STAGEMSG[min(3, (wave - 1) / 3)], 90)
+}
+mod newGame() {
   state = 1
   stT = 0
   setScene()
   clearAll()
-  bossOn = false
-  dist = 0.0
-  spawnT = 30.0
-  hx = 6.0
-  hy = 16.0
-  inv = 30
-  playSong(1)
-  say("DAY " .. day .. " - " .. LVMSG[lv - 1], 90)
-}
-mod startBoss() {
-  bossOn = true
-  bossX = ${W}.0
-  bossY = 12.0
-  bossV = 0.25 + lv * 0.08 + day * 0.04
-  bossHp = BHP[lv - 1] + (day - 1) * 10
-  bossMax = bossHp
-  bossT = 0
-  playSong(2)
-  sfx(${FX.boss})
-  say(BINTRO[lv - 1], 90)
-}
-mod newGame() {
-  day = 1
-  lv = 1
   score = 0
   hp = 5
-  pow = 1
-  bigM = 0
-  startLevel()
+  crack = 1
+  kills = 0
+  wave = 1
+  hx = 10.0
+  hf = 30.0
+  fc = 1
+  inv = 30
+  pcd = 0
+  punchT = 0
+  eatT = 0
+  playSong(1)
+  startWave()
 }
 
-mod flyTick() {
-  // the hero
-  let sp = 0.7
-  if kL { hx = hx - sp }
-  if kR { hx = hx + sp }
-  if kU { hy = hy - sp }
-  if kD { hy = hy + sp }
-  hx = max(0.0, min(30.0, hx))
-  hy = max(3.0, min(29.0, hy))
+mod playTick() {
   if inv > 0 { inv -= 1 }
-  if fireT > 0 { fireT -= 1 }
-  if kS && fireT == 0 {
-    shoot(0.0)
-    if pow >= 2 {
-      shoot(-0.3)
-      shoot(0.3)
-    }
-    fireT = if pow >= 3 then 4 else 6
-    if fxId < 0 { sfx(${FX.shoot}) }
+  if pcd > 0 { pcd -= 1 }
+  if punchT > 0 { punchT -= 1 }
+  if eatT > 0 { eatT -= 1 }
+  moving = kL || kR || kU || kD
+  if kL {
+    hx = hx - 0.7
+    fc = -1
   }
-  if kJ && !pJ && bigM >= 100 {
-    bigM = 0
-    bigT = 24
-    sfx(${FX.big})
-    say("RIPPED IN HALF!!!", 30)
+  if kR {
+    hx = hx + 0.7
+    fc = 1
+  }
+  if kU { hf = hf - 0.45 }
+  if kD { hf = hf + 0.45 }
+  hx = max(0.0, min(37.0, hx))
+  hf = max(25.0, min(34.0, hf))
+
+  // punch (E / LMB)
+  if kS && !pS && pcd == 0 {
+    pcd = 8
+    punchT = 4
+    sfx(${FX.shoot})
     for k in 0..NK {
-      if kt[k] > 0 && kt[k] < 4 { kill(k) }
+      let kind = kt[k]
+      if kind > 0 && kind != 3 && kind != 4 {
+        let fdx = (kx[k] + KW[kind] * 0.5 - (hx + 5.5)) * fc
+        if fdx > -2.0 && fdx < 11.0 && ab(ky[k] - hf) < 3.0 {
+          khp[k] -= 1
+          kst[k] = 8
+          kx[k] = kx[k] + fc * 2.0
+          if khp[k] <= 0 { killFoe(k, false) } else { sfx(${FX.hit}) }
+        }
+      }
     }
-    for i in 0..NE { ea[i] = 0 }
-    if bossOn { bossHit(8) }
   }
-  if bigT > 0 { bigT -= 1 }
-  if bossF > 0 { bossF -= 1 }
-
-  // the level scrolls on until the boss
-  if !bossOn && state == 1 {
-    dist = dist + 1.0
-    spawnT = spawnT - 1.0
-    if spawnT <= 0.0 {
-      let r = Random(0, 9)
-      let y: float = Random(3, 28) * 1.0
-      if r < 4 + (if lv == 1 then 3 else 0) { spawnEnemy(1, y) }
-      else if r < 7 && lv >= 2 { spawnEnemy(2, y) }
-      else if lv >= 2 || r < 9 { spawnEnemy(3, y) }
-      else { spawnEnemy(1, y) }
-      if Random(0, 2) == 0 { spawnEnemy(1, max(3.0, min(28.0, y + 6.0))) }
-      spawnT = Random(14, 30) * 1.0 - lv * 2.0 - day * 2.0
-    }
-    if dist >= GOAL[lv - 1] { startBoss() }
+  // rip in half (Space / RMB), costs one crack
+  if kJ && !pJ {
+    if crack > 0 {
+      crack -= 1
+      sfx(${FX.big})
+      eatT = 10
+      for k in 0..NK {
+        let kind = kt[k]
+        if kind > 0 && kind != 3 && kind != 4 {
+          let fdx = (kx[k] + KW[kind] * 0.5 - (hx + 5.5)) * fc
+          if fdx > -3.0 && fdx < 19.0 && ab(ky[k] - hf) < 4.0 {
+            if kind == 5 {
+              khp[k] -= 10
+              kst[k] = 12
+              if khp[k] <= 0 { killFoe(k, true) }
+            } else { killFoe(k, true) }
+          }
+        }
+      }
+    } else { say("No crack. Beat some out of them.", 30) }
   }
 
-  // enemies
+  // spawns
+  spawnT = spawnT - 1.0
+  if spawnT <= 0.0 && toSpawn > 0 && alive < 4 {
+    spawnFoe(if toSpawn == 1 && wave % 5 == 0 then 5 else (if Random(0, 99) < min(45, wave * 8) then 2 else 1))
+    toSpawn -= 1
+    spawnT = 50.0 - min(30, wave * 3) * 1.0
+  }
+
+  // foes and pickups
+  alive = 0
   for k in 0..NK {
     let kind = kt[k]
     if kind > 0 {
-      kx[k] = kx[k] - KSP[kind] - day * 0.05
-      if kind == 1 {
-        ky[k] = ky[k] + kvy[k]
-        if ky[k] < 3.0 || ky[k] > 28.0 { kvy[k] = 0.0 - kvy[k] }
-      } else if kind == 3 {
-        ky[k] = ky[k] + (if ky[k] < hy then 0.2 else -0.2)
-      } else if kind == 2 && kx[k] < 46.0 && Random(0, 45) == 0 {
-        spawnEB(kx[k] - 2.0, ky[k] + 2.0, -1.0, 0.0)
-      }
-      if kx[k] < -6.0 { kt[k] = 0 }
-      else if overlap(hx + 2.0, hy + 1.0, 7.0, 3.0, kx[k], ky[k], KW[kind], KH[kind]) {
-        if kind == 4 {
+      if kind == 3 || kind == 4 {
+        kcd[k] -= 1
+        if kcd[k] <= 0 { kt[k] = 0 }
+        else if ab(kx[k] + 1.0 - (hx + 5.5)) < 6.0 && ab(ky[k] - hf) < 3.0 {
+          if kind == 3 {
+            crack = min(5, crack + 1)
+            score += 50
+            sfx(${FX.pill})
+            say("CRACK +1. SPACE rips.", 25)
+          } else {
+            hp = min(5, hp + 1)
+            sfx(${FX.heart})
+            say("+1 HONK", 20)
+          }
           kt[k] = 0
-          pow = min(3, pow + 1)
-          score += 500
-          sfx(${FX.pill})
-          say("CRACK! Power up. HONK HONK.", 40)
-        } else if kind == 5 {
-          kt[k] = 0
-          hp = min(5, hp + 1)
-          sfx(${FX.heart})
-          say("+1 HONK", 25)
-        } else {
-          kt[k] = 0
-          hurt()
         }
-      }
-    }
-  }
-
-  // laser vision
-  for i in 0..NB {
-    if ba[i] > 0 {
-      bx[i] = bx[i] + 1.6
-      by[i] = by[i] + bdy[i]
-      if bx[i] > ${W}.0 || by[i] < 2.0 || by[i] > 33.0 { ba[i] = 0 }
-      else {
-        for k in 0..NK {
-          let kind = kt[k]
-          if ba[i] > 0 && kind > 0 && kind < 4 && overlap(bx[i], by[i], 2.0, 1.0, kx[k], ky[k], KW[kind], KH[kind]) {
-            ba[i] = 0
-            khp[k] -= 1
-            if khp[k] <= 0 { kill(k) } else { sfx(${FX.hit}) }
+      } else {
+        alive += 1
+        if kst[k] > 0 { kst[k] -= 1 } else {
+          let dx = hx + 5.5 - (kx[k] + KW[kind] * 0.5)
+          let dy = hf - ky[k]
+          let sp = if kind == 1 then 0.22 else (if kind == 2 then 0.14 else 0.1)
+          if ab(dx) > 7.0 { kx[k] = kx[k] + (if dx > 0.0 then sp else 0.0 - sp) }
+          if ab(dy) > 1.0 { ky[k] = ky[k] + (if dy > 0.0 then 0.12 else -0.12) }
+          if kcd[k] > 0 { kcd[k] -= 1 }
+          else if ab(dx) <= 8.0 && ab(dy) < 2.5 {
+            kcd[k] = if kind == 1 then 40 else 55
+            hurt(if kind == 1 then 1 else 2)
           }
         }
-        if ba[i] > 0 && bossOn && overlap(bx[i], by[i], 2.0, 1.0, bossX, bossY, SW[BOSS[lv - 1]], SH[BOSS[lv - 1]]) {
-          ba[i] = 0
-          bossHit(1)
+      }
+    }
+  }
+
+  // gore: lands as a stain
+  for g in 0..NG {
+    if ga[g] > 0 {
+      gvy[g] = gvy[g] + 0.15
+      gx[g] = gx[g] + gvx[g]
+      gy[g] = gy[g] + gvy[g]
+      if gy[g] >= gfl[g] {
+        let ix: int = floor(gx[g])
+        let iy: int = floor(gfl[g])
+        if ix >= 0 && ix < ${W} {
+          bg[iy * ${W} + ix] = 5
+          put(ix, iy, 5)
         }
-      }
+        ga[g] = 0
+      } else if gx[g] < -2.0 || gx[g] > ${W}.0 { ga[g] = 0 }
     }
   }
 
-  // enemy shots
-  for i in 0..NE {
-    if ea[i] > 0 {
-      ex[i] = ex[i] + evx[i]
-      ey[i] = ey[i] + evy[i]
-      if ex[i] < -2.0 || ey[i] < 2.0 || ey[i] > 34.0 { ea[i] = 0 }
-      else if overlap(hx + 2.0, hy + 1.0, 7.0, 3.0, ex[i], ey[i], 2.0, 1.0) {
-        ea[i] = 0
-        hurt()
-      }
-    }
-  }
-
-  // the boss
-  if bossOn && state == 1 {
-    let bw = SW[BOSS[lv - 1]]
-    let bh = SH[BOSS[lv - 1]]
-    if bossX > ${W - 2}.0 - bw { bossX = bossX - 0.3 }
-    bossY = bossY + bossV
-    if bossY < 3.0 || bossY > 33.0 - bh { bossV = 0.0 - bossV }
-    bossT += 1
-    if bossT % (34 - lv * 4 - min(day, 4) * 2) == 0 {
-      let cy = bossY + bh / 2.0
-      let aim = max(-0.6, min(0.6, (hy + 2.0 - cy) / max(4.0, (bossX - hx) / 0.9)))
-      spawnEB(bossX - 2.0, cy, -0.9, aim)
-      if lv >= 2 {
-        spawnEB(bossX - 2.0, cy, -0.9, aim - 0.3)
-        spawnEB(bossX - 2.0, cy, -0.9, aim + 0.3)
-      }
-    }
-    if overlap(hx + 2.0, hy + 1.0, 7.0, 3.0, bossX, bossY, bw, bh) { hurt() }
+  // wave done
+  if state == 1 && toSpawn == 0 && alive == 0 {
+    state = 3
+    stT = 0
+    score += 200 * wave
+    playSong(3)
+    say("WAVE " .. wave .. " CLEARED! +" .. 200 * wave, 100000)
   }
 }
 
@@ -710,9 +670,8 @@ mod powerOn() {
   stT = 0
   setScene()
   clearAll()
-  bossOn = false
   playSong(0)
-  say("SPACE start. W A S D float, E eats, SPACE rips the screen.", 100000)
+  say("SPACE start. WASD move, E punch, SPACE rips (costs crack).", 100000)
 }
 mod powerOff() {
   booted = false
@@ -729,10 +688,9 @@ ${strips.map(k => `  st${k} = ""`).join('\n')}
 
 ${debug ? `var dbk: string = ""
 var dumpReq: bool = false
-on ChatCommand("spm", "CLOWN debug: /spm <keys o(sit) l r u d j s> | /spm dump | /spm boss | /spm big") -> (ctrl, args) {
+on ChatCommand("spm", "CLOWN debug: /spm <keys o(sit) l r u d j s> | /spm dump | /spm crack") -> (ctrl, args) {
   if args == "dump" { dumpReq = true }
-  else if args == "boss" { dist = GOAL[lv - 1] * 1.0 }
-  else if args == "big" { bigM = 100 }
+  else if args == "crack" { crack = 5 }
   else { dbk = args }
 }
 ` : ''}on tick {
@@ -747,7 +705,7 @@ ${debug ? `    kL = left || dbk.Contains("l")
     kD = down || dbk.Contains("d")
     kJ = big || dbk.Contains("j")
     kS = fire || dbk.Contains("s")
-    if t % 20 == 0 { PrintToConsole("spdbg|" .. t .. "|" .. state .. "|lv " .. lv .. "|dist " .. dist .. "|hx " .. hx .. " hy " .. hy .. "|score " .. score .. " hp " .. hp .. " pow " .. pow .. " big " .. bigM .. "|boss " .. bossOn .. " " .. bossHp .. "|k " .. kt.join(",") .. "|" .. msg) }
+    if t % 20 == 0 { PrintToConsole("spdbg|" .. t .. "|" .. state .. "|wave " .. wave .. " left " .. toSpawn .. " alive " .. alive .. "|hx " .. hx .. " hf " .. hf .. "|score " .. score .. " hp " .. hp .. " crack " .. crack .. " kills " .. kills .. "|k " .. kt.join(",") .. "|" .. msg) }
     if dumpReq {
       dumpReq = false
       for r in 0..H { PrintToConsole("sprow|" .. r .. "|" .. rows[r]) }
@@ -766,24 +724,14 @@ ${debug ? `    kL = left || dbk.Contains("l")
         pS = true
       }
     } else if state == 1 {
-      flyTick()
+      playTick()
     } else if state == 3 {
-      if stT > 90 {
-        if lv < 3 {
-          lv += 1
-          startLevel()
-        } else {
-          state = 4
-          stT = 0
-          say("THE CITY IS EATEN. You are full of crack. SPACE", 100000)
-        }
-      }
-    } else if state == 4 {
-      if stT > 30 && kJ && !pJ {
-        day += 1
-        lv = 1
-        startLevel()
-        pJ = true
+      if stT > 80 {
+        wave += 1
+        state = 1
+        stT = 0
+        startWave()
+        playSong(if wave % 5 == 0 then 2 else 1)
       }
     } else if state == 5 {
       if stT > 30 && kJ && !pJ {
@@ -796,7 +744,7 @@ ${debug ? `    kL = left || dbk.Contains("l")
       if msgT == 0 { msg = "" }
     }
     hud = if state == 0 then ("RIP. EAT. CRACK. HI " .. hi)
-      else ("SCORE " .. score .. "  HONK " .. hp .. "  CRACK " .. pow .. "  RIP " .. bigM .. "%  DAY " .. day .. "-" .. lv)
+      else ("SCORE " .. score .. "  HONK " .. hp .. "  CRACK " .. crack .. "  WAVE " .. wave .. "  RIPPED " .. kills)
     audio()
     if t % 2 == 0 {
       draw()
