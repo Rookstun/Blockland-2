@@ -202,14 +202,39 @@ ${eachD(d => drumReset(d, 'PDI'))}
   pt0 = ServerUptime() - PVS[song]
 }
 
-// the panel while nothing is being played: the selected song's high score and difficulty
+// the panels while nothing is being played: the selected song's top 5 on the lane panels (rank | name | score)
 mod showHigh() {
-  let tp = best.get("\${song}:top")
-  let tn = topn.get("\${song}:top")
-  judge = "HIGH SCORE"
+  judge = "TOP 5"
   jcol = ColorSRGB(255, 225, 60, 255)
-  info = if tp.Found then "\${tn.Value}  \${tp.Value}" else "NO SCORE YET"
+  info = ""
   comboTxt = "LV \${DIFF[song]}/10"
+${[0, 1, 2, 3, 4].map(i => `  let s${i} = best.get("\${song}:s${i}")
+  let n${i} = topn.get("\${song}:n${i}")
+  st0${5 - i} = "#${i + 1}"
+  st1${5 - i} = if s${i}.Found then n${i}.Value else "---"
+  st2${5 - i} = ""
+  st3${5 - i} = if s${i}.Found then "\${s${i}.Value}" else "0"
+${[0, 1, 2, 3].map(k => `  so${k}${5 - i} = Vec(0.0, 0.0, 0.0)`).join('\n')}`).join('\n')}
+}
+
+// insert a finished song's score into its top 5 (a displaced entry moves down a place)
+mod addTop(pts: int, name: string) {
+  var cs: int = pts
+  var cn: string = name
+  for i in 0..5 {
+    let ks = "\${song}:s\${i}"
+    let kn = "\${song}:n\${i}"
+    let cur = best.get(ks)
+    if cs >= 0 && (!cur.Found || cs > cur.Value) {
+      let oldN = topn.get(kn)
+      best.set(ks, cs)
+      topn.set(kn, cn)
+      if cur.Found {
+        cs = cur.Value
+        cn = oldN.Value
+      } else { cs = -1 }
+    }
+  }
 }
 
 mod menu() {
@@ -304,12 +329,7 @@ mod finish() {
   if !b.Found || pts > b.Value {
     best.set(key, pts)
   }
-  let tk = "\${song}:top"
-  let tp = best.get(tk)
-  if !tp.Found || pts > tp.Value {
-    best.set(tk, pts)
-    topn.set(tk, ctrl.GetUserName())
-  }
+  addTop(pts, ctrl.GetUserName())
   judge = "\${grade}  \${pts}"
   jcol = ColorSRGB(255, 225, 60, 255)
   info = "P\${nP} G\${nG} OK\${nO} X\${nM}"
