@@ -23,12 +23,16 @@ const SPRITES = {
   hero: CL.hero, heroL: CL.hero.map(mir), hero2: CL.hero2, hero2L: CL.hero2.map(mir),
   heroP: CL.heroP, heroPL: CL.heroP.map(mir), rip: CL.rip, ripL: CL.rip.map(mir),
   thug: ['ccccc', 'c2e2c', '.222.', '97779', '.777.', '.8.8.', '.8.8.', '.e.e.'],
+  thugL: ['ccccc', 'c2e2c', '.222.', '97779', '.777.', '.8.8.', '.8.8.', '.e.e.'].map(mir),
   big: ['.22222.', '.2e2e2.', '.22222.', '7777777', '7777777', '7777777', '.77.77.', '.ee.ee.'],
+  bigL: ['.22222.', '.2e2e2.', '.22222.', '7777777', '7777777', '7777777', '.77.77.', '.ee.ee.'].map(mir),
   mayor: ['.2222222.', '.2e222e2.', '.2222222.', '.2255522.', '888888888', '888888888', '888888888', '888888888', '.88...88.', '.88...88.', '.ee...ee.'],
+  mayorL: ['.2222222.', '.2e222e2.', '.2222222.', '.2255522.', '888888888', '888888888', '888888888', '888888888', '.88...88.', '.88...88.', '.ee...ee.'].map(mir),
   vial: ['.6.', '6f6', '.6.'],
   heart: ['.f.', '666', '666'],
   gib: ['53', '35'],
   crawl: ['.....22.', '.77772e2', '777777..', '.8...8..'],
+  crawlL: ['.....22.', '.77772e2', '777777..', '.8...8..'].map(mir),
   bul: ['44'],
 };
 const SN = Object.keys(SPRITES), S = Object.fromEntries(SN.map((k, i) => [k, i]));
@@ -394,6 +398,11 @@ mod setScene() {
   rh.clear()
 }
 
+mod sprOf(k: int) -> int {
+  let base = if kcr[k] > 0 then ${S.crawl} else KSPR[kt[k]]
+  let flip = (kt[k] <= 2 || kt[k] == 5 || kcr[k] > 0) && kx[k] + KW[kt[k]] * 0.5 > hx + 7.5
+  return base + (if flip then 1 else 0)
+}
 mod draw() {
   for i in 0..rx.length() { eraseRect(rx[i], ry[i], rw[i], rh[i]) }
   rx.clear()
@@ -406,13 +415,13 @@ mod draw() {
     drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, ${(W - 15) >> 1}, 13 + (t / 10) % 2, 0)
   } else {
     for k in 0..NK {
-      if kt[k] > 0 && ky[k] < hf { drawSpr(if kcr[k] > 0 then ${S.crawl} else KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - (if kcr[k] > 0 then 4 else KH[kt[k]]), if kst[k] > 0 then 1 else 0) }
+      if kt[k] > 0 && ky[k] < hf { drawSpr(sprOf(k), floor(kx[k]), floor(ky[k]) - (if kcr[k] > 0 then 4 else KH[kt[k]]), if kst[k] > 0 then 1 else 0) }
     }
     if state != 5 && (inv == 0 || t % 4 < 2) {
       drawSpr((if eatT > 0 then ${S.rip} else (if punchT > 0 then ${S.heroP} else (if moving && (t / 4) % 2 == 1 then ${S.hero2} else ${S.hero}))) + (if fc < 0 then 1 else 0), fx, hfy - 9, 0)
     }
     for k in 0..NK {
-      if kt[k] > 0 && ky[k] >= hf { drawSpr(if kcr[k] > 0 then ${S.crawl} else KSPR[kt[k]], floor(kx[k]), floor(ky[k]) - (if kcr[k] > 0 then 4 else KH[kt[k]]), if kst[k] > 0 then 1 else 0) }
+      if kt[k] > 0 && ky[k] >= hf { drawSpr(sprOf(k), floor(kx[k]), floor(ky[k]) - (if kcr[k] > 0 then 4 else KH[kt[k]]), if kst[k] > 0 then 1 else 0) }
     }
     for g in 0..NG {
       if ga[g] > 0 { drawSpr(${S.gib}, floor(gx[g]), floor(gy[g]), 0) }
