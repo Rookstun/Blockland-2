@@ -62,24 +62,21 @@ function bgCity() {
 }
 
 
-function bgRoad() { // the office floor (name kept from the street version)
-  let seed = 777; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-  const b = Array(W * H).fill(10);
+function bgRoad() { // a corridor of lockers (name kept from the street version)
+  const b = Array(W * H).fill(11);
   const set = (x, y, c) => { if (x >= 0 && x < W && y >= 0 && y < H) b[y * W + x] = c; };
   const rect = (x0, y0, w, h, c) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, c); };
-  rect(0, 0, W, 3, 11); for (let x = 3; x < W; x += 14) rect(x, 1, 7, 2, 15);          // ceiling tiles + light panels
-  for (let x = 3; x < W - 8; x += 15) {                                                  // windows on a night skyline
-    rect(x, 4, 11, 11, 11); rect(x + 1, 5, 9, 9, 1);
-    for (let i = 0; i < 4; i++) set(x + 1 + Math.floor(rnd() * 9), 5 + Math.floor(rnd() * 4), 6);
-    for (let k = 0; k < 4; k++) { const bw = 2 + Math.floor(rnd() * 2), bh = 3 + Math.floor(rnd() * 4); rect(x + 1 + k * 2, 14 - bh, bw, bh, 8); set(x + 1 + k * 2, 14 - bh + 1, 4); }
-    rect(x + 5, 4, 1, 11, 11);
+  rect(0, 0, W, 3, 10);                                                    // ceiling strip
+  for (let x = 0, i = 0; x < W; x += 8, i++) {                             // lockers: door, vent slits, handle, number plate
+    rect(x, 3, 7, 18, i % 2 ? 8 : 7);
+    for (const y of [5, 7, 9]) rect(x + 2, y, 3, 1, 11);
+    rect(x + 5, 14, 1, 2, 4);
+    set(x + 3, 12, 15);
   }
-  rect(0, 21, W, 1, 11);                                                                  // baseboard
-  rect(0, 22, W, H - 22, 8); rect(0, 22, W, 1, 11);                                       // carpet
-  for (let y = 24; y < H; y += 4) for (let x = (y / 4) % 2 * 4; x < W; x += 8) rect(x, y, 4, 1, 7);
-  for (let x = 6; x < W - 12; x += 22) { rect(x, 18, 12, 3, 13); rect(x + 3, 14, 6, 4, 11); rect(x + 4, 15, 4, 2, 9); rect(x + 5, 18, 1, 1, 11); } // desks + monitors
-  for (const x of [1, 29, 51]) { rect(x, 19, 3, 2, 13); rect(x, 15, 3, 4, 9); set(x + 1, 14, 9); }                                  // plants
-  rect(W - 6, 15, 4, 6, 6); rect(W - 6, 12, 4, 3, 7);                                     // water cooler
+  rect(0, 21, W, 1, 10);                                                   // base rail
+  rect(0, 22, W, H - 22, 10);                                              // tile floor
+  for (let y = 22; y < H; y += 4) rect(0, y, W, 1, 11);
+  for (let x = 0; x < W; x += 8) rect(x, 22, 1, H - 22, 11);
   return b;
 }
 
