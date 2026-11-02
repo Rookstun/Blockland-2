@@ -254,9 +254,9 @@ export function house(H, seed) {
       for (const o of ops) {
         if (o.a0 - 4 <= lo || o.a1 + 4 >= hi) continue;
         const door = o.z0 <= R.z0 + 2, jz0 = door ? R.z0 : o.z0, top = Math.min(R.z1 - 6, o.z1 + 4);
-        facePiece(side, R, o.a0 - 4, o.a0, jz0, top, 4, trimC, 'casing');
-        facePiece(side, R, o.a1, o.a1 + 4, jz0, top, 4, trimC, 'casing');
-        if (o.z1 < top) facePiece(side, R, o.a0, o.a1, o.z1, top, 4, trimC, 'casing head');
+        facePiece(side, R, o.a0 - 4, o.a0, jz0, top, thin ? 2 : 4, trimC, 'casing');
+        facePiece(side, R, o.a1, o.a1 + 4, jz0, top, thin ? 2 : 4, trimC, 'casing');
+        if (o.z1 < top) facePiece(side, R, o.a0, o.a1, o.z1, top, thin ? 2 : 4, trimC, 'casing head');
         if (!door) facePiece(side, R, o.a0 - 4, o.a1 + 4, o.z0 - 2, o.z0, 4, trimC, 'stool');
       }
     }
