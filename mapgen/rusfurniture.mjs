@@ -2,7 +2,8 @@
 // size rooms accurately"; owner: "internalize the furniture pieces and add them as a design pattern available to
 // housegen pipeline"). Catalog = refs/furniture.json (each piece's bricks relative to its own footprint centre, z 0 =
 // the floor it stands on; names are guesses until руся names them).
-//   piece(key)                     -> { key, dims, rooms, back, bricks }   back = the side its tallest part is on
+//   piece(key)                     -> { key, dims, rooms, back, bricks, mount }   back = the side its tallest part is on;
+//                                     mount 'ceiling' = hangs: place it at z = ceiling underside - dims[2]
 //   footprint(key, turn)           -> [w, d] after `turn` quarter turns (anticlockwise)
 //   placeFurniture(B, key, x, y, z, turn, label) -> true if every brick went in (nothing is added otherwise)
 //   facing(key, side)              -> the turn that puts the piece's back against a wall on `side` (x0 x1 y0 y1)

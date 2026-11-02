@@ -671,8 +671,8 @@ export function house(H, seed) {
   // clear of every opening on that wall by 14 and of the room's doors by 40, at most a third of the floor taken so the
   // middle stays open; per room kind a list of groups, the first piece of a group that fits is placed
   const FURNISH = {
-    living: [['sofa', 'sofa_cream', 'loveseat', 'loveseat_cream'], ['armchair', 'armchair_grey', 'armchair_low'], ['tv_console', 'sideboard'], ['plant_tall', 'tree_plant', 'planter', 'plant_pot']],
-    bedroom: [['bed_queen', 'bed_double', 'bed_headboard'], ['end_table', 'lamp_small'], ['sideboard', 'tall_cabinet', 'desk_set']],
+    living: [['sofa', 'sofa_cream', 'loveseat', 'loveseat_cream'], ['armchair', 'armchair_grey', 'armchair_low'], ['tv_console'], ['plant_tall', 'tree_plant', 'planter', 'plant_pot']],
+    bedroom: [['bed_queen', 'bed_double', 'bed_headboard'], ['end_table', 'lamp_small'], ['tall_cabinet', 'desk_set']],
     bathroom: [['toilet'], ['bathtub']],
     kitchen: [['fridge'], ['stove'], ['kitchen_unit']],
     laundry: [['washer']],
