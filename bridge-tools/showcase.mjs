@@ -19,7 +19,7 @@ const sign = (x, y, lines) => {
     Material: 0, Shading: 0, bFlipShading: false, Outline: 0, bSharpCorners: true, bSharpOutlines: true,
     bOverrideOutlineColor: true, bForeground: false, Text: lines.join('\n') } }] };
 };
-const card = (name, n, prompt, who) => [name, `${fmt(n)} bricks`, ...wrap(`"${prompt}"`), `- ${who}`];
+const card = (name, n, prompt, who, w = 38) => [name, `${fmt(n)} bricks`, ...wrap(`"${prompt}"`, w), `- ${who}`];
 
 // requests, from notes/ and the generators' headers
 const P = {
@@ -66,11 +66,12 @@ const SIGNS_ONLY = process.argv.includes('--signs-only');   // cabinets already 
 const bricks = [], ops = [];
 for (const s of slots) bricks.push(sign(s.sx, s.sy - 20, card(s.text, s.n, ...P[s.name])));
 // arcade row along y -16450, cabinets facing -y, 80 between
-let x = 100;
+let x = 100, i = 0;
+// cabinets sit ~110 apart: signs wrap at 22 and alternate between two rows so neighbours never share one
 for (const [k, name, prompt, who] of ARC) {
   const m = meta[k], cx = x - m.lo[0], cy = -16450, z = m.lo[2] < 0 ? 4 : 0;
   if (!SIGNS_ONLY) ops.push({ op: 'cmd', line: `br.Prefab.Load "${k}" ${cx} ${cy} ${z} 0 16`, captureMs: 1500 });
-  bricks.push(sign(cx, cy + m.lo[1] - 30, card(name, m.n, prompt, who)));
+  bricks.push(sign(cx, cy + m.lo[1] - 30 - (i++ % 2) * 24, card(name, m.n, prompt, who, 22)));
   x = cx + m.hi[0] + 80;
 }
 // this session's builds
