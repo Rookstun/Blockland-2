@@ -644,10 +644,12 @@ mod playTick() {
       dop[d] = min(1.0, dop[d] + 0.2)
     } else { dop[d] = max(0.0, dop[d] - 0.15) }
   }
-  if spawnT < 14.0 && toSpawn > 0 { dT[nextDoor] = 30 }
+  // (2026-11-02, owner: 'fix doors opening') a full arena (4 alive) used to run spawnT negative and hold a door open
+  // for good: the timer now waits at 14 and the door opens only when a foe can actually come out
+  if spawnT < 14.0 && toSpawn > 0 && alive < 4 { dT[nextDoor] = 30 }
 
   // spawns
-  spawnT = spawnT - 1.0
+  spawnT = if alive < 4 then spawnT - 1.0 else max(spawnT - 1.0, 14.0)
   if spawnT <= 0.0 && toSpawn > 0 && alive < 4 {
     spawnFoe(if toSpawn == 1 && wave % 5 == 0 then 5 else (if Random(0, 99) < min(45, wave * 8) then 2 else 1))
     toSpawn -= 1
