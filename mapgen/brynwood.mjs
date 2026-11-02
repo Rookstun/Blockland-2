@@ -19,7 +19,7 @@ import { makeBuilder, rng } from './builder.mjs';
 
 const BP = JSON.parse(fs.readFileSync(new URL('./refs/brynwood_bp.json', import.meta.url)));
 const K = 0.32808;                                   // units per cm
-const R = 2, GX0 = -880, GY0 = -680, NX = 880, NY = 680, N = NX * NY;
+export const R = 2, GX0 = -880, GY0 = -680, NX = 880, NY = 680, N = NX * NY;
 const FLOORS = [
   { name: 'Floor 1', off: [0, 0] },
   { name: 'Floor 2 A', off: [734, -450] },
@@ -29,9 +29,9 @@ const FLOORS = [
 // ceiling 290..300 | roofs from 180 (one storey) and 300
 const FL1 = 40, TOP1 = 170, FL2 = 180, TOP2 = 290;
 
-const T = (x, y, off) => [-(x + off[0]) * K, (y + off[1]) * K];
+export const T = (x, y, off) => [-(x + off[0]) * K, (y + off[1]) * K];
 const pts = (a, off) => { const P = []; for (let i = 0; i < a.length; i += 2) P.push(T(a[i], a[i + 1], off)); return P; };
-const cx = i => GX0 + i * R + 1, cy = j => GY0 + j * R + 1;
+export const cx = i => GX0 + i * R + 1, cy = j => GY0 + j * R + 1;
 function pip(poly, x, y) {
   let c = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -40,7 +40,7 @@ function pip(poly, x, y) {
   }
   return c;
 }
-function eachCell(x0, y0, x1, y1, f) {
+export function eachCell(x0, y0, x1, y1, f) {
   const i0 = Math.max(0, Math.floor((x0 - GX0) / R)), i1 = Math.min(NX - 1, Math.ceil((x1 - GX0) / R));
   const j0 = Math.max(0, Math.floor((y0 - GY0) / R)), j1 = Math.min(NY - 1, Math.ceil((y1 - GY0) / R));
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) f(j * NX + i, cx(i), cy(j));
@@ -53,7 +53,7 @@ function polyMask(P, mask = new Uint8Array(N), v = 1) {
 }
 const cellOf = (x, y) => Math.floor((y - GY0) / R) * NX + Math.floor((x - GX0) / R);
 /** chamfer distance (cells) from every cell to the nearest seed cell (seed[k] truthy) */
-function chamfer(seed) {
+export function chamfer(seed) {
   const d = new Float32Array(N);
   for (let k = 0; k < N; k++) d[k] = seed[k] ? 0 : 1e9;
   const D = Math.SQRT2;
@@ -72,7 +72,7 @@ function chamfer(seed) {
   return d;
 }
 const hash = (a, b) => { let h = Math.imul(a, 374761393) ^ Math.imul(b, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; };
-const shade = (c, f) => c.map(v => Math.max(0, Math.min(255, Math.round(v * f))));
+export const shade = (c, f) => c.map(v => Math.max(0, Math.min(255, Math.round(v * f))));
 
 // ------------------------------------------------------------------ materials --
 // floor finishes after the photos: travertine (great room, kitchen, foyer), Brazilian cherry planks (bedrooms, den,
@@ -98,14 +98,14 @@ function variant(m, x, y) {
   if (m === 6) { const row = f(y / 20); return hash(f((x + (row & 1) * 20) / 40), row) % 3; }
   return 0;
 }
-const finLabel = (m, k) => m * 8 + variant(m, cx(k % NX), cy(Math.floor(k / NX))) + 1;
-const finMat = v => { const m = FIN[(v - 1) >> 3]; return { color: m.c[(v - 1) & 7] }; };
-const STUCCO = [238, 226, 204], GLASS = { color: [176, 212, 228], material: 'BMC_Glass' }, IRON = [58, 44, 36], WHITE = [244, 240, 232];
-const ROOF = [[180, 88, 56], [168, 80, 50], [190, 100, 64]];
+export const finLabel = (m, k) => m * 8 + variant(m, cx(k % NX), cy(Math.floor(k / NX))) + 1;
+export const finMat = v => { const m = FIN[(v - 1) >> 3]; return { color: m.c[(v - 1) & 7] }; };
+export const STUCCO = [238, 226, 204], GLASS = { color: [176, 212, 228], material: 'BMC_Glass' }, IRON = [58, 44, 36], WHITE = [244, 240, 232];
+export const ROOF = [[180, 88, 56], [168, 80, 50], [190, 100, 64]];
 
 // ---------------------------------------------------------------------- plans --
-function plan(fd, P) {
-  const f = BP.find(q => q.n === fd.name), off = fd.off;
+export function plan(fd, P) {
+  const f = (fd.bp ?? BP).find(q => q.n === fd.name), off = fd.off;
   const fp = pts(f.fp, off);
   polyMask(fp, P.fp);
   const rooms = f.r.map(([id, type, , poly]) => ({ id, type, P: pts(poly, off), notes: f.t.filter(t => t[0] === id).map(t => ({ text: t[1], p: T(t[2], t[3], off) })) }));
@@ -152,10 +152,10 @@ function plan(fd, P) {
   for (let k = 0; k < N; k++) if (hit[k]) P.op[k] = 0;
   return rooms;
 }
-const newPlan = () => ({ fp: new Uint8Array(N), kind: new Uint8Array(N), fin: new Uint8Array(N), room: new Array(N), wall: new Uint8Array(N), rail: new Uint8Array(N), op: new Uint8Array(N), glass: new Uint8Array(N) });
+export const newPlan = () => ({ fp: new Uint8Array(N), kind: new Uint8Array(N), fin: new Uint8Array(N), room: new Array(N), wall: new Uint8Array(N), rail: new Uint8Array(N), op: new Uint8Array(N), glass: new Uint8Array(N) });
 
 // ----------------------------------------------------------------------- mesh --
-function makeMesher(B, stats) {
+export function makeMesher(B, stats) {
   /** one z layer of a label raster (0 = air) as trapezoids -> micro boxes + upright side wedges */
   return function mesh(lab, z0, z1, matOf, tag, block) {
     const put = (x0, y0, x1, y1, m) => {
