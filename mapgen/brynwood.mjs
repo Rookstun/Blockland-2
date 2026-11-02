@@ -17,20 +17,23 @@ import fs from 'fs';
 import { makeBuilder, rng } from './builder.mjs';
 import { orientFor } from './orient.mjs';
 
-const BP = JSON.parse(fs.readFileSync(new URL('./refs/brynwood_bp.json', import.meta.url)));
+let BP = JSON.parse(fs.readFileSync(new URL('./refs/brynwood_bp.json', import.meta.url)));
 const K = 0.32808;                                   // units per cm
 const T = (x, y, off) => [-(x + off[0]) * K, (y + off[1]) * K];
-const FLOORS = { F1: { name: 'Floor 1', off: [0, 0] }, A: { name: 'Floor 2 A', off: [734, -450] }, B: { name: 'Separate Entry Floor 2 B', off: [-1730, -590] } };
+let FLOORS = { F1: { name: 'Floor 1', off: [0, 0] }, A: { name: 'Floor 2 A', off: [734, -450] }, B: { name: 'Separate Entry Floor 2 B', off: [-1730, -590] } };
 
 // stud grid: cell (i, j) = [X0 + 10 i, +10] x [Y0 + 10 j, +10]
-const C = 10, X0 = -900, Y0 = -700, NI = 180, NJ = 140, NC = NI * NJ;
+const C = 10;
+let X0 = -900, Y0 = -700, NI = 180, NJ = 140, NC = NI * NJ;
 const ci = x => Math.floor((x - X0) / C), cj = y => Math.floor((y - Y0) / C);
 const xOf = i => X0 + i * C, yOf = j => Y0 + j * C;
 const inG = (i, j) => i >= 0 && j >= 0 && i < NI && j < NJ;
 
 // z: pad 0..36 | F1 floor 36..40, walls ..170 | slab 170..176, F2 floor ..180 | F2 walls ..290 | roofs from 180 / 290
-const FL1 = 40, TOP1 = 170, FL2 = 180, TOP2 = 290, PER = 8, NMAX = 12;
-const DOOR = 62, SILL = 26, HEAD = 96;
+let FL1 = 40, TOP1 = 170, FL2 = 180, TOP2 = 290;
+const PER = 8, NMAX = 12;
+const DOOR = 62, SILL = 26;
+let HEAD = 96;
 const GLASS = { color: [176, 212, 228], material: 'BMC_Glass' };
 const GLOW = (color, i = 3) => ({ color, material: 'BMC_Glow', material_intensity: i });
 const PLASTER = [228, 222, 210], WHITE = [244, 240, 232], STUCCO = [238, 226, 204], STONE = [214, 202, 180], IRON = [58, 44, 36];
@@ -88,13 +91,21 @@ export function plan(key) {
   return { key, fp, room, rooms, wall, rail, segs };
 }
 
-export function brynwood({ seed = 4453 } = {}) {
+// another house on this template: house({ bp, floors, upper: [keys], grid: [X0, Y0, NI, NJ], z: [FL1, TOP1, FL2, TOP2],
+// head, lanai: room id, stairs(P1, P2) -> [{ hole, build }] })
+const BRYNWOOD = { bp: BP, floors: FLOORS, upper: ['A', 'B'], grid: [-900, -700, 180, 140], z: [40, 170, 180, 290], head: 96, lanai: '7eaf0', stairs: (P1, P2) => stairPlan(P1, P2) };
+export const brynwood = ({ seed = 4453 } = {}) => house(BRYNWOOD, seed);
+
+export function house(H, seed) {
+  ({ bp: BP, floors: FLOORS } = H);
+  [X0, Y0, NI, NJ] = H.grid; NC = NI * NJ;
+  [FL1, TOP1, FL2, TOP2] = H.z; HEAD = H.head;
   const r = rng(seed);
   const B = makeBuilder({ cell: 40 });
   const shade = (c, f) => c.map(v => Math.max(0, Math.min(255, Math.round(v * f))));
   const hash = (a, b) => { let h = Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 19349663); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
   // trim / finish pieces may lose a corner to a diagonal wall's wedge; anything structural that drops is a bug
-  const SOFT = /^(base|wains|rail|paper|crown|casing|casing head|stool|wall paper|wall wains|sill|lintel|keystone|doorstep|column|column capital)$/;
+  const SOFT = /^(base|wains|rail|F[12] balustrade|F[12] balustrade cap|paper|crown|casing|casing head|stool|wall paper|wall wains|sill|lintel|keystone|doorstep|column|column capital)$/;
   const soft = {};
   const box = (x0, y0, z0, x1, y1, z1, m, label) => {
     if (x1 <= x0 || y1 <= y0 || z1 <= z0) return true;
@@ -270,10 +281,10 @@ export function brynwood({ seed = 4453 } = {}) {
   }
 
   // ------------------------------------------------------------------ plans --
-  const P1 = plan('F1'), PA = plan('A'), PB = plan('B');
+  const P1 = plan('F1');
   // the two upper plans share one storey
   const P2 = { fp: new Uint8Array(NC), room: new Int16Array(NC).fill(-1), rooms: [], wall: new Uint8Array(NC), rail: new Uint8Array(NC), segs: [] };
-  for (const Q of [PA, PB]) {
+  for (const Q of H.upper.map(plan)) {
     const base = P2.rooms.length;
     P2.rooms.push(...Q.rooms.map(q => ({ ...q, n: q.n + base, wing: Q.key })));
     for (let k = 0; k < NC; k++) {
@@ -285,11 +296,21 @@ export function brynwood({ seed = 4453 } = {}) {
     P2.segs.push(...Q.segs);
   }
   for (let k = 0; k < NC; k++) if (P2.wall[k]) P2.rail[k] = 0;
+  // strict: a 30 x 20 clear patch each side of every door (wall stubs / necks narrower than the 30-wide door go)
+  if (H.strict) for (const P of [P1, P2]) for (const s of P.segs) if (s.kind !== 'd' && !s.rail) for (const o of s.ops) {
+    if (o.t === 'w') continue;
+    const [cx, cy] = o.c, j0 = cj(cy), i0 = ci(cx);
+    for (let n = -2; n <= 2; n++) for (let a = -15; a <= 15; a += 5) {
+      if (!n) continue;
+      const k = s.kind === 'x' ? (j0 + n) * NI + ci(cx + a) : cj(cy + a) * NI + i0 + n;
+      if (k >= 0 && k < NC && P.fp[k]) P.wall[k] = 0;
+    }
+  }
   const kindAt = (P, k) => (P.room[k] >= 0 ? P.rooms[P.room[k]].type : null);
   const indoor = (P, k) => P.fp[k] && !['outdoor'].includes(kindAt(P, k));
 
   // lanai (the F1 outdoor room round the pool), open sky = lanai cells 8+ studs from the house, pool 2+ inside it
-  const lanaiN = P1.rooms.find(q => q.id === '7eaf0')?.n;
+  const lanaiN = P1.rooms.find(q => q.id === H.lanai)?.n;
   const bfs = (seed, diag = true) => {
     const d = new Int16Array(NC).fill(9999), q = [];
     for (let k = 0; k < NC; k++) if (seed[k]) { d[k] = 0; q.push(k); }
@@ -336,10 +357,18 @@ export function brynwood({ seed = 4453 } = {}) {
           const garage = sides.some(kk => kindAt(P, kk) === 'garage');
           // upstairs, an opening onto a lower roof would sit behind its courses (whitetail trap): none there
           if (P === P2 && sides.some(kk => out(kk) && !P2.fp[kk] && P1.fp[kk] && !sky[kk])) continue;
+          // (checked along the whole opening plus its trim, and the lower roof's eave stud beside it)
+          const lowRoof = kk => out(kk) && !P2.fp[kk] && !sky[kk] && [0, 1, -1, NI, -NI].some(d => P1.fp[kk + d] && !P2.fp[kk + d]);
+          if (P === P2 && H.strict && [...Array(Math.ceil((q - p + 12) / 10) + 1).keys()].some(n => {
+            const a = Math.min(p - 6 + 10 * n, q + 6), kk = axis === 'x' ? cj(o.c[1]) * NI + ci(a) : ci(o.c[0]) + cj(a) * NI;
+            return (axis === 'x' ? [kk - NI, kk + NI] : [kk - 1, kk + 1]).some(lowRoof);
+          })) continue;
           let t = o.t === 'w' ? 'w' : garage && o.w >= 66 ? 'g' : outside === 1 && o.w > 40 ? 'gd' : 'd';
           if (t === 'd') { const m = Math.round(c / 2) * 2; p = m - 16; q = m + 14; }     // leaf doors: 30 wide (fixture panel)
+          // strict: a leaf door is never trimmed under the 30-wide panel, it slides along its run instead (or is skipped)
+          if (H.strict && t === 'd') { p = Math.min(Math.max(a0 + 6, p), a1 - 36); q = p + 30; }
           p = Math.max(a0 + 6, p); q = Math.min(a1 - 6, q);
-          if (q - p < 14 || res.some(e => e.a0 < q + 4 && e.a1 > p - 4)) continue;
+          if (q - p < (H.strict && t === 'd' ? 30 : 14) || res.some(e => e.a0 < q + 4 && e.a1 > p - 4)) continue;
           const z = t === 'w' ? [fl + SILL, fl + HEAD] : t === 'g' ? [fl, fl + 84] : t === 'gd' ? [fl, fl + 84] : [fl, fl + DOOR];
           res.push(op(p, q, z[0], z[1], { t, outside: outside === 1 }));
         }
@@ -377,7 +406,7 @@ export function brynwood({ seed = 4453 } = {}) {
     const dOp = new Map();
     for (const s of P.segs) if (s.kind === 'd' && !s.rail) for (const o of s.ops) for (const [i, j] of s.cells) {
       const u = (xOf(i) + 5 - s.A[0]) * s.ux + (yOf(j) + 5 - s.A[1]) * s.uy, uc = (o.c[0] - s.A[0]) * s.ux + (o.c[1] - s.A[1]) * s.uy;
-      if (Math.abs(u - uc) < o.w / 2) dOp.set(j * NI + i, o.t);
+      if (Math.abs(u - uc) < (H.strict && o.t !== 'w' ? Math.max(o.w / 2, 24) : o.w / 2)) dOp.set(j * NI + i, o.t);   // strict: diagonal doors 48+ along the wall
     }
     const bandsOf = k => { const t = dOp.get(k); return t === 'w' ? [[z0, fl + SILL, 0], [fl + SILL, fl + HEAD, 1], [fl + HEAD, top, 0]] : t === 'd' ? [[fl + 84, top, 0]] : [[z0, top, 0]]; };
     const taken = new Set();
@@ -406,6 +435,8 @@ export function brynwood({ seed = 4453 } = {}) {
     }
     dress();
     // rails (thin walls in the plan: gallery and balcony balustrades), white, merged runs
+    // strict: ground-floor thin walls are porch / lanai edges, left open (steps up to them below)
+    if (H.strict && P === P1) return { runs, doors, notches: taken };
     for (const R of rects(P.rail)) box(R.x0, R.y0, fl, R.x1, R.y1, fl + 34, { color: WHITE }, tag + ' balustrade');
     for (const R of rects(P.rail)) box(R.x0, R.y0, fl + 34, R.x1, R.y1, fl + 38, { color: STONE }, tag + ' balustrade cap');
     return { runs, doors, notches: taken };
@@ -422,7 +453,7 @@ export function brynwood({ seed = 4453 } = {}) {
   // --------------------------------------------------------------- stairs (holes) --
   // STAIR = the grand stair, STAIR_B = the apartment's; filled in after the rooms (see stairs below)
   const stairCells = new Uint8Array(NC);
-  const STAIRS = stairPlan(P1, P2);
+  const STAIRS = H.stairs(P1, P2, { cj, ci, NI });
   for (const s of STAIRS) for (const [x0, y0, x1, y1] of s.hole) for (let y = y0; y < y1; y += 10) for (let x = x0; x < x1; x += 10) stairCells[cj(y) * NI + ci(x)] = 1;
 
   // ----------------------------------------------------------------- ground floor --
@@ -480,6 +511,7 @@ export function brynwood({ seed = 4453 } = {}) {
     for (const R of rs) {
       const q = P.rooms[R.v - 1];
       if (q.type === 'outdoor' || q.type === 'garage' || (R.x1 - R.x0) * (R.y1 - R.y0) < 900) continue;
+      if (H.strict && Math.min(R.x1 - R.x0, R.y1 - R.y0) < 50) continue;   // strict: no trim narrowing a 30-40 wide neck
       finishRoom({ x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, z0: fl, z1: top - 4 }, { paper: paper[q.n] ??= PAPERS[Math.floor(r() * PAPERS.length)], wains: WAINS[q.n % 2] });
     }
     void notchSet;
@@ -606,6 +638,18 @@ export function brynwood({ seed = 4453 } = {}) {
       const n0 = dir > 0 ? d.line + 10 + 10 * (s - 1) : d.line - 10 * s;
       const [x0, y0, x1, y1] = d.axis === 'x' ? [d.a0 - 6, n0, d.a1 + 6, n0 + 10] : [n0, d.a0 - 6, n0 + 10, d.a1 + 6];
       if (B.free([x0, y0, 0], [x1, y1, FL1 - 4 - 12 * (s - 1)])) box(x0, y0, 0, x1, y1, FL1 - 4 - 12 * (s - 1), { color: STONE }, 'doorstep');
+    }
+  }
+
+  // strict: two 12-high step rings round the F1 outdoor rooms' open (rail) edges, so a player walks up onto the porch
+  if (H.strict) {
+    const open = new Uint8Array(NC);
+    for (let k = 0; k < NC; k++) if (P1.fp[k] && kindAt(P1, k) === 'outdoor' && !P1.wall[k]) open[k] = 1;
+    const d = bfs(open, false);
+    for (const [ring, zt] of [[1, FL1 - 16], [2, FL1 - 28]]) {
+      for (const R of rects(null, k => d[k] === ring && !P1.fp[k] && !P1.wall[k] && !P2.fp[k] ? 1 : 0)) {
+        if (B.free([R.x0, R.y0, 0], [R.x1, R.y1, zt])) box(R.x0, R.y0, 0, R.x1, R.y1, zt, { color: STONE }, 'doorstep');
+      }
     }
   }
 

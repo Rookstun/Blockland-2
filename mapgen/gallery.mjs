@@ -30,6 +30,7 @@ const GENS = [
 ];
 
 const half = b => b.size ?? [5, 5, 6];
+const PIN = { longbrooke: [920, -15620, 0] };
 // a few generator tiles have off-grid sizes (ship.mjs rejects them): those become micro bricks
 const offGrid = b => /^PB_Default(?!Micro)/.test(b.asset) && b.size && (b.size[0] % 5 || b.size[1] % 5 || b.size[2] % 2);
 function load(name, args) {
@@ -79,7 +80,9 @@ for (const row of rows) {
   let x = GX;
   for (const b of row) {
     // snap shifts to 10 so procedural bricks stay on the stud grid
-    const dx = Math.round((x - b.m[0]) / 10) * 10, dy = Math.round((y0 - b.m[4]) / 10) * 10, dz = Math.ceil(-b.m[2] / 4) * 4;
+    let dx = Math.round((x - b.m[0]) / 10) * 10, dy = Math.round((y0 - b.m[4]) / 10) * 10, dz = Math.ceil(-b.m[2] / 4) * 4;
+    // builds re-shipped into their live slot by a delta keep that slot (2026-11-02: longbrooke on the template)
+    if (PIN[b.name]) [dx, dy, dz] = PIN[b.name];
     for (const k of b.bricks) { const { label, ...r } = k; if (offGrid(r)) r.asset = 'PB_DefaultMicroBrick'; out.push({ ...r, position: [k.position[0] + dx, k.position[1] + dy, k.position[2] + dz] }); }
     out.push(sign(b.text, Math.round((b.m[0] + b.m[3]) / 20) * 10 + dx, b.m[1] + dy - SIGN_Y));
     box[0] = Math.min(box[0], b.m[0] + dx); box[2] = Math.max(box[2], b.m[3] + dx);
