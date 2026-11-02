@@ -36,6 +36,9 @@ teaches a rule, add it here, not in CLAUDE.md (CLAUDE.md links here).
     `PB_DefaultMicroWedgeHalfInnerCornerInverted` (or 2 micro ramps) in one cell
     for its 4-segment / diagonal pixels. **(measured)** Exactly when the game
     allows this is an open question.
+  - Two COMPLEMENTARY upright `PB_DefaultMicroWedge`s in the SAME box (rotation 0 + 2, or 1 + 3; 20x20x20 and
+    40x20x20) both load in one bricks op (2026-11-01, 4/4 loaded). So a slanted seam between two materials is
+    allowed; builder.mjs still rejects it (AABB check). **(measured)**
   - Bricks on a different grid (a microchip's inner grid, a dynamic/entity
     grid) don't clash with the main grid. **(measured)**
   - Plants: the game rejects BOTH plant bricks when two touch or overlap within
