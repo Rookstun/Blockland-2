@@ -198,10 +198,11 @@ export function house(H, seed) {
 
   // --------------------------------------------- interior finishes (whitetail finishRoom) --
   const trimC = [246, 244, 238];
-  const bands = (z0, z1) => [
+  // thin (strict, necks under 50 wide): every band 2 deep, so the room keeps its papering without eating the passage
+  const bands = (z0, z1, thin) => [
     [z0, z0 + 6, 4, 'base'], [z0 + 6, z0 + 26, 2, 'wains'], [z0 + 26, z0 + 30, 4, 'rail'],
     [z0 + 30, z1 - 6, 2, 'paper'], [z1 - 6, z1 - 4, 4, 'crown'], [z1 - 4, z1, 6, 'crown'],
-  ];
+  ].map(([a, b, t, k]) => [a, b, thin ? 2 : t, k]).filter(([a, b], i, all) => !thin || i !== 4);
   function patterned(pat, a0, a1, z0, z1, put) {
     if (pat.kind === 'paint') return put(a0, a1, z0, z1, pat.color);
     const per = pat.cols.reduce((s, [w]) => s + w, 0);
@@ -219,7 +220,7 @@ export function house(H, seed) {
     const [c0, c1] = d > 0 ? [f, f + t] : [f - t, f];
     if (axis === 'x') box(a, c0, z, b, c1, zt, { color }, label); else box(c0, a, z, c1, b, zt, { color }, label);
   }
-  function finishRoom(R, { paper, wains = WAINS[0] } = {}) {
+  function finishRoom(R, { paper, wains = WAINS[0], thin = false } = {}) {
     const has = {};
     for (const s of Object.keys(SIDES)) has[s] = faceWall(s, R).length > 0;
     const cutSpans = (sp, p0, p1) => sp.flatMap(([p, q]) => (p1 <= p || p0 >= q) ? [[p, q]] : [[p, p0], [p1, q]].filter(([u, v]) => v > u));
@@ -229,7 +230,7 @@ export function house(H, seed) {
       const lo = axis === 'x' ? R.x0 : R.y0, hi = axis === 'x' ? R.x1 : R.y1;
       const ws = faceWall(side, R);
       const ops = ws.flatMap(w => w.openings).filter(o => o.z0 < R.z1 && o.z1 > R.z0 && o.a0 < hi && o.a1 > lo);
-      for (const [z0, z1, t, kind] of bands(R.z0, R.z1)) {
+      for (const [z0, z1, t, kind] of bands(R.z0, R.z1, thin)) {
         let a0 = lo, a1 = hi;
         if (axis === 'y') { if (has.y0) a0 += t; if (has.y1) a1 -= t; }
         let spans = ws.filter(w => w.z0 <= z0 && w.z1 >= z1).map(w => [Math.max(a0, w.a0), Math.min(a1, w.a1)]).filter(([p, q]) => q > p).sort((u, v) => u[0] - v[0])
@@ -455,6 +456,16 @@ export function house(H, seed) {
   const stairCells = new Uint8Array(NC);
   const STAIRS = H.stairs(P1, P2, { cj, ci, NI });
   for (const s of STAIRS) for (const [x0, y0, x1, y1] of s.hole) for (let y = y0; y < y1; y += 10) for (let x = x0; x < x1; x += 10) stairCells[cj(y) * NI + ci(x)] = 1;
+  // strict: wall cells cleared for doors / stairs belong to no room -> no floor, ceiling or paper (holes): give each the
+  // room of a neighbour
+  if (H.strict) for (const P of [P1, P2]) for (let pass = 0, more = true; more && pass < 6; pass++) {
+    more = false;
+    for (let k = 0; k < NC; k++) {
+      if (!P.fp[k] || P.wall[k] || P.rail[k] || P.room[k] >= 0) continue;
+      const n = [k + 1, k - 1, k + NI, k - NI].find(q => q >= 0 && q < NC && P.room[q] >= 0 && !P.wall[q]);
+      if (n !== undefined) { P.room[k] = P.room[n]; more = true; }
+    }
+  }
 
   // ----------------------------------------------------------------- ground floor --
   const W1 = buildWalls(P1, FL1, TOP1, 'F1');
@@ -503,16 +514,17 @@ export function house(H, seed) {
     }
     // ceilings over indoor cells (not over stair wells / open-to-below on the floor above), notches stop 4 under them
     if (ceilings) {
-      const cc = k => cell(k) && kindAt(P, k) !== 'outdoor' && !(P === P1 && (stairCells[k] || kindAt(P2, k) === 'open-to-below')) ? 1 : 0;
+      // strict: the top storey's ceiling also closes over its stair well and open-to-below (else the roof shows)
+      const top2 = k => H.strict && P === P2 && P.fp[k] && !P.wall[k] && !P.rail[k] && kindAt(P, k) !== 'outdoor';
+      const cc = k => top2(k) || (cell(k) && kindAt(P, k) !== 'outdoor' && !(P === P1 && (stairCells[k] || kindAt(P2, k) === 'open-to-below'))) ? 1 : 0;
       for (const R of rects(null, cc)) ceiling(R.x0, R.y0, R.x1, R.y1, top - 4, tag + ' ceiling');
     }
     // trim bands on the rooms' rectangles (a band only where a straight wall face backs it)
     const paper = {};
     for (const R of rs) {
       const q = P.rooms[R.v - 1];
-      if (q.type === 'outdoor' || q.type === 'garage' || (R.x1 - R.x0) * (R.y1 - R.y0) < 900) continue;
-      if (H.strict && Math.min(R.x1 - R.x0, R.y1 - R.y0) < 50) continue;   // strict: no trim narrowing a 30-40 wide neck
-      finishRoom({ x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, z0: fl, z1: top - 4 }, { paper: paper[q.n] ??= PAPERS[Math.floor(r() * PAPERS.length)], wains: WAINS[q.n % 2] });
+      if (q.type === 'outdoor' || q.type === 'garage' || (!H.strict && (R.x1 - R.x0) * (R.y1 - R.y0) < 900)) continue;
+      finishRoom({ x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, z0: fl, z1: top - 4 }, { paper: paper[q.n] ??= PAPERS[Math.floor(r() * PAPERS.length)], wains: WAINS[q.n % 2], thin: H.strict && Math.min(R.x1 - R.x0, R.y1 - R.y0) < 50 });
     }
     void notchSet;
     return rs;
@@ -662,6 +674,8 @@ export function house(H, seed) {
     for (const R of rs ?? rects(null, k => !P.wall[k] && !P.rail[k] && P.room[k] >= 0 && !(P === P2 && stairCells[k]) && kindAt(P, k) !== 'open-to-below' ? P.room[k] + 1 : 0)) {
       const a = (R.x1 - R.x0) * (R.y1 - R.y0), q = P.rooms[R.v - 1];
       if (q.type === 'outdoor' || q.type === 'open-to-below' || a < 1600 || Math.min(R.x1 - R.x0, R.y1 - R.y0) < 30) continue;
+      // strict: no lamp in a stair room or over a tread (руся 2026-11-02: 'a light in the middle of the stairs i cant get up')
+      if (H.strict && (q.type === 'stairs' || [...Array((R.x1 - R.x0) / 10 * (R.y1 - R.y0) / 10).keys()].some(n => stairCells[cj(R.y0 + 10 * Math.floor(n / ((R.x1 - R.x0) / 10))) * NI + ci(R.x0 + 10 * (n % ((R.x1 - R.x0) / 10)))]))) continue;
       if (!byRoom.has(q.n) || a > byRoom.get(q.n).a) byRoom.set(q.n, { R, a, q });
     }
     for (const { R, q } of byRoom.values()) {
