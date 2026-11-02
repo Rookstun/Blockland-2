@@ -673,7 +673,7 @@ export function house(H, seed) {
   const FURNISH = {
     living: [['sofa', 'sofa_cream', 'loveseat', 'loveseat_cream'], ['armchair', 'armchair_grey', 'armchair_low'], ['tv_console', 'sideboard'], ['plant_tall', 'tree_plant', 'planter', 'plant_pot']],
     bedroom: [['bed_queen', 'bed_double', 'bed_headboard'], ['end_table', 'lamp_small'], ['sideboard', 'tall_cabinet', 'desk_set']],
-    bathroom: [['bathtub']],
+    bathroom: [['toilet'], ['bathtub']],
     kitchen: [['fridge'], ['stove'], ['kitchen_unit']],
     laundry: [['washer']],
   };
