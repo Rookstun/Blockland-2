@@ -60,7 +60,7 @@ if (overlaps > 10) bad(`... ${overlaps - 10} more overlaps`);
 
 // previews: two isoview renders around the build's bounding box
 if (bricks.length && !err.some(e => e.includes('position'))) {
-  const lo = [0, 1, 2].map(k => Math.min(...boxes.map(([b]) => b[0][k]))), hi = [0, 1, 2].map(k => Math.max(...boxes.map(([b]) => b[1][k])));
+  const lo = [0, 1, 2].map(k => boxes.reduce((m, [b]) => Math.min(m, b[0][k]), Infinity)), hi = [0, 1, 2].map(k => boxes.reduce((m, [b]) => Math.max(m, b[1][k]), -Infinity)); // no spread: 100k+ bricks overflow the stack
   const c = [0, 1].map(k => Math.round((lo[k] + hi[k]) / 2)), half = Math.ceil(Math.max(hi[0] - lo[0], hi[1] - lo[1]) / 2) + 40;
   const upp = Math.max(1, Math.ceil(half / 300)), tmp = file.replace(/\.json$/, '') + '.bricks.json';
   fs.writeFileSync(tmp, JSON.stringify(bricks));
