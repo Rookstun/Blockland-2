@@ -33,7 +33,7 @@ function stairs(P1, P2, { cj, ci, NI }) {
 export const LONGBROOKE = {
   bp: JSON.parse(fs.readFileSync(new URL('./refs/longbrooke_bp.json', import.meta.url))),
   floors: { F1: { name: 'Floor 1', off: [0, 0] }, U: { name: 'Floor 2', off: [-230, -80] } },
-  upper: ['U'], grid: [-260, -400, 70, 85], z: [FL1, TOP1, FL2, 250], head: 90, lanai: null, stairs, strict: true,
+  upper: ['U'], grid: [-260, -400, 70, 85], z: [FL1, TOP1, FL2, 250], head: 90, lanai: null, stairs, strict: true, furnish: true,
 };
 export const longbrooke = ({ seed = 11214 } = {}) => house(LONGBROOKE, seed);
 

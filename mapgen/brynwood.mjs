@@ -16,6 +16,7 @@
 import fs from 'fs';
 import { makeBuilder, rng } from './builder.mjs';
 import { orientFor } from './orient.mjs';
+import { piece as furnPiece, footprint, facing, placeFurniture } from './furniture.mjs';
 
 let BP = JSON.parse(fs.readFileSync(new URL('./refs/brynwood_bp.json', import.meta.url)));
 const K = 0.32808;                                   // units per cm
@@ -559,7 +560,7 @@ export function house(H, seed) {
 
   // ------------------------------------------------------------------- upper floor --
   const W2 = buildWalls(P2, FL2, TOP2, 'F2');
-  floors(P2, FL2, TOP2, W2, 'F2');
+  const R2 = floors(P2, FL2, TOP2, W2, 'F2');
 
 
   // ---------------------------------------------------------------------- roofs --
@@ -665,6 +666,58 @@ export function house(H, seed) {
     }
   }
 
+  // ------------------------------------------------------------------ furniture --
+  // H.furnish: руся's pieces (furniture.mjs) against straight walls of each room's biggest rectangle, back to the wall,
+  // clear of every opening on that wall by 14 and of the room's doors by 40, at most a third of the floor taken so the
+  // middle stays open; per room kind a list of groups, the first piece of a group that fits is placed
+  const FURNISH = {
+    living: [['sofa', 'sofa_cream', 'loveseat', 'loveseat_cream'], ['armchair', 'armchair_grey', 'armchair_low'], ['tv_console', 'sideboard'], ['plant_tall', 'tree_plant', 'planter', 'plant_pot']],
+    bedroom: [['bed_queen', 'bed_double', 'bed_headboard'], ['end_table', 'lamp_small'], ['sideboard', 'tall_cabinet', 'desk_set']],
+    bathroom: [['bathtub']],
+    kitchen: [['fridge'], ['stove'], ['kitchen_unit']],
+    laundry: [['washer']],
+  };
+  const furnished = [];
+  if (H.furnish) for (const [P, rs, fl, top] of [[P1, R1, FL1, TOP1], [P2, R2, FL2, TOP2]]) {
+    const big = new Map();
+    for (const R of rs) { const a = (R.x1 - R.x0) * (R.y1 - R.y0), q = P.rooms[R.v - 1]; if (!big.has(q.n) || a > big.get(q.n).a) big.set(q.n, { R, a, q }); }
+    for (const { R, a, q } of big.values()) {
+      if (q.type === 'outdoor' || q.type === 'garage' || q.type === 'stairs') continue;
+      const t = (q.notes.join(' ') + ' ' + q.type).toLowerCase(), kind = /laundry/.test(t) ? 'laundry' : catOf(q);
+      const groups = FURNISH[kind];
+      if (!groups) continue;
+      const Rz = { ...R, z0: fl, z1: top - 4 }, doorOps = Object.keys(SIDES).flatMap(sd => faceWall(sd, Rz).flatMap(w => w.openings.filter(o => o.z0 <= fl + 2).map(o => ({ ...o, axis: SIDES[sd][0] }))));
+      let used = 0;
+      for (const group of groups) {
+        let done = false;
+        for (const key of group) {
+          if (done || !furnPiece(key)) continue;
+          for (const side of ['y1', 'x0', 'x1', 'y0']) {
+            if (done) break;
+            const ws = faceWall(side, Rz);
+            if (!ws.length) continue;
+            const turn = facing(key, { x0: 'x0', x1: 'x1', y0: 'y0', y1: 'y1' }[side]), [fw, fd] = footprint(key, turn);
+            const along = side[0] === 'y' ? fw : fd, deep = side[0] === 'y' ? fd : fw;
+            if (used + fw * fd > a / 3) continue;
+            const [axis, dirIn] = SIDES[side], lo = axis === 'x' ? R.x0 : R.y0, hi = axis === 'x' ? R.x1 : R.y1;
+            const ops = ws.flatMap(w => w.openings);
+            for (let c = lo + along / 2 + 6; c <= hi - along / 2 - 6 && !done; c += 10) {
+              if (!ws.some(w => w.a0 <= c - along / 2 && w.a1 >= c + along / 2)) continue;
+              if (ops.some(o => o.a0 - 14 < c + along / 2 && o.a1 + 14 > c - along / 2)) continue;
+              const n = R[side] + dirIn * (5 + deep / 2);   // 5 off the face: past the 4-deep base trim
+              const [x, y] = axis === 'x' ? [c, n] : [n, c];
+              const px0 = x - fw / 2, px1 = x + fw / 2, py0 = y - fd / 2, py1 = y + fd / 2;
+              // keep 40 clear in front of any door of this rectangle
+              if (doorOps.some(o => { const [dx0, dx1, dy0, dy1] = o.axis === 'x' ? [o.a0, o.a1, R.y0 - 40, R.y1 + 40] : [R.x0 - 40, R.x1 + 40, o.a0, o.a1]; const near = o.axis === 'x' ? [o.a0 - 40, o.a1 + 40] : [o.a0 - 40, o.a1 + 40];
+                return o.axis === 'x' ? px1 > near[0] && px0 < near[1] && (Math.abs(py0 - R.y0) < 50 || Math.abs(py1 - R.y1) < 50) && dx0 < dx1 && dy0 < dy1 : py1 > near[0] && py0 < near[1] && (Math.abs(px0 - R.x0) < 50 || Math.abs(px1 - R.x1) < 50); })) continue;
+              if (placeFurniture(B, key, Math.round(x), Math.round(y), fl, turn)) { done = true; used += fw * fd; furnished.push(`${P === P1 ? 'F1' : 'F2'} ${q.name}: ${key}`); }
+            }
+          }
+        }
+      }
+    }
+  }
+
   // ------------------------------------------------------------------- fixtures --
   // a lamp at the middle of each indoor room's biggest rectangle; its switch on a straight wall face of that rectangle
   // 10+ clear of openings; every leaf door (30 wide) of both floors
@@ -707,7 +760,7 @@ export function house(H, seed) {
   const xs = [], ys = [];
   for (let k = 0; k < NC; k++) if (P1.fp[k] || P2.fp[k]) { xs.push(xOf(k % NI)); ys.push(yOf(Math.floor(k / NI))); }
   const lot = [Math.min(...xs) - 60, Math.min(...ys) - 60, Math.max(...xs) + 70, Math.max(...ys) + 70];
-  return { bricks, fixtures, lot, count: bricks.length, soft };
+  return { bricks, fixtures, lot, count: bricks.length, soft, furnished };
 }
 
 // ------------------------------------------------------------------------ stairs --
