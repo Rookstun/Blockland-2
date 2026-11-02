@@ -1,11 +1,11 @@
 // 11214 Longbrooke Dr, Riverview FL 33579 (2026-11-01, руся in chat: 'a simpler house ... i will work with you to make
 // it good'). 1995 two-storey Florida stucco house, 3,060 sq ft, 5 bed / 2.5 bath, two-storey foyer with an arched
 // window, 2-car garage, back lanai. Plan = Zillow 3D tour blueprint (view-imx 8ca6df9a...), refs/longbrooke_bp.json;
-// Floor 2 fitted on the walls at -230,-80 cm. Same raster + trapezoid/wedge mesher as brynwood.mjs.
+// Floor 2 fitted on the walls at -230,-80 cm. Same raster + trapezoid/wedge mesher as brynwood_raster.mjs.
 //   longbrooke() -> { bricks, dropped, stats }      node mapgen/longbrooke.mjs [job.json] [--at X,Y]
 import fs from 'fs';
 import { makeBuilder, rng } from './builder.mjs';
-import { N, NX, NY, T, cx, cy, eachCell, chamfer, shade, finLabel, finMat, plan, newPlan, makeMesher, STUCCO } from './brynwood.mjs';
+import { N, NX, NY, T, cx, cy, eachCell, chamfer, shade, finLabel, finMat, plan, newPlan, makeMesher, STUCCO } from './brynwood_raster.mjs';
 
 const BP = JSON.parse(fs.readFileSync(new URL('./refs/longbrooke_bp.json', import.meta.url)));
 const FL1 = 40, TOP1 = 140, FL2 = 150, TOP2 = 250;   // 10 ft / 10 ft storeys

@@ -1,507 +1,719 @@
-// 4453 Brynwood Dr, Naples FL 34119 (Quail West) (2026-11-01, owner: Zillow zpid 43789930, 'one to one floorplan,
-// research house, research mapgens, knock their socks off, experiment with diagonal geometry'). 2001 Biltmore-inspired
-// Mediterranean estate, 11,616 sq ft, 5 bed / 9 bath, block + cream stucco, red barrel-tile hip roofs, a screened pool
-// lanai between the wings, 18-seat cinema, wine cellar, safe room, two garages, a one-bed apartment wing upstairs
-// with its own stair.
-// PLAN = the listing's 3D tour blueprint (view-imx __NEXT_DATA__ blueprintJson), compact in refs/brynwood_bp.json
-// (cm; per floor fp = flat x,y list, rooms [id, type, stair, poly], walls [x0,y0,x1,y1, thick, [w|d, cx, cy, width]..],
-// notes [room, text, x, y]). Upper floors come in their own frames, fitted on the walls: Floor 2 A +734,-450 cm
-// (its 45 degree wall on the great-room diagonal, its stair over the F1 stair), Floor 2 B (apartment) -1730,-590 cm
-// (elevator on the F1 diamond elevator). 1 ft = 10 units; x mirrored at load (left-handed world).
-// DIAGONAL GEOMETRY: every layer (wall bands, floors, slabs, roof courses, stair treads, steps, pool) is a label raster
-// of 2-unit cells cut by mesh() into trapezoids: runs stacked row on row while each edge stays on one straight line.
-// A trapezoid becomes strips: a micro box core plus an upright PB_DefaultMicroWedge (side wedge) on each slanted edge,
-// so 45 degree walls, the round turret and the curved stair come out smooth. Slants only ever face air: where two
-// different solid labels meet, the edge is kept vertical (a wedge pair would share one box and the game rejects it).
-//   brynwood() -> { bricks, dropped }      node mapgen/brynwood.mjs [job.json] [--at X,Y]
+// 4453 Brynwood Dr, Naples FL 34119 (Quail West), rebuilt 2026-11-01 on the White Tail / Tavistock template (owner:
+// "white tail is the best one, why are so many elements so terribly formed in brynwood. there are millions of
+// microbricks for no purpose" -> "Rebuild it"). The first build (brynwood_raster.mjs) meshed a 2-unit raster of the
+// cm plan: walls off the stud grid came out as 2-wide slivers, floors as one brick per pattern tile, roofs as rings.
+// Here the plan (refs/brynwood_bp.json, the listing's 3D-tour blueprint, same frames) is snapped to the 1 ft stud
+// grid (10 units) and laid with the template's pieces:
+//   walls  straight runs -> wall(): one plaster core, a coursed stucco skin on the outside faces, framed windows with
+//          sills + keystone lintels, room trim bands (finishRoom). 45 degree walls (and the turrets' octagons) ->
+//          one box per stud step plus a micro wedge in each notch, so both faces read as flat diagonals.
+//   floors tilefloors.mjs per room rectangle, ceilings face-down tiles, one slab per storey.
+//   roofs  coursed like White Tail's (4-high lip + micro wedge per stud, white eave lip) from a distance field over
+//          each storey's roofed cells, hips as corner wedges, low decks capped flat.
+//   fixtures lamps / switches / doors for tavistock_fixtures.mjs --house brynwood.
+// Built straight in world coordinates (the plan's x is mirrored by T for the left-handed world).
+//   brynwood() -> { bricks, fixtures, lot, count }      node mapgen/brynwood.mjs [job.json] [--at X,Y]
 import fs from 'fs';
 import { makeBuilder, rng } from './builder.mjs';
+import { orientFor } from './orient.mjs';
 
 const BP = JSON.parse(fs.readFileSync(new URL('./refs/brynwood_bp.json', import.meta.url)));
 const K = 0.32808;                                   // units per cm
-export const R = 2, GX0 = -880, GY0 = -680, NX = 880, NY = 680, N = NX * NY;
-const FLOORS = [
-  { name: 'Floor 1', off: [0, 0] },
-  { name: 'Floor 2 A', off: [734, -450] },
-  { name: 'Separate Entry Floor 2 B', off: [-1730, -590] },
-];
-// z: pad 0..36 + finish 36..40 | F1 walls 40..170 | slab 170..176 + F2 finish ..180 | F2 walls 180..290 |
-// ceiling 290..300 | roofs from 180 (one storey) and 300
-const FL1 = 40, TOP1 = 170, FL2 = 180, TOP2 = 290;
+const T = (x, y, off) => [-(x + off[0]) * K, (y + off[1]) * K];
+const FLOORS = { F1: { name: 'Floor 1', off: [0, 0] }, A: { name: 'Floor 2 A', off: [734, -450] }, B: { name: 'Separate Entry Floor 2 B', off: [-1730, -590] } };
 
-export const T = (x, y, off) => [-(x + off[0]) * K, (y + off[1]) * K];
-const pts = (a, off) => { const P = []; for (let i = 0; i < a.length; i += 2) P.push(T(a[i], a[i + 1], off)); return P; };
-export const cx = i => GX0 + i * R + 1, cy = j => GY0 + j * R + 1;
-function pip(poly, x, y) {
+// stud grid: cell (i, j) = [X0 + 10 i, +10] x [Y0 + 10 j, +10]
+const C = 10, X0 = -900, Y0 = -700, NI = 180, NJ = 140, NC = NI * NJ;
+const ci = x => Math.floor((x - X0) / C), cj = y => Math.floor((y - Y0) / C);
+const xOf = i => X0 + i * C, yOf = j => Y0 + j * C;
+const inG = (i, j) => i >= 0 && j >= 0 && i < NI && j < NJ;
+
+// z: pad 0..36 | F1 floor 36..40, walls ..170 | slab 170..176, F2 floor ..180 | F2 walls ..290 | roofs from 180 / 290
+const FL1 = 40, TOP1 = 170, FL2 = 180, TOP2 = 290, PER = 8, NMAX = 12;
+const DOOR = 62, SILL = 26, HEAD = 96;
+const GLASS = { color: [176, 212, 228], material: 'BMC_Glass' };
+const GLOW = (color, i = 3) => ({ color, material: 'BMC_Glow', material_intensity: i });
+const PLASTER = [228, 222, 210], WHITE = [244, 240, 232], STUCCO = [238, 226, 204], STONE = [214, 202, 180], IRON = [58, 44, 36];
+const ROOF = [184, 92, 58], PAD = [222, 208, 184], TILE = 'PB_DefaultTile', MB = 'PB_DefaultMicroBrick';
+const PAPERS = [[236, 226, 206], [226, 214, 190], [214, 200, 172], [200, 210, 196], [222, 210, 196], [240, 236, 228]].map(color => ({ kind: 'paint', color }));
+const WAINS = [{ kind: 'paint', color: [246, 242, 234] }, { kind: 'paint', color: [236, 230, 218] }];
+
+function pip(P, x, y) {
   let c = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+  for (let a = 0, b = P.length - 1; a < P.length; b = a++) {
+    const [xi, yi] = P[a], [xj, yj] = P[b];
     if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
   }
   return c;
 }
-export function eachCell(x0, y0, x1, y1, f) {
-  const i0 = Math.max(0, Math.floor((x0 - GX0) / R)), i1 = Math.min(NX - 1, Math.ceil((x1 - GX0) / R));
-  const j0 = Math.max(0, Math.floor((y0 - GY0) / R)), j1 = Math.min(NY - 1, Math.ceil((y1 - GY0) / R));
-  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) f(j * NX + i, cx(i), cy(j));
-}
-const bbox = P => [Math.min(...P.map(p => p[0])), Math.min(...P.map(p => p[1])), Math.max(...P.map(p => p[0])), Math.max(...P.map(p => p[1]))];
-function polyMask(P, mask = new Uint8Array(N), v = 1) {
-  const [x0, y0, x1, y1] = bbox(P);
-  eachCell(x0, y0, x1, y1, (k, x, y) => { if (pip(P, x, y)) mask[k] = v; });
-  return mask;
-}
-const cellOf = (x, y) => Math.floor((y - GY0) / R) * NX + Math.floor((x - GX0) / R);
-/** chamfer distance (cells) from every cell to the nearest seed cell (seed[k] truthy) */
-export function chamfer(seed) {
-  const d = new Float32Array(N);
-  for (let k = 0; k < N; k++) d[k] = seed[k] ? 0 : 1e9;
-  const D = Math.SQRT2;
-  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
-    const k = j * NX + i; let v = d[k];
-    if (i > 0) v = Math.min(v, d[k - 1] + 1);
-    if (j > 0) { v = Math.min(v, d[k - NX] + 1); if (i > 0) v = Math.min(v, d[k - NX - 1] + D); if (i < NX - 1) v = Math.min(v, d[k - NX + 1] + D); }
-    d[k] = v;
-  }
-  for (let j = NY - 1; j >= 0; j--) for (let i = NX - 1; i >= 0; i--) {
-    const k = j * NX + i; let v = d[k];
-    if (i < NX - 1) v = Math.min(v, d[k + 1] + 1);
-    if (j < NY - 1) { v = Math.min(v, d[k + NX] + 1); if (i < NX - 1) v = Math.min(v, d[k + NX + 1] + D); if (i > 0) v = Math.min(v, d[k + NX - 1] + D); }
-    d[k] = v;
-  }
-  return d;
-}
-const hash = (a, b) => { let h = Math.imul(a, 374761393) ^ Math.imul(b, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return (h ^ (h >>> 16)) >>> 0; };
-export const shade = (c, f) => c.map(v => Math.max(0, Math.min(255, Math.round(v * f))));
+const pts = (a, off) => { const P = []; for (let k = 0; k < a.length; k += 2) P.push(T(a[k], a[k + 1], off)); return P; };
 
-// ------------------------------------------------------------------ materials --
-// floor finishes after the photos: travertine (great room, kitchen, foyer), Brazilian cherry planks (bedrooms, den,
-// cinema), white marble (primary baths), beige bath tile, garage epoxy, lanai pavers
-const FIN = [null,
-  { id: 'TRV', c: [[226, 212, 186], [216, 200, 172], [232, 221, 199]] },
-  { id: 'WOD', c: [[122, 62, 38], [134, 74, 46], [110, 55, 33]] },
-  { id: 'MAR', c: [[238, 236, 232], [222, 220, 216]] },
-  { id: 'BTH', c: [[212, 198, 172], [200, 186, 160]] },
-  { id: 'GAR', c: [[152, 152, 150]] },
-  { id: 'PAV', c: [[224, 208, 180], [210, 192, 162], [232, 218, 194]] },
-];
-const finOf = t => /primary.*bath|primary <br/i.test(t) ? 3 : /bath/i.test(t) ? 4 : /garage/i.test(t) ? 5 : /patio|porch|balcony|pool|entry$/i.test(t) ? 6
-  : /bed|den|closet|movie|media|bonus|office|safe/i.test(t) ? 2 : 1;
-/** pattern variant of finish m at a cell centre: travertine 3 ft squares, staggered 6 ft planks, 4 ft marble checker,
- * 2 ft bath tile, 2x4 ft running-bond pavers */
-function variant(m, x, y) {
-  const f = Math.floor;
-  if (m === 1) return hash(f(x / 30), f(y / 30)) % 3;
-  if (m === 2) { const row = f(y / 10); return hash(f((x + (row * 22) % 60) / 60), row) % 3; }
-  if (m === 3) return (f(x / 40) + f(y / 40)) & 1;
-  if (m === 4) return hash(f(x / 20), f(y / 20)) % 2;
-  if (m === 6) { const row = f(y / 20); return hash(f((x + (row & 1) * 20) / 40), row) % 3; }
-  return 0;
-}
-export const finLabel = (m, k) => m * 8 + variant(m, cx(k % NX), cy(Math.floor(k / NX))) + 1;
-export const finMat = v => { const m = FIN[(v - 1) >> 3]; return { color: m.c[(v - 1) & 7] }; };
-export const STUCCO = [238, 226, 204], GLASS = { color: [176, 212, 228], material: 'BMC_Glass' }, IRON = [58, 44, 36], WHITE = [244, 240, 232];
-export const ROOF = [[180, 88, 56], [168, 80, 50], [190, 100, 64]];
-
-// ---------------------------------------------------------------------- plans --
-export function plan(fd, P) {
-  const f = (fd.bp ?? BP).find(q => q.n === fd.name), off = fd.off;
-  const fp = pts(f.fp, off);
-  polyMask(fp, P.fp);
-  const rooms = f.r.map(([id, type, , poly]) => ({ id, type, P: pts(poly, off), notes: f.t.filter(t => t[0] === id).map(t => ({ text: t[1], p: T(t[2], t[3], off) })) }));
-  for (const r of rooms) {
-    const kind = { finished: 1, outdoor: 2, garage: 3, stairs: 4, 'open-to-below': 5 }[r.type];
-    const [x0, y0, x1, y1] = bbox(r.P);
-    eachCell(x0, y0, x1, y1, (k, x, y) => {
-      if (!pip(r.P, x, y)) return;
-      P.kind[k] = kind; P.room[k] = r;
-      if (kind === 5) return;
-      let m = kind === 2 ? 6 : kind === 3 ? 5 : 1;
-      if (r.notes.length) {
-        let best = 1e18;
-        for (const n of r.notes) { const d = (n.p[0] - x) ** 2 + (n.p[1] - y) ** 2; if (d < best) { best = d; m = finOf(n.text); } }
-      } else if (kind === 1) m = 2;
-      P.fin[k] = m;
-    });
-  }
-  const garageAt = (x, y) => { const k = cellOf(x, y); return k >= 0 && k < N && P.kind[k] === 3; };
-  const hit = new Uint8Array(N);
+// ------------------------------------------------------------------ plan on the stud grid --
+// fp: footprint, room: room index per cell, wall: 1 = wall cell, rail: thin (rail) walls, segs: snapped wall segments
+// with their openings
+export function plan(key) {
+  const fd = FLOORS[key], f = BP.find(q => q.n === fd.name), off = fd.off;
+  const fp = new Uint8Array(NC), room = new Int16Array(NC).fill(-1), wall = new Uint8Array(NC), rail = new Uint8Array(NC);
+  const fpP = pts(f.fp, off);
+  for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) if (pip(fpP, xOf(i) + 5, yOf(j) + 5)) fp[j * NI + i] = 1;
+  const rooms = f.r.map(([id, type, , poly], n) => {
+    const P = pts(poly, off), notes = f.t.filter(t => t[0] === id).map(t => t[1]);
+    const xs = P.map(p => p[0]), ys = P.map(p => p[1]);
+    for (let j = Math.max(0, cj(Math.min(...ys))); j <= Math.min(NJ - 1, cj(Math.max(...ys))); j++)
+      for (let i = Math.max(0, ci(Math.min(...xs))); i <= Math.min(NI - 1, ci(Math.max(...xs))); i++) if (pip(P, xOf(i) + 5, yOf(j) + 5)) room[j * NI + i] = n;
+    return { id, type, n, notes, name: notes[0] ?? type };
+  });
+  const segs = [];
   for (const [x0, y0, x1, y1, tc, ...ks] of f.w) {
-    const A = T(x0, y0, off), B = T(x1, y1, off);
-    const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
-    if (L < 0.5) continue;
-    const ux = dx / L, uy = dy / L, nx = -uy, ny = ux, rail = tc < 6, h = rail ? 2 : 5;
-    // openings cut square to the grid's dominant axis, so a diagonal wall meets its glass on a straight (unslanted) edge
-    const ops = ks.map(([t, ox, oy, wc]) => {
-      const c = T(ox, oy, off), hw = wc * K / 2, ax = Math.abs(ux) >= Math.abs(uy) ? 0 : 1;
-      const e = [c[ax] - (ax ? uy : ux) * hw, c[ax] + (ax ? uy : ux) * hw];
-      const gar = t === 'd' && wc >= 200 && (garageAt(c[0] + nx * 15, c[1] + ny * 15) || garageAt(c[0] - nx * 15, c[1] - ny * 15));
-      return { lo: Math.min(...e), hi: Math.max(...e), ax, kind: t === 'w' ? 2 : gar ? 3 : 1 };
-    });
-    eachCell(Math.min(A[0], B[0]) - 8, Math.min(A[1], B[1]) - 8, Math.max(A[0], B[0]) + 8, Math.max(A[1], B[1]) + 8, (k, x, y) => {
-      const rx = x - A[0], ry = y - A[1], u = rx * ux + ry * uy, s = rx * nx + ry * ny;
-      if (Math.abs(s) >= h || u < -h || u > L + h) return;
-      if (rail) { P.rail[k] = 1; return; }
-      P.wall[k] = 1;
-      const o = u > 0 && u < L && ops.find(q => { const v = q.ax ? y : x; return v > q.lo && v < q.hi; });
-      if (!o) { hit[k] = 1; return; }
-      if (o.kind > P.op[k]) P.op[k] = o.kind;
-      if (Math.abs(s) < 2) P.glass[k] = 1;
-    });
+    const A = T(x0, y0, off), B = T(x1, y1, off), dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
+    if (L < 3) continue;
+    const ang = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI) % 90;
+    const kind = ang < 22.5 ? (Math.abs(dx) > Math.abs(dy) ? 'x' : 'y') : ang > 67.5 ? (Math.abs(dx) > Math.abs(dy) ? 'x' : 'y') : 'd';
+    const cells = [];
+    if (kind === 'x') { const j = cj((A[1] + B[1]) / 2); for (let i = ci(Math.min(A[0], B[0]) + 1); i <= ci(Math.max(A[0], B[0]) - 1); i++) cells.push([i, j]); }
+    else if (kind === 'y') { const i = ci((A[0] + B[0]) / 2); for (let j = cj(Math.min(A[1], B[1]) + 1); j <= cj(Math.max(A[1], B[1]) - 1); j++) cells.push([i, j]); }
+    else {
+      const ia = ci(A[0]), ja = cj(A[1]), n = Math.max(1, Math.round(Math.max(Math.abs(dx), Math.abs(dy)) / C)), sx = Math.sign(dx), sy = Math.sign(dy);
+      for (let s = 0; s <= n; s++) cells.push([ia + sx * s, ja + sy * s]);
+    }
+    const ops = ks.map(([t, ox, oy, wc]) => ({ t, c: T(ox, oy, off), w: wc * K }));
+    const seg = { kind, cells: cells.filter(([i, j]) => inG(i, j)), ops, A, B, L, ux: dx / L, uy: dy / L, rail: tc < 6 };
+    // screen-cage / fence lines out in the yard (no footprint within a stud) are not built
+    const near = ([i, j]) => [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => inG(i + a, j + b) && fp[(j + b) * NI + i + a]);
+    if (seg.cells.filter(near).length * 2 < seg.cells.length) continue;
+    for (const [i, j] of seg.cells) (seg.rail ? rail : wall)[j * NI + i] = 1;
+    segs.push(seg);
   }
-  for (let k = 0; k < N; k++) if (hit[k]) P.op[k] = 0;
-  return rooms;
+  for (let k = 0; k < NC; k++) if (wall[k]) rail[k] = 0;
+  return { key, fp, room, rooms, wall, rail, segs };
 }
-export const newPlan = () => ({ fp: new Uint8Array(N), kind: new Uint8Array(N), fin: new Uint8Array(N), room: new Array(N), wall: new Uint8Array(N), rail: new Uint8Array(N), op: new Uint8Array(N), glass: new Uint8Array(N) });
 
-// ----------------------------------------------------------------------- mesh --
-export function makeMesher(B, stats) {
-  /** one z layer of a label raster (0 = air) as trapezoids -> micro boxes + upright side wedges */
-  return function mesh(lab, z0, z1, matOf, tag, block) {
-    const put = (x0, y0, x1, y1, m) => {
-      if (!B.box(GX0 + x0 * R, GY0 + y0 * R, z0, GX0 + x1 * R, GY0 + y1 * R, z1, { asset: 'PB_DefaultMicroBrick', ...m }, tag)) stats.drop++;
-      stats.n++;
-    };
-    const wedge = (x0, y0, x1, y1, rot, m) => {
-      const hx = (x1 - x0) * R / 2, hy = (y1 - y0) * R / 2, hz = (z1 - z0) / 2;
-      const b = { asset: 'PB_DefaultMicroWedge', direction: 4, rotation: rot, size: rot & 1 ? [hy, hx, hz] : [hx, hy, hz], ...m,
-        position: [GX0 + (x0 + x1) * R / 2, GY0 + (y0 + y1) * R / 2, (z0 + z1) / 2] };
-      if (!B.add(b, tag)) stats.drop++;
-      stats.n++; stats.w++;
-    };
-    const freeBox = (x0, y0, x1, y1) => B.free([GX0 + x0 * R, GY0 + y0 * R, z0], [GX0 + x1 * R, GY0 + y1 * R, z1]);
-    function emit(t) {
-      const n = t.L.length, j0 = t.j0, m = matOf(t.v);
-      const sl = n > 1 ? (t.L[n - 1] - t.L[0]) / (n - 1) : 0, sr = n > 1 ? (t.R[n - 1] - t.R[0]) / (n - 1) : 0;
-      const xl = y => Math.max(0, Math.min(NX, Math.round(t.L[0] + sl * (y - j0)))), xr = y => Math.max(0, Math.min(NX, Math.round(t.R[0] + sr * (y - j0))));
-      const rows = (a, b) => { for (let y = a; y < b; y++) put(t.L[y - j0], y, t.R[y - j0], y + 1, m); };
-      for (let a = j0; a < j0 + n;) {
-        let b = a + 1;
-        const ok = (a, b) => Math.max(xl(a), xl(b)) <= Math.min(xr(a), xr(b));
-        if (!ok(a, b)) { rows(a, b); a = b; continue; }
-        while (b < j0 + n && b - a < 200 && ok(a, b + 1)) b++;
-        const La = xl(a), Lb = xl(b), Ra = xr(a), Rb = xr(b);
-        const l0 = Math.min(La, Lb), l1 = Math.max(La, Lb), r0 = Math.min(Ra, Rb), r1 = Math.max(Ra, Rb);
-        // every cell under the strip's pieces is this run or air, and the slant boxes touch nothing placed yet
-        let clean = true;
-        for (let y = a; y < b && clean; y++) {
-          const row = y * NX, rl = t.L[y - j0], rr = t.R[y - j0];
-          for (let x = l0; x < r1; x++) if ((x < rl || x >= rr) && (lab[row + x] || block[row + x])) { clean = false; break; }
-        }
-        if (clean && l0 < l1 && !freeBox(l0, a, l1, b)) clean = false;
-        if (clean && r0 < r1 && !freeBox(r0, a, r1, b)) clean = false;
-        if (clean && l1 < r0 && !freeBox(l1, a, r0, b)) clean = false;
-        if (!clean) { rows(a, b); a = b; continue; }
-        if (l1 < r0) put(l1, a, r0, b, m);
-        if (l0 < l1) wedge(l0, a, l1, b, La < Lb ? 1 : 2, { ...m, color: m.color });
-        if (r0 < r1) wedge(r0, a, r1, b, Ra < Rb ? 3 : 0, { ...m, color: m.color });
-        a = b;
-      }
-    }
-    function edgeOk(arr, vert, free, p, nb) {
-      const last = arr[arr.length - 1];
-      if (vert && p === last) return 'v';
-      if (!free || nb) return null;
-      const n = arr.length, a0 = arr[0];
-      if (Math.abs(p - a0) > 8 * n) return null;             // flatter than ~7 degrees: leave it stepped
-      for (let k = 1; k < n; k++) if (Math.abs(arr[k] - (a0 + (p - a0) * k / n)) > 0.6) return null;
-      return 's';
-    }
-    let act = [];
-    for (let j = 0; j <= NY; j++) {
-      const runs = [];
-      if (j < NY) {
-        const row = j * NX;
-        for (let i = 0; i < NX;) {
-          const v = lab[row + i];
-          if (!v) { i++; continue; }
-          let e = i + 1;
-          while (e < NX && lab[row + e] === v) e++;
-          runs.push({ v, i0: i, i1: e, nL: i > 0 && (lab[row + i - 1] !== 0 || block[row + i - 1] !== 0), nR: e < NX && (lab[row + e] !== 0 || block[row + e] !== 0) });
-          i = e;
-        }
-      }
-      // overlap matching on the sorted, disjoint runs of this row and the last
-      const cand = [], cnt = new Map();
-      let p = 0;
-      for (const r of runs) {
-        while (p < act.length && act[p].R.at(-1) <= r.i0) p++;
-        const c = [];
-        for (let q = p; q < act.length && act[q].L.at(-1) < r.i1; q++) if (act[q].v === r.v) { c.push(act[q]); cnt.set(act[q], (cnt.get(act[q]) ?? 0) + 1); }
-        cand.push(c);
-      }
-      const next = [], kept = new Set();
-      runs.forEach((r, n) => {
-        const c = cand[n], t = c[0];
-        if (c.length === 1 && cnt.get(t) === 1) {
-          const a = edgeOk(t.L, t.vL, t.fL, r.i0, r.nL), b = a && edgeOk(t.R, t.vR, t.fR, r.i1, r.nR);
-          if (a && b) {
-            t.L.push(r.i0); t.R.push(r.i1);
-            if (a === 's') t.vL = false;
-            if (b === 's') t.vR = false;
-            t.fL = t.fL && !r.nL; t.fR = t.fR && !r.nR;
-            next.push(t); kept.add(t); return;
-          }
-        }
-        next.push({ v: r.v, j0: j, L: [r.i0], R: [r.i1], vL: true, vR: true, fL: !r.nL, fR: !r.nR });
+export function brynwood({ seed = 4453 } = {}) {
+  const r = rng(seed);
+  const B = makeBuilder({ cell: 40 });
+  const shade = (c, f) => c.map(v => Math.max(0, Math.min(255, Math.round(v * f))));
+  const hash = (a, b) => { let h = Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 19349663); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  // trim / finish pieces may lose a corner to a diagonal wall's wedge; anything structural that drops is a bug
+  const SOFT = /^(base|wains|rail|paper|crown|casing|casing head|stool|wall paper|wall wains|sill|lintel|keystone|doorstep|column|column capital)$/;
+  const soft = {};
+  const box = (x0, y0, z0, x1, y1, z1, m, label) => {
+    if (x1 <= x0 || y1 <= y0 || z1 <= z0) return true;
+    if (B.box(x0, y0, z0, x1, y1, z1, { asset: MB, ...m }, label)) return true;
+    if (SOFT.test(label)) { soft[label] = (soft[label] ?? 0) + 1; return false; }
+    throw new Error(`brynwood: ${label} dropped: ${B.dropped.at(-1)}`);
+  };
+  const wedge = (x0, y0, z0, x1, y1, z1, ups, color, label, zSign = 1, asset = 'PB_DefaultMicroWedge') => {
+    const ext = [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2];
+    if (!B.add({ asset, ...orientFor(asset, ups, ext, zSign), color, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2] }, label)) throw new Error(`brynwood: ${label} dropped: ${B.dropped.at(-1)}`);
+  };
+  // an upright side wedge filling the triangle of cell [x0..x0+10]x[y0..y0+10] with its right angle at corner
+  // (sx, sy) (-1 = low side, +1 = high side)
+  const notch = (x0, y0, z0, z1, sx, sy, m, label) => {
+    const rot = sx < 0 ? (sy < 0 ? 0 : 3) : (sy < 0 ? 1 : 2);
+    if (!B.add({ asset: 'PB_DefaultMicroWedge', direction: 4, rotation: rot, size: [5, 5, (z1 - z0) / 2], ...m, position: [x0 + 5, y0 + 5, (z0 + z1) / 2] }, label)) throw new Error(`brynwood: ${label} dropped: ${B.dropped.at(-1)}`);
+  };
+  const fadd = (x0, y0, z0, x1, y1, z1, m, label) => box(x0, y0, z0, x1, y1, z1, m, label);
+  fadd.wedge = (x0, y0, z0, x1, y1, z1, rot, color) => {
+    if (!B.add({ asset: 'PB_DefaultMicroWedge', direction: 4, rotation: rot, size: [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2], color, position: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2] }, 'floor triangle')) throw new Error('brynwood: floor triangle dropped ' + B.dropped.at(-1));
+  };
+  const ceiling = (x0, y0, x1, y1, z, label = 'ceiling') => box(x0, y0, z, x1, y1, z + 4, { asset: TILE, color: [242, 240, 234], direction: 5 }, label);
+  const op = (a0, a1, z0, z1, extra) => ({ a0, a1, z0, z1, ...extra });
+
+  // ------------------------------------------------------------ template walls (whitetail.mjs) --
+  const WALLS = [];
+  const piece = (axis, line, a, b, z, zt, color, label, t = 10) => axis === 'x'
+    ? box(a, line, z, b, line + t, zt, { color }, label) : box(line, a, z, line + t, b, zt, { color }, label);
+  function course(axis, line, a0, a1, z, zt, openings, color, label, t = 10) {
+    let pcs = [{ p: a0, q: a1, z, zt }];
+    for (const o of openings) {
+      if (o.z0 >= zt || o.z1 <= z) continue;
+      pcs = pcs.flatMap(c => {
+        if (o.a1 <= c.p || o.a0 >= c.q) return [c];
+        const out = [];
+        if (o.a0 > c.p) out.push({ ...c, q: o.a0 });
+        if (o.a1 < c.q) out.push({ ...c, p: o.a1 });
+        const m0 = Math.max(c.p, o.a0), m1 = Math.min(c.q, o.a1);
+        if (o.z0 > c.z) out.push({ p: m0, q: m1, z: c.z, zt: Math.min(c.zt, o.z0) });
+        if (o.z1 < c.zt) out.push({ p: m0, q: m1, z: Math.max(c.z, o.z1), zt: c.zt });
+        return out;
       });
-      for (const t of act) if (!kept.has(t)) emit(t);
-      act = next;
     }
+    for (const c of pcs) if (c.q > c.p && c.zt > c.z) piece(axis, line, c.p, c.q, c.z, c.zt, color, label, t);
+  }
+  // stucco is smooth: one skin piece between openings (8-high courses read as siding and cost 15x the bricks)
+  const stuccoRows = (axis, line, a0, a1, z0, z1, openings, t, label) => course(axis, line, a0, a1, z0, z1, openings, shade(STUCCO, 0.98 + 0.04 * hash(line, a0)), label, t);
+  // a wall on [line, line + 10]: plaster core in one piece, a 4-deep stucco skin on each outside face (neg / pos =
+  // the z it starts from, null = indoors)
+  function wall(axis, line, a0, a1, z0, z1, { neg = null, pos = null, ops = [], label = 'wall' } = {}) {
+    WALLS.push({ axis, line, a0, a1, z0, z1, openings: ops });
+    if (neg == null && pos == null) return course(axis, line, a0, a1, z0, z1, ops, PLASTER, label);
+    const c0 = line + (neg != null ? 4 : 0), c1 = line + 10 - (pos != null ? 4 : 0);
+    course(axis, c0, a0, a1, z0, z1, ops, PLASTER, label + ' core', c1 - c0);
+    for (const [from, t0] of [[neg, line], [pos, line + 6]]) {
+      if (from == null) continue;
+      if (from > z0) course(axis, t0, a0, a1, z0, Math.min(z1, from), ops, PLASTER, label + ' skin', 4);
+      if (from < z1) stuccoRows(axis, t0, a0, a1, Math.max(z0, from), z1, ops, 4, label + ' stucco');
+    }
+  }
+  // white frame in the outer half, meeting rail, glass, stone sill, a white lintel with a keystone
+  function windowIn(axis, line, out, o, { mull = [] } = {}) {
+    const W = { color: WHITE };
+    const pb = (a, b, z, zt, m, lab, t0 = line, t1 = line + 10) => axis === 'x' ? box(a, t0, z, b, t1, zt, m, lab) : box(t0, a, z, t1, b, zt, m, lab);
+    const f0 = out < 0 ? line : line + 4, f1 = f0 + 6;
+    pb(o.a0, o.a1, o.z0, o.z0 + 2, W, 'window frame', f0, f1);
+    pb(o.a0, o.a1, o.z1 - 2, o.z1, W, 'window frame', f0, f1);
+    pb(o.a0, o.a0 + 2, o.z0 + 2, o.z1 - 2, W, 'window frame', f0, f1);
+    pb(o.a1 - 2, o.a1, o.z0 + 2, o.z1 - 2, W, 'window frame', f0, f1);
+    const mz = o.z0 + Math.round((o.z1 - o.z0) / 4) * 2;
+    pb(o.a0 + 2, o.a1 - 2, mz - 2, mz, W, 'meeting rail', line + 4, line + 6);
+    pb(o.a0 + 2, o.a1 - 2, o.z0 + 2, mz - 2, GLASS, 'glass', line + 4, line + 6);
+    pb(o.a0 + 2, o.a1 - 2, mz, o.z1 - 2, GLASS, 'glass', line + 4, line + 6);
+    for (const m of mull) pb(m, m + 2, o.z0 + 2, o.z1 - 2, W, 'mullion', out < 0 ? line + 2 : line + 6, out < 0 ? line + 4 : line + 8);
+    const p0 = out < 0 ? line - 2 : line + 10, p1 = p0 + 2;
+    pb(o.a0 - 2, o.a1 + 2, o.z0 - 4, o.z0, { color: STONE }, 'sill', p0, p1);
+    pb(o.a0 - 4, o.a1 + 4, o.z1, o.z1 + 6, W, 'lintel', p0, p1);
+    const mid = Math.round((o.a0 + o.a1) / 4) * 2;
+    pb(mid - 4, mid + 4, o.z1 - 2, o.z1 + 8, W, 'keystone', out < 0 ? p0 - 2 : p1, out < 0 ? p0 : p1 + 2);
+  }
+  // a glazed door (French doors / sliders onto the lanai): frames + glass leaves, the panes split every ~40
+  function glassDoor(axis, line, o) {
+    const pb = (a, b, z, zt, m, lab, t0, t1) => axis === 'x' ? box(a, t0, z, b, t1, zt, m, lab) : box(t0, a, z, t1, b, zt, m, lab);
+    const n = Math.max(2, Math.round((o.a1 - o.a0) / 40)), w = (o.a1 - o.a0) / n;
+    const stiles = [o.a0, ...Array.from({ length: n - 1 }, (_, k) => Math.round((o.a0 + w * (k + 1)) / 2) * 2), o.a1 - 2];
+    for (const s of stiles) pb(s, s + 2, o.z0, o.z1 - 2, { color: WHITE }, 'door frame', line + 2, line + 8);
+    pb(o.a0, o.a1, o.z1 - 2, o.z1, { color: WHITE }, 'door frame', line + 2, line + 8);
+    for (let k = 0; k < stiles.length - 1; k++) pb(stiles[k] + 2, stiles[k + 1], o.z0, o.z1 - 2, GLASS, 'door glass', line + 4, line + 6);
+  }
+
+  // --------------------------------------------- interior finishes (whitetail finishRoom) --
+  const trimC = [246, 244, 238];
+  const bands = (z0, z1) => [
+    [z0, z0 + 6, 4, 'base'], [z0 + 6, z0 + 26, 2, 'wains'], [z0 + 26, z0 + 30, 4, 'rail'],
+    [z0 + 30, z1 - 6, 2, 'paper'], [z1 - 6, z1 - 4, 4, 'crown'], [z1 - 4, z1, 6, 'crown'],
+  ];
+  function patterned(pat, a0, a1, z0, z1, put) {
+    if (pat.kind === 'paint') return put(a0, a1, z0, z1, pat.color);
+    const per = pat.cols.reduce((s, [w]) => s + w, 0);
+    let a = Math.floor(a0 / per) * per, k = 0;
+    while (a < a1) { const [w, c] = pat.cols[k % pat.cols.length]; const p = Math.max(a0, a), q = Math.min(a1, a + w); if (q > p) put(p, q, z0, z1, c); a += w; k++; }
+  }
+  const SIDES = { y0: ['x', 1], y1: ['x', -1], x0: ['y', 1], x1: ['y', -1] };
+  function faceWall(side, R) {
+    const [axis] = SIDES[side], f = R[side];
+    const lo = axis === 'x' ? R.x0 : R.y0, hi = axis === 'x' ? R.x1 : R.y1;
+    return WALLS.filter(w => w.axis === axis && (side.endsWith('0') ? w.line + 10 === f : w.line === f) && w.a0 < hi && w.a1 > lo && w.z0 < R.z1 && w.z1 > R.z0);
+  }
+  function facePiece(side, R, a, b, z, zt, t, color, label) {
+    const [axis, d] = SIDES[side], f = R[side];
+    const [c0, c1] = d > 0 ? [f, f + t] : [f - t, f];
+    if (axis === 'x') box(a, c0, z, b, c1, zt, { color }, label); else box(c0, a, z, c1, b, zt, { color }, label);
+  }
+  function finishRoom(R, { paper, wains = WAINS[0] } = {}) {
+    const has = {};
+    for (const s of Object.keys(SIDES)) has[s] = faceWall(s, R).length > 0;
+    const cutSpans = (sp, p0, p1) => sp.flatMap(([p, q]) => (p1 <= p || p0 >= q) ? [[p, q]] : [[p, p0], [p1, q]].filter(([u, v]) => v > u));
+    for (const side of Object.keys(SIDES)) {
+      if (!has[side]) continue;
+      const [axis] = SIDES[side];
+      const lo = axis === 'x' ? R.x0 : R.y0, hi = axis === 'x' ? R.x1 : R.y1;
+      const ws = faceWall(side, R);
+      const ops = ws.flatMap(w => w.openings).filter(o => o.z0 < R.z1 && o.z1 > R.z0 && o.a0 < hi && o.a1 > lo);
+      for (const [z0, z1, t, kind] of bands(R.z0, R.z1)) {
+        let a0 = lo, a1 = hi;
+        if (axis === 'y') { if (has.y0) a0 += t; if (has.y1) a1 -= t; }
+        let spans = ws.filter(w => w.z0 <= z0 && w.z1 >= z1).map(w => [Math.max(a0, w.a0), Math.min(a1, w.a1)]).filter(([p, q]) => q > p).sort((u, v) => u[0] - v[0])
+          .reduce((m, sp) => (m.length && sp[0] <= m.at(-1)[1] ? (m.at(-1)[1] = Math.max(m.at(-1)[1], sp[1]), m) : [...m, [...sp]]), []);
+        const parts = [];
+        for (const o of ops) {
+          const door = o.z0 <= R.z0 + 2;
+          const oz0 = door ? R.z0 : o.z0 - 2, oz1 = Math.max(o.z1, Math.min(R.z1 - 6, o.z1 + 4));
+          if (!(oz0 < z1 && oz1 > z0)) continue;
+          const p = Math.max(a0, o.a0 - 4), q = Math.min(a1, o.a1 + 4);
+          if (!spans.some(([u, v]) => p < v && q > u)) continue;
+          spans = cutSpans(spans, o.a0 - 4, o.a1 + 4);
+          if (z0 < oz0) parts.push([p, q, z0, Math.min(z1, oz0)]);
+          if (z1 > oz1) parts.push([p, q, Math.max(z0, oz1), z1]);
+        }
+        for (const [p, q, u, v] of [...spans.map(([p, q]) => [p, q, z0, z1]), ...parts]) {
+          if (kind === 'paper' || kind === 'wains') patterned(kind === 'paper' ? paper : wains, p, q, u, v, (s0, s1, zz, zt, c) => facePiece(side, R, s0, s1, zz, zt, t, c, 'wall ' + kind));
+          else facePiece(side, R, p, q, u, v, t, kind === 'crown' && t === 6 ? shade(trimC, 0.96) : trimC, kind);
+        }
+      }
+      for (const o of ops) {
+        if (o.a0 - 4 <= lo || o.a1 + 4 >= hi) continue;
+        const door = o.z0 <= R.z0 + 2, jz0 = door ? R.z0 : o.z0, top = Math.min(R.z1 - 6, o.z1 + 4);
+        facePiece(side, R, o.a0 - 4, o.a0, jz0, top, 4, trimC, 'casing');
+        facePiece(side, R, o.a1, o.a1 + 4, jz0, top, 4, trimC, 'casing');
+        if (o.z1 < top) facePiece(side, R, o.a0, o.a1, o.z1, top, 4, trimC, 'casing head');
+        if (!door) facePiece(side, R, o.a0 - 4, o.a1 + 4, o.z0 - 2, o.z0, 4, trimC, 'stool');
+      }
+    }
+  }
+
+  // greedy rectangles of a cell mask (rows first, then grown down while the run repeats)
+  function rects(mask, keyOf = k => mask[k]) {
+    const used = new Uint8Array(NC), out = [];
+    for (let j = 0; j < NJ; j++) for (let i = 0; i < NI; i++) {
+      const k = j * NI + i, v = keyOf(k);
+      if (!v || used[k]) continue;
+      let i1 = i;
+      while (i1 + 1 < NI && !used[k + i1 + 1 - i] && keyOf(j * NI + i1 + 1) === v) i1++;
+      let j1 = j;
+      grow: while (j1 + 1 < NJ) {
+        for (let q = i; q <= i1; q++) { const kk = (j1 + 1) * NI + q; if (used[kk] || keyOf(kk) !== v) break grow; }
+        j1++;
+      }
+      for (let jj = j; jj <= j1; jj++) for (let q = i; q <= i1; q++) used[jj * NI + q] = 1;
+      out.push({ v, x0: xOf(i), y0: yOf(j), x1: xOf(i1 + 1), y1: yOf(j1 + 1) });
+    }
+    return out;
+  }
+
+  // ------------------------------------------------------------------ plans --
+  const P1 = plan('F1'), PA = plan('A'), PB = plan('B');
+  // the two upper plans share one storey
+  const P2 = { fp: new Uint8Array(NC), room: new Int16Array(NC).fill(-1), rooms: [], wall: new Uint8Array(NC), rail: new Uint8Array(NC), segs: [] };
+  for (const Q of [PA, PB]) {
+    const base = P2.rooms.length;
+    P2.rooms.push(...Q.rooms.map(q => ({ ...q, n: q.n + base, wing: Q.key })));
+    for (let k = 0; k < NC; k++) {
+      if (Q.fp[k]) P2.fp[k] = 1;
+      if (Q.room[k] >= 0 && P2.room[k] < 0) P2.room[k] = Q.room[k] + base;
+      if (Q.wall[k]) P2.wall[k] = 1;
+      if (Q.rail[k]) P2.rail[k] = 1;
+    }
+    P2.segs.push(...Q.segs);
+  }
+  for (let k = 0; k < NC; k++) if (P2.wall[k]) P2.rail[k] = 0;
+  const kindAt = (P, k) => (P.room[k] >= 0 ? P.rooms[P.room[k]].type : null);
+  const indoor = (P, k) => P.fp[k] && !['outdoor'].includes(kindAt(P, k));
+
+  // lanai (the F1 outdoor room round the pool), open sky = lanai cells 8+ studs from the house, pool 2+ inside it
+  const lanaiN = P1.rooms.find(q => q.id === '7eaf0')?.n;
+  const bfs = (seed, diag = true) => {
+    const d = new Int16Array(NC).fill(9999), q = [];
+    for (let k = 0; k < NC; k++) if (seed[k]) { d[k] = 0; q.push(k); }
+    for (let h = 0; h < q.length; h++) {
+      const k = q[h], i = k % NI, j = (k - i) / NI;
+      for (const [di, dj] of diag ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj;
+        if (!inG(a, b)) continue;
+        const kk = b * NI + a;
+        if (d[kk] > d[k] + 1) { d[kk] = d[k] + 1; q.push(kk); }
+      }
+    }
+    return d;
   };
+  const lanai = new Uint8Array(NC), house = new Uint8Array(NC);
+  for (let k = 0; k < NC; k++) if (P1.fp[k]) { if (P1.room[k] === lanaiN) lanai[k] = 1; else if (kindAt(P1, k) !== 'outdoor') house[k] = 1; }
+  const dHouse = bfs(house), sky = new Uint8Array(NC);
+  for (let k = 0; k < NC; k++) if (lanai[k] && dHouse[k] >= 8 && !P2.fp[k] && !P1.wall[k]) sky[k] = 1;
+  const dSky = bfs(sky.map(v => v ? 0 : 1)), pool = new Uint8Array(NC);
+  for (let k = 0; k < NC; k++) if (sky[k] && dSky[k] >= 3) pool[k] = 1;
+
+  // ---------------------------------------------------------- walls from the snapped plan --
+  // each wall cell joins its longer straight run (rows vs columns); cells in no run of 2+ are steps of a diagonal
+  function buildWalls(P, fl, top, tag) {
+    const z0 = fl - 4, W = P.wall;
+    const hl = new Int16Array(NC), vl = new Int16Array(NC);
+    for (let j = 0; j < NJ; j++) for (let i = 0; i < NI;) { if (!W[j * NI + i]) { i++; continue; } let e = i; while (e < NI && W[j * NI + e]) e++; for (let q = i; q < e; q++) hl[j * NI + q] = e - i; i = e; }
+    for (let i = 0; i < NI; i++) for (let j = 0; j < NJ;) { if (!W[j * NI + i]) { j++; continue; } let e = j; while (e < NJ && W[e * NI + i]) e++; for (let q = j; q < e; q++) vl[q * NI + i] = e - j; j = e; }
+    const as = new Uint8Array(NC);           // 1 = x run, 2 = y run, 3 = single (diagonal step)
+    for (let k = 0; k < NC; k++) if (W[k]) as[k] = hl[k] >= vl[k] && hl[k] >= 2 ? 1 : vl[k] >= 2 ? 2 : 3;
+    const out = (k) => !inG(k % NI, Math.floor(k / NI)) || !P.fp[k] || kindAt(P, k) === 'outdoor' || (P === P1 && sky[k]);
+    // openings of a segment along a run axis: [a0, a1] on 2s, the z band per type
+    const opsFor = (axis, line, a0, a1, cells) => {
+      const res = [];
+      for (const s of P.segs) {
+        if (s.kind !== axis || s.rail) continue;
+        if (!s.cells.some(([i, j]) => cells.has(j * NI + i))) continue;
+        for (const o of s.ops) {
+          const c = axis === 'x' ? o.c[0] : o.c[1];
+          let p = Math.round((c - o.w / 2) / 2) * 2, q = Math.round((c + o.w / 2) / 2) * 2;
+          const k = axis === 'x' ? cj(o.c[1]) * NI + ci(c) : ci(o.c[0]) + cj(c) * NI;
+          const sides = axis === 'x' ? [k - NI, k + NI] : [k - 1, k + 1];
+          const outside = sides.filter(out).length;
+          const garage = sides.some(kk => kindAt(P, kk) === 'garage');
+          // upstairs, an opening onto a lower roof would sit behind its courses (whitetail trap): none there
+          if (P === P2 && sides.some(kk => out(kk) && !P2.fp[kk] && P1.fp[kk] && !sky[kk])) continue;
+          let t = o.t === 'w' ? 'w' : garage && o.w >= 66 ? 'g' : outside === 1 && o.w > 40 ? 'gd' : 'd';
+          if (t === 'd') { const m = Math.round(c / 2) * 2; p = m - 16; q = m + 14; }     // leaf doors: 30 wide (fixture panel)
+          p = Math.max(a0 + 6, p); q = Math.min(a1 - 6, q);
+          if (q - p < 14 || res.some(e => e.a0 < q + 4 && e.a1 > p - 4)) continue;
+          const z = t === 'w' ? [fl + SILL, fl + HEAD] : t === 'g' ? [fl, fl + 84] : t === 'gd' ? [fl, fl + 84] : [fl, fl + DOOR];
+          res.push(op(p, q, z[0], z[1], { t, outside: outside === 1 }));
+        }
+      }
+      return res;
+    };
+    const runs = [];
+    for (const [axis, code] of [['x', 1], ['y', 2]]) {
+      const seen = new Uint8Array(NC);
+      for (let k = 0; k < NC; k++) {
+        if (as[k] !== code || seen[k]) continue;
+        const i = k % NI, j = (k - i) / NI, cells = new Set();
+        let e = axis === 'x' ? i : j;
+        while (true) { const kk = axis === 'x' ? j * NI + e : e * NI + i; if (!inG(axis === 'x' ? e : i, axis === 'x' ? j : e) || as[kk] !== code) break; seen[kk] = 1; cells.add(kk); e++; }
+        const line = axis === 'x' ? yOf(j) : xOf(i), a0 = axis === 'x' ? xOf(i) : yOf(j), a1 = axis === 'x' ? xOf(e) : yOf(e);
+        let nOut = 0, pOut = 0;
+        for (const kk of cells) { if (out(axis === 'x' ? kk - NI : kk - 1)) nOut++; if (out(axis === 'x' ? kk + NI : kk + 1)) pOut++; }
+        runs.push({ axis, line, a0, a1, cells, neg: nOut * 2 > cells.size, pos: pOut * 2 > cells.size });
+      }
+    }
+    const doors = [];
+    for (const R of runs) {
+      const ops = opsFor(R.axis, R.line, R.a0, R.a1, R.cells);
+      wall(R.axis, R.line, R.a0, R.a1, z0, top, { neg: R.neg ? z0 : null, pos: R.pos ? z0 : null, ops, label: tag + ' wall' });
+      R.ops = ops;
+    }
+    // window / door dressing after every wall core is in (a sill or lintel may stand into a neighbour's skin: dropped)
+    const dress = () => { for (const R of runs) for (const o of R.ops) {
+        if (o.t === 'w') { if (R.neg || R.pos) windowIn(R.axis, R.line, R.neg ? -1 : 1, o, { mull: o.a1 - o.a0 > 50 ? [Math.round((o.a0 + o.a1) / 4) * 2 - 1] : [] }); else glassDoor(R.axis, R.line, o); }
+        else if (o.t === 'gd') glassDoor(R.axis, R.line, o);
+        else if (o.t === 'g') garageDoor(R.axis, R.line, R.neg ? -1 : 1, o);
+        else doors.push({ axis: R.axis, line: R.line, a0: o.a0, a1: o.a1, z0: o.z0, outside: R.neg || R.pos });
+    } };
+    // diagonal steps: one box per cell (windows / doors cut by z), a wedge in each free notch so both faces are flat
+    const dOp = new Map();
+    for (const s of P.segs) if (s.kind === 'd' && !s.rail) for (const o of s.ops) for (const [i, j] of s.cells) {
+      const u = (xOf(i) + 5 - s.A[0]) * s.ux + (yOf(j) + 5 - s.A[1]) * s.uy, uc = (o.c[0] - s.A[0]) * s.ux + (o.c[1] - s.A[1]) * s.uy;
+      if (Math.abs(u - uc) < o.w / 2) dOp.set(j * NI + i, o.t);
+    }
+    const bandsOf = k => { const t = dOp.get(k); return t === 'w' ? [[z0, fl + SILL, 0], [fl + SILL, fl + HEAD, 1], [fl + HEAD, top, 0]] : t === 'd' ? [[fl + 84, top, 0]] : [[z0, top, 0]]; };
+    const taken = new Set();
+    for (let k = 0; k < NC; k++) {
+      if (as[k] !== 3) continue;
+      const i = k % NI, j = (k - i) / NI, ext = out(k + 1) || out(k - 1) || out(k + NI) || out(k - NI);
+      for (const [a, b, g] of bandsOf(k)) box(xOf(i), yOf(j), a, xOf(i) + 10, yOf(j) + 10, b, g ? GLASS : { color: ext ? STUCCO : PLASTER }, tag + ' diagonal');
+    }
+    for (let k = 0; k < NC; k++) {
+      if (!W[k]) continue;
+      const i = k % NI, j = (k - i) / NI;
+      for (const [di, dj] of [[1, 1], [1, -1]]) {
+        if (!inG(i + di, j + dj)) continue;
+        const k2 = (j + dj) * NI + i + di;
+        if (!W[k2] || W[j * NI + i + di] || W[(j + dj) * NI + i]) continue;
+        if (as[k] !== 3 && as[k2] !== 3 && (as[k] === as[k2])) continue;
+        const bnd = (dOp.has(k) ? bandsOf(k) : dOp.has(k2) ? bandsOf(k2) : [[z0, top, 0]]).map(([a, b, g]) => [Math.max(a, fl), Math.min(b, top - 4), g]).filter(([a, b]) => b > a);
+        // notch (i+di, j): its horizontal neighbour is k (side -di), vertical is k2 (side +dj); notch (i, j+dj) the reverse
+        for (const [nk, ni, nj, sx, sy] of [[j * NI + i + di, i + di, j, -di, dj], [(j + dj) * NI + i, i, j + dj, di, -dj]]) {
+          if (taken.has(nk) || P.rail[nk]) continue;
+          taken.add(nk);
+          const ext = out(nk);
+          for (const [a, b, g] of bnd) notch(xOf(ni), yOf(nj), a, b, sx, sy, g ? GLASS : { color: ext ? STUCCO : PLASTER }, tag + ' notch');
+        }
+      }
+    }
+    dress();
+    // rails (thin walls in the plan: gallery and balcony balustrades), white, merged runs
+    for (const R of rects(P.rail)) box(R.x0, R.y0, fl, R.x1, R.y1, fl + 34, { color: WHITE }, tag + ' balustrade');
+    for (const R of rects(P.rail)) box(R.x0, R.y0, fl + 34, R.x1, R.y1, fl + 38, { color: STONE }, tag + ' balustrade cap');
+    return { runs, doors, notches: taken };
+  }
+  function garageDoor(axis, line, out, g) {
+    const t0 = out < 0 ? line : line + 8, pb = (a, b, z, zt, m, lab) => axis === 'x' ? box(a, t0, z, b, t0 + 2, zt, m, lab) : box(t0, a, z, t0 + 2, b, zt, m, lab);
+    for (let z = g.z0; z < g.z1; z += 20) {
+      const zt = Math.min(g.z1, z + 20);
+      pb(g.a0, g.a1, z, zt - 2, { color: [232, 226, 212] }, 'garage door');
+      pb(g.a0, g.a1, zt - 2, zt, { color: [206, 198, 182] }, 'garage door groove');
+    }
+  }
+
+  // --------------------------------------------------------------- stairs (holes) --
+  // STAIR = the grand stair, STAIR_B = the apartment's; filled in after the rooms (see stairs below)
+  const stairCells = new Uint8Array(NC);
+  const STAIRS = stairPlan(P1, P2);
+  for (const s of STAIRS) for (const [x0, y0, x1, y1] of s.hole) for (let y = y0; y < y1; y += 10) for (let x = x0; x < x1; x += 10) stairCells[cj(y) * NI + ci(x)] = 1;
+
+  // ----------------------------------------------------------------- ground floor --
+  const W1 = buildWalls(P1, FL1, TOP1, 'F1');
+  // stairs before the floors' trim (a band standing into a tread is the band's loss)
+  for (const s of STAIRS) s.build({ box });
+  // pad: the whole footprint, pool cut out; outside the walls the lanai / porches are pavers on the same pad
+  const padM = new Uint8Array(NC);
+  for (let k = 0; k < NC; k++) if (P1.fp[k] && !pool[k]) padM[k] = 1;
+  for (const R of rects(padM)) B.slab(R.x0, R.y0, 0, R.x1, R.y1, FL1 - 4, { color: PAD }, 'pad');
+  for (const R of rects(pool)) { B.slab(R.x0, R.y0, 0, R.x1, R.y1, 6, { color: [118, 186, 212] }, 'pool floor'); B.slab(R.x0, R.y0, 6, R.x1, R.y1, 34, { color: [60, 150, 200], material: 'BMC_Glass', collision: false }, 'pool water'); }
+  // room floors and finishes
+  const catOf = q => {
+    const t = (q.notes.join(' ') + ' ' + q.type).toLowerCase();
+    return /bath|powder/.test(t) ? 'bathroom' : /kitchen|laundry|pantry|wine/.test(t) ? 'kitchen' : /garage/.test(t) ? 'garage' : /bed|den|office|closet|movie|media|theat|bonus|safe/.test(t) ? 'bedroom' : /hall|foyer|entry|gallery|stair/.test(t) ? 'hall' : 'living';
+  };
+  // floor finishes after the listing photos, laid on world-aligned grids so neighbouring rectangles share joints:
+  // travertine 3 ft squares, Brazilian cherry 6 ft planks staggered, white marble 4 ft checker, beige 2 ft bath
+  // tile, garage epoxy 4 ft, lanai pavers 4 ft running bond
+  const FIN = {
+    TRV: { w: 30, h: 30, c: [[226, 212, 186], [216, 200, 172], [232, 221, 199]] },
+    MAR: { w: 40, h: 40, c: [[240, 238, 234], [222, 220, 216]], checker: true },
+    BTH: { w: 20, h: 20, c: [[212, 198, 172], [200, 186, 160]] },
+    GAR: { w: 40, h: 40, c: [[156, 156, 152], [148, 148, 144]] },
+    PAV: { w: 40, h: 40, c: [[224, 208, 180], [210, 192, 162], [232, 218, 194]], bond: true },
+    WOD: { w: 60, h: 10, c: [[122, 62, 38], [134, 74, 46], [110, 55, 33]], bond: 3 },
+  };
+  function finFloor([x0, y0, x1, y1], top, f) {
+    const F = FIN[f], z0 = top - 4;
+    for (let y = Math.floor(y0 / F.h) * F.h; y < y1; y += F.h) {
+      const row = Math.round(y / F.h), off = F.bond === true ? (row & 1) * F.w / 2 : F.bond ? ((row % F.bond) + F.bond) % F.bond * 20 : 0;
+      for (let x = Math.floor((x0 - off) / F.w) * F.w + off; x < x1; x += F.w) {
+        const p = Math.max(x0, x), q = Math.min(x1, x + F.w), a = Math.max(y0, y), b = Math.min(y1, y + F.h);
+        if (q <= p || b <= a) continue;
+        const c = F.checker ? F.c[(Math.round(x / F.w) + row) & 1] : F.c[Math.floor(hash(x, y) * F.c.length)];
+        box(p, a, z0, q, b, top, { color: c }, 'floor ' + f);
+      }
+    }
+  }
+  function floors(P, fl, top, W, tag, ceilings = true) {
+    const notchSet = W.notches;
+    const cell = k => !P.wall[k] && !P.rail[k] && P.room[k] >= 0 && !pool[k] && !(P === P2 && stairCells[k]) && kindAt(P, k) !== 'open-to-below' ? P.room[k] + 1 : 0;
+    const rs = rects(null, cell);
+    for (const R of rs) {
+      const q = P.rooms[R.v - 1], cat = q.type === 'outdoor' ? 'outdoor' : catOf(q);
+      finFloor([R.x0, R.y0, R.x1, R.y1], fl, { outdoor: 'PAV', bathroom: q.notes.some(t => /primary/i.test(t)) ? 'MAR' : 'BTH', garage: 'GAR', bedroom: 'WOD', kitchen: 'TRV', hall: 'TRV', living: 'TRV' }[cat]);
+    }
+    // ceilings over indoor cells (not over stair wells / open-to-below on the floor above), notches stop 4 under them
+    if (ceilings) {
+      const cc = k => cell(k) && kindAt(P, k) !== 'outdoor' && !(P === P1 && (stairCells[k] || kindAt(P2, k) === 'open-to-below')) ? 1 : 0;
+      for (const R of rects(null, cc)) ceiling(R.x0, R.y0, R.x1, R.y1, top - 4, tag + ' ceiling');
+    }
+    // trim bands on the rooms' rectangles (a band only where a straight wall face backs it)
+    const paper = {};
+    for (const R of rs) {
+      const q = P.rooms[R.v - 1];
+      if (q.type === 'outdoor' || q.type === 'garage' || (R.x1 - R.x0) * (R.y1 - R.y0) < 900) continue;
+      finishRoom({ x0: R.x0, y0: R.y0, x1: R.x1, y1: R.y1, z0: fl, z1: top - 4 }, { paper: paper[q.n] ??= PAPERS[Math.floor(r() * PAPERS.length)], wains: WAINS[q.n % 2] });
+    }
+    void notchSet;
+    return rs;
+  }
+  const R1 = floors(P1, FL1, TOP1, W1, 'F1');
+
+  // covered lanai: white columns along the open sky, every 7+ studs
+  const cols = [];
+  for (let k = 0; k < NC; k++) {
+    if (!lanai[k] || sky[k] || P1.wall[k] || P1.rail[k]) continue;
+    if (!(sky[k + 1] || sky[k - 1] || sky[k + NI] || sky[k - NI])) continue;
+    const x = xOf(k % NI), y = yOf(Math.floor(k / NI));
+    if (cols.some(([a, b]) => Math.max(Math.abs(a - x), Math.abs(b - y)) < 70)) continue;
+    cols.push([x, y]);
+  }
+
+  // --------------------------------------------------------------------- slab --
+  const hole2 = k => sky[k] || stairCells[k] || kindAt(P2, k) === 'open-to-below';
+  const slabM = new Uint8Array(NC), deckM = new Uint8Array(NC);
+  for (let k = 0; k < NC; k++) {
+    if (!(P1.fp[k] || P2.fp[k]) || hole2(k) || pool[k]) continue;
+    slabM[k] = 1;
+    if (!P2.fp[k] && !P2.wall[k] && !P2.rail[k]) deckM[k] = 1;
+  }
+  for (const R of rects(slabM)) B.slab(R.x0, R.y0, TOP1, R.x1, R.y1, FL2 - 4, { color: WHITE }, 'slab');
+  for (const R of rects(deckM)) B.slab(R.x0, R.y0, FL2 - 4, R.x1, R.y1, FL2, { color: WHITE }, 'deck');
+  for (const [x, y] of cols) {
+    if (!B.free([x, y, FL1], [x + 10, y + 10, TOP1])) continue;
+    box(x, y, FL1, x + 10, y + 10, TOP1 - 10, { color: WHITE }, 'column');
+    box(x - 2, y - 2, TOP1 - 10, x + 12, y + 12, TOP1, { color: STONE }, 'column capital');
+  }
+
+  // ------------------------------------------------------------------- upper floor --
+  const W2 = buildWalls(P2, FL2, TOP2, 'F2');
+  floors(P2, FL2, TOP2, W2, 'F2');
+
+
+  // ---------------------------------------------------------------------- roofs --
+  // course c (0 = eave) covers the roof cells c+1 studs (chebyshev) in from the eave line: a 4-high lip (white at the
+  // eave) and a micro wedge rising PER over the stud toward the higher course; two lower sides = a hip corner wedge;
+  // runs along a row with the same slope merge into one lip + one wedge. Past NMAX courses the deck is capped flat.
+  function roof(mask, high, base, tag) {
+    // the eave: one stud out from the roofed cells (not into a higher storey or the sky over the pool)
+    const R = new Uint8Array(NC);
+    for (let k = 0; k < NC; k++) if (mask[k]) R[k] = 1;
+    for (let k = 0; k < NC; k++) if (!R[k] && !high[k] && !sky[k]) {
+      const i = k % NI;
+      if ([k + 1, k - 1, k + NI, k - NI, k + NI + 1, k + NI - 1, k - NI + 1, k - NI - 1].some(q => q >= 0 && q < NC && mask[q] && Math.abs((q % NI) - i) <= 1)) R[k] = 2;
+    }
+    const seed = new Uint8Array(NC);
+    for (let k = 0; k < NC; k++) seed[k] = !R[k] && !high[k] ? 1 : 0;
+    const d = bfs(seed);
+    const lvl = k => (R[k] ? Math.min(d[k], NMAX + 1) : high[k] ? 99 : 0);
+    const kindOf = new Array(NC);
+    for (let k = 0; k < NC; k++) {
+      if (!R[k]) continue;
+      const L = lvl(k);
+      if (L > NMAX) { kindOf[k] = 'flat'; continue; }
+      const lo = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([di, dj]) => lvl(k + di + dj * NI) < L);
+      // a step of a 45 degree eave: only a diagonal neighbour is lower -> a corner wedge falling toward it
+      const dl = lo.length ? [] : [[1, 1], [1, -1], [-1, 1], [-1, -1]].filter(([di, dj]) => lvl(k + di + dj * NI) < L);
+      if (dl.length === 1) { kindOf[k] = `c${[dl[0][0], 0]}|${[0, dl[0][1]]}`; continue; }
+      kindOf[k] = lo.length === 1 ? `s${lo[0]}` : lo.length === 2 && lo[0][0] !== -lo[1][0] && lo[0][1] !== -lo[1][1] ? `c${lo[0]}|${lo[1]}` : 'flat';
+    }
+    // flat cells (the capped deck, 1-stud ridges) as rectangles per level
+    for (let L = 1; L <= NMAX + 1; L++) {
+      const zb = base + Math.min(L - 1, NMAX) * PER;
+      for (const Q of rects(null, k => R[k] && kindOf[k] === 'flat' && lvl(k) === L ? 1 : 0)) {
+        box(Q.x0, Q.y0, zb, Q.x1, Q.y1, zb + 4, { color: L === 1 ? WHITE : shade(ROOF, 0.82) }, tag + ' lip');
+        box(Q.x0, Q.y0, zb + 4, Q.x1, Q.y1, zb + PER, { color: shade(ROOF, [1, 0.95, 1.04][L % 3]) }, tag + ' deck');
+        for (let y = Q.y0; y < Q.y1; y += 10) for (let x = Q.x0; x < Q.x1; x += 10) kindOf[cj(y) * NI + ci(x)] = undefined;
+      }
+    }
+    for (let k = 0; k < NC; k++) {
+      if (!R[k] || kindOf[k] === undefined) continue;
+      const i = k % NI, j = (k - i) / NI, L = lvl(k), kd = kindOf[k];
+      const zb = base + Math.min(L - 1, NMAX) * PER, zt = zb + PER;
+      const lip = { color: L === 1 ? WHITE : shade(ROOF, 0.82) }, col = shade(ROOF, [1, 0.95, 1.04][L % 3] * (0.97 + 0.06 * hash(i, j)));
+      if (kd === 'flat') {
+        let e = i;
+        while (e + 1 < NI && R[k + e + 1 - i] && kindOf[k + e + 1 - i] === 'flat' && lvl(k + e + 1 - i) === L) e++;
+        for (let q = i; q <= e; q++) kindOf[j * NI + q] = undefined;
+        box(xOf(i), yOf(j), zb, xOf(e + 1), yOf(j) + 10, zb + 4, lip, tag + ' lip');
+        box(xOf(i), yOf(j), zb + 4, xOf(e + 1), yOf(j) + 10, zt, { color: col }, tag + ' deck');
+        continue;
+      }
+      if (kd[0] === 's') {
+        const [di, dj] = kd.slice(1).split(',').map(Number);
+        // a run along the edge (x for a y slope, y for an x slope)
+        const [si, sj] = dj ? [1, 0] : [0, 1];
+        let e = 0;
+        while (true) { const q = k + (e + 1) * (si + sj * NI); if (!inG(i + (e + 1) * si, j + (e + 1) * sj) || !R[q] || kindOf[q] !== kd || lvl(q) !== L) break; e++; }
+        for (let s = 0; s <= e; s++) kindOf[k + s * (si + sj * NI)] = undefined;
+        const x1 = xOf(i + e * si + 1), y1 = yOf(j + e * sj + 1);
+        box(xOf(i), yOf(j), zb, x1, y1, zb + 4, lip, tag + ' lip');
+        wedge(xOf(i), yOf(j), zb + 4, x1, y1, zt, [[-di, -dj]], col, tag);
+        continue;
+      }
+      const [[a, b], [c, e2]] = kd.slice(1).split('|').map(s => s.split(',').map(Number));
+      kindOf[k] = undefined;
+      box(xOf(i), yOf(j), zb, xOf(i) + 10, yOf(j) + 10, zb + 4, lip, tag + ' lip');
+      wedge(xOf(i), yOf(j), zb + 4, xOf(i) + 10, yOf(j) + 10, zt, [[-a - c, 0], [0, -b - e2]], col, tag + ' hip', 1, 'PB_DefaultMicroWedgeCorner');
+    }
+  }
+  const roof1 = new Uint8Array(NC), roof2 = new Uint8Array(NC), high1 = new Uint8Array(NC), none = new Uint8Array(NC);
+  for (let k = 0; k < NC; k++) {
+    if (P2.fp[k] || P2.wall[k] || P2.rail[k]) { high1[k] = 1; if ((P2.fp[k] && kindAt(P2, k) !== 'outdoor') || P2.wall[k]) roof2[k] = 1; }
+    else if (P1.fp[k] && !sky[k] && !pool[k]) roof1[k] = 1;
+  }
+  // the upper walls' diagonal notches stand outside the plan's cells: under the upper roof, clear of the lower one
+  for (const k of W2.notches) { high1[k] = 1; roof1[k] = 0; roof2[k] = 1; }
+  // outdoor F2 rooms (balconies, roof terraces) are open: their walls stop at the balustrade, no roof over them
+  for (let k = 0; k < NC; k++) if (P2.fp[k] && kindAt(P2, k) === 'outdoor' && !P2.wall[k]) high1[k] = 1;
+  roof(roof1, high1, FL2, 'roof');
+  roof(roof2, none, TOP2, 'upper roof');
+
+  // ------------------------------------------------------------------- doorsteps --
+  // three 12-high steps off the pad in front of every outside F1 door (pad 36 above the ground)
+  for (const d of W1.doors.filter(q => q.outside)) {
+    const k = d.axis === 'x' ? cj(d.line - 1) * NI + ci((d.a0 + d.a1) / 2) : cj((d.a0 + d.a1) / 2) * NI + ci(d.line - 1);
+    const dir = P1.fp[k] ? 1 : -1;                      // the outside side: +line if the cell before the wall is inside
+    for (let s = 1; s <= 3; s++) {
+      const n0 = dir > 0 ? d.line + 10 + 10 * (s - 1) : d.line - 10 * s;
+      const [x0, y0, x1, y1] = d.axis === 'x' ? [d.a0 - 6, n0, d.a1 + 6, n0 + 10] : [n0, d.a0 - 6, n0 + 10, d.a1 + 6];
+      if (B.free([x0, y0, 0], [x1, y1, FL1 - 4 - 12 * (s - 1)])) box(x0, y0, 0, x1, y1, FL1 - 4 - 12 * (s - 1), { color: STONE }, 'doorstep');
+    }
+  }
+
+  // ------------------------------------------------------------------- fixtures --
+  // a lamp at the middle of each indoor room's biggest rectangle; its switch on a straight wall face of that rectangle
+  // 10+ clear of openings; every leaf door (30 wide) of both floors
+  const fixtures = { rooms: [], doors: [] };
+  for (const [P, rs, fl, top] of [[P1, R1, FL1, TOP1], [P2, null, FL2, TOP2]]) {
+    const byRoom = new Map();
+    for (const R of rs ?? rects(null, k => !P.wall[k] && !P.rail[k] && P.room[k] >= 0 && !(P === P2 && stairCells[k]) && kindAt(P, k) !== 'open-to-below' ? P.room[k] + 1 : 0)) {
+      const a = (R.x1 - R.x0) * (R.y1 - R.y0), q = P.rooms[R.v - 1];
+      if (q.type === 'outdoor' || q.type === 'open-to-below' || a < 1600 || Math.min(R.x1 - R.x0, R.y1 - R.y0) < 30) continue;
+      if (!byRoom.has(q.n) || a > byRoom.get(q.n).a) byRoom.set(q.n, { R, a, q });
+    }
+    for (const { R, q } of byRoom.values()) {
+      const lx = R.x0 + Math.floor((R.x1 - R.x0) / 20) * 10 + 5, ly = R.y0 + Math.floor((R.y1 - R.y0) / 20) * 10 + 5;   // a cell centre inside the rectangle
+      let sw = null;
+      for (const side of ['y0', 'y1', 'x0', 'x1']) {
+        const Rz = { ...R, z0: fl, z1: top - 4 };
+        const ws = faceWall(side, Rz);
+        if (!ws.length) continue;
+        const [axis] = SIDES[side], lo = axis === 'x' ? R.x0 : R.y0, hi = axis === 'x' ? R.x1 : R.y1;
+        const ops = ws.flatMap(w => w.openings);
+        for (let a = lo + 16; a <= hi - 16 && !sw; a += 2) {
+          if (!ws.some(w => w.a0 <= a - 6 && w.a1 >= a + 6) || ops.some(o => o.a0 - 14 < a && o.a1 + 14 > a)) continue;
+          const f = R[side], n = { y0: [0, 1], y1: [0, -1], x0: [1, 0], x1: [-1, 0] }[side];
+          sw = { at: axis === 'x' ? [a, f, fl] : [f, a, fl], normal: n };
+        }
+        if (sw) break;
+      }
+      if (!sw) continue;
+      fixtures.rooms.push({ name: `${P === P1 ? 'F1' : 'F2'} ${q.name}`.slice(0, 40), lamps: [{ at: [lx, ly, top - 4] }], switch: sw });
+    }
+  }
+  for (const d of [...W1.doors, ...W2.doors]) {
+    const at = (a, z) => d.axis === 'x' ? [a, d.line + 5, z] : [d.line + 5, a, z];
+    fixtures.doors.push({ name: `door ${fixtures.doors.length}`, color: d.outside ? [120, 70, 40] : undefined, z0: d.z0, z1: d.z0 + DOOR, a0: at(d.a0, d.z0), a1: at(d.a1, d.z0) });
+  }
+
+  const bricks = B.bricks.map(({ label, ...b }) => (process.env.LABELS ? { ...b, label } : b));
+  const xs = [], ys = [];
+  for (let k = 0; k < NC; k++) if (P1.fp[k] || P2.fp[k]) { xs.push(xOf(k % NI)); ys.push(yOf(Math.floor(k / NI))); }
+  const lot = [Math.min(...xs) - 60, Math.min(...ys) - 60, Math.max(...xs) + 70, Math.max(...ys) + 70];
+  return { bricks, fixtures, lot, count: bricks.length, soft };
 }
 
-export function brynwood() {
-  const B = makeBuilder({ cell: 40 }), stats = { n: 0, w: 0, drop: 0 };
-  const meshNow = makeMesher(B, stats), rnd = rng(4453);
-  // layers are queued, then meshed with every other layer at an overlapping height counted as solid, so no slant
-  // ever runs into a neighbour's cells (pad vs pool, steps vs pad, roof vs upper walls, rails vs treads)
-  const layers = [];
-  const mesh = (lab, z0, z1, matOf, tag, extra) => {
-    let j0 = NY, j1 = -1;
-    for (let k = 0; k < N; k++) if (lab[k]) { const j = Math.floor(k / NX); if (j < j0) j0 = j; j1 = j; }
-    if (j1 >= 0) layers.push({ lab, z0, z1, matOf, tag, extra, j0, j1 });
+// ------------------------------------------------------------------------ stairs --
+// The grand stair (the plan's curved one, squared up): from the upper hall at x -300 a flight of 5 treads (10 rise,
+// 10 run) down -x to a 5x4 stud landing at 120, then 7 treads down +y into the ground-floor hall (landing 3+ studs of
+// open floor at y 110..). The apartment (2B) stair: an outdoor square switchback round a stucco core (8x8 studs at
+// x 430..510, y -540..-460), 18 risers of 10, the last one the NE corner beside the 2B balcony. Each stair: slab
+// holes (F2 floor + slab), walls / rails it clears on either floor, and a builder.
+function stairPlan(P1, P2) {
+  const clear = (P, x0, y0, x1, y1) => { for (let y = y0; y < y1; y += 10) for (let x = x0; x < x1; x += 10) { const k = cj(y) * NI + ci(x); P.wall[k] = 0; P.rail[k] = 0; } };
+  const TR = [[226, 212, 186], [214, 198, 170]], RAILC = IRON;
+  // ---- grand stair
+  clear(P1, -400, 0, -300, 140); clear(P2, -400, 0, -300, 110);
+  const grand = {
+    hole: [[-400, 0, -300, 40], [-400, 40, -360, 110]],
+    build({ box }) {
+      for (let k = 1; k <= 5; k++) { const x = -300 - 10 * k, zt = FL2 - 10 * k; box(x, 0, zt - 10, x + 10, 40, zt, { color: TR[k % 2] }, 'stair tread'); }
+      box(-400, 0, 110, -350, 40, 120, { color: TR[0] }, 'stair landing');
+      for (let k = 1; k <= 7; k++) { const y = 40 + 10 * (k - 1), zt = 120 - 10 * k; box(-400, y, k >= 6 ? FL1 : zt - 10, -360, y + 10, zt, { color: TR[k % 2] }, 'stair tread'); }
+      // iron balusters + a stone handrail on the open sides: the upper flight's y 40 side (past the landing), the
+      // lower flight's x -360 side, the landing's two open sides
+      const post = (x, y, z, h = 34) => box(x, y, z, x + 2, y + 2, z + h, { color: RAILC }, 'baluster');
+      for (let k = 1; k <= 5; k++) post(-300 - 10 * k + 4, 38, FL2 - 10 * k);
+      box(-350, 36, FL2 - 10 + 34, -300, 40, FL2 - 10 + 38, { color: STONE }, 'handrail');
+      for (let k = 1; k <= 7; k++) post(-362, 40 + 10 * (k - 1) + 4, 120 - 10 * k);
+      box(-364, 40, 120 - 10 + 34, -360, 110, 120 - 10 + 38, { color: STONE }, 'handrail');
+      box(-400, 36, 120, -360, 40, 154, { color: RAILC }, 'landing rail');
+    },
   };
-  const flush = () => {
-    for (const L of layers) {
-      const block = new Uint8Array(N);
-      if (L.extra) block.set(L.extra);
-      for (const O of layers) {
-        if (O === L || O.z1 <= L.z0 || L.z1 <= O.z0 || O.j1 < L.j0 - 1 || L.j1 + 1 < O.j0) continue;
-        for (let k = Math.max(L.j0 - 1, O.j0) * NX, e = (Math.min(L.j1 + 1, O.j1) + 1) * NX; k < e; k++) if (O.lab[k]) block[k] = 1;
+  // ---- apartment stair
+  const AX0 = 430, AY0 = -540, ring = [
+    [0, 0, 30, 30], [30, 0, 40, 30], [40, 0, 50, 30], [50, 0, 80, 30], [50, 30, 80, 40], [50, 40, 80, 50],
+    [50, 50, 80, 80], [40, 50, 50, 80], [30, 50, 40, 80], [0, 50, 30, 80], [0, 40, 30, 50], [0, 30, 30, 40],
+  ].map(([a, b, c, d]) => [AX0 + a, AY0 + b, AX0 + c, AY0 + d]);
+  const at = n => ring[n % 12];
+  clear(P2, 500, -500, 520, -450);
+  const apt = {
+    hole: [],
+    build({ box }) {
+      box(AX0 + 30, AY0 + 30, 0, AX0 + 50, AY0 + 50, FL2 + 10, { color: STUCCO }, 'stair core');
+      box(AX0 + 28, AY0 + 28, FL2 + 10, AX0 + 52, AY0 + 52, FL2 + 14, { color: STONE }, 'stair core cap');
+      for (let n = 1; n <= 18; n++) {
+        const [x0, y0, x1, y1] = at(n), zt = 10 * n;
+        box(x0, y0, n <= 2 ? 0 : zt - 10, x1, y1, zt, { color: TR[n % 2] }, 'outdoor stair');
+        // rail on the piece's outer sides (not the top piece's balcony side)
+        const ya = y0 === AY0 ? y0 + 2 : y0, yb = y1 === AY0 + 80 ? y1 - 2 : y1;   // x-side rails stop at the y-side ones
+        const sides = [[y0 === AY0, [x0, y0, x1, y0 + 2]], [y1 === AY0 + 80, [x0, y1 - 2, x1, y1]], [x0 === AX0, [x0, ya, x0 + 2, yb]], [x1 === AX0 + 80 && n !== 18, [x1 - 2, ya, x1, yb]]];
+        for (const [on, [a, b, c, d]] of sides) if (on) box(a, b, zt, c, d, zt + 34, { color: RAILC }, 'outdoor stair rail');
       }
-      meshNow(L.lab, L.z0, L.z1, L.matOf, L.tag, block);
-    }
+    },
   };
-  const P1 = newPlan(), P2 = newPlan();
-  plan(FLOORS[0], P1);
-  plan(FLOORS[1], P2);
-  plan(FLOORS[2], P2);
-  const lab = () => new Uint16Array(N);
-
-  // ---------------------------------------------------------- stairs (masks) --
-  // grand stair: a curved flight round a centre fitted on Floor 2 A's stair arcs, 14 risers of 10, sweeping 145
-  // degrees up from the kitchen side to the gallery; the F2 slab is open over its upper treads
-  const SC = T(986, 272, [0, 0]), RI = 40, RO = 88, A0 = 130, SW = 145, NT = 13;
-  const stairK = new Int8Array(N).fill(-1);
-  eachCell(SC[0] - RO, SC[1] - RO, SC[0] + RO, SC[1] + RO, (k, x, y) => {
-    const r = Math.hypot(x - SC[0], y - SC[1]);
-    if (r < RI || r >= RO) return;
-    let a = Math.atan2(y - SC[1], x - SC[0]) * 180 / Math.PI - A0;
-    a = ((a % 360) + 360) % 360;
-    if (a < SW) stairK[k] = Math.floor(a / (SW / NT));
-  });
-  // apartment stair: an outdoor spiral from the lanai lawn to the 2B kitchen door, 17 treads x 30 degrees + landing
-  const SP = T(-1730, -1490, [0, 0]), door = T(-1747, -1385, [0, 0]), SRO = 44, SRI = 6;
-  const aLand = Math.atan2(door[1] - SP[1], door[0] - SP[0]) * 180 / Math.PI;
-  const spiK = new Int8Array(N).fill(-1);     // 0..16 treads, 17 = landing sector
-  eachCell(SP[0] - SRO, SP[1] - SRO, SP[0] + SRO, SP[1] + SRO, (k, x, y) => {
-    const r = Math.hypot(x - SP[0], y - SP[1]);
-    if (r >= SRO || r < SRI) return;
-    let a = Math.atan2(y - SP[1], x - SP[0]) * 180 / Math.PI;
-    const dl = (((a - aLand) % 360) + 540) % 360 - 180;
-    if (Math.abs(dl) <= 45) { spiK[k] = 17; return; }
-    // treads climb anticlockwise and end where the landing begins: tread 16 = [aLand-75, aLand-45)
-    const back = (((aLand - 45 - a) % 360) + 360) % 360;   // degrees below the landing
-    const t = 16 - Math.floor(back / 30);
-    if (t >= 0) spiK[k] = t;
-  });
-  for (let k = 0; k < N; k++) if (stairK[k] >= 0) { P1.wall[k] = 0; P1.rail[k] = 0; P2.wall[k] = 0; P2.rail[k] = 0; }
-
-  // -------------------------------------------------------- lanai, pool, holes --
-  const lanai = new Uint8Array(N), house = new Uint8Array(N);
-  for (let k = 0; k < N; k++) {
-    if (!P1.fp[k]) continue;
-    if (P1.room[k]?.id === '7eaf0') lanai[k] = 1; else if (P1.kind[k] !== 2) house[k] = 1;
-  }
-  const dHouse = chamfer(house), sky = new Uint8Array(N);
-  for (let k = 0; k < N; k++) if (lanai[k] && dHouse[k] >= 80 && !P2.fp[k] && !P1.wall[k]) sky[k] = 1;
-  const dSky = chamfer(sky.map(v => v ? 0 : 1)), pool = new Uint8Array(N);
-  for (let k = 0; k < N; k++) if (sky[k] && dSky[k] >= 22) pool[k] = 1;
-  const holeF2 = new Uint8Array(N);     // no slab: open sky, double-height gallery, upper stair treads, the spiral well
-  for (let k = 0; k < N; k++) {
-    if (sky[k] || P2.kind[k] === 5 || P2.kind[k] === 4 || stairK[k] >= 3) holeF2[k] = 1;
-    if (spiK[k] >= 0 && spiK[k] < 17) holeF2[k] = 1;
-    if (Math.hypot(cx(k % NX) - SP[0], cy(Math.floor(k / NX)) - SP[1]) < SRI) holeF2[k] = 1;
-  }
-
-  // ----------------------------------------------------- F1 pad, finish, pool --
-  // finish under walls / gaps: grow each room's finish outward so wall feet sit on their rooms' floors
-  const grow = (fin, mask) => {
-    let frontier = [];
-    for (let k = 0; k < N; k++) if (mask[k] && fin[k]) frontier.push(k);
-    for (let it = 0; it < 40 && frontier.length; it++) {
-      const nx = [];
-      for (const k of frontier) for (const d of [1, -1, NX, -NX]) { const q = k + d; if (q >= 0 && q < N && mask[q] && !fin[q]) { fin[q] = fin[k]; nx.push(q); } }
-      frontier = nx;
-    }
-    for (let k = 0; k < N; k++) if (mask[k] && !fin[k]) fin[k] = 1;
-  };
-  grow(P1.fin, P1.fp);
-  {
-    const pad = lab(), fin = lab(), pf = lab(), wat = lab();
-    for (let k = 0; k < N; k++) {
-      if (!P1.fp[k]) continue;
-      if (pool[k]) { pf[k] = 1; wat[k] = 1; continue; }
-      pad[k] = 1; fin[k] = finLabel(P1.fin[k], k);
-    }
-    mesh(pad, 0, 36, () => ({ color: [214, 204, 186] }), 'pad');
-    mesh(fin, 36, 40, finMat, 'floor 1');
-    mesh(pf, 0, 6, () => ({ color: [118, 186, 212] }), 'pool floor');
-    mesh(wat, 6, 34, () => ({ color: [60, 150, 200], material: 'BMC_Glass', collision: false }), 'pool water');
-  }
-
-  // ---------------------------------------------------------------- walls --
-  function walls(P, fl, top, skip) {
-    const cuts = [fl, fl + 24, fl + 36, fl + 84, fl + 100, top];
-    for (let b = 0; b < cuts.length - 1; b++) {
-      const zA = cuts[b], zB = cuts[b + 1], mid = (zA + zB) / 2 - fl, L = lab();
-      for (let k = 0; k < N; k++) {
-        if (skip && skip[k]) continue;
-        if (P.wall[k]) {
-          const o = P.op[k];
-          let v = 1;
-          if (o === 1 && mid < 84) v = 0;
-          else if (o === 2 && mid > 24 && mid < 100) v = P.glass[k] ? 2 : 0;
-          else if (o === 3 && mid < 84) v = P.glass[k] ? 3 : 0;
-          L[k] = v;
-        } else if (P.rail[k] && mid < 36) L[k] = 4;
-      }
-      mesh(L, zA, zB, v => v === 1 ? { color: shade(STUCCO, 0.97 + rnd() * 0.03) } : v === 2 ? GLASS : v === 3 ? { color: WHITE } : { color: IRON }, 'walls');
-    }
-  }
-  walls(P1, FL1, TOP1);
-
-  // ---------------------------------------------------------------- slab --
-  grow(P2.fin, P2.fp);
-  {
-    const sa = lab(), sb = lab();
-    for (let k = 0; k < N; k++) {
-      if (!(P1.fp[k] || P2.fp[k]) || holeF2[k]) continue;
-      sa[k] = 1;
-      sb[k] = P2.fp[k] ? finLabel(P2.fin[k], k) : 1;
-    }
-    mesh(sa, TOP1, TOP1 + 6, () => ({ color: WHITE }), 'slab');
-    mesh(sb, TOP1 + 6, FL2, v => v === 1 ? { color: WHITE } : finMat(v), 'floor 2');
-  }
-  walls(P2, FL2, TOP2);
-  {
-    const ce = lab();
-    for (let k = 0; k < N; k++) if (P2.fp[k] && P2.kind[k] !== 2 && !(spiK[k] >= 0)) ce[k] = 1;
-    mesh(ce, TOP2, TOP2 + 10, () => ({ color: WHITE }), 'ceiling 2');
-  }
-
-  // --------------------------------------------------------------- stairs --
-  for (let t = 0; t < NT; t++) {
-    const tr = lab(), rl = lab(), zt = FL1 + 10 * (t + 1);
-    for (let k = 0; k < N; k++) if (stairK[k] === t) {
-      tr[k] = 1;
-      const r = Math.hypot(cx(k % NX) - SC[0], cy(Math.floor(k / NX)) - SC[1]);
-      if (r < RI + 4 || r >= RO - 4) rl[k] = 1;
-    }
-    mesh(tr, zt - 10, zt, () => ({ color: [226, 212, 186] }), 'stair');
-    mesh(rl, zt, zt + 36, () => ({ color: IRON }), 'stair rail');
-  }
-  for (let t = 0; t < 17; t++) {
-    const tr = lab(), rl = lab(), zt = 10 * (t + 1);
-    for (let k = 0; k < N; k++) if (spiK[k] === t && !P1.wall[k] && !P2.wall[k] && !P2.rail[k]) {
-      tr[k] = 1;
-      if (Math.hypot(cx(k % NX) - SP[0], cy(Math.floor(k / NX)) - SP[1]) >= SRO - 4) rl[k] = 1;
-    }
-    mesh(tr, zt - 10, zt, () => ({ color: [210, 196, 170] }), 'spiral');
-    mesh(rl, zt, zt + 36, () => ({ color: IRON }), 'spiral rail');
-  }
-  {
-    const nw = lab(), land = lab();
-    for (let k = 0; k < N; k++) {
-      if (Math.hypot(cx(k % NX) - SP[0], cy(Math.floor(k / NX)) - SP[1]) < SRI) nw[k] = 1;
-      if (spiK[k] === 17 && !P2.fp[k] && !P1.fp[k]) land[k] = 1;
-    }
-    mesh(nw, 0, FL2 + 40, () => ({ color: IRON }), 'spiral newel');
-    mesh(land, TOP1, FL2, () => ({ color: [210, 196, 170] }), 'spiral landing');
-  }
-
-  // ------------------------------------------------- steps + garage aprons --
-  {
-    const deck = new Uint8Array(N);
-    for (let k = 0; k < N; k++) if (P1.fp[k] && P1.kind[k] === 2 && !P1.wall[k] && !pool[k]) deck[k] = 1;
-    const out = new Uint8Array(N);
-    for (let k = 0; k < N; k++) out[k] = P1.fp[k] || spiK[k] >= 0 ? 0 : 1;
-    const dDeck = chamfer(deck), dFp = chamfer(P1.fp);
-    for (let s = 0; s < 3; s++) {
-      const L = lab();
-      for (let k = 0; k < N; k++) if (out[k] && dDeck[k] <= 6 * (3 - s) + 0.5 && dDeck[k] <= dFp[k] + 0.5) L[k] = 1;
-      mesh(L, 10 * s, 10 * s + 10, () => ({ color: [222, 206, 178] }), 'steps');
-    }
-  }
-
-  // ---------------------------------------------------------------- roofs --
-  // coursed barrel-tile hips: course k covers the cells at least 5k cells inside the eave line (4 rise per 10 run),
-  // so every hip, valley and the turret cone falls out of one distance field; lower roofs rise against the upper
-  // storey and stop under it
-  function roof(region, high, base, maxK, tag, extra) {
-    const reg = new Uint8Array(N);
-    for (let k = 0; k < N; k++) reg[k] = region[k];
-    const dOut = chamfer(reg);                              // eave: 8 cells out from the roofed region
-    const eave = new Uint8Array(N);
-    for (let k = 0; k < N; k++) eave[k] = reg[k] || (!high[k] && dOut[k] <= 8 && spiK[k] < 0) ? 1 : 0;
-    const seed = new Uint8Array(N);
-    for (let k = 0; k < N; k++) seed[k] = eave[k] || high[k] ? 0 : 1;
-    const d = chamfer(seed);
-    for (let c = 0; c < maxK; c++) {
-      const L = lab();
-      let any = 0;
-      for (let k = 0; k < N; k++) if (eave[k] && !high[k] && d[k] >= 1 + c * 5) { L[k] = 1; any = 1; }
-      if (!any) break;
-      const col = shade(ROOF[c % 3], 0.96 + rnd() * 0.04);
-      mesh(L, base + c * 4, base + c * 4 + 4, () => ({ color: col }), tag, extra);
-    }
-  }
-  {
-    const r1 = new Uint8Array(N), r2 = new Uint8Array(N), hi1 = new Uint8Array(N), none = new Uint8Array(N);
-    for (let k = 0; k < N; k++) {
-      if (P2.fp[k] || P2.wall[k] || P2.rail[k]) { hi1[k] = 1; if (P2.fp[k] && P2.kind[k] !== 2 && !(spiK[k] >= 0)) r2[k] = 1; }
-      else if (P1.fp[k] && !holeF2[k]) r1[k] = 1;
-      if (sky[k] && !P2.wall[k] && !P2.rail[k]) hi1[k] = 0;
-    }
-    roof(r1, hi1, FL2, 24, 'roof 1', P2.fp);
-    roof(r2, none, TOP2 + 10, 30, 'roof 2');
-  }
-
-  flush();
-
-  // -------------------------------------------- loggia columns round the pool --
-  {
-    const pick = [];
-    for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++) {
-      const k = j * NX + i;
-      if (!lanai[k] || sky[k] || P1.wall[k]) continue;
-      if (!(sky[k + 1] || sky[k - 1] || sky[k + NX] || sky[k - NX])) continue;
-      const x = cx(i), y = cy(j);
-      if (pick.some(([a, b]) => (a - x) ** 2 + (b - y) ** 2 < 70 * 70)) continue;
-      pick.push([x, y]);
-    }
-    for (const [x, y] of pick) {
-      const px = Math.round(x / 2) * 2, py = Math.round(y / 2) * 2;
-      if (B.free([px - 10, py - 10, FL1], [px + 10, py + 10, TOP1])) B.add({ asset: 'PB_DefaultMicroBrick', size: [8, 8, (TOP1 - FL1) / 2], position: [px, py, (FL1 + TOP1) / 2], color: WHITE }, 'column');
-    }
-    stats.columns = pick.length;
-  }
-  return { bricks: B.bricks, dropped: B.dropped, stats };
+  return [grand, apt];
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop())) {
-  const t0 = Date.now(), { bricks, dropped, stats } = brynwood();
+if (process.argv[1]?.endsWith('brynwood.mjs')) {
+  const t0 = Date.now(), h = brynwood();
   const ai = process.argv.indexOf('--at'), at = ai > 0 ? process.argv[ai + 1].split(',').map(Number) : [0, 0];
-  const by = {};
-  for (const d of dropped) { const t = d.split(' [[')[0] + ' x ' + (d.split(' hits ')[1] ?? '').split(' [[')[0]; by[t] = (by[t] ?? 0) + 1; }
-  console.error(by);
-  console.error(`brynwood: ${bricks.length} bricks (${stats.w} wedges), ${stats.drop} dropped, ${stats.columns} columns, ${Date.now() - t0} ms`);
-  for (const d of dropped.slice(0, 12)) console.error('  ' + d);
+  const counts = {};
+  for (const b of h.bricks) counts[b.asset] = (counts[b.asset] ?? 0) + 1;
+  console.error(`brynwood: ${h.count} bricks ${JSON.stringify(counts)}, soft drops ${JSON.stringify(h.soft)}, ${h.fixtures.rooms.length} rooms / ${h.fixtures.doors.length} doors, ${Date.now() - t0} ms`);
   const out = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : null;
   if (out) {
     const owner = { id: 'c1770000-0000-4b0b-9a11-0000004453b0', name: 'Brynwood Estate', display_name: 'Brynwood Estate' };
-    const bs = bricks.map(({ label, ...b }) => ({ ...b, position: [b.position[0] + at[0], b.position[1] + at[1], b.position[2]] }));
+    const bs = h.bricks.map(b => ({ ...b, asset: b.asset ?? 'PB_DefaultBrick', position: [b.position[0] + at[0], b.position[1] + at[1], b.position[2]] }));
     fs.writeFileSync(out, JSON.stringify({ ops: [{ op: 'bricks', at: [0, 0, 0], owner, captureMs: 15000, bricks: bs }] }));
   }
 }
