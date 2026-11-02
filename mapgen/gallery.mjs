@@ -8,7 +8,7 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 
 const [GX, GY] = process.argv.slice(2, 4).map(Number);
-const OUT = process.argv[4] ?? 'gallery_job.json';
+const OUT = process.argv[4] ?? 'gallery_job.json', SLOTS = process.argv[5];   // SLOTS: per-build sign spot + brick count (bridge-tools/showcase.mjs)
 const OWNER = { id: '6a11e000-0000-4b0b-9a11-00000000ca11', name: 'Mapgen Gallery', display_name: 'Mapgen Gallery' };
 const FONTS = ['MonaspaceXenon', 'Cinzel', 'PirataOne', 'Gotfridus', 'EagleLake', 'Bungee'];
 const GAP = 200, SIGN_Y = 60;
@@ -73,7 +73,7 @@ const sign = (text, x, y) => ({
     bOverrideOutlineColor: true, bForeground: false, Text: text } }],
 });
 
-const out = [], box = [Infinity, Infinity, -Infinity, -Infinity];
+const out = [], slots = [], box = [Infinity, Infinity, -Infinity, -Infinity];
 let y0 = GY;
 for (const row of rows) {
   const depth = Math.max(...row.map(b => b.d));
@@ -84,6 +84,7 @@ for (const row of rows) {
     // builds re-shipped into their live slot by a delta keep that slot (2026-11-02: longbrooke on the template)
     if (PIN[b.name]) [dx, dy, dz] = PIN[b.name];
     for (const k of b.bricks) { const { label, ...r } = k; if (offGrid(r)) r.asset = 'PB_DefaultMicroBrick'; out.push({ ...r, position: [k.position[0] + dx, k.position[1] + dy, k.position[2] + dz] }); }
+    slots.push({ name: b.name, text: b.text, n: b.bricks.length, sx: Math.round((b.m[0] + b.m[3]) / 20) * 10 + dx, sy: b.m[1] + dy - SIGN_Y });
     out.push(sign(b.text, Math.round((b.m[0] + b.m[3]) / 20) * 10 + dx, b.m[1] + dy - SIGN_Y));
     box[0] = Math.min(box[0], b.m[0] + dx); box[2] = Math.max(box[2], b.m[3] + dx);
     box[1] = Math.min(box[1], b.m[1] + dy - SIGN_Y - 10);
@@ -95,5 +96,6 @@ for (const row of rows) {
 
 fs.writeFileSync(OUT, JSON.stringify({ ops: [{ op: 'bricks', at: [0, 0, 0], owner: OWNER, captureMs: 30000,
   externalAssets: FONTS.map(name => ({ type: 'BrickFontDescriptor', name })), bricks: out }] }));
+if (SLOTS) fs.writeFileSync(SLOTS, slots.map(s => JSON.stringify(s)).join('\n'));
 fs.rmSync(T, { recursive: true });
 console.error(`${builds.length} builds, ${out.length} bricks, box x ${box[0]}..${box[2]} y ${box[1]}..${box[3]}`);

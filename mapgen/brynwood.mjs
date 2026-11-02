@@ -16,7 +16,7 @@
 import fs from 'fs';
 import { makeBuilder, rng } from './builder.mjs';
 import { orientFor } from './orient.mjs';
-import { piece as furnPiece, footprint, facing, placeFurniture } from './furniture.mjs';
+import { piece as furnPiece, footprint, facing, placeFurniture } from './rusfurniture.mjs';
 
 let BP = JSON.parse(fs.readFileSync(new URL('./refs/brynwood_bp.json', import.meta.url)));
 const K = 0.32808;                                   // units per cm
@@ -667,7 +667,7 @@ export function house(H, seed) {
   }
 
   // ------------------------------------------------------------------ furniture --
-  // H.furnish: руся's pieces (furniture.mjs) against straight walls of each room's biggest rectangle, back to the wall,
+  // H.furnish: руся's pieces (rusfurniture.mjs) against straight walls of each room's biggest rectangle, back to the wall,
   // clear of every opening on that wall by 14 and of the room's doors by 40, at most a third of the floor taken so the
   // middle stays open; per room kind a list of groups, the first piece of a group that fits is placed
   const FURNISH = {
