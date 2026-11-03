@@ -13,7 +13,8 @@ import { bundle } from '../tools/wsbundle.mjs';
 
 // buildCabinet({ dir, name, title, owner, gen, pins: { a, b } }): writes <dir>/<name>.gen.ws, <name>_chip.brz, <name>.brz.
 // pins.a = Space / right mouse, pins.b = left mouse / E (the chip's bool inputs). Marquee + in-screen title = title.
-export async function buildCabinet({ dir, name, title, owner: OWNER, gen, pins = { a: 'a', b: 'b' } }) {
+// cell = picture cell size (default 0.5); extra = { pin: 'bPressedQ' | 'bPressedC' } more seat keys -> chip bool pins.
+export async function buildCabinet({ dir, name, title, owner: OWNER, gen, pins = { a: 'a', b: 'b' }, cell, extra = {} }) {
 const here = dir;
 fs.writeFileSync(join(here, `${name}.gen.ws`), gen.src);
 
@@ -71,7 +72,7 @@ function speakers(b) {
   const wireTo = (src, port) => w.addWire(src, { brick: b.portIn(port), component_type: INC, port: 'RER_Input' });
 
   // 48 cells = the owner's 26-wide panel; wider pictures widen panel + cabinet (clown: 64)
-  const PW = Math.ceil(13 * gen.W / 48), BW = PW + 2;
+  const PW = cell ? Math.ceil(gen.W * cell / 2 + 1) : Math.ceil(13 * gen.W / 48), BW = PW + 2;
   // ---- the owner's cabinet (clipboard bricks, rotated into this frame)
   box(-BW, 2, 24, BW, 22, 50);     // head behind the screen
   box(-BW, -8, 50, BW, 22, 58, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: title, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
@@ -81,7 +82,7 @@ function speakers(b) {
     components: [{ type: C.Seat.NAME, data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: `Play ${title}` } }] });
 
   // ---- screen = the owner's white panel x -13..13, y 0..2, z 26..48
-  const CELL = 0.5, base = hex(gen.PAL[0]);
+  const CELL = cell ?? 0.5, base = hex(gen.PAL[0]);
   const Z1 = 48, SH = gen.STRIP * CELL;
   for (let k = 0; k < gen.H / gen.STRIP; k++) {
     const s = box(-PW, 0, Z1 - (k + 1) * SH, PW, 2, Z1 - k * SH, { color: base,
@@ -91,7 +92,7 @@ function speakers(b) {
   const z0 = Z1 - gen.H * CELL; // 30
   const hud = box(-PW, 0, z0 - 2, PW, 2, z0, { color: base, components: text({ LineHeight: 0.8, Color: rgba([248, 208, 64]) }) });
   wireFrom('hud_', hud, 'Text');
-  const msg = box(-PW, 0, 26, PW, 2, z0 - 2, { color: base, components: text({ LineHeight: 0.8, Color: rgba([240, 240, 240]) }) });
+  const msg = box(-PW, 0, Math.min(26, z0 - 4), PW, 2, z0 - 2, { color: base, components: text({ LineHeight: 0.8, Color: rgba([240, 240, 240]) }) });
   wireFrom('msg_', msg, 'Text');
   const titleB = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, 42], visibility: false, collision: false, owner_index: O,
     components: text({ Font: font('Bungee'), LineHeight: 2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });
@@ -99,7 +100,7 @@ function speakers(b) {
 
   // ---- seat -> chip: occupancy straight into 'seated', the sitter into a raw MicrochipInput -> splitter -> compares
   // -> the chip's own input port gates; 20 Hz clock -> 'tick'. All on the chip plane, past its gates and speakers.
-  const X0 = Math.max(...b.rootPos.map(p => p[0])) + 60, Y0 = Math.min(...b.rootPos.map(p => p[1])), ZP = b.rootPos[0][2];
+  const X0 = Math.max(...b.rootPos.map(p => p[0])) + 30 + 10 * Math.max(3, gen.synths.length), Y0 = Math.min(...b.rootPos.map(p => p[1])), ZP = b.rootPos[0][2]; // X0: past the speakers
   let gi = 0;
   const gate = (c, data = {}) => ({ h: b.addInside({ asset: c.BRICK, position: [X0 + (gi % 8) * 10, Y0 + Math.floor(gi++ / 8) * 10, ZP], color: [200, 200, 200],
     components: [{ type: c.NAME, data }] }), c });
@@ -119,6 +120,7 @@ function speakers(b) {
   wireTo(cmp('Expr_CompareLess', port(split, 'InputForward'), -0.5), 'down');
   wireTo(cmp('Expr_CompareGreater', add(port(split, 'InputUp'), port(split, 'bPressedRightMouse')), 0.5), pins.a);
   wireTo(cmp('Expr_CompareGreater', add(port(split, 'bPressedLeftMouse'), port(split, 'bPressedE')), 0.5), pins.b);
+  for (const [pin, key] of Object.entries(extra)) wireTo(cmp('Expr_CompareGreater', port(split, key), 0.5), pin);
   const clock = gate(C.Clock, { IntervalSeconds: 0.05, bEnabled: true });
   wireTo(port(clock, 'Pulse'), 'tick');
 
