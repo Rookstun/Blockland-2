@@ -28,6 +28,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 const { pathToFileURL } = require('url');
 const Anthropic = require('@anthropic-ai/sdk');
 const shapes = require('./lib/shapes');
+const { render } = require('./lib/render');
 
 const EVENTS = ['chatcmd:ai', 'cmd:ai']; // "!ai" and "/ai"
 // (owner 2026-10-15: "hide !ai for now") true = !ai is ignored silently and left out of help
@@ -37,7 +38,10 @@ const IMAGE_EVENTS = ['chatcmd:img', 'cmd:img', 'chatcmd:image', 'cmd:image']; /
 const HEIGHTMAP = path.join(__dirname, 'bin', 'heightmap');
 const IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 const LINE = 200; // characters per chat line
-const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_ROUNDS = 8;
+// FCC maps model names to its slots (fable/opus/sonnet/haiku, anything else = MODEL); each slot is its own
+// Gemini model and free-tier quota is per model, so a busy slot falls through to the next
+const MODEL_FALLBACKS = ['claude-fable-5', 'claude-sonnet-5', 'claude-haiku-5', 'default'];
 const LOG_FILE = path.join(__dirname, 'logs', 'chatbot.log');
 const LOG_MAX = 5 * 1024 * 1024; // rotate to chatbot.log.1 past this size
 
@@ -86,7 +90,7 @@ A build is a list of parts. The plugin turns each part into bricks, so you descr
 Parts are painted in order: later parts paint over earlier ones, so add details (windows, eyes, stripes, trim) after the body, and use carve to cut holes. Overlapping is fine and expected. The player looks along +x at the build, so put faces, fronts and signs on the side with the smallest x (an extrude with axis "y" at the front x paints a face onto a body).
 Every part may set material: plastic, glow, glass, metal or hologram. Colors are hex like "#8b5a2b".
 
-Quality: make builds detailed and recognizable, not a few boxes. Use the right size (a car is about 10 studs long and 5 wide, a house 16+ studs, a statue or character 10-30 studs tall), several shades of each color, and details (windows, trim, lights, faces, wheels with hubcaps). Prefer extrude/layers/revolve for organic or detailed shapes and room/roof/tower for buildings. After a build, the tool result shows ASCII FRONT/SIDE/TOP previews with a color key: check it looks like the thing. If it clearly does not, call undo_build with "last" and build it again, fixed.
+Quality is everything: players judge every build. Before the first build call, plan it: what the real thing looks like from the front, side and top; its real size on the grid (1 stud = 30 cm wide, 1 plate = 12 cm tall, a player is 1.8 m = 15 plates); its 3 to 6 main masses; the signature details that make it instantly recognizable; a palette with 2 or 3 shades per material (darker underneath and in recesses, lighter on top and on edges). Build big enough for detail: most builds 15 to 60 studs, small objects scaled up 2 to 4 times. A car is about 10 studs long and 5 wide at life size, a house 16+ studs, a statue or character 10 to 30 studs tall. Shape organic things with revolve, layers and extrude, never stacked boxes. Break up big flat walls and slabs with trim, frames, insets, panels, columns and stripes; add the small things (handles, lights, eyes, rivets, plants, signs, hubcaps). Everything rests on the ground or on something under it. Prefer extrude/layers/revolve for organic or detailed shapes and room/roof/tower for buildings. After a build, the tool result shows ASCII FRONT/SIDE/TOP previews with a color key: check it looks like the thing. If it clearly does not, call undo_build with "last" and build it again, fixed.
 Example sports car (red, facing +x): [{"type":"extrude","x":6,"y":-3,"z":2,"axis":"x","depth":6,"pz":2,"palette":{"R":"#c01818","r":"#8a1010","G":"#9ad0ff","L":"#ffe080","T":"#ff4030"},"rows":["....GGGGG.....","...GGGGGGGR...","TRRRRRRRRRRRRL","rRRRRRRRRRRRRR","rrrrrrrrrrrrrr"]},{"type":"cylinder","axis":"y","x":9,"y":-4,"z":0,"radius":1.5,"h":8,"color":"#1a1a1a"},{"type":"cylinder","axis":"y","x":17,"y":-4,"z":0,"radius":1.5,"h":8,"color":"#1a1a1a"}]
 Example snowman: [{"type":"revolve","x":10,"y":0,"z":0,"radii":[3,4,5,5,4,3,3,4,4,3,2,2,3,3,2],"color":"#f4f8ff"},{"type":"extrude","x":7,"y":-1,"z":38,"axis":"y","depth":1,"palette":{"K":"#111111","O":"#ff8020"},"rows":["K.K",".O."]}]
 
@@ -113,7 +117,7 @@ You can build. When a player asks you to build, place, or make something, call t
 
 ${BUILD_DOCS}
 
-Use undo_build to remove the last build or all builds when asked. After building, read the tool result: if it has WARNING lines or the preview does not look like the thing, undo_build "last" and build it again fixed. Otherwise reply with one short sentence about what you made.
+Every build call first comes back as a DRAFT with a rendered picture of it, not placed yet: review the picture honestly and call build again with the improved complete build; after the reviews the plugin places it. Aim for the best build you can make, not the first one that works. Once it is placed, reply with one short sentence about what you made. Use undo_build only for builds that are really in the world: when a player asks, or to fix a placed build.
 When a player complains about a build (wrong, ugly, broken, backwards), FIX it: undo_build "last" and then call build with the corrected version in the same turn. Never just remove a build unless the player asked to remove or delete it. Never reply "rebuilding" or "on it" without calling build in that same answer.
 "Large", "massive", "huge" means big and full: dozens of parts, 60+ studs across, with real detail.
 Never say you built or removed something unless you called the tool for it in this turn and it succeeded. If you did not call the tool, you did not build anything.
@@ -180,6 +184,7 @@ const TOOLS = [
           },
         },
         allow_overlap: { type: 'boolean', description: 'true only when this is meant to join onto or go inside an existing build (a roof on a house, furniture in a room); otherwise an overlapping build is moved to free space' },
+        final: { type: 'boolean', description: 'true = place it now: only when a draft you reviewed is already excellent' },
       },
       required: ['parts'],
     },
@@ -559,6 +564,7 @@ module.exports = class Plugin {
     this.store = store;
     this.history = [];
     this.lastUse = new Map();
+    this.modelDown = new Map(); // model name -> time its quota/overload pause ends
     // Running requests. !ai, !agent and !img requests all run side by side,
     // several per player too; only the total is capped (max-parallel).
     this.jobs = new Set();
@@ -955,25 +961,38 @@ module.exports = class Plugin {
           role: 'assistant',
           content: response.content.filter(b => b.type === 'text' || b.type === 'tool_use'),
         });
+        // While review rounds are left, this round's builds are drafts: rendered
+        // and shown back to the model instead of placed (newer drafts replace older)
+        job.reviews ??= 0;
+        const building = uses.some(u => u.name === 'build');
+        job.drafting = building && job.reviews < (this.config['review-rounds'] ?? 2);
+        if (job.drafting) job.reviews++;
+        if (building) job.pending = []; // this round's build replaces the earlier draft (placed or drafted again)
         const results = await this.runTools(uses, async use => {
-          let result;
+          let result, image;
           try {
             this.log('tool', `${use.name} for ${name}: ${JSON.stringify(use.input ?? {})}`);
             this.stage(name, `planned in ${secs()}: ${describeTool(use.name, use.input ?? {})}`);
             result = await this.runTool(name, use.name, use.input ?? {});
-            done.push(result);
-            if (use.name === 'build' || use.name === 'build_image') job.built++;
+            if (result?.image) ({ text: result, image } = result);
+            else done.push(result);
+            if ((use.name === 'build' && !image) || use.name === 'build_image') job.built++;
             if (use.name === 'undo_build' && job.built) job.built--;
             this.log('tool', `${use.name} ok: ${result}`);
-            this.stage(name, String(result).split('\n')[0]);
+            this.stage(name, image ? `draft ${job.reviews} rendered at ${secs()}, reviewing it...` : String(result).split('\n')[0]);
           } catch (err) {
             result = `Error: ${err.message ?? err}`;
             this.log('tool', `${use.name} failed: ${err.message ?? err}`);
             this.stage(name, `<color="f88">${use.name} failed: ${sanitize(String(err.message ?? err).slice(0, 150))}</> (letting the AI fix it)`, true);
           }
-          return { type: 'tool_result', tool_use_id: use.id, content: result };
+          const content = image ? [{ type: 'text', text: result }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: image } }] : result;
+          return { type: 'tool_result', tool_use_id: use.id, content };
         });
         messages.push({ role: 'user', content: results });
+        if (results.some(r => Array.isArray(r.content))) {
+          this.stage(name, `${loading()}...`);
+          continue;
+        }
         // Asking the model to describe a build that worked costs another
         // 30s+ round trip, so reply straight away unless a tool failed and
         // it needs a chance to fix it.
@@ -993,7 +1012,7 @@ module.exports = class Plugin {
           this.stage(name, `${loading()}...`);
           continue;
         }
-        if (!results.some(r => r.content.startsWith('Error:'))) {
+        if (!results.some(r => String(r.content).startsWith('Error:'))) {
           const said = response.content.filter(b => b.type === 'text').map(b => b.text).join(' ').trim();
           const built = uses.filter(u => u.name === 'build').map(u => u.input?.name).filter(Boolean);
           reply = said || (built.length ? `Done! Built: ${built.join(', ')}.` : results.map(r => r.content).join(' '));
@@ -1001,6 +1020,19 @@ module.exports = class Plugin {
         }
         this.stage(name, `${loading()}...`);
       }
+      // a draft the model stopped reviewing (it answered instead of calling build) is placed as it is
+      job.drafting = false;
+      for (const draft of job.pending ?? []) {
+        try {
+          const r = await this.build(name, { ...draft, final: true });
+          done.push(r);
+          job.built++;
+          this.log('tool', `placed the last draft for ${name}: ${String(r).split('\n')[0]}`);
+        } catch (err) {
+          reply = `${reply || ''} (Could not place it: ${err.message ?? err})`;
+        }
+      }
+      job.pending = [];
       reply = stripSpeaker(reply || '') || (done.length ? 'Done.' : '...');
       this.remember([...messages.slice(past.length), { role: 'assistant', content: reply }]);
     } catch (err) {
@@ -1031,13 +1063,23 @@ module.exports = class Plugin {
       (this.config['progress-seconds'] ?? 15) * 1000
     );
     try {
-      const response = await this.client.messages.create({
-        model: this.config.model || 'claude-opus-5',
-        max_tokens: 8000,
-        system,
-        tools,
-        messages,
-      });
+      const models = [this.config.model || 'claude-opus-5', ...MODEL_FALLBACKS];
+      let response;
+      for (const model of models) {
+        if ((this.modelDown.get(model) ?? 0) > Date.now() && model !== models[models.length - 1]) continue;
+        try {
+          const lastModel = model === models[models.length - 1];
+          response = await this.client.messages.create({ model, max_tokens: 8000, system, tools, messages }, { maxRetries: lastModel ? 1 : 0 });
+          break;
+        } catch (err) {
+          // out of quota or overloaded: skip that slot for a while and try the next one
+          const busy = err instanceof Anthropic.RateLimitError || (err instanceof Anthropic.APIError && err.status >= 500);
+          if (!busy || model === models[models.length - 1]) throw err;
+          const daily = /per day/i.test(err.message);
+          this.modelDown.set(model, Date.now() + (daily ? 60 : 2) * 60_000);
+          this.log('model', `${model} ${err.status}${daily ? ' (daily quota)' : ''}, trying the next model`);
+        }
+      }
       // The FCC provider now and then degenerates into a run of "!!!!...";
       // drop that so it is never shown and counts as an empty answer, which
       // the callers already retry. Empty text blocks would also be rejected
@@ -1280,7 +1322,8 @@ module.exports = class Plugin {
     this.stage(name, `agent done: ${steps} step${steps === 1 ? '' : 's'} in ${secs()}`);
   }
 
-  async build(name, { name: what, parts, bricks: legacy, near, allow_overlap }) {
+  async build(name, input) {
+    let { name: what, parts, bricks: legacy, near, allow_overlap, final } = input;
     if (!this.canBuild(name)) throw new Error(`${name} is not allowed to make me build`);
     // Weak models sometimes still send the old brick list
     if (!Array.isArray(parts)) parts = Array.isArray(legacy) ? legacy.map(b => ({ type: 'box', ...b })) : [];
@@ -1295,6 +1338,23 @@ module.exports = class Plugin {
     }
     const max = this.config['max-bricks'] ?? 2000;
     if (bricks.length > max) throw new Error(`that is ${bricks.length} bricks, max ${max}; make it smaller`);
+
+    // While review rounds are left (command() sets drafting), render it for the model instead of placing it
+    const job = this.current.getStore();
+    if (job?.drafting && !final) {
+      job.pending.push(input);
+      const last = job.reviews >= (this.config['review-rounds'] ?? 2);
+      const warn = (bricks.warnings ?? []).map(w => `\nWARNING: ${w}`).join('');
+      const thing = String(what || job.text || 'the build');
+      return {
+        text: `DRAFT ${job.reviews} of "${thing}" (${bricks.length} bricks): NOT placed yet.${warn}\n` +
+          `The picture: LEFT = seen from in front and a bit to the left (the player's side, low x), RIGHT = from behind (high x). The blue figure is a player for scale (2 studs wide, 15 plates tall), ground squares are 1 stud.\n` +
+          `Review it like a harsh art director comparing it with a real ${thing}: silhouette and proportions, missing signature features, big flat blocky areas that need shape or detail, colors and shading, parts floating or not touching, anything facing the wrong way, size next to the player.\n` +
+          `Then call build again with the COMPLETE improved part list (every part, not only the changes)${last ? '; that build is placed for real' : '; it comes back as another draft'}. Never undo_build to fix a draft: drafts are not in the world. Only if it is truly excellent already, call build with the same parts and final true.\n` +
+          shapes.preview(bricks),
+        image: render(bricks).toString('base64'),
+      };
+    }
 
     const target = near ? this.findPlayer(near) : this.omegga.getPlayer(name);
     if (near && !target) throw new Error(`no online player matches "${near}" (use list_players)`);
@@ -1649,7 +1709,9 @@ module.exports = class Plugin {
    * text taught the model to write "(Built 45 bricks)" without building.
    */
   remember(turn) {
-    this.history.push(turn);
+    // renders are big: remembered turns keep the review text only
+    const noImages = c => (Array.isArray(c) ? c.filter(b => b.type !== 'image').map(b => (b.type === 'tool_result' ? { ...b, content: noImages(b.content) } : b)) : c);
+    this.history.push(turn.map(m => ({ ...m, content: noImages(m.content) })));
     const max = Math.max(1, Math.floor((this.config['memory-messages'] ?? 20) / 2));
     if (this.history.length > max) this.history = this.history.slice(-max);
   }
