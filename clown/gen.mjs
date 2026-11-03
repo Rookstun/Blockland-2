@@ -95,9 +95,14 @@ const SONGS = [
   { eighth: 3, loop: 0, lead: 'G5:1 G5:1 G5:1 C6:6 B5:1 C6:6', bass: 'C3:2 E3:2 G3:2 C3:8' },
   { eighth: 4, loop: 0, lead: 'G4:2 F#4:2 F4:2 E4:3 D#4:3 D4:8', bass: 'C3:4 B2:4 A#2:4 A2:8' },
 ];
+// ~3 s of rising, warbling wail that breaks and falls into a gurgle (owner 2026-11-02: "screams really long and painful")
+const LONG_SCREAM = Array.from({ length: 60 }, (_, i) => {
+  const t = i / 59, base = i < 44 ? 1.7 + 1.5 * (i / 43) : 3.2 - (i - 43) * 0.13;
+  return +(base + (i % 2 ? 1 : -1) * (0.12 + 0.3 * t)).toFixed(3);
+});
 const SFX = {
   shoot: [2.0, 1.6], hit: [1.2, 0.8], kill: [0.6, 0.9, 1.4], hurt: [0.4, 0.3, 0.25, 0.2], pill: [1.0, 1.26, 1.5, 2.0],
-  heart: [1.5, 2.0], big: [0.3, 0.4, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8], boss: [0.35, 0.3, 0.35, 0.3, 0.25], ready: [2.0, 2.5, 3.0], scream: [2.2, 2.9, 2.4, 3.0, 2.5, 3.1, 2.6, 2.0, 1.6],
+  heart: [1.5, 2.0], big: [0.3, 0.4, 0.5, 0.7, 1.0, 1.4, 2.0, 2.8], boss: [0.35, 0.3, 0.35, 0.3, 0.25], ready: [2.0, 2.5, 3.0], scream: LONG_SCREAM,
 };
 const FX = Object.fromEntries(Object.keys(SFX).map((k, i) => [k, i]));
 
