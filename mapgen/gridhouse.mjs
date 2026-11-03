@@ -218,7 +218,28 @@ function fillBeams(cells, alongX) {
   for (const [a0, b0, a1, b1] of cover(pieces)) put({ asset: MB, color: LINTEL }, a0 * R2, b0 * R2, TOP - 6, a1 * R2, b1 * R2, TOP);
 }
 
-const normals = {}, DOOR_TOP = F + DOOR_H;
+const normals = {}, DOOR_TOP = F + DOOR_H, COURSE = 10;
+const solid = (i, j) => isWall(i, j) || at(i, j) === 'G', outside = (i, j) => !solid(i, j) && at(i, j) !== 'R';
+const SIDES = [[-1, 0, 2], [1, 0, 0], [0, -1, 3], [0, 1, 1]]; // outward normal, siding ramp rotation
+
+// window resolver: straight outside walls with a room behind them, kept 2 pixels clear of doors; windows WIN_N pixels
+// wide, one per ~6 pixels of run, with a pixel of wall at each run end. Sill and head sit on siding course lines.
+const WIN_N = 2, WIN_Z0 = Z + 3 * COURSE, WIN_Z1 = Z + 7 * COURSE, GLASS = [170, 210, 230];
+const windows = new Map(); // "i,j" -> { dx, dy, lo, hi } (lo / hi: this pixel ends the window on that side)
+for (const [dx, dy] of SIDES) {
+  const cand = (i, j) => isWall(i, j) && outside(i + dx, j + dy) && at(i - dx, j - dy) === 'R' && isWall(i + dy, j + dx) && isWall(i - dy, j - dx)
+    && ![-2, -1, 0, 1, 2].some(a => [-2, -1, 0, 1, 2].some(b => at(i + a, j + b) === 'G'));
+  for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
+    if (!cand(i, j) || cand(i - Math.abs(dy), j - Math.abs(dx))) continue; // start of a run (runs go +y for x faces, +x for y faces)
+    let n = 0; while (cand(i + n * Math.abs(dy), j + n * Math.abs(dx))) n++;
+    const m = n - 2, k = Math.floor((m + 4) / 6);
+    for (let t = 0; t < k; t++) {
+      const s0 = 1 + Math.floor(m * (t + 0.5) / k - WIN_N / 2);
+      for (let q = 0; q < WIN_N; q++)
+        windows.set(`${i + (s0 + q) * Math.abs(dy)},${j + (s0 + q) * Math.abs(dx)}`, { dx, dy, lo: q === 0, hi: q === WIN_N - 1 });
+    }
+  }
+}
 for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
   const x0 = X + i * C, y0 = Y + j * C, c = at(i, j);
   if (c === 'G') put({ asset: MB, color: TRIM }, x0, y0, Z, x0 + C, y0 + C, F); // threshold
@@ -233,9 +254,29 @@ for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
 // take that room's wallpaper; a wall pixel's faces toward a door are plaster jambs below DOOR_TOP and no face above it
 // (the wall over the door abuts there, so the room skins run through to the corner)
 function wallCell(i, j, door) {
+  const w = windows.get(`${i},${j}`);
+  if (w) {
+    const f = (a, b) => at(a, b) === 'R' ? room(a, b) : null;
+    wallBand(i, j, Z, WIN_Z0, f); wallBand(i, j, WIN_Z1, TOP, f);
+    return windowBand(i, j, w);
+  }
   if (door) return wallBand(i, j, DOOR_TOP, TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : null, true);
   wallBand(i, j, Z, DOOR_TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : at(a, b) === 'G' ? 'jamb' : null);
   wallBand(i, j, DOOR_TOP, TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : null);
+}
+// a window pixel between the sill and head: sill + head across the wall and the siding strip, jambs at the window ends,
+// a 2-thick pane in the middle of the wall
+function windowBand(i, j, { dx, dy, lo, hi }) {
+  const x0 = X + i * C, y0 = Y + j * C, trim = { asset: MB, color: TRIM }, glass = { asset: MB, color: GLASS, material: 'BMC_Glass' };
+  // r = along the wall, t = across it (out = outward side); box(r0, r1, t0, t1, z0, z1) in world terms
+  const [r0, t0] = dx ? [y0, x0] : [x0, y0], r1 = r0 + C, t1 = t0 + C, out = dx || dy;
+  const box = (m, a0, a1, b0, b1, z0, z1) => dx ? put(m, b0, a0, z0, b1, a1, z1) : put(m, a0, b0, z0, a1, b1, z1);
+  const [s0, s1] = out < 0 ? [t0 - SKIN, t1] : [t0, t1 + SKIN];
+  box(trim, r0, r1, s0, s1, WIN_Z0, WIN_Z0 + 2); box(trim, r0, r1, s0, s1, WIN_Z1 - 2, WIN_Z1);
+  if (lo) box(trim, r0, r0 + 2, t0, t1, WIN_Z0 + 2, WIN_Z1 - 2);
+  if (hi) box(trim, r1 - 2, r1, t0, t1, WIN_Z0 + 2, WIN_Z1 - 2);
+  const mid = t0 + C / 2;
+  box(glass, r0 + (lo ? 2 : 0), r1 - (hi ? 2 : 0), mid - 1, mid + 1, WIN_Z0 + 2, WIN_Z1 - 2);
 }
 function wallBand(i, j, z0, z1, face, soffit = false) {
   const x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C;
@@ -265,12 +306,10 @@ function paper(r, axis, u0, u1, [t0, t1], z0, z1) {
 // lap siding (owner's sample, 2026-11-03): every outside face gets 10-high courses of a 2-thick micro ramp rising into
 // the wall (rotation r rises toward -x, -y, +x, +y for r = 0..3), a micro wedge corner capping each outside corner.
 // Over doors only whole courses above DOOR_TOP, with a flat trim under them; x-facing runs step aside at inside corners.
-const COURSE = 10, solid = (i, j) => isWall(i, j) || at(i, j) === 'G', outside = (i, j) => !solid(i, j) && at(i, j) !== 'R';
-const SIDES = [[-1, 0, 2], [1, 0, 0], [0, -1, 3], [0, 1, 1]]; // outward normal, ramp rotation
 for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
   if (!solid(i, j)) continue;
   const door = at(i, j) === 'G', x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C;
-  const zs = []; for (let z = Z; z + COURSE <= TOP; z += COURSE) if (!door || z >= DOOR_TOP) zs.push(z);
+  const zs = []; for (let z = Z; z + COURSE <= TOP; z += COURSE) if ((!door || z >= DOOR_TOP) && !(windows.has(`${i},${j}`) && z >= WIN_Z0 && z < WIN_Z1)) zs.push(z);
   for (const [dx, dy, rot] of SIDES) {
     if (!outside(i + dx, j + dy)) continue;
     let [a0, a1, b0, b1] = dx ? [dx < 0 ? x0 - SKIN : x1, dx < 0 ? x0 : x1 + SKIN, y0, y1] : [x0, x1, dy < 0 ? y0 - SKIN : y1, dy < 0 ? y0 : y1 + SKIN];
