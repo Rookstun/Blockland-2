@@ -15,7 +15,7 @@ import { makeBuilder } from './builder.mjs';
 import { worldBox } from './orient.mjs';
 
 const [plan, ax, ay, az, out, sc = '1'] = process.argv.slice(2);
-const MB = 'PB_DefaultMicroBrick', TILE = 'PB_DefaultTile', WEDGE = 'PB_DefaultMicroWedge';
+const MB = 'PB_DefaultMicroBrick', TILE = 'PB_DefaultTile', WEDGE = 'PB_DefaultMicroWedge', RAMP = 'PB_DefaultMicroRamp', CORNER = 'PB_DefaultMicroWedgeCorner';
 const OWNER = { id: 'a0e50000-0000-4b0b-9a11-0000000067d1', name: 'Grid House', display_name: 'Grid House' };
 const C = 10 * +sc, H = 96, DOOR_H = 64, SKIN = 2, FLOOR = 4, RAIL = 28;
 const PLASTER = [232, 222, 200], SIDING = [150, 110, 80], TRIM = [70, 48, 34], LINTEL = [120, 84, 56], CEIL = [240, 236, 228];
@@ -121,8 +121,8 @@ const room = (i, j) => rooms[roomOf[j]?.[i]] ?? null;
 // collect boxes per material, merge runs along z (so split wall bands rejoin), then x, then y
 const boxes = new Map();
 const put = (m, x0, y0, z0, x1, y1, z1) => { const k = JSON.stringify(m); (boxes.get(k) ?? boxes.set(k, []).get(k)).push([x0, y0, z0, x1, y1, z1]); };
-function merge(list) {
-  for (const ax of [2, 0, 1]) {
+function merge(list, axes = [2, 0, 1]) {
+  for (const ax of axes) {
     const key = b => [0, 1, 2].filter(a => a !== ax).flatMap(a => [b[a], b[a + 3]]).join(), out = [];
     list.sort((a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : a[ax] - b[ax]);
     for (const b of list) {
@@ -262,7 +262,37 @@ function paper(r, axis, u0, u1, [t0, t1], z0, z1) {
   }
 }
 
-for (const [k, list] of boxes) for (const b of merge(list)) B.box(...b, JSON.parse(k), 'piece');
+// lap siding (owner's sample, 2026-11-03): every outside face gets 10-high courses of a 2-thick micro ramp rising into
+// the wall (rotation r rises toward -x, -y, +x, +y for r = 0..3), a micro wedge corner capping each outside corner.
+// Over doors only whole courses above DOOR_TOP, with a flat trim under them; x-facing runs step aside at inside corners.
+const COURSE = 10, solid = (i, j) => isWall(i, j) || at(i, j) === 'G', outside = (i, j) => !solid(i, j) && at(i, j) !== 'R';
+const SIDES = [[-1, 0, 2], [1, 0, 0], [0, -1, 3], [0, 1, 1]]; // outward normal, ramp rotation
+for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
+  if (!solid(i, j)) continue;
+  const door = at(i, j) === 'G', x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C;
+  const zs = []; for (let z = Z; z + COURSE <= TOP; z += COURSE) if (!door || z >= DOOR_TOP) zs.push(z);
+  for (const [dx, dy, rot] of SIDES) {
+    if (!outside(i + dx, j + dy)) continue;
+    let [a0, a1, b0, b1] = dx ? [dx < 0 ? x0 - SKIN : x1, dx < 0 ? x0 : x1 + SKIN, y0, y1] : [x0, x1, dy < 0 ? y0 - SKIN : y1, dy < 0 ? y0 : y1 + SKIN];
+    if (dx) { if (solid(i + dx, j - 1)) b0 += SKIN; if (solid(i + dx, j + 1)) b1 -= SKIN; }
+    for (const z of zs) put({ asset: RAMP, direction: 4, rotation: rot, color: SIDING }, a0, b0, z, a1, b1, z + COURSE);
+    if (door) put({ asset: MB, color: TRIM }, a0, b0, DOOR_TOP, a1, b1, zs[0]);
+  }
+  // outside corners: both side faces and the diagonal are outside
+  for (const [cx, cy, rot] of [[-1, -1, 2], [1, -1, 3], [1, 1, 0], [-1, 1, 1]])
+    if (outside(i + cx, j) && outside(i, j + cy) && outside(i + cx, j + cy)) {
+      const px = cx < 0 ? x0 - SKIN : x1, py = cy < 0 ? y0 - SKIN : y1;
+      for (const z of zs) put({ asset: CORNER, direction: 4, rotation: rot, color: SIDING }, px, py, z, px + SKIN, py + SKIN, z + COURSE);
+    }
+}
+
+for (const [k, list] of boxes) for (const b of merge(list, /Ramp|Corner/.test(k) ? [0, 1] : undefined)) { // siding courses stay separate
+  const m = JSON.parse(k);
+  if (m.asset === RAMP || m.asset === CORNER) { // rotated pieces take local sizes: odd rotations swap x and y
+    const sz = [(b[3] - b[0]) / 2, (b[4] - b[1]) / 2, (b[5] - b[2]) / 2];
+    B.add({ ...m, size: m.rotation & 1 ? [sz[1], sz[0], sz[2]] : sz, position: [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2] }, 'siding');
+  } else B.box(...b, m, 'piece');
+}
 for (const [x, y] of lamps) B.box(x - 2, y - 2, TOP - 2, x + 2, y + 2, TOP, { asset: MB, color: [255, 220, 160], material: 'BMC_Glow', material_intensity: 8 }, 'lamp');
 console.error(`${g.length - 2}x${g[0].length - 2} plan, ${rooms.length} rooms (${rooms.map(r => `${r.cells.length}px ${r.style.floor}/${r.style.wall}/${r.style.ceil}`).join(', ')})`);
 console.error(`${B.bricks.length} bricks, dropped ${B.dropped.length}${B.dropped.slice(0, 4).map(d => ', ' + d).join('')}`);
