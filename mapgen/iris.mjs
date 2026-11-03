@@ -6,6 +6,8 @@
 // held by B_Joint_RigidBearing_Micro on a post at pivot P_i (r 74, 60 deg apart). Blades are voxelised already turned to
 // their place, so every bearing runs the same 0 -> OPEN. Blade shape from a coverage search: closed covers r<60 100%,
 // open leaves ~8% of r<56 covered.
+// v2 (owner, same day): servos instead of rigid bearings ("this servo is like the bearing"), logic = in-game wires only
+// ("wirescript only": nothing server-side, the prefab works on any server).
 // BEARING FRAME (probed 2026-11-03): grid yaw = (bearing rotation 2 ? 180 : 0) - angle, so rot 0 + angle +60 = blades
 // turn -60 deg (x toward -y), the opening direction of the search.
 // Ramp (one hidden chip): Clock 0.05 s -> Var_Increment(v, clamp(target - v, -STEP, STEP)); target = switch ? OPEN : 0;
@@ -27,7 +29,7 @@ const { lib, w, C, gate, wire, num, ownerIdx: O } = await mk(DIST, { owner: OWNE
 if (!lib.World.prototype.registerJoint) throw Error('run node tools/patch_brs4.mjs first (joint links)');
 const hid = { visibility: false, collision: { player: false, weapon: false, interaction: false, tool: true, physics: false } };
 const boxes = []; // main-grid AABBs (self-check: the game rejects overlaps)
-const HALF = { B_Joint_RigidBearing_Micro: [1, 1, 1], B_Switch_Flipped: [5, 5, 3], B_1x1_Microchip: [5, 5, 2] };
+const HALF = { B_Joint_Servo_Micro: [1, 1, 1], B_Switch_Flipped: [5, 5, 3], B_1x1_Microchip: [5, 5, 2] };
 const add = (b, grid) => (grid || boxes.push({ p: b.position, h: b.size ?? HALF[b.asset], a: b.asset }), addRaw(b, grid));
 const addRaw = (b, grid) => w.addBrick({ asset: 'PB_DefaultMicroBrick', owner_index: O, direction: 4, rotation: 0, color: STEEL, material: 'BMC_Metallic', ...b }, grid);
 
@@ -64,9 +66,10 @@ let maxR = 0, nBlade = 0;
 for (let i = 0; i < 6; i++) {
   const f = i * Math.PI / 3, P = [Math.round(RP * Math.cos(f) / 2) * 2, Math.round(RP * Math.sin(f) / 2) * 2], zc = 3 + 2 * i;
   for (let z = 3; z < zc; z += 2) add({ size: [1, 1, 1], position: [P[0], P[1], z], color: BRASS });   // post
-  const brg = add({ asset: 'B_Joint_RigidBearing_Micro', position: [P[0], P[1], zc], direction: 4, rotation: 0, color: BRASS,
-    components: [{ type: C.RigidBearing.NAME, data: { TargetAngle: 0, bAnglesArePercentages: false, bReversed: false, CurrentAngle: 0, InterpMode: 0, SmoothTime: 0.1, TopSpeed: 0 } }] });
-  bearings.push({ c: C.RigidBearing, h: brg });
+  // servo = the owner's (2026-11-03, built on top of the first iris): Power 100, ActiveDamping 30, Damping 1
+  const brg = add({ asset: 'B_Joint_Servo_Micro', position: [P[0], P[1], zc], direction: 4, rotation: 0, color: BRASS,
+    components: [{ type: C.Servo.NAME, data: { bEnabled: true, TargetAngle: 0, Power: 100, ActiveDamping: 30, ForceLimit: 0, bLimitAngle: false, LimitAngle: 0, CurrentAngle: 0, bAnglesArePercentages: false, bReversed: false, Damping: 1 } }] });
+  bearings.push({ c: C.Servo, h: brg });
   const grid = w.addBrickGrid({ owner_index: O, location: { X: P[0], Y: P[1], Z: zc }, rotation: { X: 0, Y: 0, Z: 0, W: 1 }, sleeping: true, data: GRID_DATA });
   w.registerJoint(brg, grid, { X: 0, Y: 0, Z: 0 }, { X: 0, Y: 0, Z: 0, W: 1 });
   // grid-local (x, y) -> blade-local (outward radial frame at its pivot)
