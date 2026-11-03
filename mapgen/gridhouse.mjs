@@ -169,19 +169,21 @@ function fillPattern(cells, name, z0, z1, skip = () => false) {
   }
 }
 // outline resolver: strips t thick along every wall face of the room pixels, on [z0, z1); x-facing strips step aside at corners
-function outline(cells, z0, z1, t, m) {
+// (isW = isWallOrDoor for strips that also run over door openings, like the crown)
+function outline(cells, z0, z1, t, m, isW = isWall) {
   for (const [i, j] of cells) {
-    const x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C, s = isWall(i, j - 1), n = isWall(i, j + 1);
+    const x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C, s = isW(i, j - 1), n = isW(i, j + 1);
     if (s) put(m, x0, y0, z0, x1, y0 + t, z1);
     if (n) put(m, x0, y1 - t, z0, x1, y1, z1);
-    if (isWall(i - 1, j)) put(m, x0, y0 + (s ? t : 0), z0, x0 + t, y1 - (n ? t : 0), z1);
-    if (isWall(i + 1, j)) put(m, x1 - t, y0 + (s ? t : 0), z0, x1, y1 - (n ? t : 0), z1);
+    if (isW(i - 1, j)) put(m, x0, y0 + (s ? t : 0), z0, x0 + t, y1 - (n ? t : 0), z1);
+    if (isW(i + 1, j)) put(m, x1 - t, y0 + (s ? t : 0), z0, x1, y1 - (n ? t : 0), z1);
   }
 }
-// distance (in units) from a point in pixel (i, j) to the nearest wall face of that pixel
-const wallGap = (x, y, i, j) => Math.min(
-  isWall(i - 1, j) ? x - (X + i * C) : 1e9, isWall(i + 1, j) ? X + (i + 1) * C - x : 1e9,
-  isWall(i, j - 1) ? y - (Y + j * C) : 1e9, isWall(i, j + 1) ? Y + (j + 1) * C - y : 1e9);
+const isWallOrDoor = (i, j) => isWall(i, j) || at(i, j) === 'G';
+// distance (in units) from a point in pixel (i, j) to the nearest wall face (or wall over a door) of that pixel
+const wallGap = (x, y, i, j, w = isWallOrDoor) => Math.min(
+  w(i - 1, j) ? x - (X + i * C) : 1e9, w(i + 1, j) ? X + (i + 1) * C - x : 1e9,
+  w(i, j - 1) ? y - (Y + j * C) : 1e9, w(i, j + 1) ? Y + (j + 1) * C - y : 1e9);
 
 for (const r of rooms) {
   const { floor, wall, ceil } = r.style;
@@ -194,7 +196,7 @@ for (const r of rooms) {
     }
   } else fillPattern(r.cells, floor, Z, F);
   outline(r.cells, F, F + 6, 2, { asset: MB, color: TRIM }); // baseboard
-  outline(r.cells, TOP - 4, TOP, 2, { asset: MB, color: TRIM }); // crown
+  outline(r.cells, TOP - 4, TOP, 2, { asset: MB, color: TRIM }, isWallOrDoor); // crown, over doors too
   if (wall === 'wainscot') outline(r.cells, F + RAIL - 2, F + RAIL + 2, 2, { asset: MB, color: TRIM }); // chair rail
   fillPattern(r.cells, ceil === 'checker' ? 'ceilchecker' : 'plain', TOP, TOP + 4);
   // beams hang under the ceiling across the short axis, clear of the crown; the lamp sits between them
@@ -216,30 +218,41 @@ function fillBeams(cells, alongX) {
   for (const [a0, b0, a1, b1] of cover(pieces)) put({ asset: MB, color: LINTEL }, a0 * R2, b0 * R2, TOP - 6, a1 * R2, b1 * R2, TOP);
 }
 
-const normals = {};
+const normals = {}, DOOR_TOP = F + DOOR_H;
 for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
-  const x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C, c = at(i, j);
-  if (c === 'G') {
-    put({ asset: MB, color: TRIM }, x0, y0, Z, x1, y1, F); // threshold
-    put({ asset: MB, color: LINTEL }, x0, y0, F + DOOR_H, x1, y1, TOP);
-  }
-  if (c === 'G' || isWall(i, j)) put({ asset: MB, color: CEIL }, x0, y0, TOP, x1, y1, TOP + 4);
+  const x0 = X + i * C, y0 = Y + j * C, c = at(i, j);
+  if (c === 'G') put({ asset: MB, color: TRIM }, x0, y0, Z, x0 + C, y0 + C, F); // threshold
+  if (c === 'G' || isWall(i, j)) put({ asset: MB, color: CEIL }, x0, y0, TOP, x0 + C, y0 + C, TOP + 4);
+  if (c === 'G') wallCell(i, j, true);
   if (!isWall(i, j)) continue;
-  // normals: which faces of this wall pixel look into the house; each takes its room's wallpaper
-  const fw = inner(i - 1, j), fe = inner(i + 1, j), fs_ = inner(i, j - 1), fn = inner(i, j + 1);
-  const nk = fw + fe + fs_ + fn ? `${fe - fw},${fn - fs_}` : 'outside';
+  const nk = [[-1, 0], [1, 0], [0, -1], [0, 1]].some(([di, dj]) => inner(i + di, j + dj)) ? `${inner(i + 1, j) - inner(i - 1, j)},${inner(i, j + 1) - inner(i, j - 1)}` : 'outside';
   normals[nk] = (normals[nk] ?? 0) + 1;
-  const cx0 = x0 + (fw ? SKIN : 0), cx1 = x1 - (fe ? SKIN : 0), cy0 = y0 + (fs_ ? SKIN : 0), cy1 = y1 - (fn ? SKIN : 0);
-  put({ asset: MB, color: SIDING }, cx0, cy0, Z, cx1, cy1, TOP);
-  if (fs_) paper(room(i, j - 1), 0, x0, x1, [y0, cy0]);
-  if (fn) paper(room(i, j + 1), 0, x0, x1, [cy1, y1]);
-  if (fw) paper(room(i - 1, j), 1, cy0, cy1, [x0, cx0]);
-  if (fe) paper(room(i + 1, j), 1, cy0, cy1, [cx1, x1]);
+  wallCell(i, j, false);
 }
-// wallpaper resolver: a skin running along u (axis 0 = x, 1 = y) from u0 to u1, t = its [lo, hi] across the face
-function paper(r, axis, u0, u1, [t0, t1]) {
+// one wall pixel, or the wall over a door pixel (from DOOR_TOP, plaster soffit underneath). normals: faces toward a room
+// take that room's wallpaper; a wall pixel's faces toward a door are jambs: plaster up to DOOR_TOP, wall above it
+function wallCell(i, j, door) {
+  const x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C, z0 = door ? DOOR_TOP : Z;
+  const face = (a, b) => at(a, b) === 'R' ? room(a, b) : !door && at(a, b) === 'G' ? 'jamb' : null;
+  const fw = face(i - 1, j), fe = face(i + 1, j), fs_ = face(i, j - 1), fn = face(i, j + 1);
+  const cx0 = x0 + (fw ? SKIN : 0), cx1 = x1 - (fe ? SKIN : 0), cy0 = y0 + (fs_ ? SKIN : 0), cy1 = y1 - (fn ? SKIN : 0);
+  put({ asset: MB, color: SIDING }, cx0, cy0, door ? z0 + SKIN : z0, cx1, cy1, TOP);
+  if (door) put({ asset: MB, color: PLASTER }, cx0, cy0, z0, cx1, cy1, z0 + SKIN);
+  const skin = (f, axis, u0, u1, t) => {
+    if (f !== 'jamb') return paper(f, axis, u0, u1, t, z0, TOP);
+    paper(null, axis, u0, u1, t, Z, DOOR_TOP);
+    const m = { asset: MB, color: SIDING };
+    if (axis === 0) put(m, u0, t[0], DOOR_TOP, u1, t[1], TOP); else put(m, t[0], u0, DOOR_TOP, t[1], u1, TOP);
+  };
+  if (fs_) skin(fs_, 0, x0, x1, [y0, cy0]);
+  if (fn) skin(fn, 0, x0, x1, [cy1, y1]);
+  if (fw) skin(fw, 1, cy0, cy1, [x0, cx0]);
+  if (fe) skin(fe, 1, cy0, cy1, [cx1, x1]);
+}
+// wallpaper resolver: a skin running along u (axis 0 = x, 1 = y) from u0 to u1 and z0 to z1, t = its [lo, hi] across the face
+function paper(r, axis, u0, u1, [t0, t1], z0, z1) {
   const fn = PAPERS[r?.style.wall ?? 'plain'], pieces = new Map();
-  for (let u = u0; u < u1; u += R2) for (let z = Z; z < TOP; z += R2) {
+  for (let u = u0; u < u1; u += R2) for (let z = z0; z < z1; z += R2) {
     const [key, color] = fn(u + 1, z + 1 - F), k = JSON.stringify([key, color]);
     (pieces.get(k) ?? pieces.set(k, new Set()).get(k)).add(`${u / R2},${z / R2}`);
   }
