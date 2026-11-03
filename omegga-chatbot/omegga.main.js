@@ -865,7 +865,7 @@ module.exports = class Plugin {
     const botName = sanitize(this.config['bot-name'] || 'AI');
     const body = markup ? text : sanitize(String(text).slice(0, 180));
     const t = this.current.getStore()?.ticket;
-    const msg = `<color="999"><b>[${botName}]${t ? `[#${t}]` : ''}</> ${body}</>`;
+    const msg = `<size="${this.config['thinking-size'] ?? 11}"><color="999"><b>[${botName}]${t ? `[#${t}]` : ''}</> ${body}</></>`;
     if (mode === 'asker') this.whisper(name, msg);
     else this.broadcast(msg);
   }
@@ -940,7 +940,6 @@ module.exports = class Plugin {
           if (reply && !nudged && round < MAX_TOOL_ROUNDS && PROMISE.test(reply) && !done.some(r => /^Built /.test(String(r)))) {
             nudged = true;
             this.log('retry', `promise without a build for ${name}, nudging`);
-            this.stage(name, `${loading()}...`);
             messages.push({ role: 'assistant', content: reply });
             messages.push({ role: 'user', content: 'You said you would build it but called no tool, so nothing was built. Call the build tool now with the full corrected build.' });
             continue;
@@ -972,7 +971,6 @@ module.exports = class Plugin {
           let result, image;
           try {
             this.log('tool', `${use.name} for ${name}: ${JSON.stringify(use.input ?? {})}`);
-            this.stage(name, `planned in ${secs()}: ${describeTool(use.name, use.input ?? {})}`);
             result = await this.runTool(name, use.name, use.input ?? {});
             if (result?.image) ({ text: result, image } = result);
             else done.push(result);
@@ -990,7 +988,6 @@ module.exports = class Plugin {
         });
         messages.push({ role: 'user', content: results });
         if (results.some(r => Array.isArray(r.content))) {
-          this.stage(name, `${loading()}...`);
           continue;
         }
         // Asking the model to describe a build that worked costs another
@@ -1003,13 +1000,11 @@ module.exports = class Plugin {
         const warned = fixes < 2 && results.some(r => /WARNING/.test(r.content));
         const undoOnly = uses.every(u => u.name === 'undo_build') && !REMOVE.test(text);
         if (browsed) {
-          this.stage(name, `${loading()}...`);
           continue;
         }
         if (warned || undoOnly) {
           fixes++;
           if (undoOnly) messages[messages.length - 1].content.push({ type: 'text', text: 'Removed. Now call build with the corrected version.' });
-          this.stage(name, `${loading()}...`);
           continue;
         }
         if (!results.some(r => String(r.content).startsWith('Error:'))) {
@@ -1018,7 +1013,6 @@ module.exports = class Plugin {
           reply = said || (built.length ? `Done! Built: ${built.join(', ')}.` : results.map(r => r.content).join(' '));
           break;
         }
-        this.stage(name, `${loading()}...`);
       }
       // a draft the model stopped reviewing (it answered instead of calling build) is placed as it is
       job.drafting = false;
