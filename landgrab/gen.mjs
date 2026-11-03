@@ -8,10 +8,10 @@
 //   outputs: strip0..strip7, msg_, hud_ (scores + time), title_, P0/V0 loop-closed blip, P1/V1 knock-back
 export const W = 48, H = 32, STRIP = 4;
 const TW = 24, TH = 16, N = TW * TH;
-export const PAL = ['ececf4', 'd83030', '3060d8', '30b050', 'e8c020', 'f2a0a0', 'a0b8f2', 'a0dcae', 'f6e8a0', '101010'];
+export const PAL = ['ececf4', 'd83030', '3060d8', '30b050', 'e8c020', 'f2a0a0', 'a0b8f2', 'a0dcae', 'f6e8a0', '101010', 'ee6a6a', '6a90ee', '68cc84', 'f2d65a'];
 // tile kinds: 0 floor, 1-4 territory p0..p3, 5-8 trail p0..p3, 9-12 head p0..p3
-const COL = [1, 2, 3, 4], TRAIL = [5, 6, 7, 8];
-const LOOK = [[0, 0, 0, 0], ...COL.map(c => [c, c, c, c]), ...TRAIL.map(c => [c, c, c, c]), ...COL.map(c => [9, c, c, 9])];
+const HEAD = [1, 2, 3, 4], TERR = [10, 11, 12, 13], TRAIL = [5, 6, 7, 8]; // territory is a lighter shade than the head
+const LOOK = [[0, 0, 0, 0], ...TERR.map(c => [c, c, c, c]), ...TRAIL.map(c => [c, c, c, c]), ...HEAD.map(c => [9, c, c, 9])];
 const SX = [2, 21, 2, 21], SY = [2, 2, 13, 13], SD = [0, 2, 0, 2]; // start cell centre, direction 0 right 1 down 2 left 3 up
 const ROUND = 2400;
 
@@ -341,13 +341,13 @@ ${debug ? `  let s0 = seat0 || dbk.Contains("S0")
     sit[1] = s1
     sit[2] = s2
     sit[3] = s3
-${debug ? [0, 1, 2, 3].map(p => `    key[${p * 4}] = l${p} || dbk.Contains("L${p}")
-    key[${p * 4 + 1}] = r${p} || dbk.Contains("R${p}")
-    key[${p * 4 + 2}] = u${p} || dbk.Contains("U${p}")
-    key[${p * 4 + 3}] = d${p} || dbk.Contains("D${p}")`).join('\n') : [0, 1, 2, 3].map(p => `    key[${p * 4}] = l${p}
-    key[${p * 4 + 1}] = r${p}
-    key[${p * 4 + 2}] = u${p}
-    key[${p * 4 + 3}] = d${p}`).join('\n')}
+${/* inputs are latched until the next step, so a tap between steps still turns you */''}${debug ? [0, 1, 2, 3].map(p => `    key[${p * 4}] = key[${p * 4}] || l${p} || dbk.Contains("L${p}")
+    key[${p * 4 + 1}] = key[${p * 4 + 1}] || r${p} || dbk.Contains("R${p}")
+    key[${p * 4 + 2}] = key[${p * 4 + 2}] || u${p} || dbk.Contains("U${p}")
+    key[${p * 4 + 3}] = key[${p * 4 + 3}] || d${p} || dbk.Contains("D${p}")`).join('\n') : [0, 1, 2, 3].map(p => `    key[${p * 4}] = key[${p * 4}] || l${p}
+    key[${p * 4 + 1}] = key[${p * 4 + 1}] || r${p}
+    key[${p * 4 + 2}] = key[${p * 4 + 2}] || u${p}
+    key[${p * 4 + 3}] = key[${p * 4 + 3}] || d${p}`).join('\n')}
 ${debug ? `    if t % 20 == 0 { PrintToConsole("lgdbg|" .. t .. "|" .. state .. "|timer " .. timer .. "|sc " .. sc[0] .. "," .. sc[1] .. "," .. sc[2] .. "," .. sc[3] .. "|p0 " .. pxp[0] .. "," .. pyp[0] .. " tl " .. tl[0] .. "|fill " .. fillOn) }
     if dumpReq && t % 2 == 1 {
       dumpReq = false
@@ -365,6 +365,7 @@ ${debug ? `    if t % 20 == 0 { PrintToConsole("lgdbg|" .. t .. "|" .. state .. 
         for p in 0..4 {
           if act[p] == 1 { stepPlayer(p) }
         }
+        for k in 0..16 { key[k] = false }
       }
       if fillOn { fillStep() }
       timer -= 1
