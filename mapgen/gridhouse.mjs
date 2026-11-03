@@ -55,7 +55,7 @@ const PATTERNS = {
 const PAPERS = {
   plain: () => ['plain', PLASTER],
   stripes: u => { const c = Math.floor(u / 6) & 1; return [`s${c}`, c ? [190, 160, 120] : [214, 196, 160]]; },
-  harlequin: (u, z) => { const c = (Math.floor(u / 10) + Math.floor(z / 12)) & 1; return [`q${c}`, c ? [170, 40, 60] : [205, 175, 95]]; },
+  harlequin: (u, z) => { const c = (Math.floor(u / 10) + Math.floor(z / 10)) & 1; return [`q${c}`, c ? [170, 40, 60] : [205, 175, 95]]; },
   wainscot: (u, z) => z < RAIL ? ['panel', [110, 70, 45]] : ['paper', [200, 214, 190]],
 };
 
@@ -118,12 +118,12 @@ for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
 }
 const room = (i, j) => rooms[roomOf[j]?.[i]] ?? null;
 
-// collect boxes per material, merge runs along x then along y
+// collect boxes per material, merge runs along z (so split wall bands rejoin), then x, then y
 const boxes = new Map();
 const put = (m, x0, y0, z0, x1, y1, z1) => { const k = JSON.stringify(m); (boxes.get(k) ?? boxes.set(k, []).get(k)).push([x0, y0, z0, x1, y1, z1]); };
 function merge(list) {
-  for (const ax of [0, 1]) {
-    const o = 1 - ax, key = b => [b[o], b[o + 3], b[2], b[5]].join(), out = [];
+  for (const ax of [2, 0, 1]) {
+    const key = b => [0, 1, 2].filter(a => a !== ax).flatMap(a => [b[a], b[a + 3]]).join(), out = [];
     list.sort((a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : a[ax] - b[ax]);
     for (const b of list) {
       const p = out.at(-1);
