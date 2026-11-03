@@ -100,7 +100,7 @@ A sphere is about 5 plates tall per stud of radius, so stack spheres by that: sn
 
 Pictures: build_image puts a real image into the world, one brick per pixel, from a direct link to an image file (png, jpg, gif, webp) that a player gave.
 It stands upright like a painting with its bottom edge centered on x,y (facing says which way the picture faces; "-x" faces a player at x=0 when it is at x>0), or lies on the ground with facing "flat".
-width is in pixels (1 stud each, times pixel_size). You cannot search the web or invent image links: if a player wants a picture of something but gave no link, ask them to paste one (right-click the image, Copy image address).`;
+width is in pixels (1 stud each, times pixel_size). visit_site reads a web page: a link a player gave, or a web search at https://www.bing.com/search?q=WORDS (then visit the best result). Its result lists the image links on the page, so to build a picture of something, search, visit a page about it and pass one of its image links to build_image. Never invent links.`;
 
 const SYSTEM = `You are a friendly assistant living in the chat of a Brickadia server (a multiplayer LEGO-like brick building game).
 Each user message looks like "[renderman] hello": the name in brackets is the player talking. Several players share this conversation.
@@ -214,6 +214,15 @@ const TOOLS = [
       required: ['url'],
     },
   },
+  {
+    name: 'visit_site',
+    description: 'Read a web page: returns its title, text, links and image links. For a web search visit https://www.bing.com/search?q=WORDS.',
+    input_schema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'http(s) link' } },
+      required: ['url'],
+    },
+  },
 ];
 
 const agentSystem = maxSteps => `You are an agent on a Brickadia server (a multiplayer LEGO-like brick building game). A player gave you a task. Work on it step by step with your tools until it is done, then call finish with a one or two sentence summary.
@@ -251,6 +260,7 @@ const AGENT_TOOLS = [
       },
     },
   },
+  TOOLS[3],
   {
     name: 'list_players',
     description: 'List online players with their positions relative to the player who gave the task (studs, and plates for height).',
@@ -306,6 +316,7 @@ function toChatLines(text) {
 function describeTool(tool, input) {
   if (tool === 'undo_build') return input.which === 'all' ? 'removing all AI builds...' : 'removing the last AI build...';
   if (tool === 'build_image') return `downloading and converting picture "${input.name || 'image'}"...`;
+  if (tool === 'visit_site') return `visiting ${String(input.url ?? '').slice(0, 120)}...`;
   if (tool !== 'build') return `running ${tool}...`;
   const parts = Array.isArray(input.parts) ? input.parts : Array.isArray(input.bricks) ? input.bricks : [];
   const counts = {};
@@ -406,6 +417,36 @@ const run = (cmd, args, timeout = 60_000) =>
       reject(new Error(`${path.basename(cmd)} failed: ${why}`));
     })
   );
+
+const PAGE_MAX_BYTES = 3 * 1024 * 1024;
+const PAGE_TEXT = 6000; // characters of page text handed to the model
+
+function decodeEntities(s) {
+  const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  return s.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) =>
+    e[0] === '#' ? String.fromCodePoint(e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : +e.slice(1)) : named[e.toLowerCase()] ?? m);
+}
+
+/** Drop scripts, styles and menus from HTML. */
+function stripMenus(html) {
+  return html
+    .replace(/<(script|style|noscript|svg|head|nav|header|footer|aside)\b[\s\S]*?<\/\1>/gi, ' ')
+    // lists that are nearly all links are menus (language pickers, sidebars)
+    .replace(/<ul\b[\s\S]*?<\/ul>/gi, ul => {
+      const all = ul.replace(/<[^>]+>/g, '').trim().length;
+      const linked = [...ul.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].reduce((n, m) => n + m[1].replace(/<[^>]+>/g, '').trim().length, 0);
+      return all && linked / all > 0.8 ? ' ' : ul;
+    });
+}
+
+/** HTML to readable text: tags out, block breaks kept. */
+function htmlText(html) {
+  return decodeEntities(
+    html
+      .replace(/<(br|\/p|\/div|\/li|\/h\d|\/tr)\b[^>]*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+  ).replace(/[ \t\r\f\v]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+}
 
 /** Loopback, LAN and link-local addresses, so image links can't reach the server's network. */
 function isPrivateAddress(ip) {
@@ -938,9 +979,14 @@ module.exports = class Plugin {
         // it needs a chance to fix it.
         // ...but let it go on when the build came back with warnings (it is
         // told to fix those), or after an undo nobody asked for (it is fixing
-        // a build and has to build the new one)
+        // a build and has to build the new one), or after visiting a page (it still has to read it and answer or build)
+        const browsed = uses.some(u => u.name === 'visit_site');
         const warned = fixes < 2 && results.some(r => /WARNING/.test(r.content));
         const undoOnly = uses.every(u => u.name === 'undo_build') && !REMOVE.test(text);
+        if (browsed) {
+          this.stage(name, `${loading()}...`);
+          continue;
+        }
         if (warned || undoOnly) {
           fixes++;
           if (undoOnly) messages[messages.length - 1].content.push({ type: 'text', text: 'Removed. Now call build with the corrected version.' });
@@ -1042,6 +1088,7 @@ module.exports = class Plugin {
     if (tool === 'build') return this.build(name, input);
     if (tool === 'undo_build') return this.undo(name, input.which);
     if (tool === 'build_image') return this.buildImage(name, input);
+    if (tool === 'visit_site') return this.visitSite(input.url);
     if (tool === 'list_players') return this.listPlayers(name);
     if (tool === 'list_builds') return this.listBuilds(name);
     if (tool === 'say') {
@@ -1403,8 +1450,8 @@ module.exports = class Plugin {
     }
   }
 
-  /** Download an image link to a file, refusing private addresses, web pages and huge files. */
-  async fetchImage(link, file) {
+  /** fetch() a public http(s) link, following redirects by hand so every hop is checked against private addresses. */
+  async safeFetch(link, accept) {
     let url;
     try {
       url = new URL(String(link ?? '').trim().replace(/^<|>$/g, ''));
@@ -1412,7 +1459,7 @@ module.exports = class Plugin {
       throw new Error('that is not a valid link');
     }
     for (let hops = 0; ; hops++) {
-      if (!/^https?:$/.test(url.protocol)) throw new Error('only http and https image links work');
+      if (!/^https?:$/.test(url.protocol)) throw new Error('only http and https links work');
       const host = url.hostname.replace(/^\[|\]$/g, '');
       const addrs = net.isIP(host) ? [{ address: host }] : await dns.lookup(host, { all: true }).catch(() => []);
       if (!addrs.length) throw new Error(`can't find the site ${host}`);
@@ -1420,28 +1467,75 @@ module.exports = class Plugin {
       const res = await fetch(url, {
         redirect: 'manual',
         signal: AbortSignal.timeout(30_000),
-        headers: { 'user-agent': 'Mozilla/5.0 (omegga-chatbot image fetch)', accept: 'image/*,*/*;q=0.5' },
+        headers: { 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) omegga-chatbot', accept },
       });
       if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
         if (hops >= 5) throw new Error('that link redirects too many times');
         url = new URL(res.headers.get('location'), url);
         continue;
       }
-      if (!res.ok) throw new Error(`the image link answered HTTP ${res.status}`);
-      const type = res.headers.get('content-type') ?? '';
-      if (/^text\/html/i.test(type))
-        throw new Error('that link is a web page, not an image; use a direct image link (right-click the image, Copy image address)');
-      if (Number(res.headers.get('content-length')) > IMAGE_MAX_BYTES) throw new Error('that image is too big (20 MB max)');
-      const chunks = [];
-      let size = 0;
-      for await (const chunk of res.body) {
-        size += chunk.length;
-        if (size > IMAGE_MAX_BYTES) throw new Error('that image is too big (20 MB max)');
-        chunks.push(chunk);
-      }
-      fs.writeFileSync(file, Buffer.concat(chunks));
-      return url.href;
+      if (!res.ok) throw new Error(`the link answered HTTP ${res.status}`);
+      return { res, url };
     }
+  }
+
+  /** Read a capped body; throws past max bytes. */
+  async readBody(res, max, tooBig) {
+    if (Number(res.headers.get('content-length')) > max) throw new Error(tooBig);
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of res.body) {
+      size += chunk.length;
+      if (size > max) throw new Error(tooBig);
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  }
+
+  /** Download an image link to a file, refusing private addresses, web pages and huge files. */
+  async fetchImage(link, file) {
+    const { res, url } = await this.safeFetch(link, 'image/*,*/*;q=0.5');
+    const type = res.headers.get('content-type') ?? '';
+    if (/^text\/html/i.test(type))
+      throw new Error('that link is a web page, not an image; use a direct image link (right-click the image, Copy image address)');
+    fs.writeFileSync(file, await this.readBody(res, IMAGE_MAX_BYTES, 'that image is too big (20 MB max)'));
+    return url.href;
+  }
+
+  /** A web page as plain text plus its links and image links, for the visit_site tool. */
+  async visitSite(link) {
+    const { res, url } = await this.safeFetch(link, 'text/html,text/plain,application/json;q=0.9,*/*;q=0.1');
+    const type = res.headers.get('content-type') ?? '';
+    if (/^(image|video|audio)\//i.test(type)) return `${url.href} is a ${type} file, not a page.${/^image/i.test(type) ? ' Pass it to build_image to build it.' : ''}`;
+    const body = (await this.readBody(res, PAGE_MAX_BYTES, 'that page is too big (3 MB max)')).toString('utf8');
+    if (!/html/i.test(type)) return `${url.href} (${type}):\n${body.slice(0, PAGE_TEXT)}`;
+    const abs = href => {
+      try {
+        const u = new URL(decodeEntities(href), url);
+        // Bing result links are redirects (u = "a1" + base64url of the target): hand the model the real target
+        const target = (u.hostname.endsWith('bing.com') && u.pathname === '/ck/a' && u.searchParams.get('u')) || '';
+        return target.startsWith('a1') ? Buffer.from(target.slice(2), 'base64url').toString() : u.href;
+      } catch {
+        return null;
+      }
+    };
+    const title = decodeEntities(body.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '').trim();
+    const main = stripMenus(body.match(/<(main|article)\b[\s\S]*<\/\1>/i)?.[0] ?? body);
+    const links = [], images = new Set();
+    for (const m of main.matchAll(/<a\b[^>]*?\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+      const href = abs(m[1]), text = htmlText(m[2]).slice(0, 80);
+      if (href && /^https?:/.test(href) && text && links.length < 40) links.push(`${text} -> ${href}`);
+    }
+    for (const m of body.matchAll(/<(?:img\b[^>]*?\bsrc|meta\b[^>]*?property\s*=\s*["']og:image["'][^>]*?\bcontent)\s*=\s*["']([^"']+)["']/gi)) {
+      const src = abs(m[1]);
+      if (src && /^https?:/.test(src) && images.size < 20) images.add(src);
+    }
+    return [
+      `Page ${url.href}${title ? ` "${title}"` : ''}:`,
+      htmlText(main).slice(0, PAGE_TEXT),
+      links.length ? `Links:\n${links.join('\n')}` : '',
+      images.size ? `Image links:\n${[...images].join('\n')}` : '',
+    ].filter(Boolean).join('\n\n');
   }
 
   /** Picture from an image link, converted with heightmap2brz and placed like a build. */
