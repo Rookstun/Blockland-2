@@ -17,7 +17,7 @@ import { worldBox } from './orient.mjs';
 const [plan, ax, ay, az, out, sc = '1'] = process.argv.slice(2);
 const MB = 'PB_DefaultMicroBrick', TILE = 'PB_DefaultTile', WEDGE = 'PB_DefaultMicroWedge', RAMP = 'PB_DefaultMicroRamp', CORNER = 'PB_DefaultMicroWedgeCorner';
 const OWNER = { id: 'a0e50000-0000-4b0b-9a11-0000000067d1', name: 'Grid House', display_name: 'Grid House' };
-const C = 10 * +sc, H = 96, DOOR_H = 64, SKIN = 2, FLOOR = 4, RAIL = 28;
+const C = 10 * +sc, H = 96, DOOR_H = 64, SKIN = 2, FLOOR = 4, RAIL = 26; // dado rail / wainscot top above the floor = window sill height
 const PLASTER = [232, 222, 200], SIDING = [150, 110, 80], TRIM = [70, 48, 34], LINTEL = [120, 84, 56], CEIL = [240, 236, 228];
 
 // one entry per room, cycled; floor / wall / ceil name the pattern functions below
@@ -197,7 +197,7 @@ for (const r of rooms) {
   } else fillPattern(r.cells, floor, Z, F);
   outline(r.cells, F, F + 6, 2, { asset: MB, color: TRIM }); // baseboard
   outline(r.cells, TOP - 4, TOP, 2, { asset: MB, color: TRIM }, isWallOrDoor); // crown, over doors too
-  if (wall === 'wainscot') outline(r.cells, F + RAIL - 2, F + RAIL + 2, 2, { asset: MB, color: TRIM }); // chair rail
+  outline(r.cells, F + RAIL - 2, F + RAIL + 2, 2, { asset: MB, color: TRIM }); // dado rail at sill height, over the apron seam
   fillPattern(r.cells, ceil === 'checker' ? 'ceilchecker' : 'plain', TOP, TOP + 4);
   // beams hang under the ceiling across the short axis, clear of the crown; the lamp sits between them
   if (ceil === 'beams') {
@@ -240,6 +240,12 @@ for (const [dx, dy] of SIDES) {
     }
   }
 }
+// apron: every wall pixel on the same room face line as a window splits at WIN_Z0, so the wall under the windows is one strip
+const aproned = new Set();
+for (const [k, { dx, dy }] of windows) {
+  const [wi, wj] = k.split(',').map(Number), ai = Math.abs(dy), aj = Math.abs(dx);
+  for (const sgn of [1, -1]) for (let n = 0, i = wi, j = wj; isWall(i, j) && at(i - dx, j - dy) === 'R'; n++, i += sgn * ai, j += sgn * aj) aproned.add(`${i},${j}`);
+}
 for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
   const x0 = X + i * C, y0 = Y + j * C, c = at(i, j);
   if (c === 'G') put({ asset: MB, color: TRIM }, x0, y0, Z, x0 + C, y0 + C, F); // threshold
@@ -254,15 +260,12 @@ for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
 // take that room's wallpaper; a wall pixel's faces toward a door are plaster jambs below DOOR_TOP and no face above it
 // (the wall over the door abuts there, so the room skins run through to the corner)
 function wallCell(i, j, door) {
-  const w = windows.get(`${i},${j}`);
-  if (w) {
-    const f = (a, b) => at(a, b) === 'R' ? room(a, b) : null;
-    wallBand(i, j, Z, WIN_Z0, f); wallBand(i, j, WIN_Z1, TOP, f);
-    return windowBand(i, j, w);
-  }
-  if (door) return wallBand(i, j, DOOR_TOP, TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : null, true);
-  wallBand(i, j, Z, DOOR_TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : at(a, b) === 'G' ? 'jamb' : null);
-  wallBand(i, j, DOOR_TOP, TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : null);
+  const k = `${i},${j}`, w = windows.get(k), f = (a, b) => at(a, b) === 'R' ? room(a, b) : null;
+  if (door) return wallBand(i, j, DOOR_TOP, TOP, f, true);
+  if (w) { wallBand(i, j, Z, WIN_Z0, f, false, 'apron'); wallBand(i, j, WIN_Z1, TOP, f); return windowBand(i, j, w); }
+  const cuts = [Z, ...(aproned.has(k) ? [WIN_Z0] : []), DOOR_TOP, TOP];
+  for (let c = 0; c + 1 < cuts.length; c++)
+    wallBand(i, j, cuts[c], cuts[c + 1], cuts[c + 1] <= DOOR_TOP ? (a, b) => f(a, b) ?? (at(a, b) === 'G' ? 'jamb' : null) : f, false, cuts[c + 1] <= WIN_Z0 ? 'apron' : undefined);
 }
 // a window pixel between the sill and head: sill + head across the wall and the siding strip, jambs at the window ends,
 // a 2-thick pane in the middle of the wall
@@ -278,27 +281,29 @@ function windowBand(i, j, { dx, dy, lo, hi }) {
   const mid = t0 + C / 2;
   box(glass, r0 + (lo ? 2 : 0), r1 - (hi ? 2 : 0), mid - 1, mid + 1, WIN_Z0 + 2, WIN_Z1 - 2);
 }
-function wallBand(i, j, z0, z1, face, soffit = false) {
+// band: a merge tag (stripped before placing) so a wall's apron under its windows stays one strip instead of rejoining
+// each pixel's full-height skin
+function wallBand(i, j, z0, z1, face, soffit = false, band) {
   const x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C;
   const fw = face(i - 1, j), fe = face(i + 1, j), fs_ = face(i, j - 1), fn = face(i, j + 1);
   const cx0 = x0 + (fw ? SKIN : 0), cx1 = x1 - (fe ? SKIN : 0), cy0 = y0 + (fs_ ? SKIN : 0), cy1 = y1 - (fn ? SKIN : 0);
-  put({ asset: MB, color: SIDING }, cx0, cy0, soffit ? z0 + SKIN : z0, cx1, cy1, z1);
+  put({ asset: MB, color: SIDING, band }, cx0, cy0, soffit ? z0 + SKIN : z0, cx1, cy1, z1);
   if (soffit) put({ asset: MB, color: PLASTER }, cx0, cy0, z0, cx1, cy1, z0 + SKIN);
-  const skin = (f, axis, u0, u1, t) => paper(f === 'jamb' ? null : f, axis, u0, u1, t, z0, z1);
+  const skin = (f, axis, u0, u1, t) => paper(f === 'jamb' ? null : f, axis, u0, u1, t, z0, z1, band);
   if (fs_) skin(fs_, 0, x0, x1, [y0, cy0]);
   if (fn) skin(fn, 0, x0, x1, [cy1, y1]);
   if (fw) skin(fw, 1, cy0, cy1, [x0, cx0]);
   if (fe) skin(fe, 1, cy0, cy1, [cx1, x1]);
 }
 // wallpaper resolver: a skin running along u (axis 0 = x, 1 = y) from u0 to u1 and z0 to z1, t = its [lo, hi] across the face
-function paper(r, axis, u0, u1, [t0, t1], z0, z1) {
+function paper(r, axis, u0, u1, [t0, t1], z0, z1, band) {
   const fn = PAPERS[r?.style.wall ?? 'plain'], pieces = new Map();
   for (let u = u0; u < u1; u += R2) for (let z = z0; z < z1; z += R2) {
     const [key, color] = fn(u + 1, z + 1 - F), k = JSON.stringify([key, color]);
     (pieces.get(k) ?? pieces.set(k, new Set()).get(k)).add(`${u / R2},${z / R2}`);
   }
   for (const [k, set] of pieces) for (const [a0, b0, a1, b1] of cover(set)) {
-    const m = { asset: MB, color: JSON.parse(k)[1] };
+    const m = { asset: MB, color: JSON.parse(k)[1], band };
     if (axis === 0) put(m, a0 * R2, t0, b0 * R2, a1 * R2, t1, b1 * R2); else put(m, t0, a0 * R2, b0 * R2, t1, a1 * R2, b1 * R2);
   }
 }
@@ -326,7 +331,7 @@ for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
 }
 
 for (const [k, list] of boxes) for (const b of merge(list, /Ramp|Corner/.test(k) ? [0, 1] : undefined)) { // siding courses stay separate
-  const m = JSON.parse(k);
+  const { band, ...m } = JSON.parse(k);
   if (m.asset === RAMP || m.asset === CORNER) { // rotated pieces take local sizes: odd rotations swap x and y
     const sz = [(b[3] - b[0]) / 2, (b[4] - b[1]) / 2, (b[5] - b[2]) / 2];
     B.add({ ...m, size: m.rotation & 1 ? [sz[1], sz[0], sz[2]] : sz, position: [(b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2] }, 'siding');
