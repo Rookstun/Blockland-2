@@ -28,3 +28,4 @@ mapgen/.cache/
 
 nes/roms/
 nes/out/
+puppet/pose_landmarker_*.task

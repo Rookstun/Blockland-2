@@ -1,0 +1,247 @@
+{
+ "anchor": [
+  8609,
+  -24595,
+  0
+ ],
+ "parts": [
+  {
+   "name": "pelvis",
+   "pivot": [
+    0,
+    0,
+    25
+   ],
+   "parent": null,
+   "dir": [
+    0,
+    0,
+    1
+   ]
+  },
+  {
+   "name": "torso",
+   "pivot": [
+    0,
+    0,
+    28
+   ],
+   "parent": "pelvis",
+   "dir": [
+    0,
+    0,
+    1
+   ]
+  },
+  {
+   "name": "chest",
+   "pivot": [
+    0,
+    0,
+    34
+   ],
+   "parent": "torso",
+   "dir": [
+    0,
+    0,
+    1
+   ]
+  },
+  {
+   "name": "neck",
+   "pivot": [
+    0,
+    0,
+    42
+   ],
+   "parent": "chest",
+   "dir": [
+    0,
+    0,
+    1
+   ]
+  },
+  {
+   "name": "head",
+   "pivot": [
+    0,
+    0,
+    44
+   ],
+   "parent": "neck",
+   "dir": [
+    0,
+    0,
+    1
+   ]
+  },
+  {
+   "name": "l_arm",
+   "pivot": [
+    0,
+    -8,
+    39
+   ],
+   "parent": "chest",
+   "dir": [
+    0,
+    -1,
+    0
+   ]
+  },
+  {
+   "name": "l_forearm",
+   "pivot": [
+    0,
+    -18,
+    39
+   ],
+   "parent": "l_arm",
+   "dir": [
+    0,
+    -1,
+    0
+   ]
+  },
+  {
+   "name": "l_hand",
+   "pivot": [
+    0,
+    -28,
+    39
+   ],
+   "parent": "l_forearm",
+   "dir": [
+    0,
+    -1,
+    0
+   ]
+  },
+  {
+   "name": "r_arm",
+   "pivot": [
+    0,
+    8,
+    39
+   ],
+   "parent": "chest",
+   "dir": [
+    0,
+    1,
+    0
+   ]
+  },
+  {
+   "name": "r_forearm",
+   "pivot": [
+    0,
+    18,
+    39
+   ],
+   "parent": "r_arm",
+   "dir": [
+    0,
+    1,
+    0
+   ]
+  },
+  {
+   "name": "r_hand",
+   "pivot": [
+    0,
+    28,
+    39
+   ],
+   "parent": "r_forearm",
+   "dir": [
+    0,
+    1,
+    0
+   ]
+  },
+  {
+   "name": "l_leg",
+   "pivot": [
+    0,
+    -5,
+    22
+   ],
+   "parent": "pelvis",
+   "dir": [
+    0,
+    0,
+    -1
+   ]
+  },
+  {
+   "name": "l_shin",
+   "pivot": [
+    0,
+    -5,
+    12
+   ],
+   "parent": "l_leg",
+   "dir": [
+    0,
+    0,
+    -1
+   ]
+  },
+  {
+   "name": "l_foot",
+   "pivot": [
+    0,
+    -5,
+    2
+   ],
+   "parent": "l_shin",
+   "dir": [
+    1,
+    0,
+    0
+   ]
+  },
+  {
+   "name": "r_leg",
+   "pivot": [
+    0,
+    5,
+    22
+   ],
+   "parent": "pelvis",
+   "dir": [
+    0,
+    0,
+    -1
+   ]
+  },
+  {
+   "name": "r_shin",
+   "pivot": [
+    0,
+    5,
+    12
+   ],
+   "parent": "r_leg",
+   "dir": [
+    0,
+    0,
+    -1
+   ]
+  },
+  {
+   "name": "r_foot",
+   "pivot": [
+    0,
+    5,
+    2
+   ],
+   "parent": "r_shin",
+   "dir": [
+    1,
+    0,
+    0
+   ]
+  }
+ ]
+}

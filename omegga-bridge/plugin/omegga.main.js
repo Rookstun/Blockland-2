@@ -58,6 +58,22 @@ module.exports = class Plugin {
     for (const d of [INBOX, OUTBOX, this.prefabDir]) fs.mkdirSync(d, { recursive: true });
     this.running = false;
     this.timer = setInterval(() => this.poll(), 300);
+    // live puppet feed (puppet/track.py over an ssh tunnel): one line of digits = one frame -> /pup chat command
+    // localhost only, digits only, at most 20 frames/s (the server crashed on ~24 big chat commands/s before)
+    let last = 0;
+    this.pup = require('net').createServer(sock => {
+      let buf = '';
+      sock.on('data', d => {
+        buf += d;
+        if (buf.length > 65536) return sock.destroy();
+        const lines = buf.split(/\r?\n/); buf = lines.pop();
+        const line = lines.pop()?.trim(); // only the newest frame
+        if (!line || !/^\d{18,450}$/.test(line) || Date.now() - last < 50) return;
+        last = Date.now();
+        this.omegga.writeln(`br.Chat.Command /pup ${line}`);
+      });
+      sock.on('error', () => {});
+    }).on('error', e => console.log('pup feed', e.message)).listen(7790, '127.0.0.1');
     return { registeredCommands: [] };
   }
 
@@ -206,5 +222,6 @@ module.exports = class Plugin {
 
   async stop() {
     clearInterval(this.timer);
+    this.pup?.close();
   }
 };
