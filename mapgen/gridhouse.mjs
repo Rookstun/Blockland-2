@@ -230,20 +230,20 @@ for (let j = 0; j < g.length; j++) for (let i = 0; i < g[j].length; i++) {
   wallCell(i, j, false);
 }
 // one wall pixel, or the wall over a door pixel (from DOOR_TOP, plaster soffit underneath). normals: faces toward a room
-// take that room's wallpaper; a wall pixel's faces toward a door are jambs: plaster up to DOOR_TOP, wall above it
+// take that room's wallpaper; a wall pixel's faces toward a door are plaster jambs below DOOR_TOP and no face above it
+// (the wall over the door abuts there, so the room skins run through to the corner)
 function wallCell(i, j, door) {
-  const x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C, z0 = door ? DOOR_TOP : Z;
-  const face = (a, b) => at(a, b) === 'R' ? room(a, b) : !door && at(a, b) === 'G' ? 'jamb' : null;
+  if (door) return wallBand(i, j, DOOR_TOP, TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : null, true);
+  wallBand(i, j, Z, DOOR_TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : at(a, b) === 'G' ? 'jamb' : null);
+  wallBand(i, j, DOOR_TOP, TOP, (a, b) => at(a, b) === 'R' ? room(a, b) : null);
+}
+function wallBand(i, j, z0, z1, face, soffit = false) {
+  const x0 = X + i * C, y0 = Y + j * C, x1 = x0 + C, y1 = y0 + C;
   const fw = face(i - 1, j), fe = face(i + 1, j), fs_ = face(i, j - 1), fn = face(i, j + 1);
   const cx0 = x0 + (fw ? SKIN : 0), cx1 = x1 - (fe ? SKIN : 0), cy0 = y0 + (fs_ ? SKIN : 0), cy1 = y1 - (fn ? SKIN : 0);
-  put({ asset: MB, color: SIDING }, cx0, cy0, door ? z0 + SKIN : z0, cx1, cy1, TOP);
-  if (door) put({ asset: MB, color: PLASTER }, cx0, cy0, z0, cx1, cy1, z0 + SKIN);
-  const skin = (f, axis, u0, u1, t) => {
-    if (f !== 'jamb') return paper(f, axis, u0, u1, t, z0, TOP);
-    paper(null, axis, u0, u1, t, Z, DOOR_TOP);
-    const m = { asset: MB, color: SIDING };
-    if (axis === 0) put(m, u0, t[0], DOOR_TOP, u1, t[1], TOP); else put(m, t[0], u0, DOOR_TOP, t[1], u1, TOP);
-  };
+  put({ asset: MB, color: SIDING }, cx0, cy0, soffit ? z0 + SKIN : z0, cx1, cy1, z1);
+  if (soffit) put({ asset: MB, color: PLASTER }, cx0, cy0, z0, cx1, cy1, z0 + SKIN);
+  const skin = (f, axis, u0, u1, t) => paper(f === 'jamb' ? null : f, axis, u0, u1, t, z0, z1);
   if (fs_) skin(fs_, 0, x0, x1, [y0, cy0]);
   if (fn) skin(fn, 0, x0, x1, [cy1, y1]);
   if (fw) skin(fw, 1, cy0, cy1, [x0, cx0]);
