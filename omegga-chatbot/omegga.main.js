@@ -1335,7 +1335,10 @@ module.exports = class Plugin {
 
     // While review rounds are left (command() sets drafting), render it for the model instead of placing it
     const job = this.current.getStore();
+    // "final" means "the draft I just saw is excellent": a changed part list is a new draft that needs a look
+    if (job?.drafting && final && JSON.stringify(parts) !== JSON.stringify(job.lastDraft)) final = false;
     if (job?.drafting && !final) {
+      job.lastDraft = parts;
       job.pending.push(input);
       const last = job.reviews >= (this.config['review-rounds'] ?? 2);
       const warn = (bricks.warnings ?? []).map(w => `\nWARNING: ${w}`).join('');
