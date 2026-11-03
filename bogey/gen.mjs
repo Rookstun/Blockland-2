@@ -139,15 +139,21 @@ function cockpit() {
 }
 
 // ---- text screens baked per mission (briefing)
-function briefRows(m, i) {
-  const M = MISSIONS[m], rows = Array(H).fill('');
-  rows[3] = tag(PI.y, centre(`MISSION ${i + 1} OF ${NMS}: ${M.name}`));
-  M.brief.forEach((s, j) => { if (s) rows[8 + j * 2] = tag(PI.w, centre(s)); });
-  rows[26] = tag(PI.c, centre(M.intel));
-  rows[30] = tag(PI.o, centre(`TARGET: ${M.bname}`));
-  rows[34] = tag(PI.lt, centre(`AFTER ${M.quota} KILLS THE TARGET SHOWS UP. IT DOES NOT GO DOWN TO ONE MISSILE.`));
-  rows[44] = tag(PI.G, centre('PRESS SPACE FOR THE ARMORY'));
-  return rows;
+// text screens: TL lines of TWC cells; every line is exactly TWC wide (spaces + panel-coloured blocks) so centring can't shift it
+export const CELL = 1 / 3;
+const TL = 18, TWC = 64;
+const fill = n => '█'.repeat(Math.max(0, n));
+const T = (col, s) => { if (s.length > TWC) throw Error(`text line too long (${s.length}): ${s}`); const l = Math.floor((TWC - s.length) / 2); return tag(col, ' '.repeat(l) + s) + fill(TWC - l - s.length); };
+const wrap = (s, w = 60) => { const out = []; let cur = ''; for (const word of s.split(' ')) { if (cur && (cur + ' ' + word).length > w) { out.push(cur); cur = word; } else cur = cur ? cur + ' ' + word : word; } if (cur) out.push(cur); return out; };
+const block = (col, s, n) => { const ls = wrap(s); if (ls.length > n) throw Error(`needs ${ls.length} lines > ${n}: ${s}`); return [...ls, ...Array(n - ls.length).fill('')].map(l => l ? T(col, l) : ''); };
+function briefText(m) {
+  const M = MISSIONS[m], paras = M.brief.join('\n').split('\n\n').map(p => p.replace(/\n/g, ' '));
+  const out = [T(PI.y, `MISSION ${m + 1} OF ${NMS}: ${M.name}`), ''];
+  for (const p of paras) out.push(...wrap(p).map(l => T(PI.w, l)));
+  out.push('', ...wrap(M.intel).map(l => T(PI.c, l)), T(PI.o, `TARGET: ${M.bname}`), T(PI.lt, `IT SHOWS UP AFTER ${M.quota} KILLS.`));
+  if (out.length > TL - 1) throw Error(`briefing ${m} is ${out.length} lines`);
+  while (out.length < TL - 1) out.push('');
+  return [...out, T(PI.G, 'PRESS SPACE FOR THE ARMORY')];
 }
 
 export function generate({ debug = false } = {}) {
@@ -155,7 +161,7 @@ export function generate({ debug = false } = {}) {
   const OPEN = PAL.map((h, i) => i === 0 ? '' : `<color="${h}">`), CLOSE = PAL.map((_, i) => i === 0 ? '' : '</>');
   const BLK = Array.from({ length: W + 1 }, (_, n) => '█'.repeat(n));
   const ck = cockpit();
-  const BRIEF = MISSIONS.flatMap((_, m) => briefRows(m, m));
+  const BRIEF = MISSIONS.flatMap((_, m) => briefText(m));
   // run-length push into string P.s with colour P.c / count P.n
   const push = (P, c, n) => `if ${n} > 0 {
       if ${c} == ${P}c { ${P}n += ${n} } else {
@@ -214,6 +220,14 @@ const CKLS = ${S(ck.LS)}
 const CKC = ${S(ck.C)}
 const RB = ${A(ck.RB)}
 const BRIEF = ${S(BRIEF)}
+const ARMH = ${S(MISSIONS.map((M, m) => T(PI.y, `ARMORY - MISSION ${m + 1}: ${M.name}`)))}
+const WDL1 = ${S(MSL.map(w => T(PI.c, `${w[0]}: ${w[5]}`)))}
+const WDL2 = ${S(MSL.map(w => T(PI.c, w[6])))}
+const WDL3 = ${S(MSL.map(w => T(PI.c, `LOCK ${w[2]}   RANGE ${w[3]}   DAMAGE ${w[4]}`)))}
+const MINT1 = ${S(MISSIONS.map(M => block(PI.o, M.intel, 2)[0]))}
+const MINT2 = ${S(MISSIONS.map(M => block(PI.o, M.intel, 2)[1]))}
+const DEBH = ${S(MISSIONS.map((_, m) => T(PI.y, `MISSION ${m + 1} COMPLETE`)))}
+const DEBC = ${S([...block(PI.c, 'THE COMMANDER NODS. IT IS THE MOST EMOTION HE HAS SHOWN IN YEARS. THE JET IS REPAIRED BY PEOPLE WHO DO NOT GET ENOUGH CREDIT.', 3), ...block(PI.c, 'ALL MISSIONS FLOWN. THEY GIVE YOU A MEDAL SHAPED LIKE A SLIGHTLY BIGGER MEDAL. THEN THEY SEND YOU BACK OUT. THE ENEMY HAS BEEN PRACTICING.', 3)])}
 const MQUOTA = ${A(MISSIONS.map(m => m.quota))}
 const MIRP = ${A(MISSIONS.map(m => m.irp))}
 const MSAM = ${A(MISSIONS.map(m => m.sam))}
@@ -228,7 +242,7 @@ const MINTEL = ${S(MISSIONS.map(m => m.intel))}
 const MDEF = ${A(MISSIONS.flatMap(m => m.def))}
 const WNAME = ${S(MSL.map(m => m[0]))}
 const WPAD = ${S(MSL.map(m => m[0].padStart(7)))}
-const WNOTE = ${S(MSL.map(m => `${m[1]} PT EACH`.padEnd(30)))}
+const WNOTE = ${S(MSL.map(m => `${m[1]} PT EACH`.padEnd(28)))}
 const WCOST = ${A(MSL.map(m => m[1]))}
 const WLOCK = ${A(MSL.map(m => m[2]))}
 const WRNG = ${A(MSL.map(m => F(m[3])))}
@@ -341,6 +355,8 @@ var msg: string = ""
 var msgT: int = 0
 var hud: string = ""
 var txtDirty: bool = false
+var txtOn: bool = false
+var tl: string[] = ${zeros(TL, '""')}
 var rows: string[] = ${zeros(H, '""')}
 ${Array.from({ length: NS }, (_, k) => `var st${k}: string = ""`).join('\n')}
 ${[0, 1, 2, 3, 4].map(v => `var aP${v}: float = 1.0\nvar aV${v}: float = 0.0`).join('\n')}
@@ -351,6 +367,8 @@ ${Array.from({ length: NS }, (_, k) => `@right out strip${k}: string = st${k}`).
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
 ${[0, 1, 2, 3, 4].map(v => `@right out P${v}: float = aP${v}\n@right out V${v}: float = aV${v}`).join('\n')}
 @right out state_: int = state
+@right out lh_: float = if txtOn then 0.62 else ${+(CELL * 0.645).toFixed(4)}
+@right out ws_: float = if txtOn then 1.0 else 2.0
 
 mod say(s: string, n: int) {
   msg = s
@@ -401,43 +419,45 @@ mod showHud() {
   }
 }
 
+// text screens: ${TL} lines of ${TWC} cells in big type (strips switch LineHeight/WidthScale via lh_/ws_), 2 lines a strip
 mod clearText() {
-  for i in 0..${H} { rows[i] = "" }
+  for i in 0..${TL} { tl[i] = "" }
   txtDirty = true
+  txtOn = true
 }
 
 mod showBrief() {
+  clearText()
   let m = msn % ${NMS}
-  for i in 0..${H} { rows[i] = BRIEF[m * ${H} + i] }
-  if rnd > 0 { rows[5] = ${Q(OPEN[PI.r] + '                            ROUND ')} .. (rnd + 1) .. ": EVERYONE IS FASTER AND ANGRIER</>" }
-  txtDirty = true
+  for i in 0..${TL} { tl[i] = BRIEF[m * ${TL} + i] }
+  if rnd > 0 { tl[1] = ${Q(OPEN[PI.r] + '        ROUND ')} .. padn(rnd + 1) .. ${Q(': EVERYONE IS FASTER AND ANGRIER' + CLOSE[PI.r] + fill(TWC - 53))} }
 }
 
 mod line(r: int, k: int, label: string, val: string, note: string) {
   if cur == k {
-    rows[r] = ${Q(OPEN[PI.y] + "          > ")} .. label .. "   - " .. val .. " +   " .. note .. ${Q(CLOSE[PI.y] + "█".repeat(W - 72))}
+    tl[r] = ${Q(OPEN[PI.y] + "   > ")} .. label .. " - " .. val .. " +  " .. note .. ${Q(CLOSE[PI.y] + fill(TWC - 60))}
   } else {
-    rows[r] = ${Q(OPEN[PI.lt] + "            ")} .. label .. "   - " .. val .. " +   " .. note .. ${Q(CLOSE[PI.lt] + "█".repeat(W - 72))}
+    tl[r] = ${Q(OPEN[PI.lt] + "     ")} .. label .. " - " .. val .. " +  " .. note .. ${Q(CLOSE[PI.lt] + fill(TWC - 60))}
   }
 }
 
 mod showArmory() {
   clearText()
   let m = msn % ${NMS}
-  rows[3] = ${Q(tag(PI.y, centre('ARMORY').trimEnd()))}
-  rows[5] = ${Q(OPEN[PI.w])} .. "                         MISSION " .. (msn + 1) .. ": " .. MNAME[m] .. ${Q(CLOSE[PI.w])}
+  tl[0] = ARMH[m]
   let pp = pts()
-  rows[8] = (if pp >= ${CAP} then ${Q(OPEN[PI.o])} else ${Q(OPEN[PI.G])}) .. "                         PAYLOAD " .. padn(pp) .. " / ${CAP} POINTS USED</>${"█".repeat(W - 57)}"
-  line(12, 0, "MISSILE TYPE ", WPAD[mt], "${"".padEnd(30)}")
-  line(15, 1, "MISSILES     ", padn(nMsl), WNOTE[mt])
-  line(18, 2, "FLARE PAIRS  ", padn(nFlr), "${"1 PT A PAIR  (Q, BEATS IR)".padEnd(30)}")
-  line(21, 3, "CHAFF PAIRS  ", padn(nChf), "${"1 PT A PAIR  (C, BEATS RADAR)".padEnd(30)}")
-  line(24, 4, "GUN ROUNDS   ", padn(nGun * 200), "${"1 PT PER 200".padEnd(30)}")
-  rows[29] = ${Q(OPEN[PI.c] + "            ")} .. WNAME[mt] .. ": " .. WD1[mt] .. ${Q(CLOSE[PI.c])}
-  rows[31] = ${Q(OPEN[PI.c] + "            ")} .. WD2[mt] .. "  LOCK " .. WLOCK[mt] .. "  RANGE " .. WRNG[mt] .. "  DAMAGE " .. WDMG[mt] .. ${Q(CLOSE[PI.c])}
-  rows[36] = ${Q(OPEN[PI.o] + "            ")} .. MINTEL[m] .. ${Q(CLOSE[PI.o])}
-  rows[44] = ${Q(tag(PI.G, centre('W/S PICK    A/D CHANGE    SPACE TO LAUNCH')))}
-  txtDirty = true
+  tl[1] = (if pp >= ${CAP} then ${Q(OPEN[PI.o])} else ${Q(OPEN[PI.G])}) .. "        PAYLOAD " .. padn(pp) .. " / ${CAP} POINTS USED</>${fill(TWC - 40)}"
+  line(3, 0, "MISSILE TYPE ", WPAD[mt], "${''.padEnd(28)}")
+  line(4, 1, "MISSILES     ", padn(nMsl), WNOTE[mt])
+  line(5, 2, "FLARE PAIRS  ", padn(nFlr), "${'1 PT A PAIR  Q BEATS IR'.padEnd(28)}")
+  line(6, 3, "CHAFF PAIRS  ", padn(nChf), "${'1 PT A PAIR  C BEATS RADAR'.padEnd(28)}")
+  line(7, 4, "GUN ROUNDS   ", padn(nGun * 200), "${'1 PT PER 200'.padEnd(28)}")
+  tl[9] = WDL1[mt]
+  tl[10] = WDL2[mt]
+  tl[11] = WDL3[mt]
+  tl[13] = MINT1[m]
+  tl[14] = MINT2[m]
+  tl[16] = ${Q(T(PI.G, 'W/S PICK   A/D CHANGE   SPACE TO LAUNCH'))}
 }
 
 mod armoryInput(aL: bool, aR: bool, aU: bool, aD: bool) {
@@ -1210,6 +1230,7 @@ ${debug ? `    let ia = a || dbk.Contains("a")
     if dumpReq && t % 4 == 3 {
       dumpReq = false
       for r in 0..${H} { PrintToConsole("bnrow|" .. r .. "|" .. rows[r]) }
+      for r in 0..${TL} { PrintToConsole("bntxt|" .. r .. "|" .. tl[r]) }
     }` : `    let ia = a
     let ib = b
     let iq = q
@@ -1259,10 +1280,11 @@ ${debug ? `    let ia = a || dbk.Contains("a")
           state = 6
           stT = 0
           clearText()
-          rows[14] = ${Q(tag(PI.r, centre('GAME OVER')))}
-          rows[20] = ${Q(tag(PI.w, centre('YOU ARE OUT OF JETS. THE NAVY WOULD LIKE THEM BACK.')))}
-          rows[24] = ${Q(OPEN[PI.y] + "                                       SCORE ")} .. score .. ${Q(CLOSE[PI.y])}
-          rows[34] = ${Q(tag(PI.G, centre('PRESS SPACE')))}
+          tl[5] = ${Q(T(PI.r, 'GAME OVER'))}
+          tl[8] = ${Q(T(PI.w, 'YOU ARE OUT OF JETS.'))}
+          tl[9] = ${Q(T(PI.w, 'THE NAVY WOULD LIKE THEM BACK.'))}
+          tl[12] = ${Q(OPEN[PI.y] + ' '.repeat(22) + 'SCORE ')} .. padn(score) .. ${Q(CLOSE[PI.y] + fill(TWC - 35))}
+          tl[16] = ${Q(T(PI.G, 'PRESS SPACE'))}
           say("", 0)
           showHud()
         }
@@ -1277,13 +1299,16 @@ ${debug ? `    let ia = a || dbk.Contains("a")
         }
       } else if stT == 50 {
         clearText()
-        rows[8] = ${Q(OPEN[PI.y] + "                              MISSION ")} .. (msn + 1) .. " COMPLETE</>"
-        rows[14] = ${Q(OPEN[PI.w] + "                              BOGEYS DOWNED   ")} .. padn(kills) .. ${Q(CLOSE[PI.w] + "█".repeat(W - 53))}
-        rows[16] = ${Q(OPEN[PI.w] + "                              JETS LEFT       ")} .. padn(jets) .. ${Q(CLOSE[PI.w] + "█".repeat(W - 53))}
-        rows[18] = ${Q(OPEN[PI.w] + "                              SCORE           ")} .. padn(score) .. ${Q(CLOSE[PI.w] + "█".repeat(W - 53))}
-        rows[24] = if msn % ${NMS} == ${NMS - 1} then ${Q(tag(PI.c, centre('ALL MISSIONS FLOWN. THEY GIVE YOU A MEDAL SHAPED LIKE A SLIGHTLY BIGGER MEDAL.')))} else ${Q(tag(PI.c, centre('THE COMMANDER NODS. IT IS THE MOST EMOTION HE HAS SHOWN IN YEARS.')))}
-        rows[26] = if msn % ${NMS} == ${NMS - 1} then ${Q(tag(PI.c, centre('THEN THEY SEND YOU BACK OUT. THE ENEMY HAS BEEN PRACTICING.')))} else ${Q(tag(PI.c, centre('THE JET IS REPAIRED AND RE-ARMED BY PEOPLE WHO DO NOT GET ENOUGH CREDIT.')))}
-        rows[34] = ${Q(tag(PI.G, centre('PRESS SPACE FOR THE NEXT BRIEFING')))}
+        let dm = msn % ${NMS}
+        tl[2] = DEBH[dm]
+        tl[5] = ${Q(OPEN[PI.w] + ' '.repeat(18) + 'BOGEYS DOWNED   ')} .. padn(kills) .. ${Q(CLOSE[PI.w] + fill(TWC - 41))}
+        tl[6] = ${Q(OPEN[PI.w] + ' '.repeat(18) + 'JETS LEFT       ')} .. padn(jets) .. ${Q(CLOSE[PI.w] + fill(TWC - 41))}
+        tl[7] = ${Q(OPEN[PI.w] + ' '.repeat(18) + 'SCORE           ')} .. padn(score) .. ${Q(CLOSE[PI.w] + fill(TWC - 41))}
+        let fin = if dm == ${NMS - 1} then 3 else 0
+        tl[10] = DEBC[fin]
+        tl[11] = DEBC[fin + 1]
+        tl[12] = DEBC[fin + 2]
+        tl[16] = ${Q(T(PI.G, 'PRESS SPACE FOR THE NEXT BRIEFING'))}
         say("", 0)
         showHud()
       } else if stT > 65 && aE {
@@ -1308,10 +1333,11 @@ ${debug ? `    let ia = a || dbk.Contains("a")
     }
     audio()
     if state == 0 || state == 3 || state == 4 || (state == 5 && stT < 50) {
+      txtOn = false
       frame()
     } else if txtDirty {
       txtDirty = false
-${Array.from({ length: NS }, (_, k) => '      ' + strip(k)).join('\n')}
+${Array.from({ length: NS }, (_, k) => `      st${k} = tl[${2 * k}] .. "\\n" .. tl[${2 * k + 1}]`).join('\n')}
     }
     kA = ia
     kQ = iq
@@ -1323,5 +1349,5 @@ ${Array.from({ length: NS }, (_, k) => '      ' + strip(k)).join('\n')}
   }
 }
 `;
-  return { src, W, H, STRIP, PAL, synths: ['Square', 'Noise', 'Square', 'Triangle', 'NoisePink'] };
+  return { src, W, H, STRIP, PAL, textPorts: true, synths: ['Square', 'Noise', 'Square', 'Triangle', 'NoisePink'] };
 }

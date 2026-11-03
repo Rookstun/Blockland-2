@@ -88,6 +88,7 @@ function speakers(b) {
     const s = box(-PW, 0, Z1 - (k + 1) * SH, PW, 2, Z1 - k * SH, { color: base,
       components: text({ LineHeight: +(CELL * 0.645).toFixed(4), WidthScale: 2, Color: rgba(base) }) });
     wireFrom(`strip${k}`, s, 'Text');
+    if (gen.textPorts) { wireFrom('lh_', s, 'LineHeight'); wireFrom('ws_', s, 'WidthScale'); } // big type on text screens
   }
   const z0 = Z1 - gen.H * CELL; // 30
   const hud = box(-PW, 0, z0 - 2, PW, 2, z0, { color: base, components: text({ LineHeight: 0.8, Color: rgba([248, 208, 64]) }) });
