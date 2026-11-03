@@ -68,6 +68,7 @@ module.exports = class Discord {
       this.handlers.push([e, h]);
     };
     on('chat', this.onChat);
+    for (const e of ['chatcmd:discord', 'chatcmd:Discord', 'cmd:discord']) on(e, name => this.omegga.whisper(name, '<color="9cf">Discord: <link="https://discord.gg/Eu4qtXcGnR">https://discord.gg/Eu4qtXcGnR</></>'));
     on('join', p => {
       note('lastJoin', `${p?.name} ${new Date().toISOString()}`);
       if (this.config.joins !== false) return this.send(null, `**${mdSafe(p?.name ?? p?.displayName)}** joined the server`);
@@ -78,7 +79,7 @@ module.exports = class Discord {
       note('state', 'connecting');
       this.connect();
     }
-    return { registeredCommands: [] };
+    return { registeredCommands: ['discord'] };
   }
 
   async stop() {
