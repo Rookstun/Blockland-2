@@ -227,6 +227,8 @@ const MBNAME = ${S(MISSIONS.map(m => m.bname))}
 const MINTEL = ${S(MISSIONS.map(m => m.intel))}
 const MDEF = ${A(MISSIONS.flatMap(m => m.def))}
 const WNAME = ${S(MSL.map(m => m[0]))}
+const WPAD = ${S(MSL.map(m => m[0].padStart(7)))}
+const WNOTE = ${S(MSL.map(m => `${m[1]} PT EACH`.padEnd(30)))}
 const WCOST = ${A(MSL.map(m => m[1]))}
 const WLOCK = ${A(MSL.map(m => m[2]))}
 const WRNG = ${A(MSL.map(m => F(m[3])))}
@@ -369,6 +371,11 @@ mod wrap0(d: float) -> float {
   return r
 }
 
+// right-aligned in 7 cells: text rows are centred line by line, so fixed widths keep the columns straight
+mod padn(n: int) -> string {
+  return (if n < 10 then "      " else if n < 100 then "     " else if n < 1000 then "    " else if n < 10000 then "   " else if n < 100000 then "  " else " ") .. n
+}
+
 mod pts() -> int {
   return WCOST[mt] * nMsl + nFlr + nChf + nGun
 }
@@ -408,9 +415,9 @@ mod showBrief() {
 
 mod line(r: int, k: int, label: string, val: string, note: string) {
   if cur == k {
-    rows[r] = ${Q(OPEN[PI.y] + "          > ")} .. label .. "   - " .. val .. " +   " .. note .. ${Q(CLOSE[PI.y])}
+    rows[r] = ${Q(OPEN[PI.y] + "          > ")} .. label .. "   - " .. val .. " +   " .. note .. ${Q(CLOSE[PI.y] + "█".repeat(W - 72))}
   } else {
-    rows[r] = ${Q(OPEN[PI.lt] + "            ")} .. label .. "   - " .. val .. " +   " .. note .. ${Q(CLOSE[PI.lt])}
+    rows[r] = ${Q(OPEN[PI.lt] + "            ")} .. label .. "   - " .. val .. " +   " .. note .. ${Q(CLOSE[PI.lt] + "█".repeat(W - 72))}
   }
 }
 
@@ -420,12 +427,12 @@ mod showArmory() {
   rows[3] = ${Q(tag(PI.y, centre('ARMORY').trimEnd()))}
   rows[5] = ${Q(OPEN[PI.w])} .. "                         MISSION " .. (msn + 1) .. ": " .. MNAME[m] .. ${Q(CLOSE[PI.w])}
   let pp = pts()
-  rows[8] = (if pp >= ${CAP} then ${Q(OPEN[PI.o])} else ${Q(OPEN[PI.G])}) .. "                         PAYLOAD " .. pp .. " / ${CAP} POINTS USED</>"
-  line(12, 0, "MISSILE TYPE ", WNAME[mt], "")
-  line(15, 1, "MISSILES     ", "" .. nMsl, WCOST[mt] .. " PT EACH")
-  line(18, 2, "FLARE PAIRS  ", "" .. nFlr, "1 PT A PAIR  (Q, BEATS IR)")
-  line(21, 3, "CHAFF PAIRS  ", "" .. nChf, "1 PT A PAIR  (C, BEATS RADAR)")
-  line(24, 4, "GUN ROUNDS   ", "" .. (nGun * 200), "1 PT PER 200")
+  rows[8] = (if pp >= ${CAP} then ${Q(OPEN[PI.o])} else ${Q(OPEN[PI.G])}) .. "                         PAYLOAD " .. padn(pp) .. " / ${CAP} POINTS USED</>${"█".repeat(W - 57)}"
+  line(12, 0, "MISSILE TYPE ", WPAD[mt], "${"".padEnd(30)}")
+  line(15, 1, "MISSILES     ", padn(nMsl), WNOTE[mt])
+  line(18, 2, "FLARE PAIRS  ", padn(nFlr), "${"1 PT A PAIR  (Q, BEATS IR)".padEnd(30)}")
+  line(21, 3, "CHAFF PAIRS  ", padn(nChf), "${"1 PT A PAIR  (C, BEATS RADAR)".padEnd(30)}")
+  line(24, 4, "GUN ROUNDS   ", padn(nGun * 200), "${"1 PT PER 200".padEnd(30)}")
   rows[29] = ${Q(OPEN[PI.c] + "            ")} .. WNAME[mt] .. ": " .. WD1[mt] .. ${Q(CLOSE[PI.c])}
   rows[31] = ${Q(OPEN[PI.c] + "            ")} .. WD2[mt] .. "  LOCK " .. WLOCK[mt] .. "  RANGE " .. WRNG[mt] .. "  DAMAGE " .. WDMG[mt] .. ${Q(CLOSE[PI.c])}
   rows[36] = ${Q(OPEN[PI.o] + "            ")} .. MINTEL[m] .. ${Q(CLOSE[PI.o])}
@@ -1271,9 +1278,9 @@ ${debug ? `    let ia = a || dbk.Contains("a")
       } else if stT == 50 {
         clearText()
         rows[8] = ${Q(OPEN[PI.y] + "                              MISSION ")} .. (msn + 1) .. " COMPLETE</>"
-        rows[14] = ${Q(OPEN[PI.w] + "                              BOGEYS DOWNED   ")} .. kills .. ${Q(CLOSE[PI.w])}
-        rows[16] = ${Q(OPEN[PI.w] + "                              JETS LEFT       ")} .. jets .. ${Q(CLOSE[PI.w])}
-        rows[18] = ${Q(OPEN[PI.w] + "                              SCORE           ")} .. score .. ${Q(CLOSE[PI.w])}
+        rows[14] = ${Q(OPEN[PI.w] + "                              BOGEYS DOWNED   ")} .. padn(kills) .. ${Q(CLOSE[PI.w] + "█".repeat(W - 53))}
+        rows[16] = ${Q(OPEN[PI.w] + "                              JETS LEFT       ")} .. padn(jets) .. ${Q(CLOSE[PI.w] + "█".repeat(W - 53))}
+        rows[18] = ${Q(OPEN[PI.w] + "                              SCORE           ")} .. padn(score) .. ${Q(CLOSE[PI.w] + "█".repeat(W - 53))}
         rows[24] = if msn % ${NMS} == ${NMS - 1} then ${Q(tag(PI.c, centre('ALL MISSIONS FLOWN. THEY GIVE YOU A MEDAL SHAPED LIKE A SLIGHTLY BIGGER MEDAL.')))} else ${Q(tag(PI.c, centre('THE COMMANDER NODS. IT IS THE MOST EMOTION HE HAS SHOWN IN YEARS.')))}
         rows[26] = if msn % ${NMS} == ${NMS - 1} then ${Q(tag(PI.c, centre('THEN THEY SEND YOU BACK OUT. THE ENEMY HAS BEEN PRACTICING.')))} else ${Q(tag(PI.c, centre('THE JET IS REPAIRED AND RE-ARMED BY PEOPLE WHO DO NOT GET ENOUGH CREDIT.')))}
         rows[34] = ${Q(tag(PI.G, centre('PRESS SPACE FOR THE NEXT BRIEFING')))}

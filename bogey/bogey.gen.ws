@@ -39,6 +39,8 @@ const MBNAME = ["THE SMUG DIRIGIBLE","THE SANDCASTLE OF MILD MENACE","COLONEL KL
 const MINTEL = ["INTEL: HEAT SEEKERS (IR) ONLY. FLARES (Q) WORK. CHAFF IS JUST CONFETTI.","INTEL: RADAR MISSILES + SAM SITES. CHAFF (C) WORKS. FLARES ARE DECOR.","INTEL: MIXED IR AND RADAR. WATCH THE LAMPS. Q FOR IR, C FOR RADAR.","INTEL: EVERYTHING. IR, RADAR, SAMS. BRING A LITTLE OF EACH."]
 const MDEF = [0, 10, 5, 1, 5, 1, 6, 1, 6, 5, 1, 5, 3, 3, 5, 2, 3, 3, 3, 5]
 const WNAME = ["WASP","HORNET","WOMBAT"]
+const WPAD = ["   WASP"," HORNET"," WOMBAT"]
+const WNOTE = ["1 PT EACH                     ","2 PT EACH                     ","4 PT EACH                     "]
 const WCOST = [1, 2, 4]
 const WLOCK = [8, 16, 28]
 const WRNG = [45.0, 75.0, 110.0]
@@ -215,6 +217,11 @@ mod wrap0(d: float) -> float {
   return r
 }
 
+// right-aligned in 7 cells: text rows are centred line by line, so fixed widths keep the columns straight
+mod padn(n: int) -> string {
+  return (if n < 10 then "      " else if n < 100 then "     " else if n < 1000 then "    " else if n < 10000 then "   " else if n < 100000 then "  " else " ") .. n
+}
+
 mod pts() -> int {
   return WCOST[mt] * nMsl + nFlr + nChf + nGun
 }
@@ -254,9 +261,9 @@ mod showBrief() {
 
 mod line(r: int, k: int, label: string, val: string, note: string) {
   if cur == k {
-    rows[r] = "<color=\"ffd040\">          > " .. label .. "   - " .. val .. " +   " .. note .. "</>"
+    rows[r] = "<color=\"ffd040\">          > " .. label .. "   - " .. val .. " +   " .. note .. "</>████████████████████████"
   } else {
-    rows[r] = "<color=\"c0c4d0\">            " .. label .. "   - " .. val .. " +   " .. note .. "</>"
+    rows[r] = "<color=\"c0c4d0\">            " .. label .. "   - " .. val .. " +   " .. note .. "</>████████████████████████"
   }
 }
 
@@ -266,12 +273,12 @@ mod showArmory() {
   rows[3] = "<color=\"ffd040\">                                             ARMORY</>"
   rows[5] = "<color=\"ffffff\">" .. "                         MISSION " .. (msn + 1) .. ": " .. MNAME[m] .. "</>"
   let pp = pts()
-  rows[8] = (if pp >= 24 then "<color=\"ff8a20\">" else "<color=\"30ff60\">") .. "                         PAYLOAD " .. pp .. " / 24 POINTS USED</>"
-  line(12, 0, "MISSILE TYPE ", WNAME[mt], "")
-  line(15, 1, "MISSILES     ", "" .. nMsl, WCOST[mt] .. " PT EACH")
-  line(18, 2, "FLARE PAIRS  ", "" .. nFlr, "1 PT A PAIR  (Q, BEATS IR)")
-  line(21, 3, "CHAFF PAIRS  ", "" .. nChf, "1 PT A PAIR  (C, BEATS RADAR)")
-  line(24, 4, "GUN ROUNDS   ", "" .. (nGun * 200), "1 PT PER 200")
+  rows[8] = (if pp >= 24 then "<color=\"ff8a20\">" else "<color=\"30ff60\">") .. "                         PAYLOAD " .. padn(pp) .. " / 24 POINTS USED</>███████████████████████████████████████"
+  line(12, 0, "MISSILE TYPE ", WPAD[mt], "                              ")
+  line(15, 1, "MISSILES     ", padn(nMsl), WNOTE[mt])
+  line(18, 2, "FLARE PAIRS  ", padn(nFlr), "1 PT A PAIR  (Q, BEATS IR)    ")
+  line(21, 3, "CHAFF PAIRS  ", padn(nChf), "1 PT A PAIR  (C, BEATS RADAR) ")
+  line(24, 4, "GUN ROUNDS   ", padn(nGun * 200), "1 PT PER 200                  ")
   rows[29] = "<color=\"40e0ff\">            " .. WNAME[mt] .. ": " .. WD1[mt] .. "</>"
   rows[31] = "<color=\"40e0ff\">            " .. WD2[mt] .. "  LOCK " .. WLOCK[mt] .. "  RANGE " .. WRNG[mt] .. "  DAMAGE " .. WDMG[mt] .. "</>"
   rows[36] = "<color=\"ff8a20\">            " .. MINTEL[m] .. "</>"
@@ -1205,9 +1212,9 @@ on tick {
       } else if stT == 50 {
         clearText()
         rows[8] = "<color=\"ffd040\">                              MISSION " .. (msn + 1) .. " COMPLETE</>"
-        rows[14] = "<color=\"ffffff\">                              BOGEYS DOWNED   " .. kills .. "</>"
-        rows[16] = "<color=\"ffffff\">                              JETS LEFT       " .. jets .. "</>"
-        rows[18] = "<color=\"ffffff\">                              SCORE           " .. score .. "</>"
+        rows[14] = "<color=\"ffffff\">                              BOGEYS DOWNED   " .. padn(kills) .. "</>███████████████████████████████████████████"
+        rows[16] = "<color=\"ffffff\">                              JETS LEFT       " .. padn(jets) .. "</>███████████████████████████████████████████"
+        rows[18] = "<color=\"ffffff\">                              SCORE           " .. padn(score) .. "</>███████████████████████████████████████████"
         rows[24] = if msn % 4 == 3 then "<color=\"40e0ff\">         ALL MISSIONS FLOWN. THEY GIVE YOU A MEDAL SHAPED LIKE A SLIGHTLY BIGGER MEDAL.</>" else "<color=\"40e0ff\">               THE COMMANDER NODS. IT IS THE MOST EMOTION HE HAS SHOWN IN YEARS.</>"
         rows[26] = if msn % 4 == 3 then "<color=\"40e0ff\">                  THEN THEY SEND YOU BACK OUT. THE ENEMY HAS BEEN PRACTICING.</>" else "<color=\"40e0ff\">            THE JET IS REPAIRED AND RE-ARMED BY PEOPLE WHO DO NOT GET ENOUGH CREDIT.</>"
         rows[34] = "<color=\"30ff60\">                               PRESS SPACE FOR THE NEXT BRIEFING</>"
