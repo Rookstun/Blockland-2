@@ -242,6 +242,7 @@ var bf: float[] = ${zeros(NB, '0.0')}
 var bvx: float[] = ${zeros(NB, '0.0')}
 var dop: float[] = [0.0, 0.0, 0.0]
 var dT: int[] = [0, 0, 0]
+var dpw: int[] = [9, 9, 9]
 var nextDoor: int = 0
 var rx: int[] = []
 var ry: int[] = []
@@ -421,6 +422,7 @@ mod encRow(r: int) {
 }
 mod setScene() {
   bg.copyFrom(BGROAD)
+  for d in 0..3 { dpw[d] = 9 }
   fb.copyFrom(bg)
   for i in 0..H { dirty[i] = 1 }
   rx.clear()
@@ -442,10 +444,19 @@ mod draw() {
   rh.clear()
   let fx: int = floor(hx)
   let hfy: int = floor(hf)
+  // door panels live in bg and repaint only when they move (as tracked sprites they resent rows 4-20 every frame and tore in game)
   for d in 0..3 {
     let pw: int = floor(6.0 * (1.0 - dop[d]))
-    if pw > 0 { fillRect(DOORX[d], 4, pw, 17, 13) }
-    if pw > 2 { fillRect(DOORX[d] + pw - 2, 14, 1, 1, 4) }
+    if pw != dpw[d] {
+      dpw[d] = pw
+      for j in 0..102 {
+        let cx = DOORX[d] + j % 6
+        let cy = 4 + j / 6
+        let c = if j % 6 >= pw then 0 else (if pw > 2 && cy == 14 && j % 6 == pw - 2 then 4 else 13)
+        bg[cy * ${W} + cx] = c
+        put(cx, cy, c)
+      }
+    }
   }
   if state == 0 {
     drawSpr(if (t / 6) % 2 == 0 then ${S.hero} else ${S.hero2}, ${(W - 15) >> 1}, 13 + (t / 10) % 2, 0)
