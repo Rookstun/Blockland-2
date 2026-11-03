@@ -8,3 +8,13 @@
 {"kind":"birch","seed":55454,"at":[-3414,3212,252],"owner":{"id":"04e7a327-b209-406d-a8d3-38c99210316e","name":"Tree birch 55454"},"bricks":936,"when":"2026-10-12T18:08:31.889Z"}
 {"kind":"willow","seed":63373,"at":[-2886,3382,348],"owner":{"id":"01de68a0-89af-4b2d-a82d-a68b2572b97c","name":"Tree willow 63373"},"bricks":1750,"when":"2026-10-12T18:08:31.892Z"}
 {"kind":"palm","seed":71292,"at":[-2536,3352,468],"owner":{"id":"2f0f9c8e-c7d3-4027-adfa-6f31fd10a316","name":"Tree palm 71292"},"bricks":304,"when":"2026-10-12T18:08:31.895Z"}
+{"kind":"dead","seed":11,"at":[2260,-20998,0],"owner":{"id":"ee0f0225-b7f6-40b4-a913-8110849bdc25","name":"Tree dead 11"},"bricks":867,"when":"2026-11-03T02:11:31.026Z"}
+{"kind":"autumn","seed":7930,"at":[1872,-20480,0],"owner":{"id":"4e3146ff-b439-4c83-abb2-e7d95f862625","name":"Tree autumn 7930"},"bricks":2144,"when":"2026-11-03T02:11:31.029Z"}
+{"kind":"palm","seed":15849,"at":[2074,-20500,0],"owner":{"id":"6864d0c9-9f0a-4842-a4f9-24ca48a55e1e","name":"Tree palm 15849"},"bricks":278,"when":"2026-11-03T02:11:31.031Z"}
+{"kind":"pine","seed":23768,"at":[1796,-21162,0],"owner":{"id":"3732df49-5155-4267-a8c3-c31ee89abe04","name":"Tree pine 23768"},"bricks":1860,"when":"2026-11-03T02:11:31.032Z"}
+{"kind":"pine","seed":31687,"at":[2482,-20690,0],"owner":{"id":"ce4a12ae-a4f7-4f47-a853-38f22c77f437","name":"Tree pine 31687"},"bricks":1243,"when":"2026-11-03T02:11:31.034Z"}
+{"kind":"dead","seed":39606,"at":[2392,-20882,0],"owner":{"id":"7fa2e813-465e-4011-a76a-54291c74a373","name":"Tree dead 39606"},"bricks":1010,"when":"2026-11-03T02:11:31.035Z"}
+{"kind":"willow","seed":47525,"at":[2054,-20960,0],"owner":{"id":"1197c7d6-dc8b-4705-a280-a2fdfe369574","name":"Tree willow 47525"},"bricks":1454,"when":"2026-11-03T02:11:31.037Z"}
+{"kind":"autumn","seed":55444,"at":[2426,-21264,0],"owner":{"id":"69a14ee8-690a-47bc-a859-c95cac2d91a7","name":"Tree autumn 55444"},"bricks":1949,"when":"2026-11-03T02:11:31.040Z"}
+{"kind":"autumn","seed":63363,"at":[1686,-20870,0],"owner":{"id":"eb6c57c1-47ac-4aa3-ae0e-8deec58c6db1","name":"Tree autumn 63363"},"bricks":1495,"when":"2026-11-03T02:11:31.042Z"}
+{"kind":"dead","seed":71282,"at":[2052,-21332,0],"owner":{"id":"7cc861dc-1731-4ea3-ab9a-aafcafa4e92e","name":"Tree dead 71282"},"bricks":462,"when":"2026-11-03T02:11:31.044Z"}
