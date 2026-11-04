@@ -30,6 +30,9 @@ No secrets are in this file. Ask the owner (renderman) to add your SSH key; neve
      User max
    ```
    Send the owner your public key (`~/.ssh/id_ed25519.pub`) to add to `~max/.ssh/authorized_keys`.
+   Claude's tools run `ssh pzedlo.hopto.org ...` with `BatchMode=yes`, so you need **key auth with no prompt**
+   (ssh-agent). Test: `ssh pzedlo.hopto.org 'ls ~/omegga-server/plugins'`.
+   The server is Ubuntu 24.04; Node is `~/node22/bin/node` (not on PATH by default).
    Second server: `ssh -p 2223 bungus@192.168.5.137` (LAN only, `notes/bungus.md`).
 2. **The repo (git).** Bare repo on the server:
    ```bash
@@ -40,9 +43,6 @@ No secrets are in this file. Ask the owner (renderman) to add your SSH key; neve
    corpus data are gitignored: ask for those if you will regen the map. Keep `core.autocrlf false`.
 3. **Node 22** locally (all tools are plain `.mjs`, almost no npm deps). Python 3 for a few helpers.
    PowerShell only for `eyes/gamecap.ps1` (Windows).
-   Claude's tools run `ssh pzedlo.hopto.org ...` with `BatchMode=yes`, so you need **key auth with no prompt**
-   (ssh-agent). Test: `ssh pzedlo.hopto.org 'ls ~/omegga-server/plugins'`.
-   The server is Ubuntu 24.04; Node is `~/node22/bin/node` (not on PATH by default).
 4. **Claude Code** (CLI or desktop app), opened in the repo root. It loads automatically:
    - `CLAUDE.md` -> project rules (short; links to `BUILDING.md` and `notes/`).
    - `.mcp.json` -> the `brickadia` MCP server (`tools/mcp/brickadia-mcp.mjs`, no deps). Approve it on first start.
