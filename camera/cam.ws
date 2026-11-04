@@ -1,6 +1,6 @@
 // cam.ws -- security camera + monitor (owner 2026-11-03: "we are going to make a camera", picked "security cam + monitor").
-// The chip sits behind the monitor (world grid). It spawns the camera prop (cam_prop.brz, frozen) and keeps it at the pose;
-// every tick it casts 2 rows of the W x H picture from the camera: ray = forward + right*u + up*v, chained 100-unit
+// The chip sits behind the monitor (world grid). It spawns the camera prop (cam_prop.brz, frozen); the picture is filmed
+// from wherever the prop is (players can grab and carry it). Every tick 2 rows of the W x H picture from the prop: ray = forward + right*u + up*v, chained 100-unit
 // sweeps (a Sweep reaches at most 100 units) over bricks, map and players, HitColor shaded by the hit normal and fogged,
 // sky on a miss. Rows -> NS text strips of coloured blocks (2 rows each) wired to the screen. build.mjs fills //@...@.
 // /cam here = camera at your eye looking where you look; /cam fov N (20..120); /cam off | on.
@@ -54,6 +54,7 @@ on ChatCommand("cam", "Security camera: /cam here | /cam fov N | /cam off | /cam
     yaw = y
     pitch = p
     prop.SetLocationRotation(aim.Origin, Rotation(p, y, 0.0))
+    prop.SetFrozen(true)
     ctrl.ShowStatusMessage("The camera is now watching from right where you are. It finds you fascinating. Step aside.")
   } else if cmd == "fov" {
     let f = clamp(ParseNumber(if sp.Found then sp.Right else "70"), 20.0, 120.0)
@@ -79,27 +80,36 @@ on ServerUptime() {
   let f0 = fov
   let rw = rr
   let k0 = chk
-  // the prop: (re)spawn it whenever it is gone (world reloads drop spawned prefabs; IsFrozen of nothing is false)
+  // the view follows the prop: carry it, drop it, knock it over, it films from wherever it is. An empty entity (never
+  // spawned, or dropped by a world reload) is at 0 0 0: then respawn it at the last remembered spot (E/yaw/pitch,
+  // refreshed every 2 s). Freeze AFTER moving: a move wakes the grid.
+  let lr = prop.GetLocationRotation()
+  let pl = lr.Vector
+  let have = Magnitude(pl) > 1.0
   if k0 + dt > 2.0 {
     chk = 0.0
-    if !prop.IsFrozen() {
-      let e = SpawnPrefab(prefab = $./cam_prop.brz, lifetime = 0.0, limit = 1)
-      e.SetFrozen(true)
+    if have {
+      let eu = lr.Rotation.ToEuler()
+      E = pl
+      yaw = eu.Yaw
+      pitch = eu.Pitch
+    } else {
+      let e = SpawnPrefab(prefab = $./cam_prop.brz, lifetime = 0.0, limit = 4)
       e.SetLocationRotation(E0, Rotation(p0, y0, 0.0))
+      e.SetFrozen(true)
       prop = e
+      PrintToConsole(Fmt("cam|prop|{A:.0}|{B:.0}|{C:.0}", E0.x, E0.y, E0.z))
     }
   } else {
     chk = k0 + dt
   }
-  if on0 {
-    let ya = Deg2Rad(y0)
-    let pa = Deg2Rad(p0)
-    let F = Vec(cos(pa) * cos(ya), cos(pa) * sin(ya), sin(pa))
-    let R = Vec(0.0 - sin(ya), cos(ya), 0.0)
-    let U = Vec(0.0 - sin(pa) * cos(ya), 0.0 - sin(pa) * sin(ya), cos(pa))
+  if on0 && have {
+    let F = Rotate(Vec(1.0, 0.0, 0.0), lr.Rotation)
+    let R = Rotate(Vec(0.0, 1.0, 0.0), lr.Rotation)
+    let U = Rotate(Vec(0.0, 0.0, 1.0), lr.Rotation)
     let TH = tan(Deg2Rad(f0) * 0.5)
     let TV = TH * //@ASPECT@
-    let O = E0 + F * 8.0
+    let O = pl + F * 8.0
 //@ROWS@
     let t = row0 .. "\n" .. row1
 //@SET@

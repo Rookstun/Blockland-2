@@ -13,7 +13,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const MAP_OWNER = { id: OWNER.id, name: OWNER.name, display_name: OWNER.display };
 const W = 32, H = 18, CELL = 4, NS = H / 2;          // 128 x 72 picture, 2 rows per strip
 const SEGS = 8;                                       // sweeps reach 100 units: camera sees 800
-const POSE = { E: [8040, -20150, 160], yaw: 90, pitch: -15 }; // default: watching the grapple desk (live spot)
+const POSE = { E: [8040, -20100, 90], yaw: 90, pitch: -10 }; // default: watching the grapple desk (live spot)
 
 // ---- compiler
 const sdk = path.join(here, '..', 'tools', 'wspkg');
