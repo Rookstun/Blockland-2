@@ -181,7 +181,8 @@ function buildReceiverOnce(lib, L, { event, owner, refs = null, debug = false, p
   // lane j: own owner, own chip (spread across the hollow back), own event
   const OL = lj ? w.addOwner(laneOwner(owner, lj)) : O;
   let i = 0;
-  const CG = inChip ? chip([L.gate[0] + (lj ? (lj % 2 ? -1 : 1) * 12 * Math.ceil(lj / 2) : 0), L.gate[1] + 22, L.gate[2] + L.z0 + 10], G, OL) : null;
+  // lane chips 3 across x 2 high (12 apart), so the cabinet only has to be as wide as its screen
+  const CG = inChip ? chip([L.gate[0] + [0, -12, 12][lj % 3], L.gate[1] + 22, L.gate[2] + L.z0 + 10 + (Math.floor(lj / 3) % 2 ? -7 : 7)], G, OL) : null;
   const gate = (c, data = {}, extra = {}) => {
     if (CG) {
       const h = w.addBrick({ asset: c.BRICK, position: [(i % 8) * 20, Math.floor(i / 8) * 20, 2], color: [200, 200, 200], owner_index: OL, components: [{ type: c.NAME, data }], ...extra }, CG);
@@ -367,19 +368,17 @@ export function receiverBoxes(L) {
 // Its own chat commands: /tvw<id> prints `tvpos|<id>|x|y|z|yaw` (grid origin + yaw; the plugin finds the TV),
 // /tvx<id> destroys it. Bricks.Clear does NOT remove a loose grid (ClearRegion round it does).
 // File coords: origin = floor under the screen centre, screen facing -y.
-const TV_B = 6, TV_D = 46, TV_LIFT = 30;
+// 2026-11-03 (owner: "that TV is stretched so fat for no reason"): slim flat-screen, bezel hugs the screen
+const TV_B = 4, TV_D = 34, TV_LIFT = 16;
 export const TV_DUMP = [-9000, -20000, 20000];
 /** ClearRegion box (centre, half) that takes a TV parked at TV_DUMP (it falls a little before the clear lands). */
 export const tvDumpBox = () => [[TV_DUMP[0], TV_DUMP[1], TV_DUMP[2] - 100], [200, 200, 300]];
-// cabinet half width: at least 76 so the gates fit in its back (a small 1x1-tile screen gets a wide bezel)
-const tvHalf = L => Math.max(L.width / 2 + TV_B, 76);
+const tvHalf = L => L.width / 2 + TV_B;
 export function tvLayout({ tw = 32, th = 18, k = 2, cell = 2, lanes = 1 } = {}) {
-  // gates in the hollow back: rows at y 18 / 34, z mid-screen, 16 apart (inner half width >= 66)
+  // every gate sits in the lane chips in the hollow back (chip centre = mid-screen, see buildReceiverOnce)
   const L0 = tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0] });
-  const inner = tvHalf(L0) - 4;
-  const gstep = Math.min(16, Math.floor((inner - 10) / 3.5 / 2) * 2);
-  if (gstep < 12) throw Error('tgrid: TV too narrow for its gates');
-  return tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0], gstep, lanes, gate: [0, 2, Math.round(L0.height / 2 / 2) * 2 - 6] });
+  if (L0.width < 44 || L0.height < 34) throw Error('tgrid: TV too small for its lane chips');
+  return tLayout({ tw, th, k, cell, lift: TV_LIFT, depth: 2, frame: false, colour: [0, 0, 0], lanes, gate: [0, 2, Math.round(L0.height / 2 / 2) * 2 - 6] });
 }
 
 export function buildTv(lib, L, { event, owner, id, debug = false } = {}) {
@@ -391,18 +390,18 @@ export function buildTv(lib, L, { event, owner, id, debug = false } = {}) {
     box([0, -1, zt - TV_B / 2], [X, 3, TV_B / 2], BEZ);
     box([0, -1, zb + TV_B / 2], [X, 3, TV_B / 2], BEZ);
     for (const s of [1, -1]) box([s * (W + X) / 2, -1, zs + H / 2], [(X - W) / 2, 3, H / 2], BEZ);
-    // back plate + hollow housing (gates inside) + back cover
+    // back plate, then a narrower hollow hump (the lane chips live in it) with its cover
     box([0, 4, (zb + zt) / 2], [X, 2, (zt - zb) / 2], CAB);
-    const hy = (6 + TV_D - 4) / 2, hh = (TV_D - 4 - 6) / 2;
-    box([0, hy, zt - 2], [X, hh, 2], CAB);
-    box([0, hy, zb + 2], [X, hh, 2], CAB);
-    for (const s of [1, -1]) box([s * (X - 2), hy, (zb + zt) / 2], [2, hh, (zt - zb) / 2 - 4], CAB);
-    box([0, TV_D - 2, (zb + zt) / 2], [X, 2, (zt - zb) / 2], CAB);
-    // stand + foot (deep, so it doesn't tip)
-    box([0, 20, (4 + zb) / 2], [12, 10, (zb - 4) / 2], FOOT);
-    box([0, 20, 2], [Math.min(X, 60), 36, 2], FOOT);
+    const hx = Math.max(Math.round(W * 0.6), 22), hz = (zt - zb) / 2 - TV_B, zc = (zb + zt) / 2, hy = (6 + TV_D - 4) / 2, hh = (TV_D - 4 - 6) / 2;
+    box([0, hy, zc + hz - 2], [hx, hh, 2], CAB);
+    box([0, hy, zc - hz + 2], [hx, hh, 2], CAB);
+    for (const s of [1, -1]) box([s * (hx - 2), hy, zc], [2, hh, hz - 4], CAB);
+    box([0, TV_D - 2, zc], [hx, 2, hz], CAB);
+    // neck under the hump + wide deep foot (low and heavy, doesn't tip)
+    box([0, hy, (4 + zc - hz) / 2], [8, 6, (zc - hz - 4) / 2], FOOT);
+    box([0, hy - 4, 2], [Math.round(X * 0.7), TV_D / 2 + 6, 2], FOOT);
     // power light
-    box([X - 10, -5, zb + TV_B / 2], [2, 1, 1], [40, 255, 60]);
+    box([X - 8, -5, zb + TV_B / 2], [2, 1, 1], [40, 255, 60]);
     const RG = { BRICK: 'B_1x1_Gate_Internal_ReadBrickGrid', NAME: 'BrickComponentType_Internal_ReadBrickGrid', PORTS: { BrickGrid: 'BrickGrid' } };
     const rg = gate(RG);
     // /tvw<id>: where am I
