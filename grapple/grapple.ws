@@ -23,7 +23,7 @@ mod show(c: controller, es: int, ls: int, len: float) {
 mod give(ch: character) {
   let c = ch.ControllerOf()
   ch.AddInventoryItemAdv($BRItemBase/Weapon_Pistol, damage = 0.0, itemName = "Grapple Gun")
-  let s = serial + 1
+  let s = (serial % 100) * 10000000000 + round(GetUnixTime()) + 1  // unique across desk reloads (rope.kill matches s != serial)
   serial = s
   SendGlobalCustomEvent("rope.kill", c.GetUserId(), s)
   let e = SpawnPrefab(prefab = $./rope.brz, offset = Vec(0.0, 0.0, 8000.0), lifetime = 0.0, limit = 64)

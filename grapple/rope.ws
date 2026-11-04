@@ -1,6 +1,6 @@
 // rope.ws -- one per player holding a grapple gun (faik + Penta 2026-11-03: "grapple hook gun ... realistic
 // swing physics, bounds, elasticity ... sliders for elasticity and rope length"). grapple.ws spawns it 8000 up
-// and sends rope.init. Every tick: LMB with the gun out fires the hook (a sweep along the aim); LMB again, RMB,
+// and sends rope.init. Firing the gun (LMB) throws the hook (chained sweeps along the shot); firing again, RMB,
 // putting the gun away or dying lets go. While hooked the rope is a one-sided spring-damper on the player
 // (AddVelocity): it only pulls when stretched past its rest length, so you swing, fall slack and bounce.
 // Elasticity e 0..1: rope stiffness K_STIFF..K_SOFT, and how much outward speed the rope eats (rigid = all).
@@ -10,7 +10,6 @@
 
 @invisible
 
-const RANGE = 4000.0
 const K_STIFF = 120.0
 const K_SOFT = 6.0
 const MAXDV = 900.0
@@ -23,7 +22,8 @@ var anchor: vector = Vec(0.0, 0.0, 0.0)
 var rest: float = 0.0
 var elast: float = 0.35
 var ropeLen: float = 600.0
-var lmbPrev: bool = false
+var hv: vector[] = [Vec(0.0, 0.0, 0.0)]
+var hk: int[] = [0]
 var home: vector = Vec(0.0, 0.0, 0.0)
 // BEAD_VARS
 
@@ -53,9 +53,33 @@ on GlobalCustomEvent("grap.cfg") -> (e: float, l: float) {
 
 // a newer rope for the same player replaces this one
 on GlobalCustomEvent("rope.kill") -> (uid: string, s: int) {
-  if ready && s > serial && uid == who.GetUserId() {
+  if ready && s != serial && uid == who.GetUserId() {
     ready = false
     die()
+  }
+}
+
+// the hook = firing the gun: with a gun out, left click fires it and never sets PressedLeftMouse (2026-11-03).
+// A Sweep reaches at most 100 units: the throw is chained sweeps (build.mjs fills HOOK_CHAIN), first hit in hv/hk.
+on CharacterFiredWeapon() -> (shooter, direction, start, weapon, weaponName) {
+  if ready && weapon == $BRItemBase/Weapon_Pistol && shooter.ControllerOf().GetUserId() == who.GetUserId() {
+    if hooked {
+      hooked = false
+      park()
+      shooter.PlayAudioAt($BrickOneShotAudioDescriptor/BOSA_Buttons_Button_2_Release)
+    } else {
+      let ad = Normalize(direction)
+      hk[0] = 0
+// HOOK_CHAIN
+      if hk[0] == 1 {
+        anchor = hv[0]
+        rest = max(min(Distance(shooter.GetLocation(), hv[0]), ropeLen), 40.0)
+        hooked = true
+        shooter.PlayAudioAt($BrickOneShotAudioDescriptor/BOSA_Buttons_Button_1_Press)
+      } else {
+        who.ShowStatusMessage("The hook sails off into nothing and comes back looking embarrassed.")
+      }
+    }
   }
 }
 
@@ -66,8 +90,6 @@ on ServerUptime() {
   let a0 = anchor
   let rs0 = rest
   let e0 = elast
-  let L0 = ropeLen
-  let lp = lmbPrev
   if r0 {
     if who.GetUserId() == "" {
       ready = false
@@ -78,24 +100,10 @@ on ServerUptime() {
       let alive = Magnitude(p) > 1.0
       let inp = ch.GetInputs()
       let holding = alive && ch.GetInventoryEntry(ch.GetCurrentInventorySlot()).Item == $BRItemBase/Weapon_Pistol
-      let lmb = holding && inp.PressedLeftMouse
-      lmbPrev = lmb
-      if h0 && (!holding || inp.PressedRightMouse || (lmb && !lp)) {
+      if h0 && (!holding || inp.PressedRightMouse) {
         hooked = false
         park()
         ch.PlayAudioAt($BrickOneShotAudioDescriptor/BOSA_Buttons_Button_2_Release)
-      } else if lmb && !lp {
-        let aim = ch.GetAim()
-        let r = Sweep(aim.Origin, aim.Direction, RANGE, ignore = ch, detectBricks = true, detectMap = true)
-        on r.Hit {
-          anchor = r.HitLocation
-          rest = max(min(Distance(p, r.HitLocation), L0), 40.0)
-          hooked = true
-          ch.PlayAudioAt($BrickOneShotAudioDescriptor/BOSA_Buttons_Button_1_Press)
-        }
-        on r.Miss {
-          who.ShowStatusMessage("The hook sails off into nothing and comes back looking embarrassed.")
-        }
       } else if h0 {
         let v = ch.GetLinearVelocity()
         let d = p - a0

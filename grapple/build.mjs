@@ -41,11 +41,21 @@ function compile(src, name, prefabs) {
 // ---- rope chip: unrolled beads
 const I = [...Array(BEADS).keys()];
 const f = i => (i + 0.5) / BEADS;
+const HOOK_SEGS = 40; // sweeps reach 100 units: 40 chained = 4000 range
+const hook = (k, ind) => `${ind}let h${k} = Sweep(${k ? `start + ad * ${(k * 99).toFixed(1)}` : 'start'}, ad, 100.0, ignore = shooter, detectBricks = true, detectMap = true, ignoreOwningGrid = false)
+${ind}on h${k}.Hit {
+${ind}  hv[0] = h${k}.HitLocation
+${ind}  hk[0] = 1
+${ind}}
+${ind}on h${k}.Miss {
+${k + 1 < HOOK_SEGS ? hook(k + 1, ind + '  ') : ''}${ind}}
+`;
 const ropeSrc = fs.readFileSync(path.join(here, 'rope.ws'), 'utf8')
   .replace('// BEAD_VARS', I.map(i => `var b${i}: entity`).join('\n'))
   .replace('// BEAD_PARK', I.map(i => `  b${i}.SetLocation(home)`).join('\n'))
   .replace('// BEAD_KILL', I.map(i => `  b${i}.DestroySpawnedPrefab()`).join('\n'))
   .replace('// BEAD_SPAWN', I.map(i => `  let s${i} = SpawnPrefab(prefab = $./bead.brz, lifetime = 0.0, limit = 1)\n  s${i}.SetFrozen(true)\n  b${i} = s${i}`).join('\n'))
+  .replace('// HOOK_CHAIN', hook(0, '      ').replace(/\n$/, ''))
   .replace('// BEAD_DRAW', I.map(i => `        b${i}.SetLocation(hand + ScaleVec(span, ${f(i).toFixed(4)}) - Vec(0.0, 0.0, sag * ${(4 * f(i) * (1 - f(i))).toFixed(4)}))`).join('\n'));
 fs.writeFileSync(path.join(here, 'rope.gen.ws'), ropeSrc);
 const rope = reown(compile(ropeSrc, 'rope', { './bead.brz': bead }));
