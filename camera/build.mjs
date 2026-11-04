@@ -1,5 +1,5 @@
 // Security camera (owner 2026-11-03). node camera/build.mjs ->
-//   cam_prop.brz  the camera body (lens = local +x at the origin, collision off), spawned + posed by the chip
+//   cam_prop.brz  the camera body (lens = local +x at the origin, grabbable), spawned + posed by the chip
 //   cam.gen.ws    cam.ws with the unrolled ray rows
 //   monitor.brz   wall monitor on a stand (ground z 0, screen faces -y) + the chip behind it, strips wired to its pins
 // Load: br.Prefab.Load "monitor" x y z 0 16 with z = ground. Owner renderman (spawns the prop).
@@ -38,7 +38,8 @@ const overlapCheck = boxes => {
 // ---- camera prop: grey body behind the lens, black lens, red tally light; all collision off (rays and players pass)
 const pw = new lib.World();
 const po = pw.addOwner(MAP_OWNER);
-const pb = (size, position, color, more = {}) => pw.addBrick({ asset: 'PB_DefaultMicroBrick', size, position, color, owner_index: po, collision: OFF, ...more });
+// collision on (default): with it all off nobody could grab, carry or tool-move the prop (faik 2026-11-04 'when i moved the camera it didnt do anything')
+const pb = (size, position, color, more = {}) => pw.addBrick({ asset: 'PB_DefaultMicroBrick', size, position, color, owner_index: po, ...more });
 pb([8, 5, 5], [-10, 0, 0], [200, 200, 205]);                                     // body x -18..-2
 pb([2, 3, 3], [0, 0, 0], [15, 15, 18], { material: 'BMC_Glass' });              // lens x -2..2
 pb([1, 1, 1], [-4, 0, 6], [255, 30, 30], { material: 'BMC_Glow', material_intensity: 4 }); // tally light on top
