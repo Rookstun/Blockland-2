@@ -4,7 +4,7 @@ For a new collaborator who will work in this repo with Claude Code and SSH into 
 Goal: you get the same Claude that the owner has: same rules, same tools, same memory. Read this once,
 then let Claude read the files it links to (it does that by itself through `CLAUDE.md`).
 
-No secrets are in this file. Ask the owner (renderman) for SSH access; never commit keys, tokens or passwords.
+No secrets are in this file. Ask the owner (renderman) to add your SSH key; never commit keys, tokens or passwords.
 
 ---
 
@@ -22,23 +22,27 @@ No secrets are in this file. Ask the owner (renderman) for SSH access; never com
 
 ## 2. Get set up (one time)
 
-1. **The repo.** It is a LOCAL git repo on the owner's PC (`C:\Users\pooper\Documents\claudeBS\brickadia`, no remote).
-   Get a copy from the owner (git bundle or zip). Big outputs (`mapgen/out*`), vendored tools and corpus data are gitignored:
-   ask for those too if you will regen the map. Keep `core.autocrlf false`.
-2. **Node 22** locally (all tools are plain `.mjs`, almost no npm deps). Python 3 for a few helpers.
-   PowerShell only for `eyes/gamecap.ps1` (Windows).
-3. **SSH.** Put this in `~/.ssh/config` (ask the owner for your user / key and the public address if you are off the LAN):
+1. **SSH.** Server `pzedlo.hopto.org`, port **2221**, user **max** (LAN address `192.168.4.131`). Put this in `~/.ssh/config`:
    ```
    Host pzedlo pzedlo.hopto.org
-     HostName pzedlo.hopto.org   # owner's LAN uses 192.168.4.131
+     HostName pzedlo.hopto.org   # on the owner's LAN: 192.168.4.131
      Port 2221
-     User <your user>
+     User max
    ```
+   Send the owner your public key (`~/.ssh/id_ed25519.pub`) to add to `~max/.ssh/authorized_keys`.
+   Second server: `ssh -p 2223 bungus@192.168.5.137` (LAN only, `notes/bungus.md`).
+2. **The repo (git).** Bare repo on the server:
+   ```bash
+   git clone pzedlo:git/brickadia.git brickadia
+   ```
+   (full URL: `ssh://max@pzedlo.hopto.org:2221/home/max/git/brickadia.git`, branch `main`). The owner's working copy pushes there
+   (`origin`); pull before you work, commit only your own hunks, push after. Big outputs (`mapgen/out*`), vendored tools and
+   corpus data are gitignored: ask for those if you will regen the map. Keep `core.autocrlf false`.
+3. **Node 22** locally (all tools are plain `.mjs`, almost no npm deps). Python 3 for a few helpers.
+   PowerShell only for `eyes/gamecap.ps1` (Windows).
    Claude's tools run `ssh pzedlo.hopto.org ...` with `BatchMode=yes`, so you need **key auth with no prompt**
    (ssh-agent). Test: `ssh pzedlo.hopto.org 'ls ~/omegga-server/plugins'`.
    The server is Ubuntu 24.04; Node is `~/node22/bin/node` (not on PATH by default).
-   If your Linux user is not `max`, the paths below (`~/omegga-server`, `~/node22`) live under `/home/max`:
-   ask the owner for group access instead of copying them.
 4. **Claude Code** (CLI or desktop app), opened in the repo root. It loads automatically:
    - `CLAUDE.md` -> project rules (short; links to `BUILDING.md` and `notes/`).
    - `.mcp.json` -> the `brickadia` MCP server (`tools/mcp/brickadia-mcp.mjs`, no deps). Approve it on first start.

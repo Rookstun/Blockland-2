@@ -5,7 +5,7 @@
 - Live map in site = out_site_1021full (river rework) + later deltas (cut walls, nobank, nosoda, notav, flush cabinets; newest base named in notes/mapgen.md + notes/shops.md). Not deployed yet: snow tier fix (~/tierdeploy), footpaths/grass tones. Details: notes/mapgen.md.
 
 ## Git
-- Workspace is a LOCAL git repo (no remote = private; core.autocrlf false). Commit after each change; prefer git over new `.pre_*` backups. .gitignore drops mapgen/out*, editor cache, vendored tools, corpus data. Other sessions commit here too: commit only your own hunks.
+- Workspace git remote `origin` = `pzedlo:git/brickadia.git` (bare repo on the server, private; core.autocrlf false; push after committing). Commit after each change; prefer git over new `.pre_*` backups. .gitignore drops mapgen/out*, editor cache, vendored tools, corpus data. Other sessions commit here too: commit only your own hunks.
 - Windows edits: Python `open(..., newline='')`; `sed -i` turns CRLF files (town.mjs) into LF.
 
 ## Gemini stand-in
