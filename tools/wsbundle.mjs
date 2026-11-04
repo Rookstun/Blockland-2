@@ -121,6 +121,8 @@ export async function bundle(bytes, { owner, offset = [0, 0, 0], hide = false, b
   for (const b of all) for (const c of b.comps) walk(c.data);
   const finish = ({ extraAssets = [], description = 'wsbundle' } = {}) => {
     w.makePrefab({});
+    // the chip's embedded prefabs (SpawnPrefab targets) under their original paths, or its spawners point at nothing
+    for (const p of r.prefabPaths()) if (!w.prefabList.some(([q]) => q === p)) w.prefabList.push([p, r.readPrefab(p)]);
     const opts = { bundle: { description }, externalAssets: [...ext, ...extraAssets] };
     let out = w.toBrz(opts);
     if (refs.length) {
