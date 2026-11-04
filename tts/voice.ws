@@ -117,6 +117,7 @@ mod parse() -> int {
   } else if two == "QU" { p = 25; q1 = 16; step = 2
   } else if two == "EE" || two == "EA" { p = 1; step = 2; vowelSeen = true
   } else if two == "OO" { p = 8; step = 2; vowelSeen = true
+  } else if two == "OU" && !isLetter(n2) { p = 8; step = 2; vowelSeen = true   // you, thou: OO, not OW
   } else if two == "OU" || two == "OW" { p = 5; q1 = 7; step = 2; vowelSeen = true
   } else if two == "AI" || two == "AY" { p = 12; q1 = 2; step = 2; vowelSeen = true
   } else if two == "OA" { p = 13; q1 = 7; step = 2; vowelSeen = true

@@ -22,6 +22,7 @@ def phonemes(text):
     elif two=='QU': p,q,step=25,[16],2
     elif two in('EE','EA'): p,step,vs=1,2,True
     elif two=='OO': p,step,vs=8,2,True
+    elif two=='OU' and n2 not in L: p,step,vs=8,2,True
     elif two in('OU','OW'): p,q,step,vs=5,[7],2,True
     elif two in('AI','AY'): p,q,step,vs=12,[2],2,True
     elif two=='OA': p,q,step,vs=13,[7],2,True
