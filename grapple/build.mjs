@@ -81,7 +81,9 @@ const TEXT = { Font: FONT, Rotation: 0, Skew: 0, Kerning: 0, LineHeight: 8, Widt
   Text: 'THE GRAPPLE DESK\nGold: take a Grapple Gun. Click to hook, click again to let go.\n'
     + 'Front row: ELASTICITY  rigid  ...  disturbingly bouncy\nBack row: ROPE LENGTH  short  ...  ill-advised\n'
     + 'Not responsible for ceilings, lamps or your dignity.' };
-brick('PB_DefaultMicroBrick', [130, 3, 30], [0, 37, 74], DARK, { components: [{ type: C.TextDisplay.NAME, data: TEXT }] }); // sign, face -y
+// sign, face -y, standing on the desk top behind the back row. At the live spot (8040 -19830) a big brick starts at
+// local y +30 above z ~50: the old sign (y 34..40) was rejected as overlapping on every load.
+brick('PB_DefaultMicroBrick', [130, 2, 30], [0, 26, 74], DARK, { components: [{ type: C.TextDisplay.NAME, data: TEXT }] });
 
 // buttons: [x, y, color, op, label]
 const lerp = (a, c, t) => a.map((v, i) => Math.round(v + (c[i] - v) * t));

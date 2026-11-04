@@ -1,7 +1,7 @@
 // pgun.ws -- one per player holding a Portal Gun (owner 2026-11-03: "portal gun ... ray casting using sweeps ...
 // brick color and player color ... a camera in which you can see the other side of the portal").
 // giver.ws spawns it 8000 up and sends pg.init; it spawns this player's two portals (blue + orange prefabs, frozen).
-// LMB with the gun out = blue portal on the surface you aim at, RMB = orange (aim ray = chained 100-unit sweeps:
+// firing the gun (LMB) = blue portal where the shot goes, RMB = orange (aim ray = chained 100-unit sweeps:
 // a Sweep reaches at most 100 units). Walk into one, come out of the other with your velocity turned through.
 // CAMERA: each portal's face is a W x H screen of coloured text cells. Every tick 2 rows of one portal are cast:
 // the ray from the owner's eye through that cell is carried through the portal (rotated 180 degrees about the
@@ -33,7 +33,6 @@ var c1: vector = Vec(0.0, 0.0, 0.0)
 var n1: vector = Vec(1.0, 0.0, 0.0)
 var r1: vector = Vec(0.0, -1.0, 0.0)
 var u1: vector = Vec(0.0, 0.0, 1.0)
-var lmbPrev: bool = false
 var rmbPrev: bool = false
 var rr: int = 0
 var side: int = 0
@@ -148,6 +147,13 @@ on GlobalCustomEvent("pg.shoot") -> (uid: string, shot: int, o: vector, d: vecto
   }
 }
 
+// blue = firing the gun: with a gun out, left click fires it and never shows up as PressedLeftMouse (2026-11-03)
+on CharacterFiredWeapon() -> (shooter, direction, start, weapon, weaponName) {
+  if ready && weapon == $BRItemBase/Weapon_GuardPistol && shooter.ControllerOf().GetUserId() == who.GetUserId() {
+    shoot(0, start, Normalize(direction), c1, on1, shooter)
+  }
+}
+
 // a newer gun for the same player replaces this one
 on GlobalCustomEvent("pg.kill") -> (uid: string, s: int) {
   if ready && s != serial && uid == who.GetUserId() {
@@ -159,7 +165,6 @@ on GlobalCustomEvent("pg.kill") -> (uid: string, s: int) {
 on ServerUptime() {
   let dt = min(DeltaTime(), 0.1)
   let rd = ready
-  let lp = lmbPrev
   let rp = rmbPrev
   let A0 = on0
   let A1 = on1
@@ -184,12 +189,10 @@ on ServerUptime() {
       let alive = Magnitude(p) > 1.0
       let inp = ch.GetInputs()
       let holding = alive && ch.GetInventoryEntry(ch.GetCurrentInventorySlot()).Item == $BRItemBase/Weapon_GuardPistol
-      let lmb = holding && inp.PressedLeftMouse
       let rmb = holding && inp.PressedRightMouse
-      lmbPrev = lmb
       rmbPrev = rmb
-      if (lmb && !lp) || (rmb && !rp) {
-        let shot = if lmb && !lp then 0 else 1
+      if rmb && !rp {
+        let shot = 1
         let aim = ch.GetAim()
         let ao = aim.Origin
         let ad = Normalize(aim.Direction)

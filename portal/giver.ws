@@ -8,7 +8,7 @@ var serial: int = 0
 mod give(ch: character) {
   let c = ch.ControllerOf()
   ch.AddInventoryItemAdv($BRItemBase/Weapon_GuardPistol, damage = 0.0, itemName = "Portal Gun")
-  let s = serial + 1
+  let s = (serial % 100) * 10000000000 + round(GetUnixTime()) + 1  // unique across pedestal reloads (pg.kill matches s != serial)
   serial = s
   SendGlobalCustomEvent("pg.kill", c.GetUserId(), s)
   let e = SpawnPrefab(prefab = $./pgun.brz, offset = Vec(0.0, 0.0, 8000.0), lifetime = 0.0, limit = 64)
