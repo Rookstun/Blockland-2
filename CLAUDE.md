@@ -14,3 +14,4 @@ Owner = renderman (in-game soapstain22 / 'abysmal garbage', id 891c4675-d18a-4ce
 - `BUILDING.md`: geometry rules, read before generating bricks.
 - `notes/ops.md`: server/ssh/bridge job ops, deploy rules, game traps, units/orientation, mapgen CLI, MCP/eyes, Gemini (ship.mjs gate).
 - `notes/`: wires, mapgen, houses, shops, items, plugins, media, arcade, bungus, history; `CLAUDE.md.pre_trim` = pre 10-07 notes. Grep before re-deriving; new write-ups go there, not here.
+- `HANDOFF.md`: onboarding for a new collaborator; `notes/claude-memory/` = copy of the owner's Claude memory (feedback rules).

@@ -1,0 +1,21 @@
+- [Brickadia pikmin project](brickadia-pikmin-project.md) — Wirescript+brs-js build pipeline via vendored WASM SDK; no Rust installed
+- [Omegga bridge](omegga-bridge.md) — build live on pzedlo via bridge plugin job inbox; reload via web RPC
+- [Mapgen style](mapgen-style.md) — Zelda caves, wedge-smoothed terrain, tile ceilings; user taste for the big map
+- [Upload all at once](upload-all-at-once.md) — map updates in ONE load, no chat quote anymore
+- [Handoff](../../../../Documents/claudeBS/brickadia/CLAUDE.md) — brickadia/CLAUDE.md holds geometry/rotation/server facts; read it, don't re-derive
+- [Chat commentary](chat-commentary.md) — NO chat announcements of changes/deploys (owner 2026-10-13)
+- [Windows clear of doors](windows-clear-of-doors.md) — never let windows touch doors; 0 is a valid coordinate (keep/bank bug 2026-10-05)
+- [Stairs need 3x3 landings](stairs-landings.md) — all stairs: 3-stud landings both ends, floor under treads, never across windows
+- [No live regens](no-live-regens.md) — ship diffs live, but bake every diff into generator/deploy scripts so regens repeat it
+- [Tune on varied data](tune-on-varied-data.md) — audio tuning needs many varied clips, not one video; don't break playing media with reloads
+- [Chat debug logs](chat-debug-logs.md) — debug chips via BroadcastChatMessage, read back from the server log
+- [Freeform layouts](freeform-layouts.md) — no uniform grids: semi-freeform real-world layouts, preview before deploying
+- [Keep XP always](keep-exp-always.md) — progress must survive every wipe/rebuild; verify the progress plugin restored XP
+- [KoL humour](kol-humor.md) — in-game writing in Kingdom of Loathing style, no references to the game
+- [Chips invisible](chips-invisible.md) — every microchip brick: visibility false + collision false (addMicrochip can't; build by hand)
+- [Deploy speed](deploy-speed.md) — big deltas tile-by-tile at full speed, launch once, no polling
+- [House changes need extras](house-changes-need-extras.md) — house moves orphan stands/NPCs/pots: mkdelta extras + deploydelta.mjs, never bricks alone
+- [Archive = remove](archive-means-remove.md) — owner's archive/legacy means delete from world, never labelled props
+- [No spathas/sabres](no-spathas-sabres.md) — broken weapons: never in loot, chests or new item pools
+- [rusya authority](rusya-authority.md) — rusya/pycr/руся = stikehbun, owner authority; say hi when seen
+- [House styles](house-styles.md) — new houses use dutch colonial/georgian/split-level/derwent/white tail/tavistock style (rusya 2026-11-02)
