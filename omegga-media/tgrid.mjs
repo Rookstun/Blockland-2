@@ -310,7 +310,8 @@ export function buildCartridge(lib, L, enc, { event, fps, dur, slot = 0, owner, 
   const now = gate(C.Expr_MathMultiply, { InputB: num(fps) }); wire(sw, 'Time', now, 'InputA');
   const clock = gate(C.Clock, { bEnabled: true, bPulseOn: false, OnTimeSeconds: 0.025, OffTimeSeconds: 0.025, IntervalSeconds: 0.05 });
   const tick = gate(C.Expr_EdgeDetectorExec); wire(clock, 'Pulse', tick, 'Input');
-  const lanes = inChip ? L.lanes ?? 1 : 1;
+  // only the lanes the packets use (a 6-lane TV played on 3 lanes gets no idle senders)
+  const lanes = inChip ? Math.min(L.lanes ?? 1, (enc.lane ?? [0]).reduce((m, l) => Math.max(m, l + 1), 1)) : 1;
   for (let lj = 0; lj < lanes; lj++) {
     const mine = enc.packets.map((_, i) => i).filter(i => (enc.lane?.[i] ?? 0) % lanes === lj);
     const NP = mine.length;

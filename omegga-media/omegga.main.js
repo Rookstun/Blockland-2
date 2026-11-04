@@ -1523,7 +1523,7 @@ module.exports = class Media {
     // lanes = receivers with their own owners (tgrid LANES: "more expensive ... less pixel tearing")
     // 2026-10-27 "too many bricks ... smaller pixel grid, heavier text screens": 16x9 tiles (2x2 micro, 4 units) of 10x10 blocks, same 160x90 picture, a quarter of the tiles
     // 2026-11-03: cell 6/10 = 96x54-unit screen in a slim cabinet (was 64x36 in a 152-wide box)
-    const cfg = { tw: 16, th: 9, k: 10, cell: 6 / 10, lanes: 6, ...(this.config['stream-tv'] ?? {}) };
+    const cfg = { tw: 16, th: 9, k: 10, cell: 6 / 10, lanes: 3, ...(this.config['stream-tv'] ?? {}) };
     const tv = { id, event: `og.tv.${id}`, owner: { id: `7e1e0715-0000-4b0b-9a11-${crypto.randomBytes(6).toString('hex')}`, name: `${name}'s TV`, display_name: `${name}'s TV` }, cfg, player: name, made: Date.now() };
     const L = this.tg.tvLayout(cfg);
     const ref = `media_tmp_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
@@ -1736,10 +1736,11 @@ module.exports = class Media {
     // rewritten (tgrid.mjs). `strips` = the older square screen of stacked text strips (ogrid.mjs).
     const tiles = (screen || !opts.includes('strips')) && !!this.tg;
     if (screen && !tiles) return this.whisper(name, '<color="f55">/stream needs tgrid.mjs.</>');
-    const fps = Math.max(1, Math.min(15, opt('fps') || (screen ? this.config['stream-fps'] ?? 8 : null) || (tiles ? this.config['ogrid-tile-fps'] ?? 4 : this.config['ogrid-fps'] || 2)));
+    const fps = Math.max(1, Math.min(15, opt('fps') || (screen ? this.config['stream-fps'] ?? 5 : null) || (tiles ? this.config['ogrid-tile-fps'] ?? 4 : this.config['ogrid-fps'] || 2)));
     const facing = opts.find(a => SCREEN_RIGHT[a]) ?? '-x';
     const withSound = !opts.includes('mute');
-    const chunkSec = Math.max(5, tiles ? this.config['ogrid-tile-chunk-seconds'] ?? 10 : this.config['ogrid-chunk-seconds'] ?? 20);
+    // 2026-11-03 (owner: "cheaper, decrease framerate, audio update time decreased"): /stream 5 fps, 3 lanes, 6 s chunks (sound swaps every 6 s)
+    const chunkSec = Math.max(5, screen ? this.config['stream-chunk-seconds'] ?? 6 : tiles ? this.config['ogrid-tile-chunk-seconds'] ?? 10 : this.config['ogrid-chunk-seconds'] ?? 20);
     const strips = this.og.stripsFor(n); // stacked text displays: one string caps at 32768 chars
     // runs a frame: what the strips can hold, and what the decoders get through in a frame's time
     // (4 loops share the owner's 10 ms wire budget a tick; 1416 runs at 2 fps ran live)
@@ -1888,7 +1889,7 @@ module.exports = class Media {
         for (let o = 0; o + fb <= raw.length; o += fb) rawFrames.push(raw.subarray(o, o + fb));
         if (!rawFrames.length) throw new Error('no frames decoded');
         // tiles: packets of tile updates (16 of the 20 packet slots a second, the rest lets a backlog catch up)
-        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (screen ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (screen ? this.config['stream-thresh'] ?? 32 : 28), refresh: screen ? (this.config['stream-refresh'] ?? 24) : 0, per: screen ? (this.config['stream-per'] ?? this.tg.perPacket(L)) : 120, full: [0, 2 * fps], lanes: tv ? L.lanes : 1 })
+        const frames = tiles ? this.tg.encodeTiles(rawFrames, L, tgState, { fps, perSec: this.config['ogrid-tile-packets-per-sec'] ?? (screen ? 20 : 16), thresh: this.config['ogrid-tile-thresh'] ?? (screen ? this.config['stream-thresh'] ?? 32 : 28), refresh: screen ? (this.config['stream-refresh'] ?? 12) : 0, per: screen ? (this.config['stream-per'] ?? this.tg.perPacket(L)) : 120, full: [0, 2 * fps], lanes: tv ? Math.min(L.lanes, this.config['stream-lanes'] ?? 3) : 1 })
           : rawFrames.map(fr => this.og.encodeFrame(fr, n, { maxRuns, strips }));
         const nFrames = rawFrames.length;
         let audio = null;

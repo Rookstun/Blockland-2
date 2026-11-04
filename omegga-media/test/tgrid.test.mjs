@@ -18,7 +18,7 @@ function tvBricks(cfg) {
 }
 const overlap = (a, b) => [0, 1, 2].every(i => Math.abs(a.pos[i] - b.pos[i]) < a.half[i] + b.half[i]);
 
-for (const cfg of [{ tw: 16, th: 9, k: 10, cell: 0.6, lanes: 6 }, { tw: 16, th: 9, k: 10, cell: 0.4, lanes: 6 }, { tw: 16, th: 9, k: 10, cell: 0.6, lanes: 1 }]) {
+for (const cfg of [{ tw: 16, th: 9, k: 10, cell: 0.6, lanes: 3 }, { tw: 16, th: 9, k: 10, cell: 0.4, lanes: 6 }, { tw: 16, th: 9, k: 10, cell: 0.6, lanes: 1 }]) {
   const name = `cell ${cfg.cell} lanes ${cfg.lanes}`;
   const { L, bricks } = tvBricks(cfg);
   const solid = bricks.filter(b => !b.chip), chips = bricks.filter(b => b.chip), tiles = solid.filter(b => b.half[1] === 2 && b.half[0] === L.tile / 2 && Math.abs(b.pos[1]) < 1e-9);
@@ -58,8 +58,17 @@ for (const cfg of [{ tw: 16, th: 9, k: 10, cell: 0.6, lanes: 6 }, { tw: 16, th: 
   });
 }
 
-test('blank cartridge and packets still fit the 6-lane 10x10 TV', () => {
-  const L = tg.tvLayout({ tw: 16, th: 9, k: 10, cell: 0.6, lanes: 6 });
+test('blank cartridge and packets still fit the 3-lane 10x10 TV', () => {
+  const L = tg.tvLayout({ tw: 16, th: 9, k: 10, cell: 0.6, lanes: 3 });
   assert.ok(tg.blankCartridge(lib, L, { event: 'og.tv.t', owner }).length > 0);
   assert.ok(tg.perPacket(L) * tg.entryLen(L) < 32768);
+});
+
+test('6-lane TV played on 3 lanes: packets only on lanes 0-2, every tile still sent', () => {
+  const L = tg.tvLayout({ tw: 16, th: 9, k: 10, cell: 0.6, lanes: 6 });
+  const frames = [0, 1].map(f => Buffer.from(Array.from({ length: L.cols * L.rows * 3 }, (_, i) => (i * 7 + f * 101) % 256)));
+  const enc = tg.encodeTiles(frames, L, tg.newState(L), { fps: 5, per: tg.perPacket(L), perSec: 20, full: [0], lanes: 3 });
+  assert.ok(enc.packets.length > 0);
+  assert.deepEqual([...new Set(enc.lane)].sort(), [0, 1, 2]);
+  assert.ok(tg.buildCartridge(lib, L, enc, { event: 'og.tv.t', fps: 5, dur: 1, owner, inChip: true }).length > 0);
 });
