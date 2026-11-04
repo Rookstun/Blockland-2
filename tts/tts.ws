@@ -185,6 +185,7 @@ on Clock(interval = 0.02, enabled = talking) {
       nlev = 0.0
     } else {
       let p = parse()
+      PrintToConsole("ttsdbg|" .. p .. "|" .. c1 .. "|" .. lev .. "|" .. vol)
       if p >= 0 { begin(p) } else { left = 0 }
     }
   }
@@ -206,6 +207,7 @@ on ChatCommand("tts", "Say something out loud (sine-wave speech)") -> (ctrl, arg
   q2 = -1
   vowelSeen = false
   talking = true
+  PrintToConsole("ttsdbg|cmd|" .. text)
   ctrl.ShowStatusMessage("Speaking: ${args}")
 }
 

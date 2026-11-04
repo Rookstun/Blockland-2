@@ -21,7 +21,7 @@ const maxX = Math.max(...b.rootPos.map(p => p[0])), y0 = Math.min(...b.rootPos.m
 SPK.forEach(([snd, P, V], k) => {
   const sp = b.addInside({ asset: 'B_1x1F_Speaker', position: [maxX + 20 + k * 10, y0, z], color: [30, 30, 30],
     components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: b.ext.length + SYN.indexOf(snd), VolumeMultiplier: 0, PitchMultiplier: 1,
-      InnerRadius: 400, MaxDistance: 3000, bSpatialization: false, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] });
+      InnerRadius: 60000, MaxDistance: 100000, bSpatialization: false, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] });
   b.w.addWire(b.outSource(P), { brick: sp, component_type: 'Component_AudioEmitter', port: 'PitchMultiplier' });
   b.w.addWire(b.outSource(V), { brick: sp, component_type: 'Component_AudioEmitter', port: 'VolumeMultiplier' });
 });
