@@ -10,7 +10,7 @@
 // them to the outputs P1..P3/V1..V3 and PN/VN.
 //
 //   /tts <text>      say it (everyone hears it, any distance)
-//   /ttsvol <0-2>    loudness (default 1)
+//   /ttsvol <0-4>    loudness (default 2)
 
 // ------------------------------------------------------------ phonemes --
 // 0 pause | vowels 1 IY 2 IH 3 EH 4 AE 5 AA 6 AO 7 UH 8 UW 9 AH 10 ER 11 AX 12 E(ey) 13 O(ow)
@@ -39,13 +39,15 @@ var c3: float = 2500.0
 var lev: float = 0.0
 var nlev: float = 0.0
 var npit: float = 1.0
-var vol: float = 1.0
-out P1: float = c1 / 440.0
-out P2: float = c2 / 440.0
-out P3: float = c3 / 440.0
+var vol: float = 2.0
+// the synths' PitchMultiplier caps at 4 (= 1760 Hz, heard as a steady whine: F3 and high F2 all clipped there), so
+// every formant is scaled by K = 0.72 (F2 max 2290 -> 1650 Hz) and F3 is clamped under the cap
+out P1: float = c1 * 0.72 / 440.0
+out P2: float = c2 * 0.72 / 440.0
+out P3: float = min(c3 * 0.72 / 440.0, 3.95)
 out V1: float = lev * vol
-out V2: float = lev * vol * 0.55
-out V3: float = lev * vol * 0.3
+out V2: float = lev * vol * 0.7
+out V3: float = lev * vol * 0.25
 out PN: float = npit
 out VN: float = nlev * vol
 
@@ -185,7 +187,6 @@ on Clock(interval = 0.02, enabled = talking) {
       nlev = 0.0
     } else {
       let p = parse()
-      PrintToConsole("ttsdbg|" .. p .. "|" .. c1 .. "|" .. lev .. "|" .. vol)
       if p >= 0 { begin(p) } else { left = 0 }
     }
   }
