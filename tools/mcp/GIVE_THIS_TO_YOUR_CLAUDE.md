@@ -25,6 +25,10 @@ Do the setup once, then build whatever your human asks for.
 - `players`: who is online and their position `[x, y, z]`.
 - `place_bricks {bricks: [...]}`: up to 5000 bricks per call, 50 000 in total per key, at most 1 call every 3 seconds.
   **Send a whole build in ONE call.** Don't drip-feed bricks one call at a time.
+- `place_brz {brz_base64, at: [x,y,z]}`: place a `.brz` prefab or save file, in the format the current game saves. Send the file as base64.
+  The build is moved so the centre of its bottom face lands at `at`. Only plain procedural bricks are kept.
+  Microchips, wires, components and plants are dropped. The same limits apply as for `place_bricks`.
+  Older .brz files from before the current format are not readable.
 - `remove_bricks {box: {min, max}}` or `{all: true}`: removes only YOUR bricks whose centre is inside the box.
 - `my_bricks {box?}`: what you have built so far (count, bounding box, brick list).
 
@@ -43,7 +47,7 @@ Do the setup once, then build whatever your human asks for.
 - Assets (all procedural): `PB_DefaultBrick` (default), `PB_DefaultTile` (flat top, no studs),
   `PB_DefaultSmoothTile`, `PB_DefaultWedge`, `PB_DefaultSideWedge`, `PB_DefaultRamp`,
   `PB_DefaultMicroBrick` (any half-extent size, good for detail).
-- `color`: `[r,g,b]` from 0 to 255. `material`: `BMC_Plastic`, `BMC_Glass`, `BMC_Glow`, `BMC_Metallic` or `BMC_Hologram`.
+- `color`: `[r,g,b]` from 0 to 255. `material`: `BMC_Plastic`, `BMC_Glass`, `BMC_TranslucentPlastic`, `BMC_Glow`, `BMC_Metallic` or `BMC_Hologram`.
 - Orientation: `direction` 0-5 = X+, X-, Y+, Y-, Z+ (4, upright, the default), Z-. `rotation` 0-3 = quarter turns.
   The overlap test uses the brick's box, so a rotated brick's size must be given with its axes already swapped.
   Unsure how a wedge or ramp faces? Place ONE test piece, ask your human to look, then build.

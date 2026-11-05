@@ -13,7 +13,8 @@ const DATA = path.join(HOME, "brickmcp/builds");
 fs.mkdirSync(DATA, { recursive: true });
 
 const MAX_PER_CALL = 5000, MAX_PER_OWNER = 50000, MIN_GAP_MS = 3000, BOUND = 100000, MAX_HALF = 500;
-const MATERIALS = ["BMC_Plastic", "BMC_Glass", "BMC_Glow", "BMC_Metallic", "BMC_Hologram"];
+const MATERIALS = ["BMC_Plastic", "BMC_Glass", "BMC_TranslucentPlastic", "BMC_Glow", "BMC_Metallic", "BMC_Hologram"];
+const brs = await import("./brs4.mjs"); // copy of tools/brs4/dist.mjs (brs-js 4, reads post-EA3.2 .brz)
 
 // ---- bridge job (same protocol as bridge/tools/job.mjs)
 let chain = Promise.resolve(); // one job at a time from this server
@@ -92,6 +93,19 @@ const BRICK_SCHEMA = {
 };
 const BOX = { type: "object", properties: { min: { type: "array", items: { type: "integer" } }, max: { type: "array", items: { type: "integer" } } }, required: ["min", "max"] };
 
+async function place(input, me) {
+  if (!Array.isArray(input) || !input.length) throw new Error("bricks: non-empty array");
+  if (input.length > MAX_PER_CALL) throw new Error(`max ${MAX_PER_CALL} bricks per call`);
+  const bricks = input.map(clean), rec = loadRec(me);
+  if (rec.length + bricks.length > MAX_PER_OWNER) throw new Error(`you have ${rec.length} bricks; cap is ${MAX_PER_OWNER}. remove some first`);
+  throttle(me.id);
+  const [r] = await job([{ op: "bricks", bricks, owner: me, at: [0, 0, 0], captureMs: 1500 }]);
+  // shortcut: bricks the game rejected (overlap) still count in the record; re-read the world if that matters.
+  saveRec(me, rec.concat(bricks));
+  const rejected = (r.log || []).filter(l => /overlap|rror|Missing/i.test(l)).length;
+  return { placed: bricks.length, owner: me.name, total: rec.length + bricks.length, game_warnings: rejected ? (r.log || []).slice(0, 5) : [] };
+}
+
 const TOOLS = {
   players: {
     description: "List online players and their positions [x,y,z] (feet-ish; a player is ~60 units tall). Use a position to build next to someone.",
@@ -104,17 +118,27 @@ const TOOLS = {
       "Bricks overlapping existing bricks are silently rejected by the game, so build in open space (raise z or move). " +
       "Ground is roughly z = 0; a brick resting on it has z = its half height.",
     schema: { type: "object", properties: { bricks: { type: "array", items: BRICK_SCHEMA } }, required: ["bricks"] },
+    run: (a, me) => place(a.bricks, me),
+  },
+  place_brz: {
+    description: "Place a Brickadia .brz prefab/save (the current format, as saved by the game). Send the file as base64 in brz_base64. " +
+      "Only plain procedural bricks (PB_Default*) on the main grid are placed: microchips, wires, components, entities and basic bricks (plants etc.) are dropped. " +
+      "The build is moved so the centre of its bottom face lands at `at` [x,y,z]. Same limits as place_bricks.",
+    schema: { type: "object", properties: { brz_base64: { type: "string" }, at: { type: "array", items: { type: "integer" } } }, required: ["brz_base64", "at"] },
     run: async (a, me) => {
-      if (!Array.isArray(a.bricks) || !a.bricks.length) throw new Error("bricks: non-empty array");
-      if (a.bricks.length > MAX_PER_CALL) throw new Error(`max ${MAX_PER_CALL} bricks per call`);
-      const bricks = a.bricks.map(clean), rec = loadRec(me);
-      if (rec.length + bricks.length > MAX_PER_OWNER) throw new Error(`you have ${rec.length} bricks; cap is ${MAX_PER_OWNER}. remove some first`);
-      throttle(me.id);
-      const [r] = await job([{ op: "bricks", bricks, owner: me, at: [0, 0, 0], captureMs: 1500 }]);
-      // shortcut: bricks the game rejected (overlap) still count in the record; re-read the world if that matters.
-      saveRec(me, rec.concat(bricks));
-      const rejected = (r.log || []).filter(l => /overlap|rror|Missing/i.test(l)).length;
-      return { placed: bricks.length, owner: me.name, total: rec.length + bricks.length, game_warnings: rejected ? (r.log || []).slice(0, 5) : [] };
+      if (!(Array.isArray(a.at) && a.at.length === 3 && a.at.every(int))) throw new Error("at = 3 integers");
+      let r;
+      try { r = brs.WorldReader.from(Buffer.from(String(a.brz_base64), "base64")); } catch (e) { throw new Error(`not a readable .brz (current format only): ${e.message}`); }
+      const g = r.globalData(), names = [...g.BasicBrickAssetNames, ...g.ProceduralBrickAssetNames];
+      const all = [...r.bricks(1)]; // grid 1 = main grid; chip/entity grids are not read
+      const raw = all.map(b => ({ position: b.position, size: b.size, color: b.color, asset: names[b.asset_name_index],
+        material: g.MaterialAssetNames[b.material_index], direction: b.direction, rotation: b.rotation }))
+        .filter(b => /^PB_Default[A-Za-z]*$/.test(b.asset || "") && MATERIALS.includes(b.material));
+      if (!raw.length) throw new Error(`no plain procedural bricks in that file (${all.length} bricks read)`);
+      const lo = k => Math.min(...raw.map(b => b.position[k] - b.size[k])), hi = k => Math.max(...raw.map(b => b.position[k] + b.size[k]));
+      const d = [Math.round(a.at[0] - (lo(0) + hi(0)) / 2), Math.round(a.at[1] - (lo(1) + hi(1)) / 2), a.at[2] - lo(2)];
+      const res = await place(raw.map(b => ({ ...b, position: b.position.map((v, k) => v + d[k]) })), me);
+      return { ...res, dropped: all.length - raw.length };
     },
   },
   remove_bricks: {
@@ -176,7 +200,7 @@ http.createServer((req, res) => {
   if (url.pathname !== "/mcp") { res.writeHead(404).end("MCP endpoint is /mcp\n"); return; }
   if (req.method !== "POST") { res.writeHead(405, { Allow: "POST" }).end(); return; }
   let body = "", size = 0;
-  req.on("data", d => { size += d.length; if (size > 4e6) req.destroy(); else body += d; });
+  req.on("data", d => { size += d.length; if (size > 12e6) req.destroy(); else body += d; });
   req.on("end", async () => {
     let msg;
     try { msg = JSON.parse(body); } catch { res.writeHead(400).end("bad json"); return; }
