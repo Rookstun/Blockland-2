@@ -27,6 +27,7 @@ for (let v = 0; v < H; v++) for (let u = 0; u < W; u++) {
   b.box(x0, cy, zb, x1, cy + cell, zt, { color: c.split(',').map(Number), material: 'BMC_Plastic' }, 'px');
   rects++;
 }
+if (used.some(x => !x) || b.dropped.length) throw new Error('merge left gaps or overlaps'); // self-check: every pixel covered exactly once
 // back board, frame, posts
 const dark = { color: [24, 24, 26], material: 'BMC_Plastic' };
 b.slab(cx - half, cy + cell, z0 + POST, cx + half, cy + cell + 10, zTop, dark, 'back');
