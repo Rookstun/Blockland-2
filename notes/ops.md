@@ -13,6 +13,7 @@
 
 ## MCP / Eyes
 - `.mcp.json` server `brickadia` = tools/mcp/brickadia-mcp.mjs: players, cmd, job (raw bridge ops), frog, log (tail/grep game log), screenshot (gamecap).
+- PUBLIC MCP (2026-11-04): tools/mcp/public-mcp.mjs runs ON pzedlo from ~/brickmcp (port 8090, @reboot crontab, log ~/brickmcp/server.log, records ~/brickmcp/builds/<owner>.json). Tools players/place_bricks/remove_bricks/my_bricks; owner 'AI <name>' = sha256 of ?key=; PB_Default* only, 5000/call, 50k/key, 1 call/3 s. Connect: `claude mcp add --transport http brickadia "http://pzedlo.hopto.org:8090/mcp?key=SECRET&name=NAME"`. Port 8090 needs a router forward + firewall open.
 - `powershell -NoProfile -ExecutionPolicy Bypass -File eyes/gamecap.ps1 [out.png] [-Front]` captures the owner's client window (works behind other windows), then Read the PNG. To look at a spot: `br.Chat.Command /TP "abysmal garbage" x y z 0` (moves the owner: ask if they're playing).
 - No game needed: `mapgen/viewbox.mjs` (top-down), `mapgen/isoview.mjs` (3D), `mapgen/elev.mjs` (front elevation), `mapgen/caveeye.mjs` (first person in caves).
 
