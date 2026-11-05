@@ -212,13 +212,13 @@ var aV4: float = 0.0
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
 // twin autocannons (Rookstun: white noise held = radio static, triangle thump too low -> "pink noise, cancelled out
 // faster, snap-like"): rounds alternate left (V0) / right (V5) pink-noise speakers; each bump of gunL/gunR minus its
-// Tween(…, 0.05 s) is a 1 -> 0 envelope, squared for a sharp snap that is gone long before the next round. VOL scales every voice.
-let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.05)))
-let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.05)))
+// Tween(…, 0.15 s) is a 1 -> 0 envelope (0.05 s was under a 20 Hz tick = silent), gone before that side's next round (0.2 s). VOL scales every voice.
+let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.15)))
+let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.15)))
 @right out P0: float = 0.9 + 0.6 * gL
-@right out V0: float = if state == 3 then 0.55 * gL * gL else 0.0
+@right out V0: float = if state == 3 then 0.55 * gL else 0.0
 @right out P5: float = 0.9 + 0.6 * gR
-@right out V5: float = if state == 3 then 0.55 * gR * gR else 0.0
+@right out V5: float = if state == 3 then 0.55 * gR else 0.0
 @right out P1: float = aP1
 @right out V1: float = 0.55 * aV1
 @right out P2: float = aP2

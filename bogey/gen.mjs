@@ -386,13 +386,13 @@ ${Array.from({ length: NS }, (_, k) => `@right out strip${k}: string = st${k}`).
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
 // twin autocannons (Rookstun: white noise held = radio static, triangle thump too low -> "pink noise, cancelled out
 // faster, snap-like"): rounds alternate left (V0) / right (V5) pink-noise speakers; each bump of gunL/gunR minus its
-// Tween(…, 0.05 s) is a 1 -> 0 envelope, squared for a sharp snap that is gone long before the next round. VOL scales every voice.
-let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.05)))
-let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.05)))
+// Tween(…, 0.15 s) is a 1 -> 0 envelope (0.05 s was under a 20 Hz tick = silent), gone before that side's next round (0.2 s). VOL scales every voice.
+let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.15)))
+let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.15)))
 @right out P0: float = 0.9 + 0.6 * gL
-@right out V0: float = if state == 3 then ${VOL} * gL * gL else 0.0
+@right out V0: float = if state == 3 then ${VOL} * gL else 0.0
 @right out P5: float = 0.9 + 0.6 * gR
-@right out V5: float = if state == 3 then ${VOL} * gR * gR else 0.0
+@right out V5: float = if state == 3 then ${VOL} * gR else 0.0
 ${[1, 2, 3, 4].map(v => `@right out P${v}: float = aP${v}\n@right out V${v}: float = ${VOL} * aV${v}`).join('\n')}
 @right out state_: int = state
 @right out lh_: float = if txtOn then 0.62 else ${+(CELL * 0.645).toFixed(4)}
