@@ -6,10 +6,11 @@
 //   rows 36-53 = cockpit (live radar, LOCK / IR / RADAR lamps, damage bar). Text screens reuse the picture rows.
 //   W/S pitch (W = nose down, flight stick style), A/D bank + turn, LMB/E hold = guns, Space/RMB = missile (needs a
 //   lock), Q = flares (beat IR missiles), C = chaff (beats RADAR missiles). 4 missions: kill the quota, then the boss.
+//   Any loaded store empty -> yellow exfil ring near the launch spot (view + radar edge): rearm (no jet lost) or re-arm the mission.
 //   inputs: tick (20 Hz), seated, left right up down, a, b, q, c
 //   outputs: strip0..8, msg_, hud_, title_, P0..P4 / V0..V4 (guns, whoosh/boom, alarm/lock, engine, countermeasures)
 export const W = 96, H = 54, STRIP = 6;
-const VH = 36, CK = H - VH, CX = 48, CY = 18, NE = 5, NM = 5, NP = 2, NX = 8, NDL = 40, MAXT = 1400;
+const VH = 36, CK = H - VH, CX = 48, CY = 18, NE = 5, NM = 5, NP = 2, NX = 8, NDL = 64, MAXT = 1400;
 
 // ---- palette (index 0 = panel colour, never drawn by sprites)
 const PALN = {
@@ -52,6 +53,10 @@ const SPRITES = {
   LOCK: ['gg.........gg', 'g...........g', '.............', '.............', '.............', 'g...........g', 'gg.........gg'],
   DOT: ['g'],
   TRACE: ['gg'],
+  EX0: ['y'],
+  EX1: ['.y.', 'y.y', '.y.'],
+  EX2: ['.yyy.', 'y...y', '.yyy.'],
+  EX3: ['..yyyyy..', '.y.....y.', 'y.......y', '.y.....y.', '..yyyyy..'],
 };
 const SID = Object.fromEntries(Object.keys(SPRITES).map((k, i) => [k, i]));
 const SPRW = [], SPRH = [], SPRO = [], SPRD = [];
@@ -249,12 +254,14 @@ const WRNG = ${A(MSL.map(m => F(m[3])))}
 const WDMG = ${A(MSL.map(m => m[4]))}
 const WD1 = ${S(MSL.map(m => m[5]))}
 const WD2 = ${S(MSL.map(m => m[6]))}
+const EXO = ${S(['NEW JET, FULLY REARMED. NO JET LOST.', 'RESTART THE MISSION WITH A NEW LOADOUT.'].flatMap(o => [T(PI.y, '> ' + o.padEnd(40)), T(PI.lt, '  ' + o.padEnd(40))]))}
+const EXT = ${S(block(PI.w, 'A MAN IN AN ORANGE VEST WAVES TWO GLOW STICKS AT YOU WITH GREAT CONFIDENCE AND NO TRAINING. THE HANGAR SMELLS OF COFFEE AND FRESH MISSILES.', 3))}
 const SZW = [1, 3, 5, 8]
 const SZH = [1, 1, 2, 3]
 const CHX = [-3, 4, -6, 2, 6, -1, -5, 5]
 const CHY = [-2, -3, 1, 2, -1, 3, 0, -4]
 
-var state: int = 0           // 0 title, 1 briefing, 2 armory, 3 flying, 4 shot down, 5 target destroyed / debrief, 6 game over
+var state: int = 0           // 0 title, 1 briefing, 2 armory, 3 flying, 4 shot down, 5 target destroyed / debrief, 6 game over, 7 exfil menu
 var stT: int = 0
 var t: int = 0
 var booted: bool = false
@@ -290,6 +297,15 @@ var lockI: int = -1
 var lockT: int = 0
 var locked: bool = false
 var cmCd: int = 0
+// player ground position (only the exfil point lives in it) + exfil point, shown while any loaded store is empty
+var px: float = 0.0
+var py: float = 0.0
+var exOn: bool = false
+var exX: float = 0.0
+var exY: float = 0.0
+var exAz: float = 0.0
+var exD: float = 0.0
+var exC: int = 0
 // enemies
 var eA: int[] = ${zeros(NE)}
 var ek: int[] = ${zeros(NE)}
@@ -344,6 +360,7 @@ var kD: bool = false
 var kL: bool = false
 var kR: bool = false
 var gunS: int = -99
+var gunB: int = -99
 var pmS: int = -99
 var boomS: int = -99
 var flS: int = -99
@@ -506,6 +523,34 @@ mod enterArmory() {
   showHud()
 }
 
+mod showExfil() {
+  clearText()
+  tl[3] = ${Q(T(PI.y, 'EXFILTRATION POINT'))}
+  tl[5] = EXT[0]
+  tl[6] = EXT[1]
+  tl[7] = EXT[2]
+  tl[10] = EXO[if exC == 0 then 0 else 1]
+  tl[12] = EXO[if exC == 1 then 2 else 3]
+  tl[16] = ${Q(T(PI.G, 'W/S PICK   SPACE TO CONFIRM'))}
+}
+
+mod rearm() {
+  msl = nMsl
+  flr = nFlr * 2
+  chf = nChf * 2
+  gun = nGun * 200
+  dmg = 0
+  for i in 0..${NM} { mA[i] = 0 }
+  lockI = -1
+  lockT = 0
+  locked = false
+  exOn = false
+  state = 3
+  stT = 0
+  say("A FRESH JET, STILL WARM. NOBODY MENTIONS THE OLD ONE.", 50)
+  showHud()
+}
+
 mod enterBrief() {
   state = 1
   stT = 0
@@ -515,7 +560,7 @@ mod enterBrief() {
 }
 
 mod clearSky() {
-  for i in 0..${NE} { eA[i] = 0 }
+  for i in 0..${NE} { if !bossUp || ek[i] == 0 { eA[i] = 0 } }
   for i in 0..${NM} { mA[i] = 0 }
   for i in 0..${NP} { pA[i] = 0 }
   lockI = -1
@@ -532,6 +577,9 @@ mod launch() {
   kills = 0
   bossUp = false
   yaw = 0.0
+  px = 0.0
+  py = 0.0
+  exOn = false
   p = 6.0
   bank = 0.0
   clearSky()
@@ -662,10 +710,11 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
   let m = msn % ${NMS}
   let spd = 0.45 + m * 0.06 + rnd * 0.1
   project()
-  // guns: a shot every 2 ticks, 5 rounds each, hits whatever sits under the cross
+  // guns: a shot every 2 ticks, 2 rounds each, hits whatever sits under the cross
   if bH && t % 2 == 0 {
     if gun > 0 {
-      gun -= 5
+      gun -= 2
+      if t - gunS > 2 { gunB = t }
       gunS = t
       var hit: int = -1
       for i in 0..${NE} {
@@ -838,6 +887,39 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
       }
     }
   }
+  // exfil: appears back toward the launch spot (25-90 out) when any loaded store runs dry, gone once rearmed
+  px += sin(yaw * 0.016362461737446838) * spd
+  py += cos(yaw * 0.016362461737446838) * spd
+  let need = gun <= 0 || (nMsl > 0 && msl <= 0) || (nFlr > 0 && flr <= 0) || (nChf > 0 && chf <= 0)
+  if need && !exOn {
+    var dx: float = 0.0 - px
+    var dy: float = 0.0 - py
+    var d: float = sqrt(dx * dx + dy * dy)
+    if d < 0.5 {
+      dx = 0.0 - sin(yaw * 0.016362461737446838)
+      dy = 0.0 - cos(yaw * 0.016362461737446838)
+      d = 1.0
+    }
+    let L = max(25.0, min(90.0, d))
+    exX = px + dx / d * L
+    exY = py + dy / d * L
+    say("STORES DRY. FLY TO THE YELLOW RING FOR EXFIL.", 60)
+  }
+  exOn = need
+  if exOn {
+    let ex = exX - px
+    let ey = exY - py
+    exD = sqrt(ex * ex + ey * ey)
+    exAz = wrap0(atan2(ex, ey) * 61.11549814029453)
+    if exD < 6.0 && state == 3 {
+      state = 7
+      stT = 0
+      exC = 0
+      say("", 0)
+      showExfil()
+      showHud()
+    }
+  }
 }
 
 mod add(id: int, x: float, y: float, tint: int) {
@@ -874,11 +956,17 @@ mod drawList() {
     }
     for k in 0..${NP} {
       if pA[k] == 1 && eA[pI[k]] == 1 {
+        // eased (fast off the rail, slowing into the distance): shrinking flame head + smoke trail
         let f = pF[k] * 1.0 / pN[k]
         let i = pI[k]
-        add(${SID.DOT}, ${CX}.0 + (esx[i] - ${CX}.0) * f, ${VH - 2}.0 + (esy[i] - ${VH - 2}.0) * f, ${PI.w})
-        let f2 = max(0.0, f - 0.12)
-        add(${SID.DOT}, ${CX}.0 + (esx[i] - ${CX}.0) * f2, ${VH - 2}.0 + (esy[i] - ${VH - 2}.0) * f2, ${PI.d})
+        let x0 = if k == 0 then ${CX - 9}.0 else ${CX + 9}.0
+        for j in 0..4 {
+          let fj = max(0.0, f - j * 0.08)
+          let fe = 1.0 - (1.0 - fj) * (1.0 - fj)
+          let id = if j == 0 && f < 0.4 then ${SID.M1} else ${SID.DOT}
+          let tn = if j == 0 then ${PI.o} else if j == 1 then ${PI.y} else if j == 2 then ${PI.lt} else ${PI.g}
+          if j == 0 || fj > 0.0 { add(id, x0 + (esx[i] - x0) * fe, ${VH - 2}.0 + (esy[i] - ${VH - 2}.0) * fe, tn) }
+        }
       }
     }
     for i in 0..${NX} {
@@ -888,11 +976,17 @@ mod drawList() {
         add(id, ${CX}.0 + wrapd(xaz[i] - yaw), hz - xel[i], 0)
       }
     }
-    let ga = t - gunS
-    if ga < 2 {
-      let f = 0.35 + ga * 0.3
-      add(${SID.TRACE}, 26.0 + 22.0 * f, ${VH - 1}.0 - ${VH - 1 - CY}.0 * f, ${PI.y})
-      add(${SID.TRACE}, 70.0 - 22.0 * f, ${VH - 1}.0 - ${VH - 1 - CY}.0 * f, ${PI.y})
+    // tracers: every round of the burst flies out on a perspective curve (fast near, slow far), colours cycle per round
+    for j in 0..7 {
+      let s = gunS - j * 2
+      let a = t - s
+      if s >= gunB && a <= 12 {
+        let f = 1.5 * a / (a + 6.0)
+        let id = if a < 4 then ${SID.TRACE} else ${SID.DOT}
+        let tn = if s % 6 < 2 then ${PI.y} else if s % 6 < 4 then ${PI.o} else ${PI.w}
+        add(id, 26.0 + 22.0 * f, ${VH - 1}.0 - ${VH - 1 - CY}.0 * f, tn)
+        add(id, 70.0 - 22.0 * f, ${VH - 1}.0 - ${VH - 1 - CY}.0 * f, tn)
+      }
     }
     let fa = t - flS
     if fa < 18 {
@@ -909,9 +1003,16 @@ mod drawList() {
         add(${SID.DOT}, ${CX}.0 + CHX[k] * (2.0 + ca * 0.5), ${VH - 6}.0 + CHY[k] * (1.0 + ca * 0.25) + ca * 0.3, if (ca + k) % 3 == 0 then ${PI.w} else ${PI.lt})
       }
     }
+    if state == 3 && exOn {
+      let ex = ${CX}.0 + wrapd(exAz - yaw)
+      if ex > -20.0 && ex < ${W + 20}.0 {
+        let id = if exD > 60.0 then ${SID.EX0} else if exD > 30.0 then ${SID.EX1} else if exD > 14.0 then ${SID.EX2} else ${SID.EX3}
+        add(id, ex, hz + min(14.0, 120.0 / max(exD, 4.0)), 0)
+      }
+    }
     if state == 3 {
       if lockI >= 0 {
-        let lt = if locked then ${PI.y} else if t % 4 < 2 then ${PI.G} else 0
+        let lt = if locked then ${PI.o} else if t % 4 < 2 then ${PI.G} else 0
         if lt > 0 { add(${SID.LOCK}, esx[lockI], esy[lockI], lt) }
       }
       add(${SID.CROSS}, ${CX}.0, ${CY}.0, ${PI.G})
@@ -999,7 +1100,7 @@ mod view(r0: int, r1: int) {
 mod radar() {
   for q in 0..nck { cko[ckt[q]] = 0 }
   nck = 0
-  for i in 0..${NE + NM} {
+  for i in 0..${NE + NM + 1} {
     var vis: bool = false
     var az: float = 0.0
     var zz: float = 0.0
@@ -1010,6 +1111,13 @@ mod radar() {
         az = eaz[i]
         zz = ez[i]
         if ek[i] == 1 { cc = ${PI.m} }
+      }
+    } else if i == ${NE + NM} {
+      if exOn && state == 3 {
+        vis = true
+        az = exAz
+        zz = exD
+        cc = ${PI.y}
       }
     } else {
       let j = i - ${NE}
@@ -1039,7 +1147,7 @@ mod cockpitRows(r0: int, r1: int) {
       if mty[i] == 0 { irOn = true } else { rdOn = true }
     }
   }
-  let lk = if locked then ${PI.y} else if lockI >= 0 && t % 8 < 4 then ${PI.G} else ${PI.D}
+  let lk = if locked then ${PI.o} else if lockI >= 0 && t % 8 < 4 then ${PI.G} else ${PI.D}
   let li = if irOn && t % 8 < 4 then ${PI.r} else ${PI.D}
   let lr = if rdOn && t % 8 < 4 then ${PI.c} else ${PI.D}
   let dn = min(25, dmg / 4)
@@ -1167,6 +1275,7 @@ mod audio() {
 mod powerOn() {
   booted = true
   state = 0
+  bossUp = false
   stT = 0
   msn = 0
   p = 4.0
@@ -1192,11 +1301,20 @@ ${debug ? `var dbk: string = ""
 var dumpReq: bool = false
 var god: bool = false
 var aim: bool = false
-on ChatCommand("bn", "BOGEY NIGHTS debug: /bn <keys o(sit) l r u d a b q c> | dump | boss | god | aim | lvl") -> (ctrl, args) {
+on ChatCommand("bn", "BOGEY NIGHTS debug: /bn <keys o(sit) l r u d a b q c> | dump | boss | god | aim | lvl | die | ex") -> (ctrl, args) {
   if args == "dump" { dumpReq = true }
   else if args == "god" { god = !god }
   else if args == "aim" { aim = !aim }
   else if args == "boss" { kills = MQUOTA[msn % ${NMS}] }
+  else if args == "die" {
+    jets -= 1
+    state = 4
+    stT = 0
+  }
+  else if args == "ex" {
+    px = exX
+    py = exY
+  }
   else if args == "lvl" {
     state = 5
     stT = 49
@@ -1226,7 +1344,7 @@ ${debug ? `    let ia = a || dbk.Contains("a")
         }
       }
     }
-    if t % 20 == 0 { PrintToConsole("bndbg|" .. t .. "|st " .. state .. "|m " .. msn .. "|k " .. kills .. "|dmg " .. dmg .. "|yaw " .. yaw .. "|p " .. p .. "|lock " .. lockI .. "/" .. lockT .. "|z " .. floor(ez[0]) .. "," .. floor(ez[1]) .. "|e " .. eA[0] .. eA[1] .. eA[2] .. eA[3] .. eA[4] .. "|m " .. mA[0] .. mA[1] .. mA[2] .. "|flr " .. flr .. "|msl " .. msl .. "|gun " .. gun .. "|sc " .. score .. "|nT " .. nT) }
+    if t % 20 == 0 { PrintToConsole("bndbg|" .. t .. "|st " .. state .. "|m " .. msn .. "|k " .. kills .. "|dmg " .. dmg .. "|yaw " .. yaw .. "|p " .. p .. "|lock " .. lockI .. "/" .. lockT .. "|z " .. floor(ez[0]) .. "," .. floor(ez[1]) .. "|e " .. eA[0] .. eA[1] .. eA[2] .. eA[3] .. eA[4] .. "|m " .. mA[0] .. mA[1] .. mA[2] .. "|flr " .. flr .. "|msl " .. msl .. "|gun " .. gun .. "|sc " .. score .. "|nT " .. nT .. "|boss " .. bossUp .. "|ex " .. exOn .. " " .. floor(exD) .. " az " .. floor(exAz) .. "|pos " .. floor(px) .. "," .. floor(py) .. "|chf " .. chf) }
     if dumpReq && t % 4 == 3 {
       dumpReq = false
       for r in 0..${H} { PrintToConsole("bnrow|" .. r .. "|" .. rows[r]) }
@@ -1315,6 +1433,15 @@ ${debug ? `    let ia = a || dbk.Contains("a")
         msn += 1
         if msn % ${NMS} == 0 { rnd += 1 }
         enterBrief()
+      }
+    } else if state == 7 {
+      if uE || dE {
+        exC = 1 - exC
+        blip(2.0)
+        showExfil()
+      }
+      if stT > 10 && aE {
+        if exC == 0 { rearm() } else { enterArmory() }
       }
     } else if state == 6 {
       if stT > 30 && aE {
