@@ -191,11 +191,16 @@ def main():
         cap = cv2.VideoCapture(a.cam)
         if not cap.isOpened(): sys.exit(f'camera {a.cam} did not open')
         rig_h = PARTS[IDX['head']]['pivot'][2] + 10  # doll height (head top), units
-        P, last, t0 = None, 0, time.time()
+        P, last, t0, fails = None, 0, time.time(), 0
         print('tracking: q in the camera window to stop')
         while True:
             ok, img = cap.read()
-            if not ok: break
+            if not ok:  # Windows MSMF drops frames (warm-up, USB hiccups): retry, reopen after ~3 s of failures
+                fails += 1
+                if fails % 60 == 0:
+                    print('camera stopped giving frames, reopening'); cap.release(); cap = cv2.VideoCapture(a.cam)
+                time.sleep(0.05); continue
+            fails = 0
             res = lm.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=cv2.cvtColor(img, cv2.COLOR_BGR2RGB)), int((time.time() - t0) * 1000))
             if res.pose_world_landmarks:
                 w = res.pose_world_landmarks[0]
