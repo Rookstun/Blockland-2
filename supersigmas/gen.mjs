@@ -25,7 +25,7 @@ const SPRITES = {
   giga1: ['..bbb..', '.bbbbb.', '.99999.', '.9b9b9.', '.99999.', '9999999', '7777777', '9777779', '9777779', '..b.b..'],
   stacy0: ['.ff.', 'f99f', 'f99f', '.cc.', 'cccc', '.cc.', '.9.9'],
   stacy1: ['.ff.', 'f99f', 'f99f', '.cc.', 'cccc', '.cc.', '9.9.'],
-  bell: ['5.5', '555', '5.5'],
+  bell: ['b.b', 'b7b', 'b.b'],   // black plates, white bar: grey (5) vanished on the sidewalk
   crown: ['4.4.4', '44444'],
   skin: ['.7.', 'ccc', 'ccc'],
   heart: ['c.c', 'ccc', '.c.'],
