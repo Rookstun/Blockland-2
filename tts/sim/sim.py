@@ -54,7 +54,7 @@ def phonemes(text):
     if p>=0: out.append(p)
     out+=q
   return out
-def synth(text,K=0.72,dur=1.0,buzz=0.0,f0=120,sr=16000,cap=4.0,v2=0.7,v3=0.25,f3=True,tween=0.35):
+def synth(text,K=0.72,dur=1.0,buzz=0.0,f0=120,sr=16000,cap=4.0,v2=0.7,v3=0.25,f3=True,tween=0.35,wave='sine'):
   ph=phonemes(text); c=[500.,1500.,2500.]; t=[500.,1500.,2500.]; lev=nlev=0.; npit=1.
   frames=[]
   for p in ph:
@@ -70,13 +70,19 @@ def synth(text,K=0.72,dur=1.0,buzz=0.0,f0=120,sr=16000,cap=4.0,v2=0.7,v3=0.25,f3
     amps=[lv,lv*v2,lv*v3 if f3 else 0]
     for j in range(3):
       f=min(cc[j]*K/440,cap)*440
-      out[i0:i0+hop]+=amps[j]*np.sin(ph3[j]+2*np.pi*f*tt); ph3[j]+=2*np.pi*f*hop/sr
+      out[i0:i0+hop]+=amps[j]*osc(ph3[j]+2*np.pi*f*tt,f,sr,wave); ph3[j]+=2*np.pi*f*hop/sr
     if buzz:
       f=f0*(1-0.15*k/len(frames))
       out[i0:i0+hop]+=buzz*lv*np.sign(np.sin(ph3[3]+2*np.pi*f*tt)); ph3[3]+=2*np.pi*f*hop/sr
     out[i0:i0+hop]+=nl*rng.standard_normal(hop)*0.5
   return (out/max(1e-6,np.abs(out).max())).astype(np.float32)
-def additive(text,K=0.72,dur=1.3,f0=110,nh=16,cap=4.0,bw=(90,110,170),sr=16000,tween=0.35,noise=0.5):
+def osc(phase,f,sr,wave):
+  # one speaker's waveform; saw = band-limited (harmonics below Nyquist, 1/k), like the game's Sawtooth sample
+  if wave=='sine': return np.sin(phase)
+  K=max(1,int((sr/2)//max(f,1)))
+  return sum(np.sin(k*phase)/k for k in range(1,K+1))*(2/np.pi)
+def additive(text,K=0.72,dur=1.3,f0=110,nh=16,cap=4.0,bw=(90,110,170),sr=16000,tween=0.5,noise=0.5,wave='sine',saw_from=9):   # defaults = LIVE voice
+  # wave: 'sine' | 'saw' for every partial; saw_from=h: partials >= h are saws (their overtones reach past the x4 pitch cap)
   ph=phonemes(text); c=[500.,1500.,2500.]; t=list(c); lev=nlev=0.; fr=[]
   for p in ph:
     if 1<=p<=20: t=[T['F1'][p],T['F2'][p],T['F3'][p]]
@@ -91,6 +97,7 @@ def additive(text,K=0.72,dur=1.3,f0=110,nh=16,cap=4.0,bw=(90,110,170),sr=16000,t
       f=h*F0   # harmonic in the scaled domain; envelope evaluated at f/K (real speech freq)
       if f/440>cap: continue
       g=sum(1/(1+((f/K-cc[j])/bw[j])**2)*[1,.6,.3][j] for j in range(3))
-      out[i0:i0+hop]+=lv*g*np.sin(ph_[h-1]+2*np.pi*f*tt); ph_[h-1]+=2*np.pi*f*hop/sr
+      w='saw' if wave=='saw' or (saw_from and h>=saw_from) else 'sine'
+      out[i0:i0+hop]+=lv*g*osc(ph_[h-1]+2*np.pi*f*tt,f,sr,w); ph_[h-1]+=2*np.pi*f*hop/sr
     out[i0:i0+hop]+=nl*noise*rng.standard_normal(hop)
   return (out/max(1e-6,np.abs(out).max())).astype(np.float32)

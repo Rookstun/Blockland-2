@@ -222,10 +222,10 @@ on Clock(interval = 0.026, enabled = talking) {
     }
   }
   left = left - 1
-  // the tween: formants glide ~35% of the way each tick, levels faster
-  c1 = c1 + (t1 - c1) * 0.35
-  c2 = c2 + (t2 - c2) * 0.35
-  c3 = c3 + (t3 - c3) * 0.35
+  // the tween: formants glide 50% of the way each tick (bench: 0.5 beats 0.35), levels faster
+  c1 = c1 + (t1 - c1) * 0.5
+  c2 = c2 + (t2 - c2) * 0.5
+  c3 = c3 + (t3 - c3) * 0.5
   lev = lev + (AMP[seg] * 0.01 - lev) * 0.6
   nlev = nlev + (NOI[seg] * 0.01 - nlev) * 0.7
   npit = NP[seg] * 0.01
