@@ -36,6 +36,8 @@ const AI_HIDDEN = false;
 const AGENT_EVENTS = ['chatcmd:agent', 'cmd:agent']; // "!agent" and "/agent"
 const IMAGE_EVENTS = ['chatcmd:img', 'cmd:img', 'chatcmd:image', 'cmd:image']; // "!img"/"!image" and "/img"/"/image"
 const HEIGHTMAP = path.join(__dirname, 'bin', 'heightmap');
+const HOUSE = /(?<![a-z])(house|home|cottage|cabin|mansion|villa|bungalow|shack|hut|farmhouse|manor)s?(?![a-z])/i;
+const HOUSE_EXTRA = /(?<![a-z])(dog|bird|tree|light|green|ware|club|boat|play|doll|haunted)\s*(house|home)/i; // not a house to live in
 const GRIDHOUSE = path.join(__dirname, 'lib', 'gridhouse', 'gridhouse.mjs'); // copy of mapgen/gridhouse.mjs + builder.mjs + orient.mjs
 const IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 const LINE = 200; // characters per chat line
@@ -1342,6 +1344,10 @@ module.exports = class Plugin {
     // Weak models sometimes still send the old brick list
     if (!Array.isArray(parts)) parts = Array.isArray(legacy) ? legacy.map(b => ({ type: 'box', ...b })) : [];
     if (!parts.length) throw new Error('no parts given');
+    // weak fallback models ignore the prompt and build houses as one box room with no door: make them use gridhouse
+    const job0 = this.current.getStore();
+    if (job0?.kind === 'ai' && !job0.gridhoused && HOUSE.test(job0.text) && !HOUSE_EXTRA.test(job0.text))
+      throw new Error('houses are built with the gridhouse tool, not build: call gridhouse now with a floor plan (Y walls, R rooms, G doors incl. a front door in an outside wall). After it is placed you may add extras with build and allow_overlap true.');
     const bricks = shapes.expand(parts);
     // Never build on top of the player: if anything low enough to trap them
     // covers the spot they stand on, slide the whole build along +x.
@@ -1690,6 +1696,8 @@ module.exports = class Plugin {
     const pos = target && (await target.getPosition());
     if (!pos) throw new Error(`${name} has not spawned, so there is nowhere to build`);
     const limit = this.config['max-distance'] ?? 200;
+    const job = this.current.getStore();
+    if (job) job.gridhoused = true;
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omegga-ai-gh-'));
     try {
       const plan = path.join(dir, 'plan.txt'), out = path.join(dir, 'job.json');
