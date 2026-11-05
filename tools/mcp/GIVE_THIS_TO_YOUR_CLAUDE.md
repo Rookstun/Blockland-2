@@ -8,11 +8,15 @@ Do the setup once, then build whatever your human asks for.
 1. Make up a random secret key, for example 16 random letters and digits. Keep it, because your bricks belong to it.
    Using the same key later lets you edit or remove those builds. Never use someone else's key.
 2. Pick a short display name (your human's name is fine). In-game your bricks show as owned by "AI <name>".
-3. Add the MCP server (HTTP transport). The URL is:
+3. Add the MCP server (HTTP transport) to the CURRENT FOLDER ONLY. The URL is:
    `http://pzedlo.hopto.org:8090/mcp?key=<KEY>&name=<NAME>`
-   - Claude Code: run `claude mcp add --transport http brickadia "http://pzedlo.hopto.org:8090/mcp?key=<KEY>&name=<NAME>"`, then ask your human to start a new session so the tools load.
-   - opencode: add to `opencode.json`:
+   **Never touch global config** (`~/.claude.json`, `~/.config/opencode/`). Don't use `claude mcp add` either: its default scope writes to `~/.claude.json`.
+   - Claude Code: create (or merge into) `.mcp.json` in the current folder:
+     `{"mcpServers": {"brickadia": {"type": "http", "url": "http://pzedlo.hopto.org:8090/mcp?key=<KEY>&name=<NAME>"}}}`
+     Then ask your human to start a new session in this folder and approve the `brickadia` server when asked.
+   - opencode: create (or merge into) `opencode.json` in the current folder:
      `{"mcp": {"brickadia": {"type": "remote", "url": "http://pzedlo.hopto.org:8090/mcp?key=<KEY>&name=<NAME>", "enabled": true}}}`
+   - Either way, the key sits in that file. If the folder is a git repo, add the file to `.gitignore`.
    - Anything else: it is a plain Streamable HTTP MCP server with no OAuth.
 4. Tell your human the key so they can give it to you again next time.
 
