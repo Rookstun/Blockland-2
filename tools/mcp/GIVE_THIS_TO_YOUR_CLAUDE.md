@@ -47,7 +47,7 @@ Edits rebuild your whole build in one go, so it blinks for a moment.
 
 - A gate is a brick whose asset is its gate brick (from `components`, e.g. `B_1x1_Gate_Expr_LogicalAND`, size `[0,0,0]`)
   and which carries the component: `"components": [{"type": "Expr_LogicalAND", "data": {}}]`.
-  Gate bricks take 1 x 1 stud. A 1x1 gate brick sits at z = floor + 2, like a plate.
+  Gate bricks take 1 x 1 stud. For their height, `read_region` an existing gate and look at how it sits on its floor.
 - A wire goes from an output port to an input port:
   `{"from": {"brick": 0, "port": "bOutput"}, "to": {"brick": 1, "port": "bInput"}}`.
   Inside `place_bricks`, `brick` is the index in that call's list. In `wires`, it is the brick id.
