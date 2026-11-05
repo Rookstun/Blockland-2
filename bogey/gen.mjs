@@ -899,8 +899,10 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
   // exfil: appears back toward the launch spot (25-90 out) when any loaded store runs dry, gone once rearmed
   px += sin(yaw * 0.016362461737446838) * spd
   py += cos(yaw * 0.016362461737446838) * spd
-  let need = gun <= 0 || (nMsl > 0 && msl <= 0) || (nFlr > 0 && flr <= 0) || (nChf > 0 && chf <= 0)
-  if need && !exOn {
+  // damage bar yellow (dmg >= 40, same threshold as the cockpit bar colour) also opens exfil (Rookstun 2026-11-04)
+  let hurtX = dmg >= 40
+  let need = hurtX || gun <= 0 || (nMsl > 0 && msl <= 0) || (nFlr > 0 && flr <= 0) || (nChf > 0 && chf <= 0)
+  if need && !exOn && state == 3 {
     var dx: float = 0.0 - px
     var dy: float = 0.0 - py
     var d: float = sqrt(dx * dx + dy * dy)
@@ -912,7 +914,7 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
     let L = max(25.0, min(90.0, d))
     exX = px + dx / d * L
     exY = py + dy / d * L
-    say("STORES DRY. FLY TO THE YELLOW RING FOR EXFIL.", 60)
+    say(if hurtX then "JET DAMAGED. EXFIL ENABLED: FLY TO THE YELLOW RING." else "STORES DRY. EXFIL ENABLED: FLY TO THE YELLOW RING.", 80)
   }
   exOn = need
   if exOn {
@@ -1306,11 +1308,12 @@ ${debug ? `var dbk: string = ""
 var dumpReq: bool = false
 var god: bool = false
 var aim: bool = false
-on ChatCommand("bn", "BOGEY NIGHTS debug: /bn <keys o(sit) l r u d a b q c> | dump | boss | god | aim | lvl | die | ex") -> (ctrl, args) {
+on ChatCommand("bn", "BOGEY NIGHTS debug: /bn <keys o(sit) l r u d a b q c> | dump | boss | god | aim | lvl | die | ex | hurt") -> (ctrl, args) {
   if args == "dump" { dumpReq = true }
   else if args == "god" { god = !god }
   else if args == "aim" { aim = !aim }
   else if args == "boss" { kills = MQUOTA[msn % ${NMS}] }
+  else if args == "hurt" { dmg = 68 }
   else if args == "die" {
     jets -= 1
     state = 4
