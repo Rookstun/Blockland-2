@@ -8,7 +8,7 @@
 //   lock), Q = flares (beat IR missiles), C = chaff (beats RADAR missiles). 4 missions: kill the quota, then the boss.
 //   Any loaded store empty -> yellow exfil ring near the launch spot (view + radar edge): rearm (no jet lost) or re-arm the mission.
 //   inputs: tick (20 Hz), seated, left right up down, a, b, q, c
-//   outputs: strip0..8, msg_, hud_, title_, P0..P5 / V0..V5 (left cannon, whoosh/boom, alarm/lock, engine, countermeasures, right cannon)
+//   outputs: strip0..8, msg_, hud_, title_, P0..P5 / V0..V5 (left autocannon, whoosh/boom, alarm/lock, engine, countermeasures, right autocannon)
 export const W = 96, H = 54, STRIP = 6;
 const VOL = 0.55; // overall volume
 const VH = 36, CK = H - VH, CX = 48, CY = 18, NE = 5, NM = 5, NP = 2, NX = 8, NDL = 64, MAXT = 1400;
@@ -384,14 +384,15 @@ ${Array.from({ length: NS }, (_, k) => `@right out strip${k}: string = st${k}`).
 @right out msg_: string = msg
 @right out hud_: string = hud
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
-// twin cannons: rounds alternate left (V0) / right (V5) speakers; each bump of gunL/gunR minus its Tween(…, 0.2 s) is a
-// 1 -> 0 envelope (noise boom, pitch falls as it fades). VOL scales every voice.
-let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.2)))
-let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.2)))
-@right out P0: float = 0.12 + 0.35 * gL * gL
-@right out V0: float = if state == 3 then ${VOL} * 0.8 * gL else 0.0
-@right out P5: float = 0.12 + 0.35 * gR * gR
-@right out V5: float = if state == 3 then ${VOL} * 0.8 * gR else 0.0
+// twin autocannons (Rookstun: white noise held down = radio static): rounds alternate left (V0) / right (V5) triangle
+// speakers; each bump of gunL/gunR minus its Tween(…, 0.12 s) is a 1 -> 0 envelope = a short thump whose pitch drops
+// fast (kick-drum style), so every round is its own knock with silence between. VOL scales every voice.
+let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.12)))
+let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.12)))
+@right out P0: float = 0.18 + 0.7 * gL * gL * gL
+@right out V0: float = if state == 3 then ${VOL} * gL else 0.0
+@right out P5: float = 0.18 + 0.7 * gR * gR * gR
+@right out V5: float = if state == 3 then ${VOL} * gR else 0.0
 ${[1, 2, 3, 4].map(v => `@right out P${v}: float = aP${v}\n@right out V${v}: float = ${VOL} * aV${v}`).join('\n')}
 @right out state_: int = state
 @right out lh_: float = if txtOn then 0.62 else ${+(CELL * 0.645).toFixed(4)}
@@ -1480,6 +1481,6 @@ ${Array.from({ length: NS }, (_, k) => `      st${k} = tl[${2 * k}] .. "\\n" .. 
   }
 }
 `;
-  return { src, W, H, STRIP, PAL, textPorts: true, synths: ['Noise', 'Noise', 'Square', 'Triangle', 'NoisePink', 'Noise'],
+  return { src, W, H, STRIP, PAL, textPorts: true, synths: ['Triangle', 'Noise', 'Square', 'Triangle', 'NoisePink', 'Triangle'],
     speakerAt: { 0: [-20, -26, 48], 5: [20, -26, 48] } }; // twin cannon speakers either side of the pilot
 }
