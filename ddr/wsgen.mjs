@@ -17,6 +17,8 @@ const SPEED = (RECEPTOR_Z - STRIP_Z0) / LOOK;
 const NBSP = ' ';
 export const LEAD_SEC = 4;      // countdown before the first row
 export const GAIN = 2.0;              // master volume (owner: "too soft" at 1.0)
+export const MAX_SUM = 4.0;           // master limiter: summed speaker volume cap
+export const MAX_ONE = 2.2;           // no single speaker louder than this
 export const PREVIEW = 12;            // song select: seconds of music previewed (looped), from the busiest stretch
 export const RAINBOW_COMBO = 10;      // combo that turns the arrow outlines rainbow
 const DEBUG = false;            // [ddr] lines in chat (owner: use chat for logs)
@@ -167,10 +169,14 @@ out off${k}${j}: vector = so${k}${j}`).join(NL)}
 out rec${k}: color = rcol${k}
 out pad${k}: color = pcol${k}`)}
 ${eachV(v => `out P${v}: float = vp${v}
-out V${v}: float = if state == 1 || state == 2 then ${CLICK[v] ? `vv${v}` : `min(vv${v}, Dampen(vv${v}, 0.025))`} else 0.0`)}   // smooth voices tween only incoming; clicky ones snap
+let rv${v} = if state == 1 || state == 2 then max(0.0, ${CLICK[v] ? `vv${v}` : `min(vv${v}, Dampen(vv${v}, 0.025))`}) else 0.0`)}   // smooth voices tween only incoming; clicky ones snap
 ${eachD(d => { const { kind, dur, hi, lo } = drumDefs[d]; return `let e${d} = min(1.0, max(0.0, dn${d} - Tween(dn${d}, ${f(dur)})))   // ${kind}
 out DP${d}: float = ds${d} * (${f(lo)} + ${f(hi - lo)} * e${d} * e${d})
-out DA${d}: float = if state == 1 || state == 2 then dg${d} * e${d} else 0.0`; })}
+let rd${d} = if state == 1 || state == 2 then max(0.0, dg${d} * e${d}) else 0.0`; })}
+// master limiter (owner: 'sometimes starts BLASTING audio when starting or changing songs'): the summed speaker volume never passes MAX_SUM
+let lim = min(1.0, ${f(MAX_SUM)} / max(0.001, ${[...[...Array(V).keys()].map(v => `rv${v}`), ...[...Array(DK).keys()].map(d => `rd${d}`)].join(' + ')}))
+${eachV(v => `out V${v}: float = min(${f(MAX_ONE)}, rv${v} * lim)`)}
+${eachD(d => `out DA${d}: float = min(${f(MAX_ONE)}, rd${d} * lim)`)}
 
 mod silence() {
 ${eachV(v => `  vv${v} = 0.0
