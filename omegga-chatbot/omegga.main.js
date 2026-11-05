@@ -36,6 +36,7 @@ const AI_HIDDEN = false;
 const AGENT_EVENTS = ['chatcmd:agent', 'cmd:agent']; // "!agent" and "/agent"
 const IMAGE_EVENTS = ['chatcmd:img', 'cmd:img', 'chatcmd:image', 'cmd:image']; // "!img"/"!image" and "/img"/"/image"
 const HEIGHTMAP = path.join(__dirname, 'bin', 'heightmap');
+const GRIDHOUSE = path.join(__dirname, 'lib', 'gridhouse', 'gridhouse.mjs'); // copy of mapgen/gridhouse.mjs + builder.mjs + orient.mjs
 const IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 const LINE = 200; // characters per chat line
 const MAX_TOOL_ROUNDS = 8;
@@ -104,7 +105,8 @@ A sphere is about 5 plates tall per stud of radius, so stack spheres by that: sn
 
 Pictures: build_image puts a real image into the world, one brick per pixel, from a direct link to an image file (png, jpg, gif, webp) that a player gave.
 It stands upright like a painting with its bottom edge centered on x,y (facing says which way the picture faces; "-x" faces a player at x=0 when it is at x>0), or lies on the ground with facing "flat".
-width is in pixels (1 stud each, times pixel_size). visit_site reads a web page: a link a player gave, or a web search at https://www.bing.com/search?q=WORDS (then visit the best result). Its result lists the image links on the page, so to build a picture of something, search, visit a page about it and pass one of its image links to build_image. Never invent links.`;
+width is in pixels (1 stud each, times pixel_size). visit_site reads a web page: a link a player gave, or a web search at https://www.bing.com/search?q=WORDS (then visit the best result). Its result lists the image links on the page, so to build a picture of something, search, visit a page about it and pass one of its image links to build_image. Never invent links.
+Houses with real interiors: gridhouse builds a furnished-looking house from a floor plan drawn as text rows, one character per stud: Y = wall, R = room floor, G = door (in a wall), . = outside. Rooms are closed by walls (an open room edge gets a wall automatically), doors split rooms, each room gets its own floor, wallpaper and ceiling, windows and lap siding are added on outside walls. Walls are 1 character thick; make rooms at least 5x5. It has no roof: add one with build (allow_overlap true) on top, height 24 plates.`;
 
 const SYSTEM = `You are a friendly assistant living in the chat of a Brickadia server (a multiplayer LEGO-like brick building game).
 Each user message looks like "[renderman] hello": the name in brackets is the player talking. Several players share this conversation.
@@ -228,6 +230,21 @@ const TOOLS = [
       required: ['url'],
     },
   },
+  {
+    name: 'gridhouse',
+    description: 'Build a house with interior finishes from a text floor plan (Y wall, R room, G door, . outside; one character per stud) next to the player who asked. Undo it with undo_build.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'short name, e.g. "cottage"' },
+        rows: { type: 'array', items: { type: 'string' }, description: 'plan rows, all the same length; rows[0] is the low-y side, character 0 the low-x side' },
+        x: { type: 'number', description: 'studs; low-x corner of the plan (default 3)' },
+        y: { type: 'number', description: 'studs; low-y corner of the plan (default 0)' },
+        allow_overlap: { type: 'boolean', description: 'true to put it into an existing build on purpose' },
+      },
+      required: ['rows'],
+    },
+  },
 ];
 
 const agentSystem = maxSteps => `You are an agent on a Brickadia server (a multiplayer LEGO-like brick building game). A player gave you a task. Work on it step by step with your tools until it is done, then call finish with a one or two sentence summary.
@@ -321,6 +338,7 @@ function toChatLines(text) {
 function describeTool(tool, input) {
   if (tool === 'undo_build') return input.which === 'all' ? 'removing all AI builds...' : 'removing the last AI build...';
   if (tool === 'build_image') return `downloading and converting picture "${input.name || 'image'}"...`;
+  if (tool === 'gridhouse') return `drawing up house "${input.name || 'house'}" from a ${input.rows?.length ?? 0}-row plan...`;
   if (tool === 'visit_site') return `visiting ${String(input.url ?? '').slice(0, 120)}...`;
   if (tool !== 'build') return `running ${tool}...`;
   const parts = Array.isArray(input.parts) ? input.parts : Array.isArray(input.bricks) ? input.bricks : [];
@@ -974,7 +992,7 @@ module.exports = class Plugin {
             result = await this.runTool(name, use.name, use.input ?? {});
             if (result?.image) ({ text: result, image } = result);
             else done.push(result);
-            if ((use.name === 'build' && !image) || use.name === 'build_image') job.built++;
+            if ((use.name === 'build' && !image) || use.name === 'build_image' || use.name === 'gridhouse') job.built++;
             if (use.name === 'undo_build' && job.built) job.built--;
             this.log('tool', `${use.name} ok: ${result}`);
             this.stage(name, image ? `draft ${job.reviews} rendered at ${secs()}, reviewing it...` : String(result).split('\n')[0]);
@@ -1125,6 +1143,7 @@ module.exports = class Plugin {
     if (tool === 'undo_build') return this.undo(name, input.which);
     if (tool === 'build_image') return this.buildImage(name, input);
     if (tool === 'visit_site') return this.visitSite(input.url);
+    if (tool === 'gridhouse') return this.gridHouse(name, input);
     if (tool === 'list_players') return this.listPlayers(name);
     if (tool === 'list_builds') return this.listBuilds(name);
     if (tool === 'say') {
@@ -1639,6 +1658,34 @@ module.exports = class Plugin {
       const label = what || 'picture';
       const note = await this.spawn(name, target, pos, label, picture.save, `picture ${picture.width}x${picture.height} px, x${scale}, facing ${side}, from ${from}`, !!allow_overlap);
       return `Built a ${picture.width * scale}x${picture.height * scale} stud picture (${picture.save.length} bricks) next to ${target.name}.${note}`;
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  /** gridhouse tool: run lib/gridhouse on a text plan, place its bricks like any AI build. */
+  async gridHouse(name, { rows, name: what, x, y, allow_overlap }) {
+    if (!this.canBuild(name)) throw new Error(`${name} is not allowed to make me build`);
+    if (!Array.isArray(rows) || !rows.length) throw new Error('no plan rows given');
+    rows = rows.map(r => String(r).toUpperCase());
+    if (rows.length > 80 || rows.some(r => r.length > 80 || !/^[YRG.]+$/.test(r))) throw new Error('plan rows must be at most 80x80 and use only Y, R, G and .');
+    if (!rows.some(r => r.includes('R'))) throw new Error('the plan has no room (R) pixels');
+    const target = this.omegga.getPlayer(name);
+    const pos = target && (await target.getPosition());
+    if (!pos) throw new Error(`${name} has not spawned, so there is nowhere to build`);
+    const limit = this.config['max-distance'] ?? 200;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omegga-ai-gh-'));
+    try {
+      const plan = path.join(dir, 'plan.txt'), out = path.join(dir, 'job.json');
+      fs.writeFileSync(plan, rows.join(String.fromCharCode(10)));
+      const ox = num(x, -limit, limit, 3) * STUD, oy = num(y, -limit, limit, 0) * STUD;
+      await run(process.execPath, [GRIDHOUSE, plan, String(ox), String(oy), '0', out]);
+      const save = JSON.parse(fs.readFileSync(out)).ops.find(o => o.op === 'bricks').bricks
+        .map(b => ({ material: 'BMC_Plastic', direction: 4, rotation: 0, ...b }));
+      const max = this.config['image-max-bricks'] ?? 20000;
+      if (save.length > max) throw new Error(`that house is ${save.length} bricks, max ${max}; draw a smaller plan`);
+      const note = await this.spawn(name, target, pos, what || 'house', save, `gridhouse ${rows[0].length}x${rows.length} plan`, !!allow_overlap);
+      return `Built a ${rows[0].length}x${rows.length} stud house (${save.length} bricks, no roof) next to ${name}.${note}`;
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
