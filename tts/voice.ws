@@ -138,9 +138,9 @@ mod parse() -> int {
       if c == "I" { p = 4; q1 = 2 }
       if c == "O" { p = 13; q1 = 7 }
       if c == "U" { p = 17; q1 = 8 }
-    } else if !isLetter(n) && (c == "E" || c == "O") {
-      // he, she, me, go, no: long at the end of a short word
-      if c == "E" { p = 1 } else { p = 13; q1 = 7 }
+    } else if !isLetter(n) && (c == "E" || c == "O" || c == "I") {
+      // he, she, me, go, no, I, I'm, hi: long at the end of a word
+      if c == "E" { p = 1 } else if c == "I" { p = 4; q1 = 2 } else { p = 13; q1 = 7 }
     } else {
       if c == "A" { p = 4 }
       if c == "E" { p = 3 }

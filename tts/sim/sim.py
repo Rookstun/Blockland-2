@@ -35,7 +35,7 @@ def phonemes(text):
       magic= n in L and n not in V and n2=='E' and n3 not in L
       if c=='E' and n not in L and vs: p=-1
       elif magic: p,q={'A':(12,[2]),'E':(1,[]),'I':(4,[2]),'O':(13,[7]),'U':(17,[8])}[c]
-      elif n not in L and c in 'EO': p,q=(1,[]) if c=='E' else (13,[7])
+      elif n not in L and c in 'EOI': p,q={'E':(1,[]),'O':(13,[7]),'I':(4,[2])}[c]
       else: p={'A':4,'E':3,'I':2,'O':5,'U':9}[c]
       vs=True
     elif c=='Y':
