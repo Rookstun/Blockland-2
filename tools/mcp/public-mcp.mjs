@@ -6,6 +6,7 @@
 import http from "http"; import fs from "fs"; import path from "path"; import crypto from "crypto";
 
 const PORT = +process.env.PORT || 8090;
+const GUIDE = fs.readFileSync(new URL("GIVE_THIS_TO_YOUR_CLAUDE.md", import.meta.url), "utf8"); // served at GET /
 const HOME = process.env.HOME || "/home/max";
 const BRIDGE = path.join(HOME, "omegga-server/bridge");
 const DATA = path.join(HOME, "brickmcp/builds");
@@ -171,6 +172,7 @@ const reply = (m, p) => p.then(result => ({ jsonrpc: "2.0", id: m.id, result }),
 
 http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
+  if (url.pathname === "/" && req.method === "GET") { res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" }).end(GUIDE); return; }
   if (url.pathname !== "/mcp") { res.writeHead(404).end("MCP endpoint is /mcp\n"); return; }
   if (req.method !== "POST") { res.writeHead(405, { Allow: "POST" }).end(); return; }
   let body = "", size = 0;
