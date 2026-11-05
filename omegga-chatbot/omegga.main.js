@@ -106,7 +106,7 @@ A sphere is about 5 plates tall per stud of radius, so stack spheres by that: sn
 Pictures: build_image puts a real image into the world, one brick per pixel, from a direct link to an image file (png, jpg, gif, webp) that a player gave.
 It stands upright like a painting with its bottom edge centered on x,y (facing says which way the picture faces; "-x" faces a player at x=0 when it is at x>0), or lies on the ground with facing "flat".
 width is in pixels (1 stud each, times pixel_size). visit_site reads a web page: a link a player gave, or a web search at https://www.bing.com/search?q=WORDS (then visit the best result). Its result lists the image links on the page, so to build a picture of something, search, visit a page about it and pass one of its image links to build_image. Never invent links.
-For any house, home, cottage, cabin, mansion or building with rooms, call gridhouse, NOT build (build is for everything else). gridhouse builds a furnished-looking house from a floor plan drawn as text rows, one character per stud: Y = wall, R = room floor, G = door (in a wall), . = outside. Rooms are closed by walls (an open room edge gets a wall automatically), doors split rooms, each room gets its own floor, wallpaper and ceiling, windows and lap siding are added on outside walls. Walls are 1 character thick; make rooms at least 5x5 and give a house several rooms. It adds a pitched roof itself.`;
+For any house, home, cottage, cabin, mansion or building with rooms, call gridhouse, NOT build (build is for everything else). gridhouse builds a furnished-looking house from a floor plan drawn as text rows, one character per stud: Y = wall, R = room floor, G = door (in a wall), . = outside. Rooms are closed by walls (an open room edge gets a wall automatically), doors split rooms, each room gets its own floor, wallpaper and ceiling, windows and lap siding are added on outside walls. Walls are 1 character thick; always put a G front door in an outside wall, and G doors between rooms; make rooms at least 5x5 and give a house several rooms. It adds a pitched roof itself.`;
 
 const SYSTEM = `You are a friendly assistant living in the chat of a Brickadia server (a multiplayer LEGO-like brick building game).
 Each user message looks like "[renderman] hello": the name in brackets is the player talking. Several players share this conversation.
@@ -1671,6 +1671,21 @@ module.exports = class Plugin {
     rows = rows.map(r => String(r).toUpperCase());
     if (rows.length > 80 || rows.some(r => r.length > 80 || !/^[YRG.]+$/.test(r))) throw new Error('plan rows must be at most 80x80 and use only Y, R, G and .');
     if (!rows.some(r => r.includes('R'))) throw new Error('the plan has no room (R) pixels');
+    // models forget the front door: no G between outside and a room -> turn the outer wall pixel nearest the
+    // middle of the player-facing (low x) side into one
+    const wide = Math.max(...rows.map(r => r.length));
+    const g = rows.map(r => [...r.padEnd(wide, '.')]);
+    const cell = (i, j) => g[j]?.[i] ?? '.';
+    const SIDES4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const entry = (i, j) => SIDES4.some(([dx, dy]) => cell(i + dx, j + dy) === '.' && cell(i - dx, j - dy) === 'R');
+    let doorNote = '';
+    if (!g.some((r, j) => r.some((c, i) => c === 'G' && entry(i, j)))) {
+      const spots = [];
+      g.forEach((r, j) => r.forEach((c, i) => { if (c === 'Y' && entry(i, j)) spots.push([i + Math.abs(j - (g.length - 1) / 2) / g.length, i, j]); }));
+      spots.sort((a, b) => a[0] - b[0]);
+      if (spots[0]) { const [, i, j] = spots[0]; g[j][i] = 'G'; doorNote = ' The plan had no outside door, so one was added on the low-x side.'; }
+    }
+    rows = g.map(r => r.join(''));
     const target = this.omegga.getPlayer(name);
     const pos = target && (await target.getPosition());
     if (!pos) throw new Error(`${name} has not spawned, so there is nowhere to build`);
@@ -1689,7 +1704,7 @@ module.exports = class Plugin {
       const max = this.config['image-max-bricks'] ?? 20000;
       if (save.length > max) throw new Error(`that house is ${save.length} bricks, max ${max}; draw a smaller plan`);
       const note = await this.spawn(name, target, pos, what || 'house', save, `gridhouse ${rows[0].length}x${rows.length} plan`, !!allow_overlap);
-      return `Built a ${rows[0].length}x${rows.length} stud house with a roof (${save.length} bricks) next to ${name}.${note}`;
+      return `Built a ${rows[0].length}x${rows.length} stud house with a roof (${save.length} bricks) next to ${name}.${doorNote}${note}`;
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
