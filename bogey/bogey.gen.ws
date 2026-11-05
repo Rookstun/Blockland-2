@@ -25,15 +25,15 @@ const CKB = ["<color=\"2a2e34\">█████</>","<color=\"3c4048\">███
 const CKLS = ["<color=\"2a2e34\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">█</><color=\"c0c4d0\">LOCK</><color=\"3c4048\">███████</><color=\"c0c4d0\">IR</><color=\"3c4048\">█████</><color=\"c0c4d0\">RADAR</><color=\"3c4048\">███</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">██████████</><color=\"c0c4d0\">DAMAGE</><color=\"3c4048\">███████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">██</><color=\"ffd040\">BN-1 SKYJERK</><color=\"3c4048\">█████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"3c4048\">███████████████████████████</>","<color=\"2a2e34\">███████████████████████████</>"]
 const CKC = ["<color=\"2a2e34\">█████████████████████████████████</>","<color=\"3c4048\">██████████████████████████████</><color=\"2a2e34\">███</>","<color=\"3c4048\">████████</><color=\"50565e\">█████</><color=\"3c4048\">████████</><color=\"50565e\">█████</><color=\"3c4048\">████</><color=\"2a2e34\">███</>","<color=\"3c4048\">███████</><color=\"50565e\">█</><color=\"000000\">█████</><color=\"50565e\">█</><color=\"3c4048\">██████</><color=\"50565e\">█</><color=\"000000\">█████</><color=\"50565e\">█</><color=\"3c4048\">███</><color=\"2a2e34\">███</>","<color=\"3c4048\">██████</><color=\"50565e\">█</><color=\"000000\">██████</><color=\"ffffff\">█</><color=\"50565e\">█</><color=\"3c4048\">████</><color=\"50565e\">█</><color=\"000000\">███████</><color=\"50565e\">█</><color=\"3c4048\">██</><color=\"2a2e34\">███</>","<color=\"3c4048\">█████</><color=\"50565e\">█</><color=\"000000\">██████</><color=\"ffffff\">█</><color=\"000000\">██</><color=\"50565e\">█</><color=\"3c4048\">██</><color=\"50565e\">█</><color=\"000000\">█████████</><color=\"50565e\">█</><color=\"3c4048\">█</><color=\"2a2e34\">███</>","<color=\"3c4048\">█████</><color=\"50565e\">█</><color=\"000000\">█████</><color=\"ffffff\">█</><color=\"000000\">███</><color=\"50565e\">█</><color=\"3c4048\">██</><color=\"50565e\">█</><color=\"000000\">█████████</><color=\"50565e\">█</><color=\"3c4048\">█</><color=\"2a2e34\">███</>","<color=\"3c4048\">█████</><color=\"50565e\">█</><color=\"000000\">████</><color=\"ff3020\">█</><color=\"000000\">████</><color=\"50565e\">█</><color=\"3c4048\">██</><color=\"50565e\">█</><color=\"000000\">████</><color=\"ff3020\">█</><color=\"ffffff\">███</><color=\"000000\">█</><color=\"50565e\">█</><color=\"3c4048\">█</><color=\"2a2e34\">███</>","<color=\"3c4048\">█████</><color=\"50565e\">█</><color=\"000000\">█████████</><color=\"50565e\">█</><color=\"3c4048\">██</><color=\"50565e\">█</><color=\"000000\">█████████</><color=\"50565e\">█</><color=\"3c4048\">█</><color=\"2a2e34\">███</>","<color=\"3c4048\">█████</><color=\"50565e\">█</><color=\"000000\">█████████</><color=\"50565e\">█</><color=\"3c4048\">██</><color=\"50565e\">█</><color=\"000000\">█████████</><color=\"50565e\">█</><color=\"3c4048\">█</><color=\"2a2e34\">███</>","<color=\"3c4048\">██████</><color=\"50565e\">█</><color=\"000000\">███████</><color=\"50565e\">█</><color=\"3c4048\">████</><color=\"50565e\">█</><color=\"000000\">███████</><color=\"50565e\">█</><color=\"3c4048\">██</><color=\"2a2e34\">███</>","<color=\"3c4048\">███████</><color=\"50565e\">█</><color=\"000000\">█████</><color=\"50565e\">█</><color=\"3c4048\">██████</><color=\"50565e\">█</><color=\"000000\">█████</><color=\"50565e\">█</><color=\"3c4048\">███</><color=\"2a2e34\">███</>","<color=\"3c4048\">████████</><color=\"50565e\">█████</><color=\"3c4048\">████████</><color=\"50565e\">█████</><color=\"3c4048\">████</><color=\"2a2e34\">███</>","<color=\"3c4048\">█████████</><color=\"c0c4d0\">ALT</><color=\"3c4048\">██████████</><color=\"c0c4d0\">SPD</><color=\"3c4048\">█████</><color=\"2a2e34\">███</>","<color=\"3c4048\">██████████████████████████████</><color=\"2a2e34\">███</>","<color=\"3c4048\">██████████████████████████████</><color=\"2a2e34\">███</>","<color=\"3c4048\">██████████████████████████████</><color=\"2a2e34\">███</>","<color=\"2a2e34\">█████████████████████████████████</>"]
 const RB = [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 11, 10, 10, 11, 10, 10, 11, 10, 10, 11, 10, 10, 11, 10, 10, 11, 10, 10, 11, 10, 10, 11, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 8, 8, 8, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
-const BRIEF = ["<color=\"ffd040\">             MISSION 1 OF 4: OPERATION SMUG BALLOON</>█████████████","","<color=\"ffffff\">    COMMANDER GRUFFLY CHEWS AN UNLIT CIGAR. HE IS AFRAID OF</>█████","<color=\"ffffff\">    FIRE, WHICH IS AN ODD THING TO BE IN THIS LINE OF WORK.</>█████","<color=\"ffffff\">   AN ENEMY BLIMP HAS PARKED OVER OUR OCEAN AND IS BEING SMUG</>███","<color=\"ffffff\">    ABOUT IT. IT IS GUARDED BY SILVER JETS BOUGHT SECONDHAND</>████","<color=\"ffffff\">                    FROM A MAN NAMED DENNIS.</>████████████████████","<color=\"ffffff\">  SHOOT DOWN 8 BOGEYS. THEN POP THE BLIMP. TRY NOT TO ENJOY IT</>██","<color=\"ffffff\">                           TOO MUCH.</>████████████████████████████","","<color=\"40e0ff\">    INTEL: HEAT SEEKERS (IR) ONLY. FLARES (Q) WORK. CHAFF IS</>████","<color=\"40e0ff\">                         JUST CONFETTI.</>█████████████████████████","<color=\"ff8a20\">                   TARGET: THE SMUG DIRIGIBLE</>███████████████████","<color=\"c0c4d0\">                   IT SHOWS UP AFTER 8 KILLS.</>███████████████████","","","","<color=\"30ff60\">                   PRESS SPACE FOR THE ARMORY</>███████████████████","<color=\"ffd040\">              MISSION 2 OF 4: OPERATION SANDCASTLE</>██████████████","","<color=\"ffffff\">  SOMEONE HAS BUILT A FORTRESS OUT OF SAND IN THE DESERT. THE</>███","<color=\"ffffff\">  SAND IS LOAD-BEARING. THE FORTRESS IS ARMED. THE TIDE IS NOT</>██","<color=\"ffffff\">                            COMING.</>█████████████████████████████","<color=\"ffffff\">   TAN JETS PATROL THE DUNES WITH RADAR-GUIDED MISSILES, AND</>████","<color=\"ffffff\">   THE GROUND FIRES SURFACE-TO-AIR MISSILES WHENEVER IT FEELS</>███","<color=\"ffffff\">                           LEFT OUT.</>████████████████████████████","<color=\"ffffff\">   DOWN 10 BOGEYS, THEN KNOCK THE CASTLE OVER. NO, YOU CANNOT</>███","<color=\"ffffff\">                        KEEP THE FLAGS.</>█████████████████████████","","<color=\"40e0ff\">   INTEL: RADAR MISSILES + SAM SITES. CHAFF (C) WORKS. FLARES</>███","<color=\"40e0ff\">                           ARE DECOR.</>███████████████████████████","<color=\"ff8a20\">             TARGET: THE SANDCASTLE OF MILD MENACE</>██████████████","<color=\"c0c4d0\">                  IT SHOWS UP AFTER 10 KILLS.</>███████████████████","","","<color=\"30ff60\">                   PRESS SPACE FOR THE ARMORY</>███████████████████","<color=\"ffd040\">             MISSION 3 OF 4: OPERATION DUSK PATROL</>██████████████","","<color=\"ffffff\">     COLONEL KLAXON HAS A FLYING WING, A LOUD VOICE, AND NO</>█████","<color=\"ffffff\">  INDOOR VOICE. HE IS FLYING OVER THE FOREST AT SUNSET, WHICH</>███","<color=\"ffffff\">                    IS FRANKLY SHOWING OFF.</>█████████████████████","<color=\"ffffff\">    HIS OLIVE JETS CARRY BOTH KINDS OF MISSILE. THE COCKPIT</>█████","<color=\"ffffff\">  LAMPS WILL TELL YOU WHICH ONE IS COMING. THE LAMPS ARE NEVER</>██","<color=\"ffffff\">               WRONG. THE LAMPS ARE YOUR FRIENDS.</>███████████████","<color=\"ffffff\">  DOWN 12 BOGEYS, THEN CLIP THE WING. HE WILL SCREAM. YOU WILL</>██","<color=\"ffffff\">                            HEAR IT.</>████████████████████████████","","<color=\"40e0ff\">  INTEL: MIXED IR AND RADAR. WATCH THE LAMPS. Q FOR IR, C FOR</>███","<color=\"40e0ff\">                             RADAR.</>█████████████████████████████","<color=\"ff8a20\">              TARGET: COLONEL KLAXON'S FLYING WING</>██████████████","<color=\"c0c4d0\">                  IT SHOWS UP AFTER 12 KILLS.</>███████████████████","","","<color=\"30ff60\">                   PRESS SPACE FOR THE ARMORY</>███████████████████","<color=\"ffd040\">          MISSION 4 OF 4: OPERATION UNREASONABLE BOAT</>███████████","","<color=\"ffffff\">   AT NIGHT, ON A BLACK SEA, FLOATS THE BATTLESHIP REGRET. IT</>███","<color=\"ffffff\">  IS VERY LARGE. NOBODY KNOWS WHY THEY BUILT IT. NOT EVEN THE</>███","<color=\"ffffff\">                      PEOPLE WHO BUILT IT.</>██████████████████████","<color=\"ffffff\">   IT LAUNCHES SAMS, ITS ESCORTS LAUNCH EVERYTHING ELSE, AND</>████","<color=\"ffffff\">    THE MOON IS NO HELP AT ALL. THE MOON HAS NEVER BEEN ANY</>█████","<color=\"ffffff\">                             HELP.</>██████████████████████████████","<color=\"ffffff\">      DOWN 14 BOGEYS, THEN SINK THE REGRET. YOU WILL FEEL</>███████","<color=\"ffffff\">                    SOMETHING. IT IS RELIEF.</>████████████████████","","<color=\"40e0ff\">  INTEL: EVERYTHING. IR, RADAR, SAMS. BRING A LITTLE OF EACH.</>███","<color=\"ff8a20\">                 TARGET: THE BATTLESHIP REGRET</>██████████████████","<color=\"c0c4d0\">                  IT SHOWS UP AFTER 14 KILLS.</>███████████████████","","","","<color=\"30ff60\">                   PRESS SPACE FOR THE ARMORY</>███████████████████"]
-const ARMH = ["<color=\"ffd040\">           ARMORY - MISSION 1: OPERATION SMUG BALLOON</>███████████","<color=\"ffd040\">            ARMORY - MISSION 2: OPERATION SANDCASTLE</>████████████","<color=\"ffd040\">           ARMORY - MISSION 3: OPERATION DUSK PATROL</>████████████","<color=\"ffd040\">        ARMORY - MISSION 4: OPERATION UNREASONABLE BOAT</>█████████"]
-const WDL1 = ["<color=\"40e0ff\">          WASP: SMALL, ANGRY, FOND OF SHORT DISTANCES.</>██████████","<color=\"40e0ff\">       HORNET: MEDIUM RANGE. SMELLS FAINTLY OF AMBITION.</>████████","<color=\"40e0ff\">         WOMBAT: LARGE. SLOW TO COMMIT. ENDS ARGUMENTS.</>█████████"]
-const WDL2 = ["<color=\"40e0ff\">          LOCKS FAST. ONE PER BOGEY. USELESS PAST 45.</>███████████","<color=\"40e0ff\">           DECENT LOCK, DECENT REACH, DECENT PERSON.</>████████████","<color=\"40e0ff\">             LONG LOCK, LONG REACH. BOSSES HATE IT.</>█████████████"]
-const WDL3 = ["<color=\"40e0ff\">                  LOCK 8   RANGE 45   DAMAGE 6</>██████████████████","<color=\"40e0ff\">                 LOCK 16   RANGE 75   DAMAGE 12</>█████████████████","<color=\"40e0ff\">                LOCK 28   RANGE 110   DAMAGE 30</>█████████████████"]
-const MINT1 = ["<color=\"ff8a20\">    INTEL: HEAT SEEKERS (IR) ONLY. FLARES (Q) WORK. CHAFF IS</>████","<color=\"ff8a20\">   INTEL: RADAR MISSILES + SAM SITES. CHAFF (C) WORKS. FLARES</>███","<color=\"ff8a20\">  INTEL: MIXED IR AND RADAR. WATCH THE LAMPS. Q FOR IR, C FOR</>███","<color=\"ff8a20\">  INTEL: EVERYTHING. IR, RADAR, SAMS. BRING A LITTLE OF EACH.</>███"]
-const MINT2 = ["<color=\"ff8a20\">                         JUST CONFETTI.</>█████████████████████████","<color=\"ff8a20\">                           ARE DECOR.</>███████████████████████████","<color=\"ff8a20\">                             RADAR.</>█████████████████████████████",""]
-const DEBH = ["<color=\"ffd040\">                       MISSION 1 COMPLETE</>███████████████████████","<color=\"ffd040\">                       MISSION 2 COMPLETE</>███████████████████████","<color=\"ffd040\">                       MISSION 3 COMPLETE</>███████████████████████","<color=\"ffd040\">                       MISSION 4 COMPLETE</>███████████████████████"]
-const DEBC = ["<color=\"40e0ff\">   THE COMMANDER NODS. IT IS THE MOST EMOTION HE HAS SHOWN IN</>███","<color=\"40e0ff\">   YEARS. THE JET IS REPAIRED BY PEOPLE WHO DO NOT GET ENOUGH</>███","<color=\"40e0ff\">                            CREDIT.</>█████████████████████████████","<color=\"40e0ff\">    ALL MISSIONS FLOWN. THEY GIVE YOU A MEDAL SHAPED LIKE A</>█████","<color=\"40e0ff\">    SLIGHTLY BIGGER MEDAL. THEN THEY SEND YOU BACK OUT. THE</>█████","<color=\"40e0ff\">                   ENEMY HAS BEEN PRACTICING.</>███████████████████"]
+const BRIEF = ["<color=\"ffd040\">MISSION 1 OF 4: OPERATION SMUG BALLOON</>","","<color=\"ffffff\">COMMANDER GRUFFLY CHEWS AN UNLIT CIGAR. HE IS AFRAID OF</>","<color=\"ffffff\">FIRE, WHICH IS AN ODD THING TO BE IN THIS LINE OF WORK.</>","<color=\"ffffff\">AN ENEMY BLIMP HAS PARKED OVER OUR OCEAN AND IS BEING SMUG</>","<color=\"ffffff\">ABOUT IT. IT IS GUARDED BY SILVER JETS BOUGHT SECONDHAND</>","<color=\"ffffff\">FROM A MAN NAMED DENNIS.</>","<color=\"ffffff\">SHOOT DOWN 8 BOGEYS. THEN POP THE BLIMP. TRY NOT TO ENJOY IT</>","<color=\"ffffff\">TOO MUCH.</>","","<color=\"40e0ff\">INTEL: HEAT SEEKERS (IR) ONLY. FLARES (Q) WORK. CHAFF IS</>","<color=\"40e0ff\">JUST CONFETTI.</>","<color=\"ff8a20\">TARGET: THE SMUG DIRIGIBLE</>","<color=\"c0c4d0\">IT SHOWS UP AFTER 8 KILLS.</>","","","","<color=\"30ff60\">PRESS SPACE FOR THE ARMORY</>","<color=\"ffd040\">MISSION 2 OF 4: OPERATION SANDCASTLE</>","","<color=\"ffffff\">SOMEONE HAS BUILT A FORTRESS OUT OF SAND IN THE DESERT. THE</>","<color=\"ffffff\">SAND IS LOAD-BEARING. THE FORTRESS IS ARMED. THE TIDE IS NOT</>","<color=\"ffffff\">COMING.</>","<color=\"ffffff\">TAN JETS PATROL THE DUNES WITH RADAR-GUIDED MISSILES, AND</>","<color=\"ffffff\">THE GROUND FIRES SURFACE-TO-AIR MISSILES WHENEVER IT FEELS</>","<color=\"ffffff\">LEFT OUT.</>","<color=\"ffffff\">DOWN 10 BOGEYS, THEN KNOCK THE CASTLE OVER. NO, YOU CANNOT</>","<color=\"ffffff\">KEEP THE FLAGS.</>","","<color=\"40e0ff\">INTEL: RADAR MISSILES + SAM SITES. CHAFF (C) WORKS. FLARES</>","<color=\"40e0ff\">ARE DECOR.</>","<color=\"ff8a20\">TARGET: THE SANDCASTLE OF MILD MENACE</>","<color=\"c0c4d0\">IT SHOWS UP AFTER 10 KILLS.</>","","","<color=\"30ff60\">PRESS SPACE FOR THE ARMORY</>","<color=\"ffd040\">MISSION 3 OF 4: OPERATION DUSK PATROL</>","","<color=\"ffffff\">COLONEL KLAXON HAS A FLYING WING, A LOUD VOICE, AND NO</>","<color=\"ffffff\">INDOOR VOICE. HE IS FLYING OVER THE FOREST AT SUNSET, WHICH</>","<color=\"ffffff\">IS FRANKLY SHOWING OFF.</>","<color=\"ffffff\">HIS OLIVE JETS CARRY BOTH KINDS OF MISSILE. THE COCKPIT</>","<color=\"ffffff\">LAMPS WILL TELL YOU WHICH ONE IS COMING. THE LAMPS ARE NEVER</>","<color=\"ffffff\">WRONG. THE LAMPS ARE YOUR FRIENDS.</>","<color=\"ffffff\">DOWN 12 BOGEYS, THEN CLIP THE WING. HE WILL SCREAM. YOU WILL</>","<color=\"ffffff\">HEAR IT.</>","","<color=\"40e0ff\">INTEL: MIXED IR AND RADAR. WATCH THE LAMPS. Q FOR IR, C FOR</>","<color=\"40e0ff\">RADAR.</>","<color=\"ff8a20\">TARGET: COLONEL KLAXON'S FLYING WING</>","<color=\"c0c4d0\">IT SHOWS UP AFTER 12 KILLS.</>","","","<color=\"30ff60\">PRESS SPACE FOR THE ARMORY</>","<color=\"ffd040\">MISSION 4 OF 4: OPERATION UNREASONABLE BOAT</>","","<color=\"ffffff\">AT NIGHT, ON A BLACK SEA, FLOATS THE BATTLESHIP REGRET. IT</>","<color=\"ffffff\">IS VERY LARGE. NOBODY KNOWS WHY THEY BUILT IT. NOT EVEN THE</>","<color=\"ffffff\">PEOPLE WHO BUILT IT.</>","<color=\"ffffff\">IT LAUNCHES SAMS, ITS ESCORTS LAUNCH EVERYTHING ELSE, AND</>","<color=\"ffffff\">THE MOON IS NO HELP AT ALL. THE MOON HAS NEVER BEEN ANY</>","<color=\"ffffff\">HELP.</>","<color=\"ffffff\">DOWN 14 BOGEYS, THEN SINK THE REGRET. YOU WILL FEEL</>","<color=\"ffffff\">SOMETHING. IT IS RELIEF.</>","","<color=\"40e0ff\">INTEL: EVERYTHING. IR, RADAR, SAMS. BRING A LITTLE OF EACH.</>","<color=\"ff8a20\">TARGET: THE BATTLESHIP REGRET</>","<color=\"c0c4d0\">IT SHOWS UP AFTER 14 KILLS.</>","","","","<color=\"30ff60\">PRESS SPACE FOR THE ARMORY</>"]
+const ARMH = ["<color=\"ffd040\">ARMORY - MISSION 1: OPERATION SMUG BALLOON</>","<color=\"ffd040\">ARMORY - MISSION 2: OPERATION SANDCASTLE</>","<color=\"ffd040\">ARMORY - MISSION 3: OPERATION DUSK PATROL</>","<color=\"ffd040\">ARMORY - MISSION 4: OPERATION UNREASONABLE BOAT</>"]
+const WDL1 = ["<color=\"40e0ff\">WASP: SMALL, ANGRY, FOND OF SHORT DISTANCES.</>","<color=\"40e0ff\">HORNET: MEDIUM RANGE. SMELLS FAINTLY OF AMBITION.</>","<color=\"40e0ff\">WOMBAT: LARGE. SLOW TO COMMIT. ENDS ARGUMENTS.</>"]
+const WDL2 = ["<color=\"40e0ff\">LOCKS FAST. ONE PER BOGEY. USELESS PAST 45.</>","<color=\"40e0ff\">DECENT LOCK, DECENT REACH, DECENT PERSON.</>","<color=\"40e0ff\">LONG LOCK, LONG REACH. BOSSES HATE IT.</>"]
+const WDL3 = ["<color=\"40e0ff\">LOCK 8   RANGE 45   DAMAGE 6</>","<color=\"40e0ff\">LOCK 16   RANGE 75   DAMAGE 12</>","<color=\"40e0ff\">LOCK 28   RANGE 110   DAMAGE 30</>"]
+const MINT1 = ["<color=\"ff8a20\">INTEL: HEAT SEEKERS (IR) ONLY. FLARES (Q) WORK. CHAFF IS</>","<color=\"ff8a20\">INTEL: RADAR MISSILES + SAM SITES. CHAFF (C) WORKS. FLARES</>","<color=\"ff8a20\">INTEL: MIXED IR AND RADAR. WATCH THE LAMPS. Q FOR IR, C FOR</>","<color=\"ff8a20\">INTEL: EVERYTHING. IR, RADAR, SAMS. BRING A LITTLE OF EACH.</>"]
+const MINT2 = ["<color=\"ff8a20\">JUST CONFETTI.</>","<color=\"ff8a20\">ARE DECOR.</>","<color=\"ff8a20\">RADAR.</>",""]
+const DEBH = ["<color=\"ffd040\">MISSION 1 COMPLETE</>","<color=\"ffd040\">MISSION 2 COMPLETE</>","<color=\"ffd040\">MISSION 3 COMPLETE</>","<color=\"ffd040\">MISSION 4 COMPLETE</>"]
+const DEBC = ["<color=\"40e0ff\">THE COMMANDER NODS. IT IS THE MOST EMOTION HE HAS SHOWN IN</>","<color=\"40e0ff\">YEARS. THE JET IS REPAIRED BY PEOPLE WHO DO NOT GET ENOUGH</>","<color=\"40e0ff\">CREDIT.</>","<color=\"40e0ff\">ALL MISSIONS FLOWN. THEY GIVE YOU A MEDAL SHAPED LIKE A</>","<color=\"40e0ff\">SLIGHTLY BIGGER MEDAL. THEN THEY SEND YOU BACK OUT. THE</>","<color=\"40e0ff\">ENEMY HAS BEEN PRACTICING.</>"]
 const MQUOTA = [8, 10, 12, 14]
 const MIRP = [100, 0, 50, 50]
 const MSAM = [0, 1, 0, 1]
@@ -47,16 +47,15 @@ const MBNAME = ["THE SMUG DIRIGIBLE","THE SANDCASTLE OF MILD MENACE","COLONEL KL
 const MINTEL = ["INTEL: HEAT SEEKERS (IR) ONLY. FLARES (Q) WORK. CHAFF IS JUST CONFETTI.","INTEL: RADAR MISSILES + SAM SITES. CHAFF (C) WORKS. FLARES ARE DECOR.","INTEL: MIXED IR AND RADAR. WATCH THE LAMPS. Q FOR IR, C FOR RADAR.","INTEL: EVERYTHING. IR, RADAR, SAMS. BRING A LITTLE OF EACH."]
 const MDEF = [0, 10, 5, 1, 5, 1, 6, 1, 6, 5, 1, 5, 3, 3, 5, 2, 3, 3, 3, 5]
 const WNAME = ["WASP","HORNET","WOMBAT"]
-const WPAD = ["   WASP"," HORNET"," WOMBAT"]
-const WNOTE = ["1 PT EACH                   ","2 PT EACH                   ","4 PT EACH                   "]
+const WNOTE = ["1 PT EACH","2 PT EACH","4 PT EACH"]
 const WCOST = [1, 2, 4]
 const WLOCK = [8, 16, 28]
 const WRNG = [45.0, 75.0, 110.0]
 const WDMG = [6, 12, 30]
 const WD1 = ["SMALL, ANGRY, FOND OF SHORT DISTANCES.","MEDIUM RANGE. SMELLS FAINTLY OF AMBITION.","LARGE. SLOW TO COMMIT. ENDS ARGUMENTS."]
 const WD2 = ["LOCKS FAST. ONE PER BOGEY. USELESS PAST 45.","DECENT LOCK, DECENT REACH, DECENT PERSON.","LONG LOCK, LONG REACH. BOSSES HATE IT."]
-const EXO = ["<color=\"ffd040\">           > NEW JET, FULLY REARMED. NO JET LOST.    </>███████████","<color=\"c0c4d0\">             NEW JET, FULLY REARMED. NO JET LOST.    </>███████████","<color=\"ffd040\">           > RESTART THE MISSION WITH A NEW LOADOUT. </>███████████","<color=\"c0c4d0\">             RESTART THE MISSION WITH A NEW LOADOUT. </>███████████"]
-const EXT = ["<color=\"ffffff\">   A MAN IN AN ORANGE VEST WAVES TWO GLOW STICKS AT YOU WITH</>████","<color=\"ffffff\">     GREAT CONFIDENCE AND NO TRAINING. THE HANGAR SMELLS OF</>█████","<color=\"ffffff\">                   COFFEE AND FRESH MISSILES.</>███████████████████"]
+const EXO = ["<color=\"ffd040\">> NEW JET, FULLY REARMED. NO JET LOST. <</>","<color=\"c0c4d0\">NEW JET, FULLY REARMED. NO JET LOST.</>","<color=\"ffd040\">> RESTART THE MISSION WITH A NEW LOADOUT. <</>","<color=\"c0c4d0\">RESTART THE MISSION WITH A NEW LOADOUT.</>"]
+const EXT = ["<color=\"ffffff\">A MAN IN AN ORANGE VEST WAVES TWO GLOW STICKS AT YOU WITH</>","<color=\"ffffff\">GREAT CONFIDENCE AND NO TRAINING. THE HANGAR SMELLS OF</>","<color=\"ffffff\">COFFEE AND FRESH MISSILES.</>"]
 const SZW = [1, 3, 5, 8]
 const SZH = [1, 1, 2, 3]
 const CHX = [-3, 4, -6, 2, 6, -1, -5, 5]
@@ -241,11 +240,6 @@ mod wrap0(d: float) -> float {
   return r
 }
 
-// right-aligned in 7 cells: text rows are centred line by line, so fixed widths keep the columns straight
-mod padn(n: int) -> string {
-  return (if n < 10 then "      " else if n < 100 then "     " else if n < 1000 then "    " else if n < 10000 then "   " else if n < 100000 then "  " else " ") .. n
-}
-
 mod pts() -> int {
   return WCOST[mt] * nMsl + nFlr + nChf + nGun
 }
@@ -282,14 +276,15 @@ mod showBrief() {
   clearText()
   let m = msn % 4
   for i in 0..18 { tl[i] = BRIEF[m * 18 + i] }
-  if rnd > 0 { tl[1] = "<color=\"ff3020\">        ROUND " .. padn(rnd + 1) .. ": EVERYONE IS FASTER AND ANGRIER</>███████████" }
+  if rnd > 0 { tl[1] = "<color=\"ff3020\">ROUND " .. (rnd + 1) .. ": EVERYONE IS FASTER AND ANGRIER</>" }
 }
 
 mod line(r: int, k: int, label: string, val: string, note: string) {
+  let body = label .. ":  - " .. val .. " +" .. (if note == "" then "" else "  (" .. note .. ")")
   if cur == k {
-    tl[r] = "<color=\"ffd040\">   > " .. label .. " - " .. val .. " +  " .. note .. "</>████"
+    tl[r] = "<color=\"ffd040\">> " .. body .. " <</>"
   } else {
-    tl[r] = "<color=\"c0c4d0\">     " .. label .. " - " .. val .. " +  " .. note .. "</>████"
+    tl[r] = "<color=\"c0c4d0\">" .. body .. "</>"
   }
 }
 
@@ -298,18 +293,18 @@ mod showArmory() {
   let m = msn % 4
   tl[0] = ARMH[m]
   let pp = pts()
-  tl[1] = (if pp >= 24 then "<color=\"ff8a20\">" else "<color=\"30ff60\">") .. "        PAYLOAD " .. padn(pp) .. " / 24 POINTS USED</>████████████████████████"
-  line(3, 0, "MISSILE TYPE ", WPAD[mt], "                            ")
-  line(4, 1, "MISSILES     ", padn(nMsl), WNOTE[mt])
-  line(5, 2, "FLARE PAIRS  ", padn(nFlr), "1 PT A PAIR  Q BEATS IR     ")
-  line(6, 3, "CHAFF PAIRS  ", padn(nChf), "1 PT A PAIR  C BEATS RADAR  ")
-  line(7, 4, "GUN ROUNDS   ", padn(nGun * 200), "1 PT PER 200                ")
+  tl[1] = (if pp >= 24 then "<color=\"ff8a20\">" else "<color=\"30ff60\">") .. "PAYLOAD " .. pp .. " / 24 POINTS USED</>"
+  line(3, 0, "MISSILE TYPE", WNAME[mt], "")
+  line(4, 1, "MISSILES", "" .. nMsl, WNOTE[mt])
+  line(5, 2, "FLARE PAIRS", "" .. nFlr, "1 PT A PAIR, Q BEATS IR")
+  line(6, 3, "CHAFF PAIRS", "" .. nChf, "1 PT A PAIR, C BEATS RADAR")
+  line(7, 4, "GUN ROUNDS", "" .. (nGun * 200), "1 PT PER 200")
   tl[9] = WDL1[mt]
   tl[10] = WDL2[mt]
   tl[11] = WDL3[mt]
   tl[13] = MINT1[m]
   tl[14] = MINT2[m]
-  tl[16] = "<color=\"30ff60\">            W/S PICK   A/D CHANGE   SPACE TO LAUNCH</>█████████████"
+  tl[16] = "<color=\"30ff60\">W/S PICK   A/D CHANGE   SPACE TO LAUNCH</>"
 }
 
 mod armoryInput(aL: bool, aR: bool, aU: bool, aD: bool) {
@@ -360,13 +355,13 @@ mod enterArmory() {
 
 mod showExfil() {
   clearText()
-  tl[3] = "<color=\"ffd040\">                       EXFILTRATION POINT</>███████████████████████"
+  tl[3] = "<color=\"ffd040\">EXFILTRATION POINT</>"
   tl[5] = EXT[0]
   tl[6] = EXT[1]
   tl[7] = EXT[2]
   tl[10] = EXO[if exC == 0 then 0 else 1]
   tl[12] = EXO[if exC == 1 then 2 else 3]
-  tl[16] = "<color=\"30ff60\">                  W/S PICK   SPACE TO CONFIRM</>███████████████████"
+  tl[16] = "<color=\"30ff60\">W/S PICK   SPACE TO CONFIRM</>"
 }
 
 mod rearm() {
@@ -1166,10 +1161,10 @@ mod frame() {
 }
 
 mod audio() {
-  // V0 guns (square rattle)
+  // V0 guns: white-noise click, one tick per round
   let ga = t - gunS
-  aV0 = if ga < 1 then 0.35 else 0.0
-  aP0 = if t % 4 < 2 then 2.6 else 2.2
+  aV0 = if ga < 1 then 0.4 else 0.0
+  aP0 = 3.0
   // V1 noise: explosions beat the missile whoosh
   let ba = t - boomS
   let ma = t - pmS
@@ -1311,11 +1306,11 @@ on tick {
           state = 6
           stT = 0
           clearText()
-          tl[5] = "<color=\"ff3020\">                           GAME OVER</>████████████████████████████"
-          tl[8] = "<color=\"ffffff\">                      YOU ARE OUT OF JETS.</>██████████████████████"
-          tl[9] = "<color=\"ffffff\">                 THE NAVY WOULD LIKE THEM BACK.</>█████████████████"
-          tl[12] = "<color=\"ffd040\">                      SCORE " .. padn(score) .. "</>█████████████████████████████"
-          tl[16] = "<color=\"30ff60\">                          PRESS SPACE</>███████████████████████████"
+          tl[5] = "<color=\"ff3020\">GAME OVER</>"
+          tl[8] = "<color=\"ffffff\">YOU ARE OUT OF JETS.</>"
+          tl[9] = "<color=\"ffffff\">THE NAVY WOULD LIKE THEM BACK.</>"
+          tl[12] = "<color=\"ffd040\">SCORE " .. score .. "</>"
+          tl[16] = "<color=\"30ff60\">PRESS SPACE</>"
           say("", 0)
           showHud()
         }
@@ -1332,14 +1327,14 @@ on tick {
         clearText()
         let dm = msn % 4
         tl[2] = DEBH[dm]
-        tl[5] = "<color=\"ffffff\">                  BOGEYS DOWNED   " .. padn(kills) .. "</>███████████████████████"
-        tl[6] = "<color=\"ffffff\">                  JETS LEFT       " .. padn(jets) .. "</>███████████████████████"
-        tl[7] = "<color=\"ffffff\">                  SCORE           " .. padn(score) .. "</>███████████████████████"
+        tl[5] = "<color=\"ffffff\">BOGEYS DOWNED " .. kills .. "</>"
+        tl[6] = "<color=\"ffffff\">JETS LEFT " .. jets .. "</>"
+        tl[7] = "<color=\"ffffff\">SCORE " .. score .. "</>"
         let fin = if dm == 3 then 3 else 0
         tl[10] = DEBC[fin]
         tl[11] = DEBC[fin + 1]
         tl[12] = DEBC[fin + 2]
-        tl[16] = "<color=\"30ff60\">               PRESS SPACE FOR THE NEXT BRIEFING</>████████████████"
+        tl[16] = "<color=\"30ff60\">PRESS SPACE FOR THE NEXT BRIEFING</>"
         say("", 0)
         showHud()
       } else if stT > 65 && aE {
