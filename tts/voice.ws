@@ -130,8 +130,12 @@ mod parse() -> int {
     // a vowel, consonant, E, end of word: the long vowel (magic E)
     let magic = isLetter(n) && !isVowel(n) && n2 == "E" && !isLetter(n3)
     // a final E after a vowel earlier in the word is silent
+    var prev: string = " "
+    if pos > 0 { prev = text.Substring(pos - 1, 1) }
     if c == "E" && !isLetter(n) && vowelSeen {
       p = -1
+    } else if c == "I" && n == "M" && !isLetter(n2) && !isLetter(prev) {
+      p = 4; q1 = 2   // im = I'm, not em
     } else if magic {
       if c == "A" { p = 12; q1 = 2 }
       if c == "E" { p = 1 }
