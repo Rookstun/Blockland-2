@@ -210,15 +210,15 @@ var aV4: float = 0.0
 @right out msg_: string = msg
 @right out hud_: string = hud
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
-// twin autocannons (Rookstun: white noise held down = radio static): rounds alternate left (V0) / right (V5) triangle
-// speakers; each bump of gunL/gunR minus its Tween(…, 0.12 s) is a 1 -> 0 envelope = a short thump whose pitch drops
-// fast (kick-drum style), so every round is its own knock with silence between. VOL scales every voice.
-let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.12)))
-let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.12)))
-@right out P0: float = 0.18 + 0.7 * gL * gL * gL
-@right out V0: float = if state == 3 then 0.55 * gL else 0.0
-@right out P5: float = 0.18 + 0.7 * gR * gR * gR
-@right out V5: float = if state == 3 then 0.55 * gR else 0.0
+// twin autocannons (Rookstun: white noise held = radio static, triangle thump too low -> "pink noise, cancelled out
+// faster, snap-like"): rounds alternate left (V0) / right (V5) pink-noise speakers; each bump of gunL/gunR minus its
+// Tween(…, 0.05 s) is a 1 -> 0 envelope, squared for a sharp snap that is gone long before the next round. VOL scales every voice.
+let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.05)))
+let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.05)))
+@right out P0: float = 0.9 + 0.6 * gL
+@right out V0: float = if state == 3 then 0.55 * gL * gL else 0.0
+@right out P5: float = 0.9 + 0.6 * gR
+@right out V5: float = if state == 3 then 0.55 * gR * gR else 0.0
 @right out P1: float = aP1
 @right out V1: float = 0.55 * aV1
 @right out P2: float = aP2

@@ -384,15 +384,15 @@ ${Array.from({ length: NS }, (_, k) => `@right out strip${k}: string = st${k}`).
 @right out msg_: string = msg
 @right out hud_: string = hud
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
-// twin autocannons (Rookstun: white noise held down = radio static): rounds alternate left (V0) / right (V5) triangle
-// speakers; each bump of gunL/gunR minus its Tween(…, 0.12 s) is a 1 -> 0 envelope = a short thump whose pitch drops
-// fast (kick-drum style), so every round is its own knock with silence between. VOL scales every voice.
-let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.12)))
-let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.12)))
-@right out P0: float = 0.18 + 0.7 * gL * gL * gL
-@right out V0: float = if state == 3 then ${VOL} * gL else 0.0
-@right out P5: float = 0.18 + 0.7 * gR * gR * gR
-@right out V5: float = if state == 3 then ${VOL} * gR else 0.0
+// twin autocannons (Rookstun: white noise held = radio static, triangle thump too low -> "pink noise, cancelled out
+// faster, snap-like"): rounds alternate left (V0) / right (V5) pink-noise speakers; each bump of gunL/gunR minus its
+// Tween(…, 0.05 s) is a 1 -> 0 envelope, squared for a sharp snap that is gone long before the next round. VOL scales every voice.
+let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.05)))
+let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.05)))
+@right out P0: float = 0.9 + 0.6 * gL
+@right out V0: float = if state == 3 then ${VOL} * gL * gL else 0.0
+@right out P5: float = 0.9 + 0.6 * gR
+@right out V5: float = if state == 3 then ${VOL} * gR * gR else 0.0
 ${[1, 2, 3, 4].map(v => `@right out P${v}: float = aP${v}\n@right out V${v}: float = ${VOL} * aV${v}`).join('\n')}
 @right out state_: int = state
 @right out lh_: float = if txtOn then 0.62 else ${+(CELL * 0.645).toFixed(4)}
@@ -1481,6 +1481,6 @@ ${Array.from({ length: NS }, (_, k) => `      st${k} = tl[${2 * k}] .. "\\n" .. 
   }
 }
 `;
-  return { src, W, H, STRIP, PAL, textPorts: true, synths: ['Triangle', 'Noise', 'Square', 'Triangle', 'NoisePink', 'Triangle'],
+  return { src, W, H, STRIP, PAL, textPorts: true, synths: ['NoisePink', 'Noise', 'Square', 'Triangle', 'NoisePink', 'NoisePink'],
     speakerAt: { 0: [-20, -26, 48], 5: [20, -26, 48] } }; // twin cannon speakers either side of the pilot
 }
