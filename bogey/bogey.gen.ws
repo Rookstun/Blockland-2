@@ -161,7 +161,9 @@ var kL: bool = false
 var kR: bool = false
 var gunS: int = -99
 var gunB: int = -99
-var gunN: float = 0.0
+var gunL: float = 0.0
+var gunR: float = 0.0
+var gunK: int = 0
 var pmS: int = -99
 var boomS: int = -99
 var flS: int = -99
@@ -208,18 +210,22 @@ var aV4: float = 0.0
 @right out msg_: string = msg
 @right out hud_: string = hud
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
-// V0 cannons: every round bumps gunN; gunN - Tween(gunN, 0.2 s) is a 1 -> 0 envelope (noise boom, pitch falls as it fades)
-let gE = min(1.0, max(0.0, gunN - Tween(gunN, 0.2)))
-@right out P0: float = 0.12 + 0.35 * gE * gE
-@right out V0: float = if state == 3 then gE else 0.0
+// twin cannons: rounds alternate left (V0) / right (V5) speakers; each bump of gunL/gunR minus its Tween(…, 0.2 s) is a
+// 1 -> 0 envelope (noise boom, pitch falls as it fades). VOL scales every voice.
+let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.2)))
+let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.2)))
+@right out P0: float = 0.12 + 0.35 * gL * gL
+@right out V0: float = if state == 3 then 0.55 * 0.8 * gL else 0.0
+@right out P5: float = 0.12 + 0.35 * gR * gR
+@right out V5: float = if state == 3 then 0.55 * 0.8 * gR else 0.0
 @right out P1: float = aP1
-@right out V1: float = aV1
+@right out V1: float = 0.55 * aV1
 @right out P2: float = aP2
-@right out V2: float = aV2
+@right out V2: float = 0.55 * aV2
 @right out P3: float = aP3
-@right out V3: float = aV3
+@right out V3: float = 0.55 * aV3
 @right out P4: float = aP4
-@right out V4: float = aV4
+@right out V4: float = 0.55 * aV4
 @right out state_: int = state
 @right out lh_: float = if txtOn then 0.62 else 0.215
 @right out ws_: float = if txtOn then 1.0 else 2.0
@@ -549,7 +555,8 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
       gun -= 2
       if t - gunS > 2 { gunB = t }
       gunS = t
-      gunN += 1.0
+      gunK += 1
+      if gunK % 2 == 0 { gunL += 1.0 } else { gunR += 1.0 }
       var hit: int = -1
       for i in 0..5 {
         if eA[i] == 1 && hit < 0 && ez[i] < 70.0 {

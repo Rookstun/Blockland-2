@@ -34,9 +34,13 @@ const SYN = [...new Set(gen.synths)].map(synName);
 function speakers(b) {
   const maxX = Math.max(...b.rootPos.map(p => p[0])), y0 = Math.min(...b.rootPos.map(p => p[1])), z = b.rootPos[0][2];
   gen.synths.forEach((s, v) => {
-    const sp = b.addInside({ asset: 'B_1x1F_Speaker', position: [maxX + 20 + v * 10, y0, z], color: [30, 30, 30],
+    const spk = { asset: 'B_1x1F_Speaker', color: [30, 30, 30],
       components: [{ type: 'Component_AudioEmitter', data: { bEnabled: true, AudioDescriptor: b.ext.length + SYN.indexOf(synName(s)), VolumeMultiplier: 0, PitchMultiplier: 1,
-        InnerRadius: 200, MaxDistance: 1200, bSpatialization: true, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] });
+        InnerRadius: 200, MaxDistance: 1200, bSpatialization: true, FocusAzimuth: 360, NonFocusAzimuth: 360, NonFocusVolumeAttenuation: 1 } }] };
+    // gen.speakerAt[v] = cabinet-local [x,y,z]: that voice's speaker is a hidden world brick there (stereo placement), else on the chip plane
+    const at = gen.speakerAt?.[v];
+    const sp = at ? b.w.addBrick({ ...spk, position: at, direction: 4, rotation: 0, visibility: false, collision: false, owner_index: b.O })
+      : b.addInside({ ...spk, position: [maxX + 20 + v * 10, y0, z] });
     for (const [port, target] of [[`P${v}`, 'PitchMultiplier'], [`V${v}`, 'VolumeMultiplier']])
       b.w.addWire(b.outSource(port), { brick: sp, component_type: 'Component_AudioEmitter', port: target });
   });
