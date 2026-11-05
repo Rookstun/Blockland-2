@@ -161,8 +161,8 @@ var kL: bool = false
 var kR: bool = false
 var gunS: int = -99
 var gunB: int = -99
-var gunL: float = 0.0
-var gunR: float = 0.0
+var gunSL: int = -99
+var gunSR: int = -99
 var gunK: int = 0
 var pmS: int = -99
 var boomS: int = -99
@@ -210,15 +210,15 @@ var aV4: float = 0.0
 @right out msg_: string = msg
 @right out hud_: string = hud
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
-// twin autocannons (Rookstun: white noise held = radio static, triangle thump too low -> "pink noise, cancelled out
-// faster, snap-like"): rounds alternate left (V0) / right (V5) pink-noise speakers; each bump of gunL/gunR minus its
-// Tween(…, 0.15 s) is a 1 -> 0 envelope (0.05 s was under a 20 Hz tick = silent), gone before that side's next round (0.2 s). VOL scales every voice.
-let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.15)))
-let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.15)))
-@right out P0: float = 0.9 + 0.6 * gL
-@right out V0: float = if state == 3 then 0.55 * gL else 0.0
-@right out P5: float = 0.9 + 0.6 * gR
-@right out V5: float = if state == 3 then 0.55 * gR else 0.0
+// twin autocannons: rounds alternate left (V0) / right (V5) white-noise speakers at a low pitch (both pink-noise tries were silent in game), each side every 4 ticks. Tick-driven
+// crack per round: full volume 1 tick, half the next, then silent 2 ticks (Rookstun couldn't hear the short Tween snaps;
+// white noise held = radio static; triangle thump too low). VOL scales every voice.
+let aL = t - gunSL
+let aR = t - gunSR
+@right out P0: float = if aL == 0 then 0.8 else 0.5
+@right out V0: float = if state == 3 && aL < 2 then 0.55 * (if aL == 0 then 1.0 else 0.45) else 0.0
+@right out P5: float = if aR == 0 then 0.8 else 0.5
+@right out V5: float = if state == 3 && aR < 2 then 0.55 * (if aR == 0 then 1.0 else 0.45) else 0.0
 @right out P1: float = aP1
 @right out V1: float = 0.55 * aV1
 @right out P2: float = aP2
@@ -557,7 +557,7 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
       if t - gunS > 2 { gunB = t }
       gunS = t
       gunK += 1
-      if gunK % 2 == 0 { gunL += 1.0 } else { gunR += 1.0 }
+      if gunK % 2 == 0 { gunSL = t } else { gunSR = t }
       var hit: int = -1
       for i in 0..5 {
         if eA[i] == 1 && hit < 0 && ez[i] < 70.0 {

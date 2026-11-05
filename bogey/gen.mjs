@@ -360,8 +360,8 @@ var kL: bool = false
 var kR: bool = false
 var gunS: int = -99
 var gunB: int = -99
-var gunL: float = 0.0
-var gunR: float = 0.0
+var gunSL: int = -99
+var gunSR: int = -99
 var gunK: int = 0
 var pmS: int = -99
 var boomS: int = -99
@@ -384,15 +384,15 @@ ${Array.from({ length: NS }, (_, k) => `@right out strip${k}: string = st${k}`).
 @right out msg_: string = msg
 @right out hud_: string = hud
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
-// twin autocannons (Rookstun: white noise held = radio static, triangle thump too low -> "pink noise, cancelled out
-// faster, snap-like"): rounds alternate left (V0) / right (V5) pink-noise speakers; each bump of gunL/gunR minus its
-// Tween(…, 0.15 s) is a 1 -> 0 envelope (0.05 s was under a 20 Hz tick = silent), gone before that side's next round (0.2 s). VOL scales every voice.
-let gL = min(1.0, max(0.0, gunL - Tween(gunL, 0.15)))
-let gR = min(1.0, max(0.0, gunR - Tween(gunR, 0.15)))
-@right out P0: float = 0.9 + 0.6 * gL
-@right out V0: float = if state == 3 then ${VOL} * gL else 0.0
-@right out P5: float = 0.9 + 0.6 * gR
-@right out V5: float = if state == 3 then ${VOL} * gR else 0.0
+// twin autocannons: rounds alternate left (V0) / right (V5) white-noise speakers at a low pitch (both pink-noise tries were silent in game), each side every 4 ticks. Tick-driven
+// crack per round: full volume 1 tick, half the next, then silent 2 ticks (Rookstun couldn't hear the short Tween snaps;
+// white noise held = radio static; triangle thump too low). VOL scales every voice.
+let aL = t - gunSL
+let aR = t - gunSR
+@right out P0: float = if aL == 0 then 0.8 else 0.5
+@right out V0: float = if state == 3 && aL < 2 then ${VOL} * (if aL == 0 then 1.0 else 0.45) else 0.0
+@right out P5: float = if aR == 0 then 0.8 else 0.5
+@right out V5: float = if state == 3 && aR < 2 then ${VOL} * (if aR == 0 then 1.0 else 0.45) else 0.0
 ${[1, 2, 3, 4].map(v => `@right out P${v}: float = aP${v}\n@right out V${v}: float = ${VOL} * aV${v}`).join('\n')}
 @right out state_: int = state
 @right out lh_: float = if txtOn then 0.62 else ${+(CELL * 0.645).toFixed(4)}
@@ -724,7 +724,7 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
       if t - gunS > 2 { gunB = t }
       gunS = t
       gunK += 1
-      if gunK % 2 == 0 { gunL += 1.0 } else { gunR += 1.0 }
+      if gunK % 2 == 0 { gunSL = t } else { gunSR = t }
       var hit: int = -1
       for i in 0..${NE} {
         if eA[i] == 1 && hit < 0 && ez[i] < 70.0 {
@@ -1481,6 +1481,6 @@ ${Array.from({ length: NS }, (_, k) => `      st${k} = tl[${2 * k}] .. "\\n" .. 
   }
 }
 `;
-  return { src, W, H, STRIP, PAL, textPorts: true, synths: ['NoisePink', 'Noise', 'Square', 'Triangle', 'NoisePink', 'NoisePink'],
+  return { src, W, H, STRIP, PAL, textPorts: true, synths: ['Noise', 'Noise', 'Square', 'Triangle', 'NoisePink', 'Noise'],
     speakerAt: { 0: [-20, -26, 48], 5: [20, -26, 48] } }; // twin cannon speakers either side of the pilot
 }
