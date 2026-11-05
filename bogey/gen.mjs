@@ -106,16 +106,15 @@ const tag = (col, s) => `<color="${PAL[col]}">${s}</>`;
 const centre = s => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s;
 
 // ---- cockpit (rows 36-53): static art baked to run-length strings around two live regions
-const RAD = [5, 31], LAM = [36, 63], RAD_R = [1, 14], LAM_R = [3, 9];
+const RAD = [5, 31], LAM = [36, 63], RAD_R = [1, 14], LAM_R = [3, 9], NN = 9, SPM = 0.1, P_LEVEL = 6;
 function cockpit() {
   const g = Array.from({ length: CK }, (_, r) => Array.from({ length: W }, (_, x) => ({ c: r === 0 || r === CK - 1 || x < 3 || x > 92 ? PI.D : PI.P })));
   const label = (r, x, s, c = PI.lt) => [...s].forEach((ch, i) => { g[r][x + i] = { c, ch }; });
   label(2, 37, 'LOCK'); label(2, 48, 'IR'); label(2, 55, 'RADAR'); label(10, 46, 'DAMAGE'); label(13, 72, 'ALT'); label(13, 85, 'SPD');
   label(12, 38, 'BN-1 SKYJERK', PI.y);
-  for (const [cx, nd] of [[73, [1, -1]], [86, [1, 0]]]) for (let r = 1; r <= 12; r++) for (let x = cx - 6; x <= cx + 6; x++) {
+  for (const cx of [73, 86]) for (let r = 1; r <= 12; r++) for (let x = cx - 6; x <= cx + 6; x++) {
     const d = Math.hypot(x - cx, r - 7);
     if (d <= 5.5) g[r][x] = { c: d > 4.6 ? PI.d : PI.k };
-    for (let k = 1; k <= 3; k++) if (x === cx + nd[0] * k && r === 7 + nd[1] * k) g[r][x] = { c: PI.w };
     if (x === cx && r === 7) g[r][x] = { c: PI.r };
   }
   const rle = cells => {
@@ -138,9 +137,19 @@ function cockpit() {
     else if ((x === 13 && r % 2 === 0) || (r === 7 && x % 3 === 0)) c = PI.dg;
     RB.push(c);
   }
+  // live gauges: each dial's segment baked once per needle position (NN steps, -135..+135 deg), picked at runtime
+  const dial = (cx, x0, x1) => Array.from({ length: NN }, (_, i) => {
+    const a = (-135 + i * 270 / (NN - 1)) * Math.PI / 180;
+    return g.map((row, r) => {
+      const cells = row.slice(x0, x1).map(c => ({ ...c }));
+      for (let k = 1; k <= 3; k++) if (Math.round(7 - k * Math.cos(a)) === r) cells[Math.round(cx + k * Math.sin(a)) - x0] = { c: PI.w };
+      return rle(cells);
+    });
+  }).flat();
   return {
+    C1: dial(73, LAM[1], 80), C2: dial(86, 80, W),
     A: g.map((_, r) => seg(r, 0, RAD[0])), RS: g.map((_, r) => seg(r, RAD[0], RAD[1])), B: g.map((_, r) => seg(r, RAD[1], LAM[0])),
-    LS: g.map((_, r) => seg(r, LAM[0], LAM[1])), C: g.map((_, r) => seg(r, LAM[1], W)), RB,
+    LS: g.map((_, r) => seg(r, LAM[0], LAM[1])), RB,
   };
 }
 
@@ -222,7 +231,8 @@ const CKA = ${S(ck.A)}
 const CKRS = ${S(ck.RS)}
 const CKB = ${S(ck.B)}
 const CKLS = ${S(ck.LS)}
-const CKC = ${S(ck.C)}
+const CKC1 = ${S(ck.C1)}
+const CKC2 = ${S(ck.C2)}
 const RB = ${A(ck.RB)}
 const BRIEF = ${S(BRIEF)}
 const ARMH = ${S(MISSIONS.map((M, m) => T(PI.y, `ARMORY - MISSION ${m + 1}: ${M.name}`)))}
@@ -296,6 +306,12 @@ var lockI: int = -1
 var lockT: int = 0
 var locked: bool = false
 var cmCd: int = 0
+// altitude 0..100 (climbs/sinks with pitch away from the launch attitude P_LEVEL), speed offset from pitch held long
+var alt: float = 50.0
+var spdMod: float = 0.0
+var holdU: int = 0
+var holdD: int = 0
+var pRate: float = 0.0
 // player ground position (only the exfil point lives in it) + exfil point, shown while any loaded store is empty
 var px: float = 0.0
 var py: float = 0.0
@@ -589,6 +605,10 @@ mod launch() {
   exOn = false
   p = 6.0
   bank = 0.0
+  alt = 50.0
+  spdMod = 0.0
+  holdU = 0
+  holdD = 0
   clearSky()
   for i in 0..${NX} { xA[i] = 0 }
   spawnT = 30
@@ -708,14 +728,22 @@ mod controls(cL: bool, cR: bool, cU: bool, cD: bool) {
   if cR { bt += 1.0 }
   bank += (bt - bank) * 0.2
   yaw = wrap0(yaw + bank * 1.6)
+  let p0 = p
   if cU { p -= 0.8 }
   if cD { p += 0.8 }
   p = max(-15.0, min(15.0, p))
+  pRate = p - p0
+  alt = max(0.0, min(100.0, alt + (p - ${P_LEVEL}.0) * 0.03))
+  if cU && !cD { holdD += 1 } else { holdD = 0 }
+  if cD && !cU { holdU += 1 } else { holdU = 0 }
+  // only a long hold (1.5 s) moves the speed; let go and it eases back to base
+  let tgt = if holdD > 30 then ${SPM} else if holdU > 30 then ${-SPM} else 0.0
+  spdMod += max(-0.003, min(0.003, tgt - spdMod))
 }
 
 mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
   let m = msn % ${NMS}
-  let spd = 0.45 + m * 0.06 + rnd * 0.1
+  let spd = 0.45 + m * 0.06 + rnd * 0.1 + spdMod
   project()
   // guns: a shot every 2 ticks, 2 rounds each, hits whatever sits under the cross
   if bH && t % 2 == 0 {
@@ -995,8 +1023,12 @@ mod drawList() {
         let f = 1.5 * a / (a + 6.0)
         let id = if a < 4 then ${SID.TRACE} else ${SID.DOT}
         let tn = if s % 6 < 2 then ${PI.y} else if s % 6 < 4 then ${PI.o} else ${PI.w}
-        add(id, 26.0 + 22.0 * f, ${VH - 1}.0 - ${VH - 1 - CY}.0 * f, tn)
-        add(id, 70.0 - 22.0 * f, ${VH - 1}.0 - ${VH - 1 - CY}.0 * f, tn)
+        // garden hose (visual only): rounds keep the heading they left with, so the jet turning/pitching since then
+        // drags older rounds across the screen and the stream bends; hits still use the cross
+        let hx = 0.0 - bank * 1.6 * a
+        let hy = pRate * a
+        add(id, 26.0 + 22.0 * f + hx, ${VH - 1}.0 - ${VH - 1 - CY}.0 * f + hy, tn)
+        add(id, 70.0 - 22.0 * f + hx, ${VH - 1}.0 - ${VH - 1 - CY}.0 * f + hy, tn)
       }
     }
     let fa = t - flS
@@ -1162,6 +1194,9 @@ mod cockpitRows(r0: int, r1: int) {
   let li = if irOn && t % 8 < 4 then ${PI.r} else ${PI.D}
   let lr = if rdOn && t % 8 < 4 then ${PI.c} else ${PI.D}
   let dn = min(25, dmg / 4)
+  // ALT needle sweeps 0..100 left to right, SPD needle centred (up) at base speed
+  let aI: int = floor(alt / 100.0 * ${NN - 1}.0 + 0.5)
+  let sI: int = floor((spdMod + ${SPM}) / ${2 * SPM} * ${NN - 1}.0 + 0.5)
   let dc = if dmg < 40 then ${PI.G} else if dmg < 70 then ${PI.y} else ${PI.r}
   for r in r0..r1 {
     var row: string = CKA[r]
@@ -1196,14 +1231,14 @@ mod cockpitRows(r0: int, r1: int) {
       ${flush('l')}
       row = row .. ls
     } else { row = row .. CKLS[r] }
-    rows[${VH} + r] = row .. CKC[r]
+    rows[${VH} + r] = row .. CKC1[aI * ${CK} + r] .. CKC2[sI * ${CK} + r]
   }
 }
 
 mod frame() {
   hz = ${CY}.0 + p
   sl = 0.0 - bank * 0.35
-  scroll += 0.25
+  scroll += 0.25 * (1.0 + spdMod * 4.0)
   if scroll > 1000.0 { scroll -= 1000.0 }
   let ph = t % 2
   if ph == 0 {
@@ -1352,7 +1387,7 @@ ${debug ? `    let ia = a || dbk.Contains("a")
         }
       }
     }
-    if t % 20 == 0 { PrintToConsole("bndbg|" .. t .. "|st " .. state .. "|m " .. msn .. "|k " .. kills .. "|dmg " .. dmg .. "|yaw " .. yaw .. "|p " .. p .. "|lock " .. lockI .. "/" .. lockT .. "|z " .. floor(ez[0]) .. "," .. floor(ez[1]) .. "|e " .. eA[0] .. eA[1] .. eA[2] .. eA[3] .. eA[4] .. "|m " .. mA[0] .. mA[1] .. mA[2] .. "|flr " .. flr .. "|msl " .. msl .. "|gun " .. gun .. "|sc " .. score .. "|nT " .. nT .. "|boss " .. bossUp .. "|ex " .. exOn .. " " .. floor(exD) .. " az " .. floor(exAz) .. "|pos " .. floor(px) .. "," .. floor(py) .. "|chf " .. chf) }
+    if t % 20 == 0 { PrintToConsole("bndbg|" .. t .. "|st " .. state .. "|m " .. msn .. "|k " .. kills .. "|dmg " .. dmg .. "|yaw " .. yaw .. "|p " .. p .. "|lock " .. lockI .. "/" .. lockT .. "|z " .. floor(ez[0]) .. "," .. floor(ez[1]) .. "|e " .. eA[0] .. eA[1] .. eA[2] .. eA[3] .. eA[4] .. "|m " .. mA[0] .. mA[1] .. mA[2] .. "|flr " .. flr .. "|msl " .. msl .. "|gun " .. gun .. "|sc " .. score .. "|nT " .. nT .. "|boss " .. bossUp .. "|ex " .. exOn .. " " .. floor(exD) .. " az " .. floor(exAz) .. "|pos " .. floor(px) .. "," .. floor(py) .. "|chf " .. chf .. "|alt " .. floor(alt) .. "|spd " .. spdMod .. "|hU " .. holdU .. "|hD " .. holdD) }
     if dumpReq && t % 4 == 3 {
       dumpReq = false
       for r in 0..${H} { PrintToConsole("bnrow|" .. r .. "|" .. rows[r]) }
