@@ -359,6 +359,7 @@ var kL: bool = false
 var kR: bool = false
 var gunS: int = -99
 var gunB: int = -99
+var gunN: float = 0.0
 var pmS: int = -99
 var boomS: int = -99
 var flS: int = -99
@@ -380,7 +381,11 @@ ${Array.from({ length: NS }, (_, k) => `@right out strip${k}: string = st${k}`).
 @right out msg_: string = msg
 @right out hud_: string = hud
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
-${[0, 1, 2, 3, 4].map(v => `@right out P${v}: float = aP${v}\n@right out V${v}: float = aV${v}`).join('\n')}
+// V0 cannons: every round bumps gunN; gunN - Tween(gunN, 0.2 s) is a 1 -> 0 envelope (noise boom, pitch falls as it fades)
+let gE = min(1.0, max(0.0, gunN - Tween(gunN, 0.2)))
+@right out P0: float = 0.12 + 0.35 * gE * gE
+@right out V0: float = if state == 3 then gE else 0.0
+${[1, 2, 3, 4].map(v => `@right out P${v}: float = aP${v}\n@right out V${v}: float = aV${v}`).join('\n')}
 @right out state_: int = state
 @right out lh_: float = if txtOn then 0.62 else ${+(CELL * 0.645).toFixed(4)}
 @right out ws_: float = if txtOn then 1.0 else 2.0
@@ -710,6 +715,7 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
       gun -= 2
       if t - gunS > 2 { gunB = t }
       gunS = t
+      gunN += 1.0
       var hit: int = -1
       for i in 0..${NE} {
         if eA[i] == 1 && hit < 0 && ez[i] < 70.0 {
@@ -1209,10 +1215,6 @@ ${[3, 4, 5].map(k => '    ' + strip(k)).join('\n')}
 }
 
 mod audio() {
-  // V0 guns: white-noise click, one tick per round
-  let ga = t - gunS
-  aV0 = if ga < 1 then 0.4 else 0.0
-  aP0 = 3.0
   // V1 noise: explosions beat the missile whoosh
   let ba = t - boomS
   let ma = t - pmS

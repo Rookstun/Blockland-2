@@ -161,6 +161,7 @@ var kL: bool = false
 var kR: bool = false
 var gunS: int = -99
 var gunB: int = -99
+var gunN: float = 0.0
 var pmS: int = -99
 var boomS: int = -99
 var flS: int = -99
@@ -207,8 +208,10 @@ var aV4: float = 0.0
 @right out msg_: string = msg
 @right out hud_: string = hud
 @right out title_: string = if state == 0 then "BOGEY NIGHTS" else ""
-@right out P0: float = aP0
-@right out V0: float = aV0
+// V0 cannons: every round bumps gunN; gunN - Tween(gunN, 0.2 s) is a 1 -> 0 envelope (noise boom, pitch falls as it fades)
+let gE = min(1.0, max(0.0, gunN - Tween(gunN, 0.2)))
+@right out P0: float = 0.12 + 0.35 * gE * gE
+@right out V0: float = if state == 3 then gE else 0.0
 @right out P1: float = aP1
 @right out V1: float = aV1
 @right out P2: float = aP2
@@ -546,6 +549,7 @@ mod flight(bH: bool, aE: bool, qE: bool, cE: bool) {
       gun -= 2
       if t - gunS > 2 { gunB = t }
       gunS = t
+      gunN += 1.0
       var hit: int = -1
       for i in 0..5 {
         if eA[i] == 1 && hit < 0 && ez[i] < 70.0 {
@@ -1161,10 +1165,6 @@ mod frame() {
 }
 
 mod audio() {
-  // V0 guns: white-noise click, one tick per round
-  let ga = t - gunS
-  aV0 = if ga < 1 then 0.4 else 0.0
-  aP0 = 3.0
   // V1 noise: explosions beat the missile whoosh
   let ba = t - boomS
   let ma = t - pmS
