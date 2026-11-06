@@ -3,10 +3,10 @@
 // never drawn per pixel. Each changed row is rebuilt from the objects on it (balls, paddle, game-over bar) as
 // intervals, sorted, then joined as SP/BL substrings (a few concats a row); only strips (16 rows) holding a changed
 // row are re-joined. Same pins/outputs as pong/gen.mjs, so it uses the same cabinet.
-export const W = 240, H = 160, STRIP = 16; // landscape (Rookstun: "each row 240 micro bricks wide, stack 160")
+export const W = 240, H = 160, STRIP = 20; // landscape (Rookstun: "each row 240 micro bricks wide, stack 160")
 export const PAL = ['000000'];
 
-export const LH0 = 0.0806, WS0 = 1.645; // strip LineHeight / WidthScale at cell 0.125 (0.125 x 0.645); tune live with /pgcal
+export const LH0 = 0.129, WS0 = 2.0; // strip LineHeight / WidthScale at cell 0.2 (0.2 x 0.645); /pgcal tunes them live
 export function generate({ debug = false } = {}) {
   const NS = H / STRIP, q = JSON.stringify;
   const strips = Array.from({ length: NS }, (_, k) => k);
