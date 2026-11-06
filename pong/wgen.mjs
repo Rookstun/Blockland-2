@@ -359,9 +359,11 @@ mod step() {
     }
   }
   lastBa = ba
+  // scoreboard (Rookstun 2026-11-06): score, balls, highest score and highest balls, always all four
+  let board = "SCORE \${score}  BALLS \${alive}  HIGH SCORE \${best}  HIGH BALLS \${most}"
   if waiting {
-    if over > 0 { hudv = "GAME OVER  SCORE \${score}  BEST \${best}  MOST BALLS \${most}  -  SPACE" } else { hudv = "PRESS SPACE TO START  BEST \${best}  MOST BALLS \${most}" }
-  } else { hudv = "SCORE \${score}  BEST \${best}  BALLS \${alive}  MOST \${most}" } // Rookstun: score + best back, plus balls / most balls ever
+    if over > 0 { hudv = "GAME OVER  " .. board .. "  -  SPACE" } else { hudv = board .. "  -  SPACE TO START" }
+  } else { hudv = board }
 }
 // the player left: back to idle as if untouched (Rookstun): game stopped, screen blank, score cleared
 mod idle() {
