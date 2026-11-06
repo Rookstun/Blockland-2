@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { W, H, STRIP, generate, spriteTables, sceneryTables, SPRITES, AREAS, NODES, TALK, ITEMS, CUTSCENE, EATSCENE, SONGS, THEMES, NOTE, tuneOf, COL } from './gen.mjs';
+import { W, H, STRIP, generate, spriteTables, sceneryTables, SPRITES, AREAS, NODES, TALK, ITEMS, CUTSCENE, EATSCENE, SONGS, THEMES, NOTE, tuneOf, songNotes, COL } from './gen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CKEYS = Object.keys(COL);
@@ -79,17 +79,23 @@ test('objects stay on the screen and below the scenery band', () => {
   }
 });
 
-test('every town and city has its own song, and every song is valid notes', () => {
+test('every town and city has its own song: A/B/C sections, a bassline, nothing copied', () => {
   for (const a of AREAS) assert.ok(SONGS[a.name], `${a.name} has no song`);
   const seen = new Set();
-  for (const [name, t] of Object.entries({ ...SONGS, ...THEMES })) {
-    const notes = tuneOf(t);
-    assert.ok(notes.length >= 16, `${name} is too short`);
-    assert.ok(notes.some(n => n > 0), `${name} is all rests`);
-    assert.ok(!seen.has(t.replace(/ /g, '')), `${name} repeats another song`);
-    seen.add(t.replace(/ /g, ''));
+  for (const [name, song] of Object.entries({ ...SONGS, ...THEMES })) {
+    const { mel, bass } = songNotes(song);
+    assert.equal(mel.length, bass.length, `${name}: bass follows the melody step for step`);
+    assert.ok(bass.some(n => n > 0) && bass.every(n => n === 0 || n < 1.5), `${name}: a bassline below the melody`);
+    assert.ok(new Set(song.form).size >= 2, `${name}: more than one section`);
+    if (SONGS[name]) assert.ok(mel.length >= 96 && new Set(song.form).size >= 3, `${name}: long and varied (A/B/C)`);
+    for (const sec of new Set(song.form)) {
+      const t = song[sec].replace(/ /g, '');
+      assert.ok(!seen.has(t), `${name} ${sec} repeats another section`);
+      seen.add(t);
+    }
   }
   assert.throws(() => tuneOf('CZ'), /bad note/);
+  assert.throws(() => songNotes({ form: 'A', bar: 4, A: 'CCCC', prog: { A: 'CC' } }), /bars/);
   assert.equal(NOTE.c, 2 * NOTE.C);
 });
 
@@ -115,9 +121,9 @@ test('generated chip source: no undefined/NaN, every table present', () => {
   for (const debug of [false, true]) {
     const g = generate({ debug });
     assert.ok(!/undefined|NaN/.test(g.src), 'no undefined/NaN in the source');
-    for (const name of ['MUSA', 'MI', 'BOSSMUS', 'INAME', 'DLG', 'CUT', 'EAT', 'AI', 'SI']) assert.match(g.src, new RegExp(`const ${name} = \\[`));
+    for (const name of ['MUSA', 'BASSA', 'MI', 'BOSSMUS', 'BOSSBASS', 'MAPBASS', 'INAME', 'DLG', 'CUT', 'EAT', 'AI', 'SI']) assert.match(g.src, new RegExp(`const ${name} = \\[`));
     assert.equal(g.sitterPin, true);
-    assert.deepEqual(g.synths, ['Square', 'Triangle']);
+    assert.deepEqual(g.synths, ['Square', 'Triangle', 'Triangle'], 'effects, melody, bass');
     assert.equal(g.src.includes('on ChatCommand("dvkey"'), debug, 'debug commands only in debug builds');
   }
 });

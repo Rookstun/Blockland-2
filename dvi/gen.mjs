@@ -191,21 +191,51 @@ const EATSCENE_T = [3.0, 2.5, 5.0, 2.5, 6.0, 3.5]; // seconds each line stays (t
 // Pitches multiply the synth's base note. All melodies are original.
 export const NOTE = { C: 1, D: 1.122, E: 1.26, F: 1.335, G: 1.498, A: 1.682, B: 1.888, H: 1.782, I: 1.189, J: 1.587, K: 1.414, L: 1.059, _: 0 };
 for (const k of 'CDEFGAB') NOTE[k.toLowerCase()] = NOTE[k] * 2;
+// Each song: sections A, B, C (melody strings) played in FORM order, plus a chord progression per section: one root
+// per bar (bar = 4 steps, tarantella = 6). The bassline is built from it: root on the downbeat, fifth halfway, an
+// octave below. Owner: "add a baseline to all the songs and make them less repetitive".
 export const SONGS = {
-  'TURKEY, HOME': 'DIKG A_HA GKID ____ AHcH AGKI D_I_ D___',          // a hijaz-flavoured lament over the rubble
-  'GREEK VILLAGE': 'EEAA BBcc dccB A___ EEAA BBcc dedc B___',         // a quickening line-dance tune
-  'ITALIAN VILLAGE': 'AEAcAc edecBA EAEcAc BGBA__',                    // tarantella, in sixes
-  'LONG ISLAND, PARKING LOT': 'C_G_ c_G_ A_E_ F_G_ C_G_ c_e_ d_c_ G___', // late-night synth-pop in a parking lot
-  'PLANET FITNESS, GYM FLOOR': 'CCGC CCGC FFcF GGdG CCGC CCGC FFcF GG__', // four on the floor, one more rep
-  "NEWARK, CHILI'S DINING ROOM": 'G_GA B_d_ c_B_ A_G_ G_GA B_d_ e_d_ c___', // countryish, for the ribs
-  "CHILI'S KITCHEN": 'cBAG cBAG dcBA dcBA ecdB cAB_ G___',              // frantic, something is on fire
-  'THE BRONX': 'C__C _I_C __H_ G___ C__C _I_F __I_ D___',             // a slow boom-bap walk
+  'TURKEY, HOME': { form: 'ABAC', bar: 4, // a hijaz-flavoured lament over the rubble
+    A: 'DIKG A_HA GKID ____ AHcH AGKI D_I_ D___', B: 'G_A_ H_c_ d_c_ H_A_ G_KG A_HA G_KI D___', C: 'd_c_ H_A_ G_K_ I_D_ DIKG A_GK I_D_ ____',
+    prog: { A: 'DDGDGGDD', B: 'GGDDGDDD', C: 'DDGGDDDD' } },
+  'GREEK VILLAGE': { form: 'ABAC', bar: 4, // a quickening line dance
+    A: 'EEAA BBcc dccB A___ EEAA BBcc dedc B___', B: 'cdec dcBA GABc d___ cdec dcBA GABA A___', C: 'aaaa gfed cdef e___ aaaa gfed cBAB A___',
+    prog: { A: 'AADAAAEE', B: 'CCGGCCEA', C: 'FGCEFGEA' } },
+  'ITALIAN VILLAGE': { form: 'ABAC', bar: 6, // tarantella, in sixes
+    A: 'AEAcAc edecBA EAEcAc BGBA__', B: 'cdedcB AcBAGA FAFAcA BGBE__', C: 'ecAecA dBGdBG cAEcAE BGBA__',
+    prog: { A: 'AEAE', B: 'FCDE', C: 'AGAE' } },
+  'LONG ISLAND, PARKING LOT': { form: 'ABAC', bar: 4, // late-night synth-pop in a parking lot
+    A: 'C_G_ c_G_ A_E_ F_G_ C_G_ c_e_ d_c_ G___', B: 'A_c_ e_c_ F_A_ c_A_ G_B_ d_B_ c___ G___', C: 'e_d_ c_G_ A_G_ F_E_ D_E_ F_G_ C___ ____',
+    prog: { A: 'CCAFCCGG', B: 'AAFFGGCG', C: 'CCFFDGCC' } },
+  'PLANET FITNESS, GYM FLOOR': { form: 'ABAC', bar: 4, // four on the floor, one more rep
+    A: 'CCGC CCGC FFcF GGdG CCGC CCGC FFcF GG__', B: 'AAeA AAeA FFcF FFcF GGdG GGdG EEBE EE__', C: 'cccc BBBB AAAA GGGG FFFF EEEE DDDD G___',
+    prog: { A: 'CCFGCCFG', B: 'AAFFGGEE', C: 'CBAGFEDG' } },
+  "NEWARK, CHILI'S DINING ROOM": { form: 'ABAC', bar: 4, // countryish, for the ribs
+    A: 'G_GA B_d_ c_B_ A_G_ G_GA B_d_ e_d_ c___', B: 'c_ce d_c_ B_A_ G___ A_AB c_B_ A_G_ D___', C: 'd_dB d_g_ e_d_ B_G_ A_B_ c_A_ G___ ____',
+    prog: { A: 'GGCDGGCC', B: 'CCGGDDDD', C: 'GGCGDDGG' } },
+  "CHILI'S KITCHEN": { form: 'ABAC', bar: 4, // frantic, something is on fire
+    A: 'cBAG cBAG dcBA dcBA ecdB cAB_ G___ E___', B: 'AcAe AcAe GBGd GBGd FAFc EGEB AAAA ____', C: 'eeee dddd cccc BBBB AAcc BBdd ccee B___',
+    prog: { A: 'AADDEAGE', B: 'AAGGFEAA', C: 'AGAGAGAE' } },
+  'THE BRONX': { form: 'ABAC', bar: 4, // a slow boom-bap walk
+    A: 'C__C _I_C __H_ G___ C__C _I_F __I_ D___', B: 'G__G _F_I __D_ C___ H__H _G_F __I_ G___', C: 'c__H _G__ I__F _G__ c__H _G__ F_I_ C___',
+    prog: { A: 'CCJGCCFG', B: 'GFICHGFG', C: 'CCJFCCFC' } },
 };
 export const THEMES = {
-  map: 'G_E_C_E_ G_c_A_G_ F_A_c_A_ G___E___',
-  battle: 'C_C_D_C_ E_E_D_C_ C_C_D_C_ G_E_D___',
-  boss: 'C_IC _G_F I_D_ C___ C_IC _G_H G_F_ I___',
+  map: { form: 'AB', bar: 4, A: 'G_E_C_E_ G_c_A_G_ F_A_c_A_ G___E___', B: 'A_c_e_c_ G_B_d_B_ F_A_c_A_ G___ ____', prog: { A: 'CCCCFFCC', B: 'AAGGFFGG' } },
+  battle: { form: 'AB', bar: 4, A: 'C_C_D_C_ E_E_D_C_ C_C_D_C_ G_E_D___', B: 'E_E_F_E_ G_G_F_E_ E_E_F_E_ D_C_D___', prog: { A: 'CCCCCCGG', B: 'CCFCCFGC' } },
+  boss: { form: 'AB', bar: 4, A: 'C_IC _G_F I_D_ C___ C_IC _G_H G_F_ I___', B: 'c_HG _F_I G_F_ D___ c_HG _F_G H_c_ C___', prog: { A: 'CCICCGGI', B: 'CCIFCCGC' } },
 };
+// one song -> { mel, bass }: equal-length pitch arrays (0 = rest)
+export function songNotes(song) {
+  const mel = [], bass = [];
+  for (const sec of song.form) {
+    const m = tuneOf(song[sec]), roots = song.prog[sec];
+    if (roots.length * song.bar !== m.length) throw Error(`section ${sec}: ${roots.length} bars x ${song.bar} != ${m.length} steps`);
+    mel.push(...m);
+    for (const r of roots) for (let k = 0; k < song.bar; k++) bass.push(k === 0 ? NOTE[r] * 0.5 : k === song.bar / 2 ? NOTE[r] * 0.75 : 0);
+  }
+  return { mel, bass };
+}
 export const tuneOf = t => t.replace(/ /g, '').split('').map(ch => { if (!(ch in NOTE)) throw Error(`bad note ${ch}`); return NOTE[ch]; });
 
 export function sceneryTables() {
@@ -319,9 +349,10 @@ export function generate({ debug = false } = {}) {
   const AN = AREAS.map((_, ai) => NODES.findIndex(nd => ai >= nd[3] && ai <= nd[4])); // area -> its place on the map
   // per-place songs, flattened: place a plays MUSA[MI[a] .. MI[a + 1]]
   if (AREAS.some(a => !SONGS[a.name])) throw Error('self-check: every place has a song');
-  const MUSA = [], MI = [0];
-  for (const a of AREAS) { MUSA.push(...tuneOf(SONGS[a.name])); MI.push(MUSA.length); }
-  const BMUS = tuneOf(THEMES.battle).map(x => x * 0.75), BOSSMUS = tuneOf(THEMES.boss).map(x => x * 0.75), MAPMUS = tuneOf(THEMES.map);
+  const MUSA = [], BASSA = [], MI = [0];
+  for (const a of AREAS) { const n = songNotes(SONGS[a.name]); MUSA.push(...n.mel); BASSA.push(...n.bass); MI.push(MUSA.length); }
+  const TH = Object.fromEntries(Object.entries(THEMES).map(([k, t]) => [k, songNotes(t)]));
+  const BMUS = TH.battle.mel.map(x => x * 0.75), BBASS = TH.battle.bass, BOSSMUS = TH.boss.mel.map(x => x * 0.75), BOSSBASS = TH.boss.bass, MAPMUS = TH.map.mel, MAPBASS = TH.map.bass;
   const PRESENTS = 'RENDERMAN INDEPENDENT SOFTWARE COMPANY ENTERTAINMENT CLAUDE LLC PRESENTS';
   const ENAME = ['GOON', 'SWOLE GOON', 'THE FAT ONE', 'NEO SADDAM'], EHP = [0, 60, 90, 140], EATK = [0, 5, 7, 9], EXP = [0, 50, 90, 0];
   const strips = Array.from({ length: NS }, (_, k) => k);
@@ -383,6 +414,10 @@ const EATK = [${EATK.join(', ')}]
 const EXP = [${EXP.join(', ')}]
 const P2 = [1, 2, 4, 8, 16, 32, 64, 128, 256]
 const MUSA = [${MUSA.join(', ')}]
+const BASSA = [${BASSA.join(', ')}]
+const BBASS = [${BBASS.join(', ')}]
+const BOSSBASS = [${BOSSBASS.join(', ')}]
+const MAPBASS = [${MAPBASS.join(', ')}]
 const MI = [${MI.join(', ')}]
 const BOSSMUS = [${BOSSMUS.join(', ')}]
 const BMUS = [${BMUS.join(', ')}]
@@ -468,6 +503,8 @@ var aP0: float = 1.0
 var aV0: float = 0.0
 var aP1: float = 1.0
 var aV1: float = 0.0
+var aP2: float = 1.0
+var aV2: float = 0.0
 
 ${strips.map(k => `@right out strip${k}: string = st${k}`).join('\n')}
 @right out msg_: string = msgv
@@ -477,6 +514,8 @@ ${strips.map(k => `@right out strip${k}: string = st${k}`).join('\n')}
 @right out V0: float = aV0
 @right out P1: float = aP1
 @right out V1: float = aV1
+@right out P2: float = aP2
+@right out V2: float = aV2
 
 mod setStrip(k: int, v: string) {
 ${strips.map(k => `  if k == ${k} { pb${k} = v }`).join('\n')}
@@ -892,14 +931,32 @@ mod step() {
     melPos += 1
   } else { aV0 = 0.0 }
   var m: float = 0.0
+  var bn: float = 0.0
   m = 0.0
-  if mode == 1 || mode == 6 || mode == 7 { m = MUSA[MI[area] + (musT / 3) % (MI[area + 1] - MI[area])] }
-  if mode == 2 {
-    if eKind == 0 { m = BMUS[(musT / 3) % ${BMUS.length}] } else { m = BOSSMUS[(musT / 3) % ${BOSSMUS.length}] }
+  bn = 0.0
+  if mode == 1 || mode == 6 || mode == 7 {
+    let mi = MI[area] + (musT / 3) % (MI[area + 1] - MI[area])
+    m = MUSA[mi]
+    bn = BASSA[mi]
   }
-  if mode == 5 { m = MAPMUS[(musT / 3) % ${MAPMUS.length}] }
+  if mode == 2 {
+    if eKind == 0 {
+      m = BMUS[(musT / 3) % ${BMUS.length}]
+      bn = BBASS[(musT / 3) % ${BBASS.length}]
+    } else {
+      m = BOSSMUS[(musT / 3) % ${BOSSMUS.length}]
+      bn = BOSSBASS[(musT / 3) % ${BOSSBASS.length}]
+    }
+  }
+  if mode == 5 {
+    m = MAPMUS[(musT / 3) % ${MAPMUS.length}]
+    bn = MAPBASS[(musT / 3) % ${MAPBASS.length}]
+  }
   aP1 = max(m * 0.5, 0.1)
   aV1 = if m > 0.0 then 0.22 else 0.0
+  // bass voice: the note rings for its step (rests between)
+  aP2 = max(bn * 0.5, 0.1)
+  aV2 = if bn > 0.0 then 0.3 else 0.0
   musT += 1
   if mode == 0 {
     // title: the presents card, then continue / new game
@@ -992,17 +1049,16 @@ mod step() {
   }
   if mode == 1 {
     // LANES (owner screenshot: Daniel torn in two): each text strip reaches the players on its own, so a sprite across
-    // a strip boundary can show half old, half new. Daniel walks in lanes that sit inside one strip (strip top + 2,
-    // 18 rows with his shadow): left/right only ever redraws one strip; W/S hop a lane (held = repeat every 0.18 s).
-    if kU && now >= laneT {
-      py -= ${STRIP}.0
-      laneT = now + 0.18
+    // a strip boundary can show half old, half new. W/S walk smoothly (owner: lane hops felt like teleporting); with no
+    // W/S held Daniel glides into the nearest lane (strip top + 2, sprite + shadow inside one strip), so the long
+    // left/right walks redraw one strip and cannot tear; only the moment between lanes touches two.
+    if kU { py -= 4.0 * kt }
+    if kD { py += 4.0 * kt }
+    if kU == false && kD == false {
+      let lane = round((py - ${LANE0}.0) / ${STRIP}.0) * ${STRIP}.0 + ${LANE0}.0
+      if py < lane { py = min(py + 3.0 * kt, lane) }
+      if py > lane { py = max(py - 3.0 * kt, lane) }
     }
-    if kD && now >= laneT {
-      py += ${STRIP}.0
-      laneT = now + 0.18
-    }
-    if kU == false && kD == false { laneT = 0.0 }
     if kL { px -= 4.0 * kt }
     if kR { px += 4.0 * kt }
     py = min(max(py, ${LANE0}.0), ${LANEMAX}.0)
@@ -1220,6 +1276,7 @@ mod idle() {
     titlev = "DANIEL VS ISIS"
     aV0 = 0.0
     aV1 = 0.0
+    aV2 = 0.0
     mel.resize(0, 0.0)
     melPos = 0
 ${strips.map(k => `    st${k} = ""\n    pb${k} = ""`).join('\n')}
@@ -1297,5 +1354,5 @@ on Change(seated) {
   if seated == false && forced == false { idle() }
 }
 `;
-  return { src, W, H, STRIP, PAL, clockWhenSeated: !debug, titleMid: true, titleLH: 2.2, exactScreen: true, sitterPin: true, synths: ['Square', 'Triangle'] };
+  return { src, W, H, STRIP, PAL, clockWhenSeated: !debug, titleMid: true, titleLH: 2.2, exactScreen: true, sitterPin: true, synths: ['Square', 'Triangle', 'Triangle'] };
 }
