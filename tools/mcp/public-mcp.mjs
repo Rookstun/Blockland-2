@@ -395,6 +395,18 @@ const reply = (m, p) => p.then(result => ({ jsonrpc: "2.0", id: m.id, result }),
 http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
   if (url.pathname === "/" && req.method === "GET") { res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" }).end(GUIDE); return; }
+  // one-step setup (owner 2026-11-06: "make bring your own claude easier to load"): a ready folder-local config with a
+  // fresh random key: curl -s "http://HOST:PORT/join?name=Bob" -o .mcp.json   (&client=opencode -> opencode.json body)
+  if (url.pathname === "/join" && req.method === "GET") {
+    const name = String(url.searchParams.get("name") || "player").replace(/[^A-Za-z0-9 _-]/g, "").slice(0, 24) || "player";
+    const key = crypto.randomBytes(12).toString("hex");
+    const mcpUrl = `http://${req.headers.host || "pzedlo.hopto.org:8090"}/mcp?key=${key}&name=${encodeURIComponent(name)}`;
+    const body = url.searchParams.get("client") === "opencode"
+      ? { mcp: { brickadia: { type: "remote", url: mcpUrl, enabled: true } } }
+      : { mcpServers: { brickadia: { type: "http", url: mcpUrl } } };
+    res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(body, null, 2) + "\n");
+    return;
+  }
   if (url.pathname !== "/mcp") { res.writeHead(404).end("MCP endpoint is /mcp\n"); return; }
   if (req.method !== "POST") { res.writeHead(405, { Allow: "POST" }).end(); return; }
   let body = "", size = 0;

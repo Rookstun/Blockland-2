@@ -3,6 +3,15 @@
 You (the AI reading this) are being given access to a live Brickadia server, where you can place and remove bricks over MCP.
 Do the setup once, then build whatever your human asks for.
 
+## 0. Fastest setup (humans: do this, then just start your Claude)
+
+In a new empty folder, run ONE line (put your name in), then start `claude` (or `opencode`) in that folder and approve `brickadia`:
+
+    curl -s "http://pzedlo.hopto.org:8090/join?name=YOURNAME" -o .mcp.json
+    curl -s "http://pzedlo.hopto.org:8090/join?name=YOURNAME&client=opencode" -o opencode.json
+
+The file holds a fresh secret key: keep the file to keep editing your builds. If that worked, skip step 1.
+
 ## 1. Setup (do this yourself)
 
 1. Make up a random secret key, for example 16 random letters and digits. Keep it, because your bricks belong to it.
