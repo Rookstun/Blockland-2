@@ -132,3 +132,16 @@ test('generated chip compiles with zero wirescript errors', async () => {
     assert.deepEqual(ds.map(d => `${d.code} line ${d.startLine}: ${d.message}`), [], `debug=${debug}`);
   }
 });
+
+test('GBA polish: sprites are auto-shaded, skies are gradients, characters have shadows', async () => {
+  const { gapRows, variant, mixHex } = await import('./gen.mjs');
+  const shadedKeys = new Set(Object.values(SPRITES).flat().join('').split('').filter(c => c.charCodeAt(0) >= 0xC0));
+  assert.ok(shadedKeys.size >= 10, `only ${shadedKeys.size} shade colours in the sprites`);
+  for (const k of ['shadow', 'bshadow', 'platform']) assert.ok(SPRITES[k], `${k} sprite`);
+  const G = gapRows();
+  assert.equal(G.length, (AREAS.length + 1) * H, 'a gap colour per row of every place + the map');
+  const lum = h => [0, 2, 4].reduce((n, i) => n + parseInt(h.slice(i, i + 2), 16), 0);
+  for (let a = 0; a < AREAS.length; a++) assert.ok(lum(G[a * H + 3]) < lum(G[a * H + 33]), `${AREAS[a].name}: sky is darker at the top than at the horizon`);
+  assert.equal(variant('b', '+'), variant('b', '+'), 'variants are cached');
+  assert.equal(mixHex('000000', 'ffffff', 0.5), '808080');
+});

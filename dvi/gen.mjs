@@ -24,6 +24,39 @@ export const COL = { h: '5a3a1a', s: 'f0c090', e: '202020', b: '3070d0', p: '203
   A: 'e0d0b0', B: 'b08850', C: '2e7d32', D: 'c49a6c', E: '8a8a8a', F: '303030', G: '6a1a1a', I: 'f0e0c0',
   J: '2060c0', K: 'f8f8f8', L: '58b850', M: 'ffd23a', N: '7a3020', O: 'b0b8c0', P: '9a4a2a', Q: '1e4a8a', R: '3a8a3a',
   S: 'd06a2a', T: '505860' };
+// ---- GBA polish (owner: "make the graphics look like they have a 10 quadrillion dollar budget for a gba game"):
+// every sprite and building is auto-shaded at build time (a lit top edge, a shadowed bottom/right edge), skies are
+// per-row gradients, grounds get haze + texture bands, night skies a moon and stars, day skies a sun and clouds,
+// characters cast drop shadows, the map gets beaches and wave bands, battles happen in the place's own scenery.
+COL.x = '15120c'; // drop shadow
+const hex3 = h => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+const toHex = c => c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+export const mixHex = (a, b, t) => { const A = hex3(a), B = hex3(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+// derived colours get palette keys from U+00C0 up (keys are single characters; '.' stays transparent)
+let nextKey = 0xC0;
+const variants = {};
+export function variant(k, sign) {
+  const id = k + sign;
+  if (!variants[id]) {
+    const ch = String.fromCharCode(nextKey++);
+    COL[ch] = sign === '+' ? mixHex(COL[k], 'ffffff', 0.3) : mixHex(COL[k], '000000', 0.35);
+    variants[id] = ch;
+  }
+  return variants[id];
+}
+const NOSHADE = new Set(['.', 'w', 'k', 'x', 'e', 'i', 'y', 'u']);
+// shade a grid of palette keys (arrays of rows): top edge of a colour = light, bottom or right edge = dark
+export function shadeGrid(g) {
+  return g.map((row, y) => row.map((c, x) => {
+    if (c == null || NOSHADE.has(c) || c.charCodeAt(0) >= 0xC0) return c;
+    const up = y > 0 ? g[y - 1][x] : null, down = y + 1 < g.length ? g[y + 1][x] : null, right = x + 1 < row.length ? row[x + 1] : null;
+    if (up !== c) return variant(c, '+');
+    if (down !== c || right !== c) return variant(c, '-');
+    return c;
+  }));
+}
+const shadeArt = art => shadeGrid(art.map(l => [...l].map(c => (c === '.' ? null : c)))).map(r => r.map(c => c ?? '.').join(''));
+
 const BOSS_ART = [
   '......AAAAAAAAAA........', '....AAAAAAAAAAAAAA......', '....AAAAAAAAAAAAAA......', '.....BBBBBBBBBBBB.......',
   '.....BkkkkBBkkkkB.......', '.....BBBBBBBBBBBB.......', '.....BBhhhhhhhhBB.......', '.....BBBhhhhhhBBB.......',
@@ -38,7 +71,7 @@ const recolor = (art, map) => art.map(l => l.replace(/[A-E]/g, ch => map[ch] ?? 
 const GUY = ['...HHHH.....', '..HHHHHH....', '..HssssH....', '..sesses....', '..ssssss....', '...ssss.....', '..SSSSSS....',
   '.SSSSSSSS...', 'sSSSSSSSSs..', '.SSSSSSSS...', '..SSSSSS....', '..PPPPPP....', '..PP..PP....', '..PP..PP....', '..PP..PP....', '.kkk..kkk...'];
 const guy = (h, sh, pa) => GUY.map(l => l.replace(/H/g, h).replace(/S/g, sh).replace(/P/g, pa));
-export const SPRITES = {
+const RAW_SPRITES = {
   daniel: ['...hhhh......', '..hhhhhh.....', '..hssssh.....', '..sseses.....', '..ssssss.....', '...ssss......',
     '..bbbbbb.....', '.bbbbbbbsggg.', 'sbbbbbbbbggg.', '.bbbbbbbb....', '..bbbbbb.....', '..pppppp.....',
     '..pp..pp.....', '..pp..pp.....', '..pp..pp.....', '.kkk..kkk....'],
@@ -60,14 +93,19 @@ export const SPRITES = {
   ketchup: ['.ww.', '.rr.', 'rrrr', 'rKKr', 'rrrr', 'rrrr', 'rrrr'],
   blocker: guy('k', 'z', 'n'), // THE MAN WHO BLOCKS THE PATH (italian village)
   nodeoff: ['.EE.', 'EEEE', 'EEEE', '.EE.'],
-  guy0: guy('E', 'w', 'p'), guy1: guy('h', 'J', 'k'), guy2: guy('k', 'L', 'p'),
+  guy0: guy('E', 'w', 'p'), guy1: guy('h', 'S', 'k'), guy2: guy('k', 'L', 'p'),
   guy3: guy('h', 'm', 'k'), guy4: guy('n', 'r', 'k'), guy5: guy('E', 'O', 'p'),
   boss0: recolor(BOSS_ART, { A: 'k', B: 's', C: 'm', D: 'M', E: 'k' }), // SWOLE GOON: gym purple + yellow
   boss1: recolor(BOSS_ART, { A: 'k', B: 's', C: 'd', D: 'r', E: 'o' }), // (unused: THE FAT ONE has the fat sprite)
   boss2: recolor(BOSS_ART, { A: 'r', B: 's', C: 'v', D: 'z', E: 'v' }), // NEO SADDAM: red beret, shades, olive + gold
 };
-const CKEYS = Object.keys(COL);
+RAW_SPRITES.shadow = ['..xxxxxxxx..', 'xxxxxxxxxxxx', '..xxxxxxxx..'];
+RAW_SPRITES.bshadow = ['...xxxxxxxxxxxxxxxxxx...', 'xxxxxxxxxxxxxxxxxxxxxxxx', '...xxxxxxxxxxxxxxxxxx...'];
+RAW_SPRITES.platform = ['......xxxxxxxxxxxxxxxxxxxxxxxx......', '..xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx..', 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', '..xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx..'];
+export const SPRITES = Object.fromEntries(Object.entries(RAW_SPRITES).map(([k, art]) => [k, shadeArt(art)]));
+let CKEYS = Object.keys(COL); // refreshed after the scenery adds its colours (see generate)
 export function spriteTables() {
+  CKEYS = Object.keys(COL);
   const SI = [0], SS = [], SE = [], SC = [], ROWBASE = {};
   let n = 0;
   for (const [name, art] of Object.entries(SPRITES)) {
@@ -172,7 +210,7 @@ export const tuneOf = t => t.replace(/ /g, '').split('').map(ch => { if (!(ch in
 
 export function sceneryTables() {
   const idx = [0], S = [], E = [], C = [];
-  const slots = [...AREAS.map(a => ({ scen: a.scen })), { scen: [['rubble', 20], ['rubble', 90], ['palm', 160], ['olive', 190], ['olive', 215]] }, { map: true }];
+  const slots = [...AREAS.map(a => ({ scen: a.scen, sky: a.sky })), { scen: [['rubble', 20], ['rubble', 90], ['palm', 160], ['olive', 190], ['olive', 215]], sky: AREAS[0].sky }, { map: true }];
   for (const slot of slots) {
     const rowsN = slot.map ? H : SKY;
     const g = Array.from({ length: rowsN }, () => new Array(W).fill(null));
@@ -213,16 +251,59 @@ export function sceneryTables() {
       if (kind === 'brick') { put(x, 4, 50, B - 4, 'P'); for (let yy = 8; yy < B - 6; yy += 8) for (let xx = 6; xx < 46; xx += 12) put(x + xx, yy, 6, 4, 'y'); put(x + 18, B - 10, 12, 10, 'h'); }
       if (kind === 'eltrain') { put(0, 12, W, 4, 'T'); for (let xx = 10; xx < W; xx += 40) put(xx, 16, 4, B - 16, 'T'); put(90, 6, 60, 6, 'O'); }
     }
+    if (slot.map) { // beaches: land touching the sea
+      const land = g.map(row => row.map(c => c === 'R'));
+      for (let y = 2; y < rowsN; y++) for (let x = 0; x < W; x++) if (land[y][x] && [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => !(land[y + dy]?.[x + dx]))) g[y][x] = 'c';
+    }
+    const shaded = shadeGrid(g);
+    for (let y = 0; y < rowsN; y++) g[y] = shaded[y];
+    if (!slot.map && slot.sky) { // sky dressing, behind everything (only on empty sky)
+      const night = hex3(slot.sky).reduce((a, b) => a + b) < 3 * 0x48;
+      let seed = slot.sky.split('').reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) >>> 0;
+      const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
+      const free = (x0, y0, w, h) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) if (y < 2 || y >= rowsN || x < 0 || x >= W || g[y][x]) return false; return true; };
+      const dot = (x, y, c) => { if (free(x, y, 1, 1)) g[y][x] = c; };
+      if (night) {
+        for (let k = 0; k < 26; k++) dot(Math.floor(rnd() * W), 3 + Math.floor(rnd() * 18), rnd() < 0.7 ? 'w' : 't');
+        const mx = 30 + Math.floor(rnd() * 170), my = 6;
+        for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) if ((x - 3.5) ** 2 + (y - 3.5) ** 2 <= 13 && free(mx + x, my + y, 1, 1)) g[my + y][mx + x] = (x - 2) ** 2 + (y - 2) ** 2 < 3 ? 'O' : 'K';
+      } else {
+        const sx = 180 + Math.floor(rnd() * 40);
+        for (let y = 0; y < 9; y++) for (let x = 0; x < 9; x++) if ((x - 4) ** 2 + (y - 4) ** 2 <= 17 && free(sx + x, 4 + y, 1, 1)) g[4 + y][sx + x] = 'M';
+        for (let k = 0; k < 3; k++) {
+          const cx = Math.floor(rnd() * 160), cy = 5 + Math.floor(rnd() * 8);
+          for (const [dx, dy, w] of [[4, 0, 10], [0, 1, 20], [2, 2, 18]]) for (let x = 0; x < w; x++) dot(cx + dx + x, cy + dy, dy === 0 ? 'K' : 'I');
+        }
+      }
+    }
+    const keys = Object.keys(COL); // after shading: includes the new variant colours
     for (let r = 0; r < H; r++) {
-      if (r >= 2 && r < rowsN) for (let x = 0; x < W;) { const c = g[r][x]; if (!c) { x++; continue; } let e = x; while (e < W && g[r][e] === c) e++; S.push(x); E.push(e); C.push(CKEYS.indexOf(c)); x = e; }
+      if (r >= 2 && r < rowsN) for (let x = 0; x < W;) { const c = g[r][x]; if (!c) { x++; continue; } let e = x; while (e < W && g[r][e] === c) e++; S.push(x); E.push(e); C.push(keys.indexOf(c)); x = e; }
       idx.push(S.length);
     }
   }
   return { idx, S, E, C };
 }
 
+// gap colour for every row of every place (+ the map): sky gradient top -> horizon, ground haze near the horizon,
+// texture bands, a darker foreground; the map's ocean gets wave bands. Deduplicated into GTAGS + GIDX.
+export function gapRows() {
+  const out = [];
+  for (const a of AREAS) for (let r = 0; r < H; r++) {
+    if (r < SKY) { const t = Math.max(0, r - 2) / (SKY - 3); out.push(mixHex(mixHex(a.sky, '000000', 0.45), mixHex(a.sky, a.ground, 0.35), Math.round(t * 7) / 7)); continue; }
+    const d = (r - SKY) / (H - SKY);
+    let c = mixHex(mixHex(a.ground, a.sky, 0.25), a.ground, Math.min(1, Math.round(d * 4 * 3) / 3)); // haze fades over the first quarter
+    if (Math.floor((r - SKY) / 6) % 2) c = mixHex(c, '000000', 0.06);                               // texture bands
+    out.push(mixHex(c, '000000', Math.round(d * 4) * 0.05));                                         // darker foreground
+  }
+  for (let r = 0; r < H; r++) out.push(mixHex(mixHex('2a6ab0', '0e2a5a', r / H), 'ffffff', r % 7 === 3 ? 0.12 : 0));
+  return out;
+}
+
 export function generate({ debug = false } = {}) {
-  const NS = H / STRIP, q = JSON.stringify, T = spriteTables(), SCN = sceneryTables(), RB = T.ROWBASE;
+  const SCN = sceneryTables(); // first: it adds the shaded scenery colours to the palette
+  const NS = H / STRIP, q = JSON.stringify, T = spriteTables(), RB = T.ROWBASE;
+  const GR = gapRows(), GTAGS = [...new Set(GR)], GIDX = GR.map(c => GTAGS.indexOf(c));
   const GROUND = H - 4, PUB = 3, NA = AREAS.length, NN = NODES.length;
   // dialogue lines flattened; each npc gets [first, last] line indices
   const DLG = [], NPC = [];
@@ -265,10 +346,8 @@ const AI = [${SCN.idx.join(', ')}]
 const AS = [${SCN.S.join(', ')}]
 const AE = [${SCN.E.join(', ')}]
 const AC = [${SCN.C.join(', ')}]
-const SKYT = [${[...AREAS, AREAS[0]].map(a => q(`<color="${a.sky}">`)).join(', ')}]
-const GNDT = [${[...AREAS, AREAS[0]].map(a => q(`<color="${a.ground}">`)).join(', ')}]
-const OCEAN = ${q('<color="1e4a8a">')}
-const BATT = ${q('<color="1a1030">')}
+const GTAGS = [${GTAGS.map(c => q(`<color="${c}">`)).join(', ')}]
+const GIDX = [${GIDX.join(', ')}]
 const ANAME = [${AREAS.map(a => q(a.name)).join(', ')}]
 const AN = [${AN.join(', ')}]
 const NNAME = [${NODES.map(nd => q(nd[0])).join(', ')}]
@@ -580,10 +659,8 @@ mod scenSlot() -> int {
   return area
 }
 mod gapTag(r: int) -> string {
-  if mode == 2 { return BATT }
-  if mode == 5 { return OCEAN }
-  if r < ${SKY} { return SKYT[area] }
-  return GNDT[area]
+  if mode == 5 { return GTAGS[GIDX[${AREAS.length * H} + r]] }
+  return GTAGS[GIDX[area * ${H} + r]]
 }
 mod renderRow(r: int) {
   is.resize(0, 0.0)
@@ -591,7 +668,11 @@ mod renderRow(r: int) {
   ic.resize(0, 0.0)
   if r < 2 { span(0.0, ${W}.0, ${CKEYS.indexOf('l')}) }
   if mode == 2 {
-    // battle: Daniel left, the enemy right, a floor
+    // battle, Mario RPG style: the place's own sky, scenery and ground; each fighter on a shadow platform
+    let bi = scenSlot() * ${H} + r
+    for t in AI[bi]..AI[bi + 1] { span(AS[t], AE[t], AC[t]) }
+    if r >= 104 && r < 108 { spr(${RB.platform}, r - 104, 39.0) }
+    if r >= 104 && r < 108 { spr(${RB.platform}, r - 104, 155.0) }
     if r >= 90 && r < 106 { spr(${RB.daniel}, r - 90, 50.0) }
     if eKind == 0 {
       if r >= 86 && r < 106 { spr(${RB.goon}, r - 86, 165.0) }
@@ -599,7 +680,6 @@ mod renderRow(r: int) {
       let bh = BH[eKind - 1]
       if r >= 106 - bh && r < 106 { spr(BRB[eKind - 1], r - 106 + bh, 160.0) }
     }
-    if r >= 106 && r < 110 { span(20.0, 220.0, ${CKEYS.indexOf('F')}) }
   } else {
     let sl = scenSlot()
     let ai = sl * ${H} + r
@@ -615,6 +695,7 @@ mod renderRow(r: int) {
     } else {
       for k in GI[area]..GI[area + 1] {
         if bit(gm, k - GI[area]) && r >= GY[k] && r < GY[k] + 20 { spr(${RB.goon}, r - GY[k], GX[k]) }
+        if bit(gm, k - GI[area]) && r >= GY[k] + 19 && r < GY[k] + 22 { spr(${RB.shadow}, r - GY[k] - 19, GX[k] - 1) }
       }
       for k in II[area]..II[area + 1] {
         if bit(im, k - II[area]) && r >= IY[k] && r < IY[k] + 4 {
@@ -624,12 +705,15 @@ mod renderRow(r: int) {
         if IK[k] == 2 && bit(im, k - II[area]) && r >= IY[k] && r < IY[k] + 7 { spr(${RB.ketchup}, r - IY[k], IX[k]) }
       }
       if area == ${BLOCK_AREA} && bit(boss, 3) == false && r >= ${BLY} && r < ${BLY + 16} { spr(${RB.blocker}, r - ${BLY}, ${BLX}.0) }
+      if area == ${BLOCK_AREA} && bit(boss, 3) == false && r >= ${BLY + 15} && r < ${BLY + 18} { spr(${RB.shadow}, r - ${BLY + 15}, ${BLX}.0) }
       for k in NI[area]..NI[area + 1] {
         if r >= PY[k] && r < PY[k] + 16 { spr(PG[k], r - PY[k], PX[k]) }
+        if r >= PY[k] + 15 && r < PY[k] + 18 { spr(${RB.shadow}, r - PY[k] - 15, PX[k]) }
       }
       let ba2 = BOSSA[area]
       if ba2 >= 0 {
         if bit(boss, ba2) == false && r >= BY[ba2] && r < BY[ba2] + BH[ba2] { spr(BRB[ba2], r - BY[ba2], BX[ba2]) }
+        if bit(boss, ba2) == false && r >= BY[ba2] + BH[ba2] - 1 && r < BY[ba2] + BH[ba2] + 2 { spr(${RB.bshadow}, r - BY[ba2] - BH[ba2] + 1, BX[ba2] - 1) }
       }
       // prologue: goons arrive, smoke clouds, the fat guy by the house
       if mode == 4 && cs >= 2 && cs < 6 {
@@ -641,7 +725,7 @@ mod renderRow(r: int) {
       }
       let dy0 = floor(py)
       if (mode == 1 || mode == 6 || mode == 4) && r >= dy0 && r < dy0 + 16 { spr(${RB.daniel}, r - dy0, floor(px)) }
-      if r >= ${GROUND} { span(0.0, ${W}.0, ${CKEYS.indexOf('n')}) }
+      if (mode == 1 || mode == 6 || mode == 4) && r >= dy0 + 15 && r < dy0 + 18 { spr(${RB.shadow}, r - dy0 - 15, floor(px)) }
     }
   }
   is.sortMultiple(ie, ic)
@@ -939,8 +1023,8 @@ mod step() {
     }
     px = min(max(px, 0.0), ${W - 13}.0)
     if mode == 1 && (px != opx || py != opy) {
-      markSpan(opy, 16)
-      markSpan(py, 16)
+      markSpan(opy, 18)
+      markSpan(py, 18)
       opx = px
       opy = py
     }
