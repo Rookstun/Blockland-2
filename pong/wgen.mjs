@@ -73,6 +73,7 @@ var kt: float = 1.0
 var lastT: float = 0.0
 var overUntil: float = 0.0
 var beep: int = 0
+var titlev: string = "NIGHT PONG"
 var mel: float[]
 var melPos: int = 0
 var waiting: bool = false
@@ -96,7 +97,7 @@ var cur: float = 0.0
 ${strips.map(k => `@right out strip${k}: string = st${k}`).join('\n')}
 @right out msg_: string = "A/D move  -  new ball every 2 returns"
 @right out hud_: string = hudv
-@right out title_: string = "NIGHT PONG"
+@right out title_: string = titlev
 @right out P0: float = aP0
 @right out V0: float = aV0
 
@@ -241,6 +242,7 @@ mod step() {
   if waiting {
     if ba && lastBa == false {
       waiting = false
+      titlev = "" // Rookstun: the title screen goes once the player confirms
       if over > 0 {
         over = 0
         reset()
@@ -355,6 +357,7 @@ mod idle() {
     over = 0
     score = 0
     aV0 = 0.0
+    titlev = "NIGHT PONG"
     mel.resize(0, 0.0)
     melPos = 0
     hudv = ""
@@ -422,5 +425,5 @@ on Change(seated) {
   if seated == false && forced == false { idle() }
 }
 `;
-  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, synths: ['Square'] }; // P0/V0 = hit blip (paddle high, circle low) // debug builds keep the clock for /pgsit
+  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, titleMid: true, titleLH: 4, synths: ['Square'] }; // P0/V0 = hit blip (paddle high, circle low) // debug builds keep the clock for /pgsit
 }

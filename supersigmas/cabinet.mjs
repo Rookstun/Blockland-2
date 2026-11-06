@@ -101,8 +101,8 @@ function speakers(b) {
   wireFrom('hud_', hud, 'Text');
   const msg = box(-PW, 0, Math.min(26, z0 - 4 * TK), PW, 2, z0 - 2 * TK, { color: base, components: text({ LineHeight: 0.8 * TK, Color: rgba([240, 240, 240]) }) });
   wireFrom('msg_', msg, 'Text');
-  const titleB = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, 42 + UP], visibility: false, collision: false, owner_index: O,
-    components: text({ Font: font('Bungee'), LineHeight: 2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });
+  const titleB = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, gen.titleMid ? Math.round(Z1 - gen.H * CELL / 2) : 42 + UP], visibility: false, collision: false, owner_index: O, // titleMid: centred on the screen (pong)
+    components: text({ Font: font('Bungee'), LineHeight: gen.titleLH ?? 2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });
   wireFrom('title_', titleB, 'Text');
 
   // ---- seat -> chip: occupancy straight into 'seated', the sitter into a raw MicrochipInput -> splitter -> compares
