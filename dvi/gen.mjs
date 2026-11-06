@@ -103,6 +103,7 @@ const SI = [${T.SI.join(', ')}]
 const SS = [${T.SS.join(', ')}]
 const SE = [${T.SE.join(', ')}]
 const SC = [${T.SC.join(', ')}]
+const BGT = ${q(`<color="${PAL[0]}">`)}
 const MUS = [${MUS.join(', ')}]
 
 var rows: string[]
@@ -234,11 +235,15 @@ mod renderRow(r: int) {
     let a = max(max(is.get(j), cur), 0.0)
     let b = min(ie.get(j), ${W}.0)
     if b > a {
-      s = s .. SP.Substring(0, a - cur) .. COLS[ic.get(j)] .. BL.Substring(0, b - a) .. "</>"
+      if a > cur { s = s .. BGT .. BL.Substring(0, a - cur) .. "</>" }
+      s = s .. COLS[ic.get(j)] .. BL.Substring(0, b - a) .. "</>"
       cur = b
     }
   }
-  rows[r] = s .. SP.Substring(0, ${W}.0 - cur)
+  // gaps are background-coloured blocks, not spaces (owner: "vertical desync"): every line is the same glyph + tags, so
+  // tagged and plain lines can't lay out at different heights and shift a strip as its content changes
+  if cur < ${W}.0 { s = s .. BGT .. BL.Substring(0, ${W}.0 - cur) .. "</>" }
+  rows[r] = s
   sdf[r / ${STRIP}] = 1
 }
 mod step() {
