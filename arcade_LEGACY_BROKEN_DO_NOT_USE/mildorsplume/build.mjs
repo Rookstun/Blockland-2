@@ -12,8 +12,8 @@ import fs from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generate } from './gen.mjs';
-import { bundle } from '../tools/wsbundle.mjs';
-import { brickRefs } from '../omegga-media/tv.mjs';
+import { bundle } from '../../tools/wsbundle.mjs';
+import { brickRefs } from '../../omegga-media/tv.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OWNER = { id: 'c5700000-0000-4b0b-9a11-00000000c570', name: 'Mildors Plume', display_name: 'Mildors Plume' };

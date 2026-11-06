@@ -1,4 +1,5 @@
 # Arcade cabinets (DDR, Super Sigmas engine games, Mildors Plume)
+- LEGACY CODE (owner 2026-11-06: "MARK PACMAN AND MILDORS PLUME AS LEGACY CODE"): Pac-Man and Mildors Plume are legacy, both under `arcade_LEGACY_BROKEN_DO_NOT_USE/` (pacman/, mildorsplume/). Do not extend or base new games on them; new cabinets use the Super Sigmas / Night Pong wire engines. brickdoom/view.mjs still imports parseRow/png from the legacy mildorsplume/view.mjs (viewer only).
 
 Moved verbatim from CLAUDE.md 2026-10-22. Newest facts win; append new entries here, not in CLAUDE.md.
 

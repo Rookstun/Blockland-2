@@ -1,6 +1,6 @@
 // brickdoom/view.mjs: renders bdrow dumps (24 columns of '██' pairs) to a PNG. node brickdoom/view.mjs log out.png [scale]
 import fs from 'node:fs';
-import { parseRow, png } from '../mildorsplume/view.mjs';
+import { parseRow, png } from '../arcade_LEGACY_BROKEN_DO_NOT_USE/mildorsplume/view.mjs';
 import { PAL } from './gen.mjs';
 const [file, out, scale] = process.argv.slice(2);
 const blocks = [];
