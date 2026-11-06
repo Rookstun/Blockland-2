@@ -115,7 +115,7 @@ ${strips.map(k => `  if k == ${k} { pb${k} = v }`).join('\n')}
   pubDirty = true
 }
 // FRAME SWAP (Rookstun: tearing): rows render into the pb* back buffers; all shown strips are swapped in together at
-// most every 1/30 s (Rookstun: 30 fps), so the client gets whole frames instead of strips landing on different server frames
+// most every 1/90 s (Rookstun: 90 fps; capped by the server frame rate), so the client gets whole frames instead of strips landing on different server frames
 mod publish() {
 ${strips.map(k => `  st${k} = pb${k}`).join('\n')}
   pubDirty = false
@@ -445,7 +445,7 @@ on ServerUptime() {
     }
     step()
     flush()
-    if pubDirty && ServerUptime() - pubT >= 0.033 {
+    if pubDirty && ServerUptime() - pubT >= 0.011 {
       pubT = ServerUptime()
       publish()
     }
