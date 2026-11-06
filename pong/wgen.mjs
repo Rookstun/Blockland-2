@@ -420,7 +420,9 @@ on ChatCommand("pgcal", "Night Pong screen fit: h+ h- (row height) w+ w- (width)
   ctrl.DisplayText("row height \${lhv}  width \${wsv}", positionY = -300.0, fontSize = 30, lifetime = 3.0, textId = 9703)
   PrintToConsole("pgcal|\${lhv}|\${wsv}")
 }
-on tick {
+// FRAME TICK (Rookstun: bypass the clock, no input/screen delay): ServerUptime changes every server frame, so this
+// fires once a frame with no clock gate in between; movement already uses delta time, so speed is unchanged
+on ServerUptime() {
   if seated || forced {
     if was == false {
       was = true
@@ -443,5 +445,5 @@ on Change(seated) {
   if seated == false && forced == false { idle() }
 }
 `;
-  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, titleMid: true, titleLH: 4, exactScreen: true, textPorts: true, synths: ['Square'] }; // P0/V0 = hit blip (paddle high, circle low) // debug builds keep the clock for /pgsit
+  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, noClock: true, titleMid: true, titleLH: 4, exactScreen: true, textPorts: true, synths: ['Square'] }; // P0/V0 = hit blip (paddle high, circle low) // debug builds keep the clock for /pgsit
 }
