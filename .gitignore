@@ -32,3 +32,5 @@ puppet/pose_landmarker_*.task
 tools/chat/usage.json
 tools/chat/status.state
 tools/chat/usage-auto.on
+dmapong/*.brz
+dmapong/*.gen.ws
