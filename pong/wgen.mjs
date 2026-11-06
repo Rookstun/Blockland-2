@@ -73,6 +73,8 @@ var kt: float = 1.0
 var lastT: float = 0.0
 var overUntil: float = 0.0
 var beep: int = 0
+var waiting: bool = false
+var lastBa: bool = false
 var sb: float = 1.0
 var aP0: float = 1.0
 var aV0: float = 0.0
@@ -196,10 +198,14 @@ mod step() {
     aV0 = 0.5
     beep -= 1
   } else { aV0 = 0.0 }
-  if over > 0 {
-    if now >= overUntil {
-      over = 0
-      reset()
+  // a round starts only on the player's confirm (Rookstun): Space / right mouse, after sitting down or a game over
+  if waiting {
+    if ba && lastBa == false {
+      waiting = false
+      if over > 0 {
+        over = 0
+        reset()
+      }
     }
   } else {
     if left { px -= 6.0 * kt }
@@ -282,11 +288,14 @@ mod step() {
     if alive == 0 {
       if score > best { best = score }
       over = 1
-      overUntil = now + 3.0
+      waiting = true
       for r in ${CY - CR}..${CY + CR} { mark(r) }
     }
   }
-  if over > 0 { hudv = "GAME OVER  SCORE \${score}  BEST \${best}" } else { hudv = "SCORE \${score}  BALLS \${alive}  BEST \${best}" }
+  lastBa = ba
+  if waiting {
+    if over > 0 { hudv = "GAME OVER  SCORE \${score}  -  SPACE TO PLAY AGAIN" } else { hudv = "PRESS SPACE TO START  BEST \${best}" }
+  } else { hudv = "SCORE \${score}  BALLS \${alive}  BEST \${best}" }
 }
 // the player left: back to idle as if untouched (Rookstun): game stopped, screen blank, score cleared
 mod idle() {
@@ -331,7 +340,7 @@ ${strips.map(k => `  PrintToConsole("pgrow|${k}|" .. st${k})`).join('\n')}
 }
 on ChatCommand("pgover", "debug: game over now (3 s)") -> (ctrl, args) {
   over = 1
-  overUntil = ServerUptime() + 3.0
+  waiting = true
   for r in ${CY - CR}..${CY + CR} { mark(r) }
   flush()
 }
@@ -352,6 +361,7 @@ on tick {
       dfl.resize(${H}, 0)
       sdf.resize(${NS}, 0)
       reset()
+      waiting = true
       lastT = ServerUptime()
       for r in 0..${H} { mark(r) }
     }
