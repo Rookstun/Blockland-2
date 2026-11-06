@@ -80,7 +80,7 @@ export function generate({ debug = false } = {}) {
   const T = spriteTables();
   const DX = 6, DH = 16;                  // Daniel x, height (sprite 13 wide)
   const GH = 20, BODY = 5;                // goon sprite height; body (hitbox) starts 5 rows down, x 0..10
-  const LINE = 24, GROUND = H - 5;
+  const LINE = 24, GROUND = H - 5, PUB = 3; // PUB: show a frame every 3 ticks (~6.7 fps), all strips at once
   // self-check: every sprite row has a table entry and colours resolve
   if (T.SI.length - 1 !== Object.values(SPRITES).reduce((n, a) => n + a.length, 0) || T.SC.some(c => c < 0)) throw Error('self-check: sprite tables');
   // looping tune (pitch x the Triangle base; 0 = rest), 3 ticks a step
@@ -117,7 +117,9 @@ var uy: float[]
 var is: float[]
 var ie: float[]
 var ic: float[]
-${strips.map(k => `var st${k}: string = ""`).join('\n')}
+${strips.map(k => `var st${k}: string = ""\nvar pb${k}: string = ""`).join('\n')}
+var pubT: int = 0
+var pubDirty: bool = false
 var hudv: string = ""
 var titlev: string = "DANIEL VS ISIS"
 var py: float = ${H / 2 - DH / 2}.0
@@ -154,7 +156,15 @@ ${strips.map(k => `@right out strip${k}: string = st${k}`).join('\n')}
 @right out V1: float = aV1
 
 mod setStrip(k: int, v: string) {
-${strips.map(k => `  if k == ${k} { st${k} = v }`).join('\n')}
+${strips.map(k => `  if k == ${k} { pb${k} = v }`).join('\n')}
+  pubDirty = true
+}
+// "fake multithreading" (owner: the image rips across the bars): the game renders every tick into the pb* back
+// buffers; the shown strips are swapped in together every ${PUB} ticks, so the client gets one consistent frame at a
+// steady interval instead of strips trickling in at different times
+mod publish() {
+${strips.map(k => `  st${k} = pb${k}`).join('\n')}
+  pubDirty = false
 }
 mod mark(r: int) {
   if r >= 0 && r < ${H} {
@@ -364,7 +374,7 @@ mod idle() {
     titlev = "DANIEL VS ISIS"
     mel.resize(0, 0.0)
     melPos = 0
-${strips.map(k => `    st${k} = ""`).join('\n')}
+${strips.map(k => `    st${k} = ""\n    pb${k} = ""`).join('\n')}
   }
 }
 mod flush() {
@@ -412,6 +422,8 @@ on ChatCommand("dvgo", "debug: start the round (as Space)") -> (ctrl, args) {
     }
     step()
     flush()
+    pubT += 1
+    if pubDirty && pubT % ${PUB} == 0 { publish() }
   } else {
     idle()
   }
