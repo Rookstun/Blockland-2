@@ -10,25 +10,29 @@
 @left in a: vector
 @left in b: vector
 
-const SP = "                                                                "
-const BL = "████████████████████████████████████████████████████████████████"
+const SP = "                                                                                                "
+const BL = "████████████████████████████████████████████████████████████████████████████████████████████████"
 var st0: string = ""
 var st1: string = ""
 var st2: string = ""
 var st3: string = ""
 var x0: float = 0.0
 var y0: float = 0.0
-var x1: float = 63.0
-var y1: float = 95.0
+var x1: float = 95.0
+var y1: float = 63.0
 var hudv: string = ""
-var lhv: float = 0.1613
+var sel: int = 0
+var lastUp: bool = false
+var lastDown: bool = false
+var lastT: float = 0.0
+var lhv: float = 1.29
 var wsv: float = 2.0
 
 @right out strip0: string = st0
 @right out strip1: string = st1
 @right out strip2: string = st2
 @right out strip3: string = st3
-@right out msg_: string = "inputs a, b: vector pixel coords, 0,0 top left  -  /line x0 y0 x1 y1"
+@right out msg_: string = "sit: W/S pick a slider, A/D slide it  -  inputs a, b (vector) or /line x0 y0 x1 y1"
 @right out hud_: string = hudv
 @right out title_: string = ""
 @right out lh_: float = lhv
@@ -36,20 +40,32 @@ var wsv: float = 2.0
 @right out P0: float = 1.0
 @right out V0: float = 0.0
 
+// one slider bar: 10 cells, the knob where the value sits; the selected one is marked with >
+mod bar(name: string, v: float, max: float, me: int) -> string {
+  let n = floor(v / max * 9.0 + 0.5)
+  var b: string = ""
+  b = ""
+  for i in 0..10 { if i == n { b = b .. "|" } else { b = b .. "-" } }
+  let mark = if sel == me then ">" else " "
+  return mark .. name .. " [" .. b .. "] ${v}"
+}
+mod bars(ax: float, ay: float, bx: float, by: float) -> string {
+  return bar("A.X", ax, 95.0, 0) .. "  " .. bar("A.Y", ay, 63.0, 1) .. "  " .. bar("B.X", bx, 95.0, 2) .. "  " .. bar("B.Y", by, 63.0, 3)
+}
 mod draw() {
-  let ax = min(max(round(x0), 0.0), 63.0)
-  let ay = min(max(round(y0), 0.0), 95.0)
-  let bx = min(max(round(x1), 0.0), 63.0)
-  let by = min(max(round(y1), 0.0), 95.0)
+  let ax = min(max(round(x0), 0.0), 95.0)
+  let ay = min(max(round(y0), 0.0), 63.0)
+  let bx = min(max(round(x1), 0.0), 95.0)
+  let by = min(max(round(y1), 0.0), 63.0)
   let top = min(ay, by)
   let bot = max(ay, by)
   let dy = by - ay
-  hudv = "(${ax}, ${ay}) -> (${bx}, ${by})"
+  hudv = bars(ax, ay, bx, by)
   var acc: string = ""
   for k in 0..4 {
     acc = ""
-    for j in 0..24 {
-      let r = k * 24 + j
+    for j in 0..16 {
+      let r = k * 16 + j
       var line: string = ""
       line = SP
       if r >= top && r <= bot {
@@ -68,10 +84,10 @@ mod draw() {
           e = round(max(xa, xb)) + 1.0
         }
         s = max(s, 0.0)
-        e = min(e, 64.0)
-        line = SP.Substring(0, s) .. BL.Substring(0, e - s) .. SP.Substring(0, 64.0 - e)
+        e = min(e, 96.0)
+        line = SP.Substring(0, s) .. BL.Substring(0, e - s) .. SP.Substring(0, 96.0 - e)
       }
-      if j < 23 { acc = acc .. line .. "\n" } else { acc = acc .. line }
+      if j < 15 { acc = acc .. line .. "\n" } else { acc = acc .. line }
     }
     if k == 0 { st0 = acc }
     if k == 1 { st1 = acc }
@@ -111,4 +127,23 @@ on ChatCommand("lscal", "line screen fit: h+ h- w+ w-") -> (ctrl, args) {
 }
 on ServerUptime() {
   if st0 == "" { draw() }
+  let now = ServerUptime()
+  let dt = min(max(now - lastT, 0.0), 0.2)
+  lastT = now
+  if seated {
+    if up && lastUp == false { sel = (sel + 3) % 4 }
+    if down && lastDown == false { sel = (sel + 1) % 4 }
+    lastUp = up
+    lastDown = down
+    let d = (if right then 1.0 else 0.0) - (if left then 1.0 else 0.0)
+    if d != 0.0 {
+      let step = d * 30.0 * dt // 30 pixels a second
+      if sel == 0 { x0 = min(max(x0 + step, 0.0), 95.0) }
+      if sel == 1 { y0 = min(max(y0 + step, 0.0), 63.0) }
+      if sel == 2 { x1 = min(max(x1 + step, 0.0), 95.0) }
+      if sel == 3 { y1 = min(max(y1 + step, 0.0), 63.0) }
+      draw()
+    }
+    if up != lastUp || down != lastDown { draw() }
+  }
 }

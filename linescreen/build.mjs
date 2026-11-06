@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { generate } from './wgen.mjs';
 import { buildCabinet } from '../supersigmas/cabinet.mjs';
 
-const cell = 0.25; // 64x96 pixels at 0.25 = a 16x24-unit screen (0.4-1 put cabinet parts off the unit grid)
+const cell = 2; // 96x64 pixels, one 2-unit micro brick each = a 192x128-unit screen
 await buildCabinet({
   dir: dirname(fileURLToPath(import.meta.url)), name: 'linescreen', title: 'LINE SCREEN', cell,
   owner: { id: 'f1a90000-0000-4b0b-9a11-0000000011e5', name: 'LINE SCREEN', display_name: 'LINE SCREEN' },
