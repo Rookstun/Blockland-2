@@ -60,7 +60,9 @@ var vx: float[]
 var vy: float[]
 var is: float[]
 var ie: float[]
-${strips.map(k => `var st${k}: string = ""`).join('\n')}
+${strips.map(k => `var st${k}: string = ""\nvar pb${k}: string = ""`).join('\n')}
+var pubT: float = 0.0
+var pubDirty: bool = false
 var hudv: string = ""
 var px: float = ${W / 2 - PW / 2}.0
 var opx: float = -1.0
@@ -109,7 +111,14 @@ ${strips.map(k => `@right out strip${k}: string = st${k}`).join('\n')}
 @right out V0: float = aV0
 
 mod setStrip(k: int, v: string) {
-${strips.map(k => `  if k == ${k} { st${k} = v }`).join('\n')}
+${strips.map(k => `  if k == ${k} { pb${k} = v }`).join('\n')}
+  pubDirty = true
+}
+// FRAME SWAP (Rookstun: tearing): rows render into the pb* back buffers; all shown strips are swapped in together at
+// most every 0.1 s, so the client gets whole frames instead of strips landing on different server frames
+mod publish() {
+${strips.map(k => `  st${k} = pb${k}`).join('\n')}
+  pubDirty = false
 }
 mod mark(r: int) {
   if r >= 0 && r < ${H} {
@@ -369,7 +378,7 @@ mod idle() {
     mel.resize(0, 0.0)
     melPos = 0
     hudv = ""
-${strips.map(k => `    st${k} = ""`).join('\n')}
+${strips.map(k => `    st${k} = ""\n    pb${k} = ""`).join('\n')}
   }
 }
 mod flush() {
@@ -436,6 +445,10 @@ on ServerUptime() {
     }
     step()
     flush()
+    if pubDirty && ServerUptime() - pubT >= 0.1 {
+      pubT = ServerUptime()
+      publish()
+    }
   } else {
     idle()
   }
