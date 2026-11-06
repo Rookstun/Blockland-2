@@ -347,8 +347,8 @@ mod step() {
   }
   lastBa = ba
   if waiting {
-    if over > 0 { hudv = "GAME OVER  MOST BALLS \${most}  -  SPACE TO PLAY AGAIN" } else { hudv = "PRESS SPACE TO START  MOST BALLS \${most}" }
-  } else { hudv = "BALLS \${alive}  MOST \${most}" } // Rookstun: no score number; the most balls ever on screen at once
+    if over > 0 { hudv = "GAME OVER  SCORE \${score}  BEST \${best}  MOST BALLS \${most}  -  SPACE" } else { hudv = "PRESS SPACE TO START  BEST \${best}  MOST BALLS \${most}" }
+  } else { hudv = "SCORE \${score}  BEST \${best}  BALLS \${alive}  MOST \${most}" } // Rookstun: score + best back, plus balls / most balls ever
 }
 // the player left: back to idle as if untouched (Rookstun): game stopped, screen blank, score cleared
 mod idle() {
