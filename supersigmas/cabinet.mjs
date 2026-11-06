@@ -55,7 +55,8 @@ function speakers(b) {
 {
   // one hidden chip lying on the hood (top z 58), no outer pins: the seat wires into its port gates, its port gates
   // wire straight into the screen, and the seat adapter (splitter, compares, clock) sits on the chip's own plane
-  const Z1 = Math.max(48, 30 + gen.H * (cell ?? 0.5)), UP = Z1 - 48; // tall pictures (pong 160x240) raise the screen top, head, hood and chip
+  const TK = Math.max(1, (cell ?? 0.5) / 0.5); // HUD/msg text scale: big-pixel screens (pong cell 2) get big type; 1 = the old size
+  const Z1 = Math.max(48, 26 + 4 * TK + gen.H * (cell ?? 0.5)), UP = Z1 - 48; // room for the HUD + msg lines above the base (z 24) // tall pictures (pong 160x240) raise the screen top, head, hood and chip
   const b = await bundle(compiled, { owner: OWNER, offset: [0, 12, 60 + UP], hide: true, bare: true });
   const { w, C, O } = b;
   const assets = [...b.ext, ...speakers(b)];
@@ -96,9 +97,9 @@ function speakers(b) {
     if (gen.textPorts) { wireFrom('lh_', s, 'LineHeight'); wireFrom('ws_', s, 'WidthScale'); } // big type on text screens
   }
   const z0 = Z1 - gen.H * CELL; // 30
-  const hud = box(-PW, 0, z0 - 2, PW, 2, z0, { color: base, components: text({ LineHeight: 0.8, Color: rgba([248, 208, 64]) }) });
+  const hud = box(-PW, 0, z0 - 2 * TK, PW, 2, z0, { color: base, components: text({ LineHeight: 0.8 * TK, Color: rgba([248, 208, 64]) }) });
   wireFrom('hud_', hud, 'Text');
-  const msg = box(-PW, 0, Math.min(26, z0 - 4), PW, 2, z0 - 2, { color: base, components: text({ LineHeight: 0.8, Color: rgba([240, 240, 240]) }) });
+  const msg = box(-PW, 0, Math.min(26, z0 - 4 * TK), PW, 2, z0 - 2 * TK, { color: base, components: text({ LineHeight: 0.8 * TK, Color: rgba([240, 240, 240]) }) });
   wireFrom('msg_', msg, 'Text');
   const titleB = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, 42 + UP], visibility: false, collision: false, owner_index: O,
     components: text({ Font: font('Bungee'), LineHeight: 2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });

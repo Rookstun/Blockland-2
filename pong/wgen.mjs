@@ -192,7 +192,7 @@ mod step() {
           dy = 0.0 - sqrt(sp * sp - dx * dx)
           y = ${PY - BS}.0
           score += 1
-          if score % 2 == 0 { newBall() }
+          if score % 2 == 0 && alive < 10 { newBall() } // at most 10 balls (Rookstun)
         }
         bx[i] = x
         by[i] = y
