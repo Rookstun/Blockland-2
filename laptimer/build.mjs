@@ -30,6 +30,11 @@ mod fmt(t: float) -> string {
   return "\${cs / 100}.\${fr}"
 }
 
+on ChatCommand("lapoff", "hide your lap timer (it comes back on your next crossing)") -> (ctrl, args) {
+  let i = racers.find(ctrl)
+  if i >= 0 { rstart[i] = -1.0 }
+}
+
 on ChatCommand("lappos", "lap timer debug: print player positions") -> (ctrl, args) {
   players.fillFromPlayers()
   for p in 0..players.length() {
@@ -72,10 +77,10 @@ on Clock(interval = 0.1) {
     }
     rprev[i] = v.Y
   }
-  // each racer's own HUD (only they see it): running lap, last, best; hidden after 10 min without a crossing
+  // each racer's own HUD (only they see it): running lap, last, best; hidden 2 min after the last crossing or by /lapoff
   for i in 0..racers.length() {
     let t = now - rstart.get(i)
-    if rstart.get(i) >= 0.0 && t < 600.0 {
+    if rstart.get(i) >= 0.0 && t < 120.0 {
       racers.get(i).DisplayText("LAP \${fmt(t)}\\nLAST \${fmt(rlast.get(i))}   BEST \${fmt(rbest.get(i))}", positionY = -300.0, fontSize = 36, lifetime = 0.3, textId = 9701)
     }
   }
