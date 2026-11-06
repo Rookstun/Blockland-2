@@ -62,6 +62,7 @@ var is: float[]
 var ie: float[]
 ${strips.map(k => `var st${k}: string = ""\nvar pb${k}: string = ""`).join('\n')}
 var pubT: float = 0.0
+var pubDt: float = 0.016
 var pubDirty: bool = false
 var hudv: string = ""
 var px: float = ${W / 2 - PW / 2}.0
@@ -421,6 +422,11 @@ on ChatCommand("pgsit", "debug: play as if seated (toggle)") -> (ctrl, args) {
 ` : ''}// 20 Hz tick, game at 10 fps; only while somebody sits (a new sitter = new game, full redraw)
 // live text calibration (Rookstun: the font will not draw the 0.125 grid at the computed size): /pgcal h+ h- w+ w-
 // = line height / width scale +-5%; tells the caller and logs pgcal|lh|ws so the values can be baked into LH0/WS0
+// FPS SWITCH (Rookstun): /pgfps flips the shown frame rate 60 <-> 30 (any player, every Night Pong chip)
+on ChatCommand("pgfps", "Night Pong frame rate: switch 60 / 30") -> (ctrl, args) {
+  if pubDt < 0.02 { pubDt = 0.033 } else { pubDt = 0.016 }
+  if pubDt < 0.02 { ctrl.DisplayText("Night Pong: 60 fps", positionY = -300.0, fontSize = 30, lifetime = 3.0, textId = 9704) } else { ctrl.DisplayText("Night Pong: 30 fps", positionY = -300.0, fontSize = 30, lifetime = 3.0, textId = 9704) }
+}
 on ChatCommand("pgcal", "Night Pong screen fit: h+ h- (row height) w+ w- (width)") -> (ctrl, args) {
   if args == "h+" { lhv = lhv * 1.05 }
   if args == "h-" { lhv = lhv / 1.05 }
@@ -445,7 +451,7 @@ on ServerUptime() {
     }
     step()
     flush()
-    if pubDirty && ServerUptime() - pubT >= 0.016 {
+    if pubDirty && ServerUptime() - pubT >= pubDt {
       pubT = ServerUptime()
       publish()
     }
