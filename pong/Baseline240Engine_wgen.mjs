@@ -46,6 +46,7 @@ export function generate({ debug = false } = {}) {
 @left in down: bool
 @left in ba: bool
 @left in bb: bool
+@left in bq: bool
 
 const SP = ${q(' '.repeat(W))}
 const BL = ${q('█'.repeat(W))}
@@ -82,6 +83,7 @@ var mel: float[]
 var melPos: int = 0
 var waiting: bool = false
 var lastBa: bool = false
+var lastBq: bool = false
 var sb: float = 1.0
 var aP0: float = 1.0
 var aV0: float = 0.0
@@ -254,6 +256,11 @@ mod step() {
       }
     }
   } else {
+    // Q adds a ball (Rookstun 2026-11-06; hidden: not mentioned on screen), up to the 10-ball cap
+    if bq && lastBq == false && alive < 10 {
+      newBall()
+      happyTune()
+    }
     if left { px -= 6.0 * kt }
     if right { px += 6.0 * kt }
     px = min(max(px, 0.0), ${W - PW}.0)
@@ -344,6 +351,7 @@ mod step() {
     }
   }
   lastBa = ba
+  lastBq = bq
   if waiting {
     if over > 0 { hudv = "GAME OVER  SCORE \${score}  MOST BALLS \${gm}  -  SPACE TO PLAY AGAIN" } else { hudv = "SCORE \${score}  BALLS \${alive}  MOST SCORE \${best}  MOST BALLS \${most}  -  SPACE TO START" }
   } else {
