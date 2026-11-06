@@ -2,8 +2,11 @@
 // proto-whale with a crocodile snout and a thick tail, on a rock. node mapgen/ambulocetus.mjs X Y Z > job.json  (faces +x)
 import { makeBuilder } from './builder.mjs';
 
-const OWNER = { id: 'c1a0de00-0000-4b0b-9a11-00000000a3b0', name: 'Claude Ambulocetus', display_name: 'Claude Ambulocetus' };
-const [X = 0, Y = 0, Z = 0] = process.argv.slice(2).map(Number);
+const [X = 0, Y = 0, Z = 0, COUNT = 1] = process.argv.slice(2).map(Number);
+// COUNT > 1 = a stack of them, each rock on the one below's head height (comfycookie), own owner
+const OWNER = COUNT > 1
+  ? { id: 'c1a0de00-0000-4b0b-9a11-00000000a3b1', name: 'Claude Ambulocetus Stack', display_name: 'Claude Ambulocetus Stack' }
+  : { id: 'c1a0de00-0000-4b0b-9a11-00000000a3b0', name: 'Claude Ambulocetus', display_name: 'Claude Ambulocetus' };
 const B = makeBuilder();
 const MB = 'PB_DefaultMicroBrick';
 const m = (color, x) => ({ asset: MB, color, ...x });
@@ -32,6 +35,8 @@ for (let x = 116; x < 146; x += 6) for (const y of [-8, 6]) B.box(x, y, 38, x + 
 for (const [x0, x1, h, z0, z1] of [[-90, -70, 14, 34, 48], [-112, -90, 10, 28, 42], [-134, -112, 7, 20, 34], [-154, -134, 5, 10, 24], [-170, -154, 3, 8, 14]])
   B.box(x0, -h, z0, x1, h, z1, HIDE, 'tail');
 if (B.dropped.length) throw new Error(`ambulocetus: ${B.dropped.length} dropped: ${B.dropped[0]}`);
-const bricks = B.bricks.map(({ label, ...b }) => b);
+const one = B.bricks.map(({ label, ...b }) => b);
+const bricks = [];
+for (let k = 0; k < COUNT; k++) for (const b of one) bricks.push({ ...b, position: [b.position[0], b.position[1], b.position[2] + k * 62] }); // 62 = eye top
 process.stderr.write(`ambulocetus: ${bricks.length} bricks at ${X} ${Y} ${Z}\n`);
 console.log(JSON.stringify({ ops: [{ op: 'clear', owner: OWNER }, { op: 'bricks', at: [X, Y, Z], owner: OWNER, captureMs: 4000, bricks }] }));
