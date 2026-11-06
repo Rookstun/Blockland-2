@@ -7,7 +7,7 @@ export const W = 240, H = 160, STRIP = 20; // landscape (Rookstun: "each row 240
 export const PAL = ['000000'];
 
 export const LH0 = 0.129, WS0 = 2.0; // strip LineHeight / WidthScale at cell 0.2 (0.2 x 0.645); /pgcal tunes them live
-export function generate({ debug = false, cell = 0.2 } = {}) {
+export function generate({ debug = false, cell = 0.2, W = 240, H = 160 } = {}) { // W/H shadow the module defaults (Rookstun's 300x200 @ 20 a micro brick try)
   const lh0 = +(cell * 0.645).toFixed(4), ws0 = WS0; // strip text size follows the pixel size (pong20 = cell 0.1)
   const NS = H / STRIP, q = JSON.stringify;
   const strips = Array.from({ length: NS }, (_, k) => k);
