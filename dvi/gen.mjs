@@ -1,21 +1,29 @@
-// dvi/gen.mjs: DANIEL VS ISIS, the RPG (owner renderman 2026-11-05: "THE GAME NEEDS TO BE AN RPG", "Turn-based battles
-// and give it a savegame"; earlier: 3 bosses, smoke cigarettes zelda style, pierogi for health, rescue the 5 uncles of
-// truth, beat neo saddam; intro card "RENDERMAN INDEPENDENT SOFTWARE COMPANY ENTERTAINMENT CLAUDE LLC PRESENTS").
-// Pure-wire row engine of pong/wgen.mjs: 240x160 at 10x10 pixels a micro brick, a changed row is rebuilt from coloured
-// spans (scenery tables precomputed here + live objects), back-buffered strips swapped together every 3 ticks.
-// Overworld: 6 areas walked edge to edge with WASD (scenery band on top, objects on the ground below it, so the two never
-// overlap); goons stand around, bumping one starts a turn-based battle (FIGHT / PIEROGI / SMOKE / RUN on the msg line,
-// W/S pick, Space confirm); Uncles of Truth sit in cages (walk in to free); bosses block their area's exit. XP -> levels.
-// Savegame: the sitter's leaderboard keys dv* (kept across restarts by the progress plugin), autosaved on area change,
-// battle win and uncle freed; sitting down offers CONTINUE. Cartoon, original art; goons carry blank black flags.
+// dvi/gen.mjs: DANIEL VS ISIS, a turn-based story RPG (owner renderman 2026-11-05). Inspired by our ZELDOY (screen rooms
+// with a top-down wipe, a guy who hands you things) and Mario RPG (timed hits: press Space on the "!" for a bonus hit,
+// and again when an enemy swings to block). Story (owner): "i love living in turkey i want to go to america to be a cbd
+// salesman. then isis shows up and smokes all your legal herb and a fat isis guy trips and destroys your house and cbd
+// store and you need to travel the world map to these little villages and talking to guys and the isis guys took over a
+// planet fitness in long island and a chillis in newark and the final boss is in the bronx and you drive a tiny european
+// car". Intro card "RENDERMAN INDEPENDENT SOFTWARE COMPANY ENTERTAINMENT CLAUDE LLC PRESENTS". Cartoon, original art;
+// goons carry blank black flags; no real logos (place names are text only).
+// Engine: the pure-wire row engine of pong/wgen.mjs (240x160 at 10x10 pixels a micro brick, a changed row is rebuilt from
+// coloured spans: precomputed scenery + live objects; back-buffered strips swapped together every 3 ticks).
+// Flow: title -> prologue cutscene (Turkey, the herb, the fat guy, the rubble) -> walk Turkey -> world map (drive the
+// tiny car between unlocked places with A/D, Space to go in) -> GREEK VILLAGE -> ITALIAN VILLAGE -> LONG ISLAND (parking
+// lot, Planet Fitness: SWOLE GOON) -> NEWARK (Chili's dining room, kitchen: THE FAT ONE) -> THE BRONX (NEO SADDAM).
+// Walk WASD; bump a guy to talk (Space for the next line), a goon or boss to fight (FIGHT / PIEROGI / SMOKE / RUN).
+// Savegame on the sitter's leaderboard (dvLv dvXp dvHp dvArea=place+1 dvUnc=places unlocked dvBoss dvPie dvCig), kept
+// across restarts by the progress plugin; autosaved on every place, item, talk gift and battle won.
 export const W = 240, H = 160, STRIP = 20;
 export const PAL = ['101828'];
-const SKY = 34; // rows 2..SKY-1 = scenery band, rows SKY..GROUND-1 = walkable ground
+const SKY = 34; // rows 2..SKY-1 = scenery band in places; rows SKY.. = the ground everything walks on
 
 const COL = { h: '5a3a1a', s: 'f0c090', e: '202020', b: '3070d0', p: '203060', k: '101010', g: '909090', w: 'ffffff',
   d: '404048', o: '556b2f', q: 'a07040', f: '0a0a0a', y: 'ffd040', n: '4a3420', l: '8090a0', t: 'c0c8d0',
-  r: 'b01818', v: '4a5a2a', z: 'd0a020', c: 'e8c878', i: 'ff6a10', a: 'c0b090', u: 'ff3030', m: '7a2a8a',
-  A: 'e0d0b0', B: 'b08850', C: '2e7d32', D: 'c49a6c', E: '8a8a8a', F: '303030', G: '6a1a1a', I: 'f0e0c0' };
+  r: 'c01818', v: '4a5a2a', z: 'd0a020', c: 'e8c878', i: 'ff6a10', a: 'c0b090', u: 'ff3030', m: '6a2a9a',
+  A: 'e0d0b0', B: 'b08850', C: '2e7d32', D: 'c49a6c', E: '8a8a8a', F: '303030', G: '6a1a1a', I: 'f0e0c0',
+  J: '2060c0', K: 'f8f8f8', L: '58b850', M: 'ffd23a', N: '7a3020', O: 'b0b8c0', P: '9a4a2a', Q: '1e4a8a', R: '3a8a3a',
+  S: 'd06a2a', T: '505860' };
 const BOSS_ART = [
   '......AAAAAAAAAA........', '....AAAAAAAAAAAAAA......', '....AAAAAAAAAAAAAA......', '.....BBBBBBBBBBBB.......',
   '.....BkkkkBBkkkkB.......', '.....BBBBBBBBBBBB.......', '.....BBhhhhhhhhBB.......', '.....BBBhhhhhhBBB.......',
@@ -25,8 +33,11 @@ const BOSS_ART = [
   '...EEEEEE....EEEEEE.....', '...EEEEEE....EEEEEE.....', '...EEEEEE....EEEEEE.....', '...EEEEEE....EEEEEE.....',
   '...EEEEEE....EEEEEE.....', '...EEEEEE....EEEEEE.....', '..kkkkkkk....kkkkkkk....', '..kkkkkkk....kkkkkkk....',
 ];
-// boss template letters A-E are recoloured per boss with lowercase palette keys (the template's A-E are NOT palette keys)
-const recolor = map => BOSS_ART.map(l => l.replace(/[ABCDE]/g, ch => map[ch]));
+const recolor = (art, map) => art.map(l => l.replace(/[A-E]/g, ch => map[ch] ?? ch));
+// a village guy: H hair, S shirt, P pants (recoloured per guy)
+const GUY = ['...HHHH.....', '..HHHHHH....', '..HssssH....', '..sesses....', '..ssssss....', '...ssss.....', '..SSSSSS....',
+  '.SSSSSSSS...', 'sSSSSSSSSs..', '.SSSSSSSS...', '..SSSSSS....', '..PPPPPP....', '..PP..PP....', '..PP..PP....', '..PP..PP....', '.kkk..kkk...'];
+const guy = (h, sh, pa) => GUY.map(l => l.replace(/H/g, h).replace(/S/g, sh).replace(/P/g, pa));
 const SPRITES = {
   daniel: ['...hhhh......', '..hhhhhh.....', '..hssssh.....', '..sseses.....', '..ssssss.....', '...ssss......',
     '..bbbbbb.....', '.bbbbbbbsggg.', 'sbbbbbbbbggg.', '.bbbbbbbb....', '..bbbbbb.....', '..pppppp.....',
@@ -35,15 +46,25 @@ const SPRITES = {
     '...kkkk..q.......', '..kkkkkk.q.......', '..kwkkwk.q.......', '..kkkkkk.q.......', '...kkkk..q.......',
     '..dddddd.q.......', '.ddddddddq.......', 'gddddddddq.......', '.dddddddd........', '..dddddd.........',
     '..oooooo.........', '..oo..oo.........', '..oo..oo.........', '..oo..oo.........', '.kkk..kkk........'],
+  fat: ['......kkkkkk............', '....kkkkkkkkkk..........', '....kkwkkkkwkk..........', '....kkkkkkkkkk..........',
+    '.....kkkkkkkk...........', '..dddddddddddddd........', '.dddddddddddddddd.......', 'gddddddddddddddddd......',
+    'dddddddddddddddddd......', 'dddddddddddddddddd......', 'dddddddddddddddddd......', 'dddddddddddddddddd......',
+    '.dddddddddddddddd.......', '..dddddddddddddd........', '...oooooooooooo.........', '...ooooo..ooooo.........',
+    '...ooooo..ooooo.........', '..kkkkkk..kkkkkk........'],
+  smokecloud: ['..ll..l...', '.llllllll.', 'llllllllll', '.llll.lll.', '..l...l...'],
   pierogi: ['..cccc..', '.cccccc.', 'cccccccc', '.c.c.c.c'],
   cigarette: ['.....l.l', '......l.', 'wwwwwwii'],
-  // an Uncle of Truth behind cage bars (bars baked in: sprites never overlap each other)
-  uncle: ['gggggggggggggg', 'g.aaaaaaaaa..g', 'g..aaaaaaa...g', 'g..sssssss...g', 'g..sesgses...g', 'g..sssssss...g',
-    'g..wwwgwww...g', 'g..wwwwwww...g', 'g...wwgww....g', 'g..ttttttt...g', 'g.ttttgtttt..g', 'g.ttttttttt..g',
-    'g..tttgttt...g', 'g..pppppppp..g', 'g..pp.g..pp..g', 'g..pp.g..pp..g', 'g.kkk.g.kkk..g', 'gggggggggggggg'],
-  boss0: recolor({ A: 'h', B: 's', C: 'd', D: 'r', E: 'p' }),
-  boss1: recolor({ A: 'o', B: 's', C: 'o', D: 'z', E: 'n' }),
-  boss2: recolor({ A: 'r', B: 's', C: 'v', D: 'z', E: 'v' }),
+  car: ['....rrrrrr........', '...rttttttr.......', '..rrttttttrrr.....', 'rrrrrrrrrrrrrrrr..', 'rrrrrrrrrrrrrrrrr.',
+    'rrrkkrrrrrrrkkrrr.', '...kk.......kk....'],
+  node: ['.yy.', 'yyyy', 'yyyy', '.yy.'],
+  ketchup: ['.ww.', '.rr.', 'rrrr', 'rKKr', 'rrrr', 'rrrr', 'rrrr'],
+  blocker: guy('k', 'z', 'n'), // THE MAN WHO BLOCKS THE PATH (italian village)
+  nodeoff: ['.EE.', 'EEEE', 'EEEE', '.EE.'],
+  guy0: guy('E', 'w', 'p'), guy1: guy('h', 'J', 'k'), guy2: guy('k', 'L', 'p'),
+  guy3: guy('h', 'm', 'k'), guy4: guy('n', 'r', 'k'), guy5: guy('E', 'O', 'p'),
+  boss0: recolor(BOSS_ART, { A: 'k', B: 's', C: 'm', D: 'M', E: 'k' }), // SWOLE GOON: gym purple + yellow
+  boss1: recolor(BOSS_ART, { A: 'k', B: 's', C: 'd', D: 'r', E: 'o' }), // (unused: THE FAT ONE has the fat sprite)
+  boss2: recolor(BOSS_ART, { A: 'r', B: 's', C: 'v', D: 'z', E: 'v' }), // NEO SADDAM: red beret, shades, olive + gold
 };
 const CKEYS = Object.keys(COL);
 function spriteTables() {
@@ -59,43 +80,119 @@ function spriteTables() {
   return { SI, SS, SE, SC, ROWBASE };
 }
 
-// six areas: name, sky + ground colours, scenery, goons [x,y], items [x,y,kind 0 pierogi 1 cigarette], caged uncle, boss
+// places (scenes). scen = scenery band shapes; npcs [x, y, guy, first line, last line, gift 0/1 pierogi/2 cigarette]
 const AREAS = [
-  { name: 'OUTSKIRTS', sky: '2a3a6a', ground: '7a6a40', scen: [['palm', 30], ['house', 70, 40, 20, 'A', 'B'], ['palm', 140], ['rock', 190], ['house', 200, 30, 16, 'D', 'h']],
-    goons: [[100, 60], [170, 110]], items: [[130, 95, 0]], uncle: null, boss: -1 },
-  { name: 'BAZAAR', sky: '3a2a5a', ground: '8a7048', scen: [['tent', 20, 'r'], ['tent', 70, 'm'], ['house', 120, 36, 22, 'A', 'r'], ['tent', 175, 'z']],
-    goons: [[70, 50], [120, 105], [150, 70]], items: [[95, 125, 1]], uncle: [40, 100], boss: 0 },
-  { name: 'DESERT', sky: '4a3a6a', ground: 'c4a46c', scen: [['dune', 0], ['dune', 120], ['palm', 60], ['rock', 170], ['palm', 215]],
-    goons: [[80, 55], [140, 110], [190, 70]], items: [[110, 80, 0]], uncle: [210, 105], boss: -1 },
-  { name: 'OIL FIELD', sky: '1a1a2a', ground: '5a4a30', scen: [['derrick', 25], ['derrick', 95], ['tank', 140], ['derrick', 200]],
-    goons: [[60, 100], [110, 50], [150, 115]], items: [[90, 120, 1]], uncle: [30, 50], boss: 1 },
-  { name: 'RUINS', sky: '2a2a4a', ground: '7a7060', scen: [['pillar', 20], ['pillar', 45], ['ruin', 90], ['pillar', 170], ['pillar', 200]],
-    goons: [[70, 70], [130, 50], [180, 105]], items: [[100, 110, 0], [210, 60, 0]], uncle: [40, 115], boss: -1 },
-  { name: 'PALACE', sky: '3a1a3a', ground: '9a8a6a', scen: [['palacewall', 0], ['dome', 30], ['dome', 120], ['dome', 200]],
-    goons: [[70, 60], [100, 110]], items: [[50, 120, 0]], uncle: [215, 45], boss: 2 },
+  { name: 'TURKEY, HOME', sky: '3a4a8a', ground: '9a7a4a', scen: [['house', 20, 44, 22, 'A', 'P'], ['cbd', 90], ['palm', 160], ['olive', 190], ['olive', 215]],
+    goons: [], items: [], npcs: [[150, 90, 1, 'neighbor']], boss: -1 },
+  { name: 'GREEK VILLAGE', sky: '3a7ad0', ground: 'd8c8a0', scen: [['whitehouse', 10], ['whitehouse', 60], ['windmill', 120], ['whitehouse', 170], ['whitehouse', 205]],
+    goons: [[110, 60], [190, 110]], items: [[60, 120, 0], [210, 45, 2]], npcs: [[40, 60, 0, 'greek'], [150, 120, 5, 'fisher']], boss: -1 },
+  { name: 'ITALIAN VILLAGE', sky: '4a6ab0', ground: 'b89a6a', scen: [['terra', 10], ['cypress', 70], ['terra', 95], ['cypress', 150], ['terra', 175]],
+    goons: [[90, 100], [160, 55], [205, 115]], items: [[130, 80, 1]], npcs: [[40, 100, 2, 'nonno']], boss: -1 },
+  { name: 'LONG ISLAND, PARKING LOT', sky: '20304a', ground: '585858', scen: [['pf', 40], ['lamp', 10], ['lamp', 200], ['parkedcar', 150]],
+    goons: [[80, 60], [130, 110], [180, 70]], items: [[60, 120, 0]], npcs: [[30, 90, 3, 'frontdesk']], boss: -1 },
+  { name: 'PLANET FITNESS, GYM FLOOR', sky: '4a2a6a', ground: '303038', scen: [['gymwall', 0], ['treadmill', 20], ['treadmill', 60], ['rack', 110], ['treadmill', 200]],
+    goons: [[70, 100], [120, 55]], items: [[40, 60, 1]], npcs: [], boss: 0 },
+  { name: 'NEWARK, CHILI\'S DINING ROOM', sky: '5a1a1a', ground: '6a4028', scen: [['chiliwall', 0], ['booth', 20], ['booth', 80], ['pepper', 140], ['booth', 180]],
+    goons: [[90, 60], [140, 110], [190, 70]], items: [[60, 120, 0]], npcs: [[40, 70, 4, 'waiter']], boss: -1 },
+  { name: 'CHILI\'S KITCHEN', sky: '3a3a40', ground: '8a8a90', scen: [['steelwall', 0], ['fryer', 30], ['fryer', 70], ['counter', 120]],
+    goons: [[80, 110]], items: [[50, 60, 1]], npcs: [], boss: 1 },
+  { name: 'THE BRONX', sky: '1a2030', ground: '505058', scen: [['brick', 0], ['brick', 60], ['eltrain', 0], ['brick', 130], ['brick', 190]],
+    goons: [[70, 60], [110, 115]], items: [[40, 120, 0]], npcs: [[30, 60, 5, 'bodega']], boss: 2 },
 ];
-const BOSSPOS = [[175, 70], [175, 70], [150, 80]];
-// scenery band: paint each area into a colour grid (rows 0..SKY-1), then run-length into spans per row
+const TURKEY_RUBBLE = AREAS.length; // scenery slot 8 = Turkey after the fat guy; slot 9 = the world map (whole screen)
+const MAP_SLOT = AREAS.length + 1;
+// world map places: name, map x, y, first area, last area
+const NODES = [
+  ['TURKEY', 222, 92, 0, 0], ['GREEK VILLAGE', 196, 100, 1, 1], ['ITALIAN VILLAGE', 172, 82, 2, 2],
+  ['LONG ISLAND', 58, 62, 3, 4], ['NEWARK', 40, 72, 5, 6], ['THE BRONX', 50, 52, 7, 7],
+];
+const BOSSPOS = [[175, 70], [170, 80], [150, 80]]; // boss 0 SWOLE GOON (area 4), 1 THE FAT ONE (area 6), 2 NEO SADDAM (area 7)
+// dialogue, Kingdom of Loathing tone. Each guy has a block of lines, shown one at a time with Space.
+const TALK = {
+  neighbor: ['NEIGHBOR: THEY WENT WEST, DANIEL. TO AMERICA.', 'NEIGHBOR: TAKE YOUR LITTLE CAR. IT GETS 90 MILES TO THE GALLON AND 4 TO THE POTHOLE.', 'NEIGHBOR: I SAVED NOTHING FROM YOUR STORE. I WANT TO BE HONEST ABOUT THAT.'],
+  greek: ['OLD GREEK GUY: ISIS CAME THROUGH. THEY ASKED THE WAY TO NEW JERSEY.', 'OLD GREEK GUY: I LIED TO THEM. THEY WENT ANYWAY. NEW JERSEY IS LIKE THAT.'],
+  fisher: ['FISHERMAN: MY COUSIN MARRIED A POLISH WOMAN. THE WEDDING HAD 400 PIEROGI.', 'FISHERMAN: HERE. HAVE ONE BEFORE IT HAS YOU.'],
+  nonno: ['NONNO: YOUR CAR IS TOO BIG FOR OUR STREETS. THAT IS A JOKE. IT IS NOT BIG.', 'NONNO: TAKE A CIGARETTE. NOT FOR SMOKING. FOR CONFIDENCE. ALSO SMOKING.'],
+  frontdesk: ['FRONT DESK GUY: WELCOME TO THE JUDGEMENT FREE ZONE.', 'FRONT DESK GUY: ISIS IS JUDGING EVERYONE IN THERE. IT IS A WHOLE THING.', 'FRONT DESK GUY: THE BIG ONE HAS NOT LEFT THE SQUAT RACK IN SIX DAYS.'],
+  waiter: ['WAITER: THEY ORDERED THE BABY BACK RIBS AND NEVER LEFT. THAT WAS IN MARCH.', 'WAITER: THE FAT ONE IS IN THE KITCHEN. HE KEEPS SAYING HE TRIPPED ON SOMETHING IN TURKEY.'],
+  bodega: ['BODEGA GUY: NEO SADDAM IS DOWN THE BLOCK. HE WENT IN FOR A LOTTO TICKET AND NEVER CAME OUT.', 'BODEGA GUY: BRING A PIEROGI. BRING TWO. BRING A GROWN-UP.'],
+};
+const GIFT = { fisher: 1, nonno: 2 };
+const CUTSCENE = [
+  'I LOVE LIVING IN TURKEY.',
+  'BUT ONE DAY I WILL GO TO AMERICA AND BE A CBD SALESMAN.',
+  'THEN ISIS SHOWED UP.',
+  'THEY SMOKED ALL OF YOUR LEGAL HERB. ALL OF IT. EVEN THE GUMMIES.',
+  'A FAT ISIS GUY TRIPPED OVER THE GUMMIES.',
+  'YOUR HOUSE AND YOUR CBD STORE ARE NOW ONE SMALLER, SADDER PILE.',
+  'THEY FLED TO AMERICA. YOU HAVE A TINY EUROPEAN CAR AND A GRUDGE.',
+];
+
+// THE MAN WHO BLOCKS THE PATH (italian village, by the exit) + the ketchup (greek village). Cartoon dark comedy: text and
+// sound only, nothing drawn. dvBoss bits: 0-2 bosses, 3 = the man is eaten, 4 = you carry ketchup.
+const BLX = 205, BLY = 70, BLOCK_AREA = 2;
+// THE ITEM LIST (owner: "ketchup is not an enumerated object its an item that goes into the list of items you have"):
+// every item is an entry here; the chip keeps a count per entry (inv[]), Q shows the ones you have, Space uses one.
+const ITEMS = [
+  ['PIEROGI', 'HEALS 12 HP. WARM, DENSE, GRANDMOTHERLY.'],
+  ['CIGARETTE', 'YOUR NEXT 3 HITS DO DOUBLE. ZELDA STYLE.'],
+  ['KETCHUP', 'A CONDIMENT. SOMEONE, SOMEWHERE, IS AFRAID OF IT.'],
+];
+const EATSCENE = [
+  'YOU APPLY THE KETCHUP. HE LOOKS CONCERNED.',
+  'YOU EAT HIM ALIVE.',
+  'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH',
+  '(HE PAUSES TO CATCH HIS BREATH. YOU WAIT. IT IS ONLY POLITE.)',
+  'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH',
+  'THE PATH IS CLEAR. YOU FEEL FULL, AND A LITTLE ASHAMED.',
+];
+const EATSCENE_T = [3.0, 2.5, 5.0, 2.5, 6.0, 3.5]; // seconds each line stays (the screams are the long ones)
+
 function sceneryTables() {
   const idx = [0], S = [], E = [], C = [];
-  for (const a of AREAS) {
-    const g = Array.from({ length: SKY }, () => new Array(W).fill(null));
-    const put = (x0, y0, w, h, c) => { for (let y = Math.max(2, y0); y < Math.min(SKY, y0 + h); y++) for (let x = Math.max(0, Math.round(x0)); x < Math.min(W, Math.round(x0 + w)); x++) g[y][x] = c; };
-    for (const [kind, x, ...o] of a.scen) {
-      if (kind === 'palm') { put(x + 4, 12, 3, SKY - 12, 'B'); put(x, 8, 11, 3, 'C'); put(x - 3, 10, 6, 2, 'C'); put(x + 8, 10, 6, 2, 'C'); }
-      if (kind === 'house') { const [w, h, wall, roof] = o; put(x, SKY - h, w, h, wall); put(x - 2, SKY - h - 3, w + 4, 3, roof); put(x + w / 2 - 3, SKY - 8, 6, 8, 'h'); put(x + 4, SKY - h + 4, 5, 4, 'y'); }
-      if (kind === 'rock') { put(x, SKY - 6, 14, 6, 'E'); put(x + 3, SKY - 9, 8, 3, 'E'); }
-      if (kind === 'tent') { const [c] = o; for (let k = 0; k < 12; k++) put(x + 12 - k, SKY - 14 + k, 2 * k + 2, 1, c); put(x + 10, SKY - 6, 6, 6, 'F'); }
-      if (kind === 'dune') { for (let k = 0; k < 10; k++) put(x + 50 - k * 5, SKY - 10 + k, k * 10 + 20, 1, 'D'); }
-      if (kind === 'derrick') { for (let k = 0; k < 22; k++) { put(x + 10 - (k >> 1), SKY - 22 + k, 1, 1, 'F'); put(x + 10 + (k >> 1), SKY - 22 + k, 1, 1, 'F'); } put(x + 4, SKY - 12, 13, 1, 'F'); put(x + 9, SKY - 26, 3, 4, 'i'); }
-      if (kind === 'tank') { put(x, SKY - 16, 40, 16, 'E'); put(x, SKY - 18, 40, 2, 'l'); put(x + 5, SKY - 10, 30, 2, 'F'); }
-      if (kind === 'pillar') { put(x, SKY - 24, 8, 24, 'I'); put(x - 2, SKY - 26, 12, 2, 'I'); }
-      if (kind === 'ruin') { put(x, SKY - 14, 60, 14, 'A'); put(x + 8, SKY - 22, 14, 8, 'A'); put(x + 36, SKY - 18, 10, 4, 'A'); put(x + 20, SKY - 8, 8, 8, 'F'); }
-      if (kind === 'dome') { for (let k = 0; k < 10; k++) { const hw = Math.round(Math.sqrt(100 - (10 - k) * (10 - k)) * 1.6); put(x + 16 - hw, SKY - 26 + k, hw * 2, 1, 'z'); } put(x + 15, SKY - 30, 2, 4, 'z'); put(x + 2, SKY - 16, 28, 16, 'A'); }
-      if (kind === 'palacewall') { put(0, SKY - 12, W, 12, 'A'); for (let xx = 0; xx < W; xx += 12) put(xx, SKY - 15, 6, 3, 'A'); for (let xx = 10; xx < W; xx += 40) put(xx, SKY - 8, 8, 8, 'G'); }
+  const slots = [...AREAS.map(a => ({ scen: a.scen })), { scen: [['rubble', 20], ['rubble', 90], ['palm', 160], ['olive', 190], ['olive', 215]] }, { map: true }];
+  for (const slot of slots) {
+    const rowsN = slot.map ? H : SKY;
+    const g = Array.from({ length: rowsN }, () => new Array(W).fill(null));
+    const put = (x0, y0, w, h, c) => { for (let y = Math.max(2, Math.round(y0)); y < Math.min(rowsN, Math.round(y0 + h)); y++) for (let x = Math.max(0, Math.round(x0)); x < Math.min(W, Math.round(x0 + w)); x++) g[y][x] = c; };
+    if (slot.map) {
+      // world map: America on the left, Europe + Turkey on the right, the Atlantic between (gap colour = ocean)
+      for (const [x, y, w, h] of [[0, 20, 70, 110], [0, 30, 82, 80], [10, 110, 40, 30], [30, 40, 45, 50]]) put(x, y, w, h, 'R');
+      for (const [x, y, w, h] of [[150, 30, 90, 50], [160, 70, 80, 25], [166, 78, 14, 30], [188, 92, 20, 18], [205, 82, 35, 22], [140, 20, 40, 20]]) put(x, y, w, h, 'R');
+      put(166, 100, 30, 6, 'Q'); // the Mediterranean bites in
+      for (let i = 0; i + 1 < NODES.length; i++) { // dotted route
+        const [, x0, y0] = NODES[i], [, x1, y1] = NODES[i + 1], n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 5);
+        for (let k = 1; k < n; k++) put(x0 + 1 + (x1 - x0) * k / n, y0 + 1 + (y1 - y0) * k / n, 2, 2, 't');
+      }
+    }
+    for (const [kind, x, ...o] of slot.scen ?? []) {
+      const B = SKY;
+      if (kind === 'palm') { put(x + 4, 12, 3, B - 12, 'B'); put(x, 8, 11, 3, 'C'); put(x - 3, 10, 6, 2, 'C'); put(x + 8, 10, 6, 2, 'C'); }
+      if (kind === 'olive') { put(x + 4, 18, 3, B - 18, 'h'); put(x, 10, 12, 9, 'v'); }
+      if (kind === 'house') { const [w, h, wall, roof] = o; put(x, B - h, w, h, wall); put(x - 2, B - h - 3, w + 4, 3, roof); put(x + w / 2 - 3, B - 8, 6, 8, 'h'); put(x + 4, B - h + 4, 5, 4, 'y'); }
+      if (kind === 'cbd') { put(x, B - 24, 50, 24, 'K'); put(x - 2, B - 27, 54, 3, 'L'); put(x + 20, B - 22, 10, 3, 'L'); put(x + 23, B - 25, 4, 9, 'L'); put(x + 6, B - 12, 10, 12, 'J'); put(x + 30, B - 14, 14, 8, 'J'); }
+      if (kind === 'rubble') { for (let k = 0; k < 6; k++) put(x + k * 8, B - 4 - (k * 7) % 9, 10, 4 + (k * 7) % 9, k % 2 ? 'A' : 'E'); put(x + 14, B - 6, 6, 2, 'L'); put(x + 30, B - 3, 8, 3, 'K'); }
+      if (kind === 'whitehouse') { put(x, B - 20, 30, 20, 'K'); put(x + 8, B - 27, 14, 7, 'J'); put(x + 12, B - 10, 6, 10, 'J'); put(x + 3, B - 16, 5, 4, 'J'); }
+      if (kind === 'windmill') { put(x + 8, B - 26, 12, 26, 'K'); put(x + 6, B - 30, 16, 4, 'P'); put(x + 13, 4, 2, 22, 'h'); put(x + 2, 14, 24, 2, 'h'); }
+      if (kind === 'terra') { put(x, B - 22, 40, 22, 'D'); put(x - 2, B - 25, 44, 3, 'S'); put(x + 6, B - 16, 6, 6, 'C'); put(x + 26, B - 16, 6, 6, 'C'); put(x + 16, B - 10, 8, 10, 'h'); }
+      if (kind === 'cypress') { put(x + 3, 6, 6, B - 6, 'R'); put(x + 5, 2, 2, 4, 'R'); }
+      if (kind === 'pf') { put(x, B - 26, 110, 26, 'm'); put(x, B - 30, 110, 4, 'M'); put(x + 40, B - 14, 30, 14, 'K'); put(x + 10, B - 24, 20, 6, 'M'); put(x + 80, B - 24, 20, 6, 'M'); }
+      if (kind === 'lamp') { put(x + 2, 6, 2, B - 6, 'E'); put(x, 4, 8, 2, 'M'); }
+      if (kind === 'parkedcar') { put(x, B - 8, 30, 6, 'J'); put(x + 6, B - 12, 18, 4, 't'); put(x + 3, B - 3, 5, 3, 'k'); put(x + 22, B - 3, 5, 3, 'k'); }
+      if (kind === 'gymwall') { put(0, 2, W, B - 2, 'm'); for (let xx = 0; xx < W; xx += 30) put(xx + 4, 6, 18, 8, 'M'); }
+      if (kind === 'treadmill') { put(x, B - 6, 28, 6, 'T'); put(x + 22, B - 18, 3, 12, 'T'); put(x + 18, B - 20, 10, 3, 'k'); }
+      if (kind === 'rack') { put(x, B - 22, 60, 2, 'T'); for (let xx = 0; xx < 60; xx += 10) put(x + xx + 2, B - 20, 6, 6, 'k'); put(x, B - 12, 60, 2, 'T'); put(x, B - 22, 2, 22, 'T'); put(x + 58, B - 22, 2, 22, 'T'); }
+      if (kind === 'chiliwall') { put(0, 2, W, B - 2, 'N'); for (let xx = 10; xx < W; xx += 50) put(xx, 8, 24, 12, 'M'); }
+      if (kind === 'booth') { put(x, B - 14, 36, 14, 'r'); put(x + 6, B - 18, 24, 4, 'D'); }
+      if (kind === 'pepper') { put(x, 8, 26, 12, 'r'); put(x + 24, 6, 6, 6, 'R'); put(x + 4, 20, 18, 4, 'r'); }
+      if (kind === 'steelwall') { put(0, 2, W, B - 2, 'O'); for (let xx = 0; xx < W; xx += 40) put(xx, 2, 2, B - 2, 'E'); }
+      if (kind === 'fryer') { put(x, B - 18, 30, 18, 'T'); put(x + 3, B - 20, 24, 2, 'M'); put(x + 4, B - 12, 22, 2, 'k'); }
+      if (kind === 'counter') { put(x, B - 12, 110, 12, 'O'); put(x, B - 14, 110, 2, 'E'); put(x + 20, B - 20, 14, 6, 'K'); put(x + 60, B - 18, 10, 4, 'r'); }
+      if (kind === 'brick') { put(x, 4, 50, B - 4, 'P'); for (let yy = 8; yy < B - 6; yy += 8) for (let xx = 6; xx < 46; xx += 12) put(x + xx, yy, 6, 4, 'y'); put(x + 18, B - 10, 12, 10, 'h'); }
+      if (kind === 'eltrain') { put(0, 12, W, 4, 'T'); for (let xx = 10; xx < W; xx += 40) put(xx, 16, 4, B - 16, 'T'); put(90, 6, 60, 6, 'O'); }
     }
     for (let r = 0; r < H; r++) {
-      if (r >= 2 && r < SKY) for (let x = 0; x < W;) { const c = g[r][x]; if (!c) { x++; continue; } let e = x; while (e < W && g[r][e] === c) e++; S.push(x); E.push(e); C.push(CKEYS.indexOf(c)); x = e; }
+      if (r >= 2 && r < rowsN) for (let x = 0; x < W;) { const c = g[r][x]; if (!c) { x++; continue; } let e = x; while (e < W && g[r][e] === c) e++; S.push(x); E.push(e); C.push(CKEYS.indexOf(c)); x = e; }
       idx.push(S.length);
     }
   }
@@ -104,17 +201,24 @@ function sceneryTables() {
 
 export function generate({ debug = false } = {}) {
   const NS = H / STRIP, q = JSON.stringify, T = spriteTables(), SCN = sceneryTables(), RB = T.ROWBASE;
-  const GROUND = H - 4, PUB = 3, NA = AREAS.length;
+  const GROUND = H - 4, PUB = 3, NA = AREAS.length, NN = NODES.length;
+  // dialogue lines flattened; each npc gets [first, last] line indices
+  const DLG = [], NPC = [];
+  AREAS.forEach((a, ai) => a.npcs.forEach(([x, y, g, who]) => { const f = DLG.length; DLG.push(...TALK[who]); NPC.push({ ai, x, y, g, f, l: DLG.length - 1, gift: GIFT[who] ?? 0 }); }));
+  const NI = [0]; AREAS.forEach((_, ai) => NI.push(NPC.filter(n => n.ai <= ai).length));
   if (T.SI.length - 1 !== Object.values(SPRITES).reduce((n, a) => n + a.length, 0) || T.SC.some(c => c < 0) || SCN.C.some(c => c < 0)) throw Error('self-check: tables');
-  if (AREAS.filter(a => a.uncle).length !== 5 || AREAS.map(a => a.boss).filter(b => b >= 0).join() !== '0,1,2') throw Error('self-check: 5 uncles, 3 bosses');
-  if (AREAS.some(a => a.goons.length > 7 || a.items.length > 7)) throw Error('self-check: masks are 8 bits');
+  if (AREAS.map(a => a.boss).filter(b => b >= 0).join() !== '0,1,2' || NODES.at(-1)[4] !== NA - 1) throw Error('self-check: story layout');
+  if (AREAS.some(a => a.goons.length > 7 || a.items.length > 7 || a.npcs.length > 7)) throw Error('self-check: masks are 8 bits');
+  if (DLG.some(l => l.includes('"'))) throw Error('self-check: no quotes in dialogue');
   const GI = [0], GX = [], GY = [], II = [0], IX = [], IY = [], IK = [];
   for (const a of AREAS) { for (const [x, y] of a.goons) { GX.push(x); GY.push(y); } GI.push(GX.length); for (const [x, y, k] of a.items) { IX.push(x); IY.push(y); IK.push(k); } II.push(IX.length); }
+  const AN = AREAS.map((_, ai) => NODES.findIndex(nd => ai >= nd[3] && ai <= nd[4])); // area -> its place on the map
   const N = { C: 1, D: 1.122, E: 1.26, F: 1.335, G: 1.498, A: 1.682, B: 1.888, c: 2, _: 0 };
   const tuneOf = t => t.replace(/ /g, '').split('').map(ch => N[ch]);
   const MUS = tuneOf('C_EG A_GE F_AF E_D_ C_EG A_cA G_ED C___'), BMUS = tuneOf('C_C_D_C_ E_E_D_C_ C_C_D_C_ G_E_D___').map(x => x * 0.75);
+  const MAPMUS = tuneOf('G_E_C_E_ G_c_A_G_ F_A_c_A_ G___E___');
   const PRESENTS = 'RENDERMAN INDEPENDENT SOFTWARE COMPANY ENTERTAINMENT CLAUDE LLC PRESENTS';
-  const ENAME = ['GOON', 'THE MANAGER', 'COLONEL CRUMB', 'NEO SADDAM'], EHP = [0, 40, 70, 110], EATK = [0, 4, 6, 8], EXP = [0, 40, 80, 0];
+  const ENAME = ['GOON', 'SWOLE GOON', 'THE FAT ONE', 'NEO SADDAM'], EHP = [0, 60, 90, 140], EATK = [0, 5, 7, 9], EXP = [0, 50, 90, 0];
   const strips = Array.from({ length: NS }, (_, k) => k);
   const src = `// GENERATED by dvi/gen.mjs: edit that, not this file.
 @left in tick: exec
@@ -126,8 +230,8 @@ export function generate({ debug = false } = {}) {
 @left in down: bool
 @left in ba: bool
 @left in bb: bool
+@left in kq: bool
 
-const SP = ${q(' '.repeat(W))}
 const BL = ${q('█'.repeat(W))}
 const COLS = [${CKEYS.map(k => q(`<color="${COL[k]}">`)).join(', ')}]
 const SI = [${T.SI.join(', ')}]
@@ -138,10 +242,17 @@ const AI = [${SCN.idx.join(', ')}]
 const AS = [${SCN.S.join(', ')}]
 const AE = [${SCN.E.join(', ')}]
 const AC = [${SCN.C.join(', ')}]
-const SKYT = [${AREAS.map(a => q(`<color="${a.sky}">`)).join(', ')}]
-const GNDT = [${AREAS.map(a => q(`<color="${a.ground}">`)).join(', ')}]
+const SKYT = [${[...AREAS, AREAS[0]].map(a => q(`<color="${a.sky}">`)).join(', ')}]
+const GNDT = [${[...AREAS, AREAS[0]].map(a => q(`<color="${a.ground}">`)).join(', ')}]
+const OCEAN = ${q('<color="1e4a8a">')}
 const BATT = ${q('<color="1a1030">')}
 const ANAME = [${AREAS.map(a => q(a.name)).join(', ')}]
+const AN = [${AN.join(', ')}]
+const NNAME = [${NODES.map(nd => q(nd[0])).join(', ')}]
+const NX = [${NODES.map(nd => nd[1]).join(', ')}]
+const NY = [${NODES.map(nd => nd[2]).join(', ')}]
+const NF = [${NODES.map(nd => nd[3]).join(', ')}]
+const NL = [${NODES.map(nd => nd[4]).join(', ')}]
 const GI = [${GI.join(', ')}]
 const GX = [${GX.join(', ')}]
 const GY = [${GY.join(', ')}]
@@ -149,12 +260,20 @@ const II = [${II.join(', ')}]
 const IX = [${IX.join(', ')}]
 const IY = [${IY.join(', ')}]
 const IK = [${IK.join(', ')}]
-const UX = [${AREAS.map(a => (a.uncle ? a.uncle[0] : -1)).join(', ')}]
-const UY = [${AREAS.map(a => (a.uncle ? a.uncle[1] : -1)).join(', ')}]
+const NI = [${NI.join(', ')}]
+const PX = [${NPC.map(n => n.x).join(', ')}]
+const PY = [${NPC.map(n => n.y).join(', ')}]
+const PG = [${NPC.map(n => RB['guy' + n.g]).join(', ')}]
+const PF = [${NPC.map(n => n.f).join(', ')}]
+const PL = [${NPC.map(n => n.l).join(', ')}]
+const PGIFT = [${NPC.map(n => n.gift).join(', ')}]
+const DLG = [${DLG.map(q).join(', ')}]
+const CUT = [${CUTSCENE.map(q).join(', ')}]
 const BOSSA = [${AREAS.map(a => a.boss).join(', ')}]
 const BX = [${BOSSPOS.map(p => p[0]).join(', ')}]
 const BY = [${BOSSPOS.map(p => p[1]).join(', ')}]
-const BRB = [${RB.boss0}, ${RB.boss1}, ${RB.boss2}]
+const BRB = [${RB.boss0}, ${RB.fat}, ${RB.boss2}]
+const BH = [28, 18, 28]
 const ENAME = [${ENAME.map(q).join(', ')}]
 const EHP = [${EHP.join(', ')}]
 const EATK = [${EATK.join(', ')}]
@@ -162,7 +281,12 @@ const EXP = [${EXP.join(', ')}]
 const P2 = [1, 2, 4, 8, 16, 32, 64, 128, 256]
 const MUS = [${MUS.join(', ')}]
 const BMUS = [${BMUS.join(', ')}]
-const MENU = ["FIGHT", "PIEROGI", "SMOKE", "RUN"]
+const MAPMUS = [${MAPMUS.join(', ')}]
+const MENU = ["FIGHT", "ITEM", "RUN"]
+const INAME = [${ITEMS.map(i => q(i[0])).join(', ')}]
+const IDESC = [${ITEMS.map(i => q(i[1])).join(', ')}]
+const EAT = [${EATSCENE.map(q).join(', ')}]
+const EATT = [${EATSCENE_T.join(', ')}]
 
 var rows: string[]
 var dfl: int[]
@@ -185,6 +309,8 @@ var hasSave: bool = false
 var introUntil: float = 0.0
 var flashUntil: float = 0.0
 var area: int = 0
+var node: int = 0
+var unl: int = 0
 var px: float = 20.0
 var py: float = 90.0
 var opx: float = -1.0
@@ -192,12 +318,13 @@ var opy: float = -1.0
 var lv: int = 1
 var xp: int = 0
 var hp: int = 20
-var unc: int = 0
 var boss: int = 0
-var pie: int = 1
-var cig: int = 0
+var inv: int[]
+var ilist: int[]
+var icur: int = 0
 var gm: int = 0
 var im: int = 0
+var nm: int = 0
 var buff: int = 0
 var won: bool = false
 var eKind: int = 0
@@ -208,11 +335,20 @@ var eAtk: int = 0
 var eXp: int = 0
 var phase: int = 0
 var tNext: float = 0.0
+var nice: bool = false
 var cur: int = 0
+var cs: int = 0
+var talkN: int = -1
+var ecs: int = 0
+var invFrom: int = 1
+var lastQ: bool = false
+var talkL: int = 0
+var wipe: int = ${H}
 var lastBa: bool = false
 var lastUp: bool = false
 var lastDn: bool = false
-var lastA: bool = false
+var lastL: bool = false
+var lastR: bool = false
 var dk: string = ""
 var dkN: int = 0
 var kt: float = 1.0
@@ -256,8 +392,9 @@ mod markSpan(y: float, h: int) {
   let y0 = floor(y)
   for k in 0..h { mark(y0 + k) }
 }
-mod markAll() {
-  for r in 0..${H} { mark(r) }
+// scene change: a Zeldoy-style wipe, 20 rows a tick from the top (also spreads the redraw over 8 ticks)
+mod wipeAll() {
+  wipe = 0
 }
 mod spr(rb: int, j: int, x0: float) {
   for t in SI[rb + j]..SI[rb + j + 1] {
@@ -281,9 +418,40 @@ mod tune(a: float, b: float, c: float) {
   note(b, 2)
   note(c, 4)
 }
+mod scream(n: int) {
+  mel.resize(0, 0.0)
+  melPos = 0
+  for k in 0..n {
+    mel.push(2.5 + (k % 3) * 0.18)
+    mel.push(2.95 - (k % 2) * 0.2)
+  }
+}
 mod flash(t: string) {
   logv = t
-  flashUntil = ServerUptime() + 3.0
+  flashUntil = ServerUptime() + 3.5
+}
+mod have(i: int) -> int {
+  return inv.get(i)
+}
+mod give(i: int, n: int) {
+  inv[i] = inv.get(i) + n
+}
+// the items you have, in list order (rebuilt whenever the list is shown)
+mod listItems() {
+  ilist.resize(0, 0)
+  for i in 0..${ITEMS.length} { if inv.get(i) > 0 { ilist.push(i) } }
+  icur = min(icur, max(ilist.length() - 1, 0))
+}
+mod listText() -> string {
+  var t: string = ""
+  t = ""
+  if ilist.length() == 0 { return "(NOTHING. YOUR POCKETS ECHO.)" }
+  for j in 0..ilist.length() {
+    let i = ilist.get(j)
+    if j == icur { t = t .. "> " } else { t = t .. "  " }
+    t = t .. INAME[i] .. " x" .. inv.get(i) .. "   "
+  }
+  return t
 }
 mod hpMax() -> int {
   return 16 + lv * 4
@@ -298,11 +466,10 @@ mod save() {
     c.SetLeaderboard("dvLv", lv)
     c.SetLeaderboard("dvXp", xp)
     c.SetLeaderboard("dvHp", hp)
-    c.SetLeaderboard("dvArea", area + 1)
-    c.SetLeaderboard("dvUnc", unc)
+    c.SetLeaderboard("dvArea", node + 1)
+    c.SetLeaderboard("dvUnc", unl)
     c.SetLeaderboard("dvBoss", boss)
-    c.SetLeaderboard("dvPie", pie)
-    c.SetLeaderboard("dvCig", cig)
+    c.SetLeaderboard("dvInv", min(inv.get(0), 99) + min(inv.get(1), 99) * 100 + min(inv.get(2), 99) * 10000)
   }
 }
 mod load() {
@@ -316,48 +483,80 @@ mod load() {
     t = c.GetLeaderboard("dvHp")
     hp = if t > 0 then t else hpMax()
     t = c.GetLeaderboard("dvArea")
-    area = max(t - 1, 0)
+    node = min(max(t - 1, 0), ${NN - 1})
     t = c.GetLeaderboard("dvUnc")
-    unc = t
+    unl = min(max(t, 1), ${NN})
     t = c.GetLeaderboard("dvBoss")
     boss = t
-    t = c.GetLeaderboard("dvPie")
-    pie = t
-    t = c.GetLeaderboard("dvCig")
-    cig = t
+    t = c.GetLeaderboard("dvInv")
+    inv[0] = t % 100
+    inv[1] = (t / 100) % 100
+    inv[2] = (t / 10000) % 100
   }
 }
 mod peekSave() {
   let c = sitter.ControllerOf()
   var t: int = 0
-  t = c.GetLeaderboard("dvLv")
+  t = c.GetLeaderboard("dvUnc")
   hasSave = t >= 1
-}
-mod newGame() {
-  lv = 1
-  xp = 0
-  hp = hpMax()
-  area = 0
-  unc = 0
-  boss = 0
-  pie = 1
-  cig = 0
-  won = false
-  save()
 }
 mod enterArea(a: int, x: float) {
   area = a
+  node = AN[a]
   px = x
   gm = P2[GI[a + 1] - GI[a]] - 1
   im = P2[II[a + 1] - II[a]] - 1
+  nm = P2[NI[a + 1] - NI[a]] - 1
   mode = 1
   opx = -1.0
   save()
-  markAll()
+  wipeAll()
+}
+mod toMap() {
+  mode = 5
+  titlev = ""
+  musT = 0
+  save()
+  wipeAll()
+}
+mod nearMan() -> bool {
+  return area == ${BLOCK_AREA} && bit(boss, 3) == false && px >= ${BLX - 30}.0 && py + 16.0 > ${BLY - 6}.0 && py < ${BLY + 22}.0
+}
+// use item i (inBattle = the battle version); the result goes to logv; ketchup next to the man starts the eating (mode 8)
+mod useItem(i: int, inBattle: bool) {
+  if i == 0 {
+    give(0, -1)
+    hp = min(hp + 12, hpMax())
+    logv = "A PIEROGI. WARM, DENSE, HEALING. +12 HP."
+    tune(1.5, 1.68, 2.0)
+  }
+  if i == 1 {
+    give(1, -1)
+    buff = 3
+    if inBattle { logv = "YOU LIGHT A CIGARETTE. YOU FEEL DANGEROUS. NEXT 3 HITS x2." } else { logv = "YOU SMOKE. NOTHING TO HIT YET. THE DANGER WAITS IN YOUR CHEST. NEXT 3 HITS x2." }
+    tune(1.12, 1.0, 1.5)
+  }
+  if i == 2 {
+    if inBattle { logv = "YOU OFFER KETCHUP. NOBODY HERE IS HUNGRY ENOUGH. YET." } else {
+      if nearMan() {
+        give(2, -1)
+        mode = 8
+        ecs = 0
+        tNext = ServerUptime() + EATT[0]
+      } else { logv = "YOU PUT KETCHUP ON YOURSELF. NOTHING HAPPENS. YOU ARE NOT A HOT DOG." }
+    }
+  }
+  save()
 }
 // ---- drawing
+mod scenSlot() -> int {
+  if mode == 5 { return ${MAP_SLOT} }
+  if area == 0 && (unl >= 1 || (mode == 4 && cs >= 5)) { return ${TURKEY_RUBBLE} }
+  return area
+}
 mod gapTag(r: int) -> string {
   if mode == 2 { return BATT }
+  if mode == 5 { return OCEAN }
   if r < ${SKY} { return SKYT[area] }
   return GNDT[area]
 }
@@ -372,30 +571,53 @@ mod renderRow(r: int) {
     if eKind == 0 {
       if r >= 86 && r < 106 { spr(${RB.goon}, r - 86, 165.0) }
     } else {
-      if r >= 78 && r < 106 { spr(BRB[eKind - 1], r - 78, 160.0) }
+      let bh = BH[eKind - 1]
+      if r >= 106 - bh && r < 106 { spr(BRB[eKind - 1], r - 106 + bh, 160.0) }
     }
     if r >= 106 && r < 110 { span(20.0, 220.0, ${CKEYS.indexOf('F')}) }
   } else {
-    if r >= 2 && r < ${SKY} {
-      let ai = area * ${H} + r
-      for t in AI[ai]..AI[ai + 1] { span(AS[t], AE[t], AC[t]) }
-    }
-    for k in GI[area]..GI[area + 1] {
-      if bit(gm, k - GI[area]) && r >= GY[k] && r < GY[k] + 20 { spr(${RB.goon}, r - GY[k], GX[k]) }
-    }
-    for k in II[area]..II[area + 1] {
-      if bit(im, k - II[area]) && r >= IY[k] && r < IY[k] + 4 {
-        if IK[k] == 0 { spr(${RB.pierogi}, r - IY[k], IX[k]) } else { if r < IY[k] + 3 { spr(${RB.cigarette}, r - IY[k], IX[k]) } }
+    let sl = scenSlot()
+    let ai = sl * ${H} + r
+    for t in AI[ai]..AI[ai + 1] { span(AS[t], AE[t], AC[t]) }
+    if mode == 5 {
+      // the map: places (yellow = open), the tiny car at the current one
+      for k in 0..${NN} {
+        if r >= NY[k] && r < NY[k] + 4 {
+          if k < unl { spr(${RB.node}, r - NY[k], NX[k]) } else { spr(${RB.nodeoff}, r - NY[k], NX[k]) }
+        }
       }
+      if r >= NY[node] - 8 && r < NY[node] - 1 { spr(${RB.car}, r - NY[node] + 8, NX[node] - 7) }
+    } else {
+      for k in GI[area]..GI[area + 1] {
+        if bit(gm, k - GI[area]) && r >= GY[k] && r < GY[k] + 20 { spr(${RB.goon}, r - GY[k], GX[k]) }
+      }
+      for k in II[area]..II[area + 1] {
+        if bit(im, k - II[area]) && r >= IY[k] && r < IY[k] + 4 {
+          if IK[k] == 0 { spr(${RB.pierogi}, r - IY[k], IX[k]) }
+          if IK[k] == 1 && r < IY[k] + 3 { spr(${RB.cigarette}, r - IY[k], IX[k]) }
+        }
+        if IK[k] == 2 && bit(im, k - II[area]) && r >= IY[k] && r < IY[k] + 7 { spr(${RB.ketchup}, r - IY[k], IX[k]) }
+      }
+      if area == ${BLOCK_AREA} && bit(boss, 3) == false && r >= ${BLY} && r < ${BLY + 16} { spr(${RB.blocker}, r - ${BLY}, ${BLX}.0) }
+      for k in NI[area]..NI[area + 1] {
+        if r >= PY[k] && r < PY[k] + 16 { spr(PG[k], r - PY[k], PX[k]) }
+      }
+      let ba2 = BOSSA[area]
+      if ba2 >= 0 {
+        if bit(boss, ba2) == false && r >= BY[ba2] && r < BY[ba2] + BH[ba2] { spr(BRB[ba2], r - BY[ba2], BX[ba2]) }
+      }
+      // prologue: goons arrive, smoke clouds, the fat guy by the house
+      if mode == 4 && cs >= 2 && cs < 6 {
+        if r >= 50 && r < 70 { spr(${RB.goon}, r - 50, 120.0) }
+        if r >= 70 && r < 90 { spr(${RB.goon}, r - 70, 150.0) }
+        if cs >= 3 && r >= 44 && r < 49 { spr(${RB.smokecloud}, r - 44, 128.0) }
+        if cs >= 3 && r >= 64 && r < 69 { spr(${RB.smokecloud}, r - 64, 158.0) }
+        if cs >= 4 && r >= 36 && r < 54 { spr(${RB.fat}, r - 36, 40.0) }
+      }
+      let dy0 = floor(py)
+      if (mode == 1 || mode == 6 || mode == 4) && r >= dy0 && r < dy0 + 16 { spr(${RB.daniel}, r - dy0, floor(px)) }
+      if r >= ${GROUND} { span(0.0, ${W}.0, ${CKEYS.indexOf('n')}) }
     }
-    if UX[area] >= 0 && bit(unc, area) == false && r >= UY[area] && r < UY[area] + 18 { spr(${RB.uncle}, r - UY[area], UX[area]) }
-    let ba2 = BOSSA[area]
-    if ba2 >= 0 {
-      if bit(boss, ba2) == false && r >= BY[ba2] && r < BY[ba2] + 28 { spr(BRB[ba2], r - BY[ba2], BX[ba2]) }
-    }
-    let dy0 = floor(py)
-    if mode == 1 && r >= dy0 && r < dy0 + 16 { spr(${RB.daniel}, r - dy0, floor(px)) }
-    if r >= ${GROUND} { span(0.0, ${W}.0, ${CKEYS.indexOf('n')}) }
   }
   is.sortMultiple(ie, ic)
   let gt = gapTag(r)
@@ -414,14 +636,14 @@ mod renderRow(r: int) {
   rows[r] = s
   sdf[r / ${STRIP}] = 1
 }
-// ---- battle
+// ---- battle (Mario RPG style: timed hit on FIGHT, timed block on the enemy's swing)
 mod startBattle(kind: int, idx: int) {
   eKind = kind
   eIdx = idx
   if kind == 0 {
-    eMax = 8 + area * 4
-    eAtk = 2 + area
-    eXp = 6 + area * 3
+    eMax = 8 + node * 5
+    eAtk = 2 + node
+    eXp = 6 + node * 3
   } else {
     eMax = EHP[kind]
     eAtk = EATK[kind]
@@ -435,33 +657,13 @@ mod startBattle(kind: int, idx: int) {
   musT = 0
   if kind == 0 { logv = "A GOON BLOCKS YOUR PATH." } else { logv = "\${ENAME[kind]} STEPS FORWARD." }
   tune(0.8, 1.0, 1.26)
-  markAll()
+  wipeAll()
 }
 mod endBattle() {
   mode = 1
   px = max(px - 18.0, 0.0)
   opx = -1.0
-  markAll()
-}
-mod enemyTurn() {
-  var dmg: int = 0
-  dmg = eAtk + floor(Random(0.0, eAtk * 0.5 + 1.0))
-  hp -= dmg
-  logv = "\${ENAME[eKind]} HITS YOU FOR \${dmg}."
-  aP0 = 0.6
-  aV0 = 0.5
-  if hp <= 0 {
-    hp = 0
-    mode = 3
-    won = false
-    titlev = "DANIEL HAS FALLEN"
-    logv = "SPACE: BACK TO YOUR LAST SAVE"
-    tune(0.9, 0.75, 0.6)
-    markAll()
-  } else {
-    phase = 2
-    tNext = ServerUptime() + 0.8
-  }
+  wipeAll()
 }
 mod winBattle() {
   xp += eXp
@@ -478,66 +680,75 @@ mod winBattle() {
     if up { logv = "THE GOON FOLDS. +\${eXp} XP. LEVEL UP! LV \${lv}" } else { logv = "THE GOON FOLDS. +\${eXp} XP." }
   } else {
     boss = boss + P2[eKind - 1]
-    if eKind == 3 { logv = "NEO SADDAM COLLAPSES INTO A PILE OF MEDALS. FREE THE LAST UNCLE." } else { logv = "\${ENAME[eKind]} IS DEFEATED. +\${eXp} XP. THE WAY IS OPEN." }
+    logv = "\${ENAME[eKind]} IS DEFEATED. +\${eXp} XP. THE WAY IS OPEN."
+    if eKind == 2 { logv = "THE FAT ONE TRIPS ONE LAST TIME. YOUR HOUSE IS AVENGED. +\${eXp} XP." }
+    if eKind == 3 { logv = "NEO SADDAM COLLAPSES INTO A PILE OF MEDALS AND LOTTO TICKETS." }
   }
   tune(1.26, 1.5, 2.0)
   phase = 3
-  tNext = ServerUptime() + 2.0
+  tNext = ServerUptime() + 2.2
   save()
 }
-mod act(choice: int) {
+mod resolveHit() {
   var dmg: int = 0
-  var ran: bool = false
-  ran = false
+  dmg = 2 + lv + floor(Random(0.0, 3.0))
+  if buff > 0 {
+    dmg = dmg * 2
+    buff -= 1
+  }
+  if nice { dmg = dmg + dmg / 2 }
+  eHP -= dmg
+  if nice { logv = "NICE! DANIEL HITS FOR \${dmg}." } else { logv = "DANIEL HITS FOR \${dmg}." }
+  aP0 = if nice then 2.2 else 1.8
+  aV0 = 0.45
+  if eHP <= 0 { winBattle() } else {
+    phase = 1
+    tNext = ServerUptime() + 0.9
+  }
+}
+mod act(choice: int) {
   if choice == 0 {
-    dmg = 2 + lv + floor(Random(0.0, 3.0))
-    if buff > 0 {
-      dmg = dmg * 2
-      buff -= 1
-    }
-    eHP -= dmg
-    logv = "DANIEL HITS FOR \${dmg}."
-    aP0 = 1.8
-    aV0 = 0.4
+    // wind up, then the "!" window: Space in it = a nice hit (x1.5)
+    nice = false
+    phase = 4
+    tNext = ServerUptime() + 0.5
+    logv = "DANIEL WINDS UP..."
   }
   if choice == 1 {
-    if pie > 0 {
-      pie -= 1
-      hp = min(hp + 12, hpMax())
-      logv = "A PIEROGI. WARM, DENSE, HEALING. +12 HP."
-      tune(1.5, 1.68, 2.0)
-    } else { logv = "YOU PAT YOUR POCKETS. NO PIEROGI." }
+    listItems()
+    phase = 6
   }
   if choice == 2 {
-    if cig > 0 {
-      cig -= 1
-      buff = 3
-      logv = "YOU LIGHT A CIGARETTE. YOU FEEL DANGEROUS. NEXT 3 HITS x2."
-      tune(1.12, 1.0, 1.5)
-    } else { logv = "NO CIGARETTES. YOU FEEL ORDINARY." }
-  }
-  if choice == 3 {
     if eKind == 0 && Random(0.0, 1.0) < 0.6 {
-      logv = "YOU LEAVE AT A BRISK, DIGNIFIED JOG."
-      flash(logv)
-      ran = true
+      flash("YOU LEAVE AT A BRISK, DIGNIFIED JOG.")
       endBattle()
     } else {
       if eKind == 0 { logv = "THE GOON STEPS ON YOUR SHOELACE." } else { logv = "\${ENAME[eKind]} WILL NOT ALLOW THIS." }
-    }
-  }
-  if ran == false {
-    if eHP <= 0 { winBattle() } else {
       phase = 1
       tNext = ServerUptime() + 1.0
     }
   }
 }
-mod countUncles() -> int {
-  var n: int = 0
-  n = 0
-  for a in 0..${NA} { if bit(unc, a) { n += 1 } }
-  return n
+mod enemyHit(blocked: bool) {
+  var dmg: int = 0
+  dmg = eAtk + floor(Random(0.0, eAtk * 0.5 + 1.0))
+  if blocked { dmg = dmg / 2 }
+  hp -= dmg
+  if blocked { logv = "BLOCKED! \${ENAME[eKind]} ONLY DOES \${dmg}." } else { logv = "\${ENAME[eKind]} HITS YOU FOR \${dmg}." }
+  aP0 = 0.6
+  aV0 = 0.5
+  if hp <= 0 {
+    hp = 0
+    mode = 3
+    won = false
+    titlev = "DANIEL HAS FALLEN"
+    logv = "SPACE: BACK TO YOUR LAST SAVE"
+    tune(0.9, 0.75, 0.6)
+    wipeAll()
+  } else {
+    phase = 2
+    tNext = ServerUptime() + 0.9
+  }
 }
 // ---- the whole game, one tick
 mod step() {
@@ -550,16 +761,20 @@ mod step() {
   let kL = left || (dk == "a" && dkN > 0)
   let kR = right || (dk == "d" && dkN > 0)
   let kS = ba || (dk == "space" && dkN > 0)
-  let kA = kL || (dk == "new" && dkN > 0)
+  let kQ = kq || (dk == "q" && dkN > 0)
   if dkN > 0 { dkN -= 1 }
   let pS = kS && lastBa == false
   let pU = kU && lastUp == false
   let pD = kD && lastDn == false
-  let pA = kA && lastA == false
+  let pL = kL && lastL == false
+  let pR = kR && lastR == false
+  let pQ = kQ && lastQ == false
+  lastQ = kQ
   lastBa = kS
   lastUp = kU
   lastDn = kD
-  lastA = kA
+  lastL = kL
+  lastR = kR
   if melPos < mel.length() {
     aP0 = max(mel.get(melPos), 0.1)
     aV0 = if mel.get(melPos) > 0.0 then 0.5 else 0.0
@@ -567,8 +782,9 @@ mod step() {
   } else { aV0 = 0.0 }
   var m: float = 0.0
   m = 0.0
-  if mode == 1 { m = MUS[(musT / 3) % ${MUS.length}] }
+  if mode == 1 || mode == 6 { m = MUS[(musT / 3) % ${MUS.length}] }
   if mode == 2 { m = BMUS[(musT / 3) % ${BMUS.length}] }
+  if mode == 5 { m = MAPMUS[(musT / 3) % ${MAPMUS.length}] }
   aP1 = max(m * 0.5, 0.1)
   aV1 = if m > 0.0 then 0.22 else 0.0
   musT += 1
@@ -577,20 +793,87 @@ mod step() {
     if now < introUntil { titlev = "${PRESENTS}" } else {
       titlev = "DANIEL VS ISIS"
       if hasSave { msgv = "SPACE: CONTINUE      A: NEW GAME" } else { msgv = "SPACE: NEW GAME" }
-      if pS {
-        if hasSave { load() } else { newGame() }
+      if pS && hasSave {
+        load()
         titlev = ""
-        py = 90.0
-        enterArea(area, 10.0)
-        flash("\${ANAME[area]}")
+        toMap()
       } else {
-        if pA && hasSave {
-          newGame()
+        if pS || (pL && hasSave) {
+          // new game: the prologue in Turkey
+          lv = 1
+          xp = 0
+          hp = hpMax()
+          unl = 0
+          boss = 0
+          inv.fill(0)
+          inv[0] = 1
+          area = 0
+          node = 0
+          px = 20.0
+          py = 100.0
+          cs = 0
+          tNext = now + 4.0
+          mode = 4
           titlev = ""
-          py = 90.0
-          enterArea(0, 10.0)
-          flash("A NEW STORY. THE UNCLES ARE WAITING.")
+          wipeAll()
         }
+      }
+    }
+  }
+  if mode == 4 {
+    // the prologue: a line every 4 s or on Space; the fat guy flattens the house at line 6
+    msgv = CUT[cs]
+    if pS || now >= tNext {
+      cs += 1
+      tNext = now + 4.0
+      if cs == 2 || cs == 3 || cs == 4 || cs == 5 || cs == 6 { wipeAll() }
+      if cs == 5 { tune(0.6, 0.5, 0.4) }
+      if cs >= ${CUTSCENE.length} {
+        unl = 1
+        enterArea(0, 20.0)
+        py = 100.0
+        flash("YOU STAND IN THE RUBBLE. THE NEIGHBOR HAS SOMETHING TO SAY.")
+      }
+    }
+  }
+  if mode == 5 {
+    // the world map: A/D drive between open places, Space goes in
+    if pL && node > 0 {
+      node -= 1
+      wipeAll()
+      tune(1.0, 1.12, 1.0)
+    }
+    if pR && node < unl - 1 {
+      node += 1
+      wipeAll()
+      tune(1.0, 1.12, 1.0)
+    }
+    if pS {
+      py = 100.0
+      enterArea(NF[node], 10.0)
+      flash("\${ANAME[area]}")
+    }
+  }
+  if mode == 6 {
+    // talking: Space for the next line; the last line may come with a gift
+    msgv = DLG[talkL]
+    if pS {
+      if talkL < PL[talkN] { talkL += 1 } else {
+        if PGIFT[talkN] == 1 && bit(nm, talkN - NI[area]) {
+          give(0, 1)
+          flash("YOU GOT A PIEROGI.")
+        }
+        if PGIFT[talkN] == 2 && bit(nm, talkN - NI[area]) {
+          give(1, 1)
+          flash("YOU GOT A CIGARETTE.")
+        }
+        if PGIFT[talkN] > 0 && bit(nm, talkN - NI[area]) {
+          nm = nm - P2[talkN - NI[area]]
+          tune(1.5, 1.68, 2.0)
+          save()
+        }
+        mode = 1
+        px = max(px - 14.0, 0.0)
       }
     }
   }
@@ -605,103 +888,201 @@ mod step() {
     if ba2 >= 0 {
       if bit(boss, ba2) == false { px = min(px, BX[ba2] - 14.0) }
     }
-    if px > ${W - 13}.0 && area < ${NA - 1} { enterArea(area + 1, 2.0) }
-    if px < 0.0 && area > 0 { enterArea(area - 1, ${W - 15}.0) }
+    if area == ${BLOCK_AREA} && bit(boss, 3) == false {
+      px = min(px, ${BLX - 14}.0)
+      if px >= ${BLX - 15}.0 && py + 16.0 > ${BLY}.0 && py < ${BLY + 16}.0 {
+        if have(2) > 0 { flash("THE MAN: I WILL MOVE FOR NOTHING. (THE KETCHUP IN YOUR ITEMS FEELS HEAVY. Q.)") } else { flash("THE MAN: I WILL MOVE FOR NOTHING. NOTHING EXCEPT, HYPOTHETICALLY, CONDIMENTS.") }
+        px = px - 4.0
+      }
+      if py + 16.0 <= ${BLY}.0 || py >= ${BLY + 16}.0 { px = min(px, ${BLX - 14}.0) }
+    }
+    // walking off the edges: the next room of this place, or out to the map (the last room opens the next place)
+    if px > ${W - 13}.0 {
+      if area < NL[node] { enterArea(area + 1, 2.0) } else {
+        if node == ${NN - 1} {
+          px = ${W - 14}.0
+        } else {
+          unl = max(unl, node + 2)
+          toMap()
+        }
+      }
+    }
+    if mode == 1 && px < 0.0 {
+      if area > NF[node] { enterArea(area - 1, ${W - 15}.0) } else { toMap() }
+    }
     px = min(max(px, 0.0), ${W - 13}.0)
-    if px != opx || py != opy {
+    if mode == 1 && (px != opx || py != opy) {
       markSpan(opy, 16)
       markSpan(py, 16)
       opx = px
       opy = py
     }
     // bumping into things
-    for k in GI[area]..GI[area + 1] {
-      if mode == 1 && bit(gm, k - GI[area]) && px + 12.0 > GX[k] && px < GX[k] + 10.0 && py + 16.0 > GY[k] + 5.0 && py < GY[k] + 20.0 { startBattle(0, k - GI[area]) }
-    }
-    if mode == 1 && ba2 >= 0 {
-      if bit(boss, ba2) == false && px + 13.0 >= BX[ba2] - 1.0 && py + 16.0 > BY[ba2] && py < BY[ba2] + 28.0 { startBattle(ba2 + 1, 0) }
-    }
-    for k in II[area]..II[area + 1] {
-      if mode == 1 && bit(im, k - II[area]) && px + 12.0 > IX[k] && px < IX[k] + 8.0 && py + 16.0 > IY[k] && py < IY[k] + 4.0 {
-        im = im - P2[k - II[area]]
-        markSpan(IY[k], 4)
-        if IK[k] == 0 {
-          pie += 1
-          flash("YOU FIND A PIEROGI. IT IS STILL WARM.")
-        } else {
-          cig += 1
-          flash("YOU FIND A CIGARETTE. ZELDA WOULD APPROVE.")
-        }
-        tune(1.5, 1.68, 2.0)
-        save()
+    if mode == 1 {
+      for k in GI[area]..GI[area + 1] {
+        if mode == 1 && bit(gm, k - GI[area]) && px + 12.0 > GX[k] && px < GX[k] + 10.0 && py + 16.0 > GY[k] + 5.0 && py < GY[k] + 20.0 { startBattle(0, k - GI[area]) }
       }
     }
-    if mode == 1 && UX[area] >= 0 {
-      if bit(unc, area) == false && px + 12.0 > UX[area] && px < UX[area] + 14.0 && py + 16.0 > UY[area] && py < UY[area] + 18.0 {
-        unc = unc + P2[area]
-        markSpan(UY[area], 18)
-        let n = countUncles()
-        flash("AN UNCLE OF TRUTH IS FREE! (\${n}/5) HE NODS SOLEMNLY.")
-        tune(1.5, 2.0, 2.5)
-        save()
-        if n == 5 && bit(boss, 2) {
-          won = true
-          mode = 3
-          titlev = "ALL 5 UNCLES OF TRUTH ARE FREE"
-          logv = "NEO SADDAM IS NO MORE. THE UNCLES BUY YOU PIEROGI. SPACE TO WALK ON."
-          markAll()
+    if mode == 1 && ba2 >= 0 {
+      if bit(boss, ba2) == false && px + 13.0 >= BX[ba2] - 1.0 && py + 16.0 > BY[ba2] && py < BY[ba2] + BH[ba2] { startBattle(ba2 + 1, 0) }
+    }
+    if mode == 1 {
+      for k in NI[area]..NI[area + 1] {
+        if mode == 1 && px + 12.0 > PX[k] && px < PX[k] + 10.0 && py + 16.0 > PY[k] && py < PY[k] + 16.0 {
+          mode = 6
+          talkN = k
+          talkL = PF[k]
+        }
+      }
+    }
+    if mode == 1 {
+      for k in II[area]..II[area + 1] {
+        if bit(im, k - II[area]) && px + 12.0 > IX[k] && px < IX[k] + 8.0 && py + 16.0 > IY[k] && py < IY[k] + 4.0 {
+          im = im - P2[k - II[area]]
+          markSpan(IY[k], 4)
+          if IK[k] == 0 {
+            give(0, 1)
+            flash("YOU FIND A PIEROGI. IT IS STILL WARM.")
+          }
+          if IK[k] == 1 {
+            give(1, 1)
+            flash("YOU FIND A CIGARETTE. ZELDA WOULD APPROVE.")
+          }
+          if IK[k] == 2 {
+            give(2, 1)
+            markSpan(IY[k], 7)
+            flash("YOU FIND KETCHUP. SOMEWHERE IN ITALY, A MAN SHUDDERS.")
+          }
+          tune(1.5, 1.68, 2.0)
+          save()
         }
       }
     }
   }
+  if mode == 8 {
+    msgv = EAT[ecs]
+    hudv = ""
+    if ecs == 2 && melPos == 0 { scream(48) }
+    if ecs == 4 && melPos == 0 { scream(60) }
+    if now >= tNext {
+      ecs += 1
+      melPos = 0
+      mel.resize(0, 0.0)
+      if ecs >= ${EATSCENE.length} {
+        boss = boss + 8
+        mode = 1
+        markSpan(${BLY}.0, 16)
+        save()
+        flash("THE PATH IS CLEAR.")
+      } else { tNext = now + EATT[ecs] }
+    }
+  }
+  if mode == 7 {
+    listItems()
+    if pU || pL { icur = max(icur - 1, 0) }
+    if pD || pR { icur = min(icur + 1, max(ilist.length() - 1, 0)) }
+    if ilist.length() > 0 { hudv = "ITEMS   W/S PICK   SPACE USE   Q CLOSE      " .. IDESC[ilist.get(icur)] } else { hudv = "ITEMS   Q CLOSE" }
+    msgv = listText()
+    if now < flashUntil { msgv = logv }
+    if pS && ilist.length() > 0 {
+      useItem(ilist.get(icur), false)
+      if mode == 7 { flash(logv) }
+    }
+    if pQ && mode == 7 { mode = invFrom }
+  } else {
+    if pQ && (mode == 1 || mode == 5) {
+      invFrom = mode
+      mode = 7
+    }
+  }
   if mode == 2 {
     if phase == 0 {
-      if pU { cur = (cur + 3) % 4 }
-      if pD { cur = (cur + 1) % 4 }
+      if pU || pL { cur = (cur + 2) % 3 }
+      if pD || pR { cur = (cur + 1) % 3 }
       if pS { act(cur) }
     } else {
-      if phase == 1 && now >= tNext { enemyTurn() }
-      if phase == 2 && now >= tNext { phase = 0 }
-      if phase == 3 && now >= tNext {
-        flash(logv)
-        endBattle()
+      if phase == 6 {
+        // the item list in battle: W/S pick, Space use (then the enemy's turn), Q back
+        listItems()
+        if pU || pL { icur = max(icur - 1, 0) }
+        if pD || pR { icur = min(icur + 1, max(ilist.length() - 1, 0)) }
+        if pQ { phase = 0 }
+        if pS {
+          if ilist.length() > 0 {
+            useItem(ilist.get(icur), true)
+            phase = 1
+            tNext = now + 1.0
+          } else { phase = 0 }
+        }
+      }
+      if phase == 4 {
+        // timed hit: the window is the 0.3 s after the wind-up
+        if now >= tNext { logv = "! ! !  SPACE NOW !" }
+        if pS && now >= tNext && now < tNext + 0.3 { nice = true }
+        if nice || now >= tNext + 0.3 { resolveHit() }
+      } else {
+        if phase == 1 && now >= tNext {
+          phase = 5
+          tNext = now + 0.35
+          logv = "\${ENAME[eKind]} SWINGS!  SPACE TO BLOCK!"
+        } else {
+          if phase == 5 {
+            if pS { enemyHit(true) } else { if now >= tNext { enemyHit(false) } }
+          } else {
+            if phase == 2 && now >= tNext { phase = 0 }
+            if phase == 3 && now >= tNext {
+              if eKind == 3 {
+                won = true
+                mode = 3
+                titlev = "THE BRONX IS SAFE. YOU OPEN A CBD STORE ON THE GRAND CONCOURSE."
+                logv = "THE END. RENDERMAN INDEPENDENT SOFTWARE COMPANY ENTERTAINMENT CLAUDE LLC THANKS YOU."
+                wipeAll()
+              } else {
+                flash(logv)
+                endBattle()
+              }
+            }
+          }
+        }
       }
     }
   }
   if mode == 3 && pS {
     if won {
-      mode = 1
       titlev = ""
-      markAll()
+      toMap()
     } else {
       load()
       hp = hpMax()
       titlev = ""
-      enterArea(area, 10.0)
+      toMap()
       flash("YOU WAKE UP AT YOUR LAST SAVE, SMELLING OF PIEROGI.")
     }
   }
   // text lines
-  let nu = countUncles()
   if mode == 2 {
     hudv = "DANIEL LV\${lv} HP \${hp}/\${hpMax()}     \${ENAME[eKind]} HP \${max(eHP, 0)}/\${eMax}"
     if phase == 0 {
       msgv = ""
-      for k in 0..4 {
-        var lab: string = ""
-        lab = MENU[k]
-        if k == 1 { lab = "PIEROGI \${pie}" }
-        if k == 2 { lab = "SMOKE \${cig}" }
-        if k == cur { msgv = msgv .. "> " .. lab .. "   " } else { msgv = msgv .. "  " .. lab .. "   " }
+      for k in 0..3 {
+        if k == cur { msgv = msgv .. "> " .. MENU[k] .. "     " } else { msgv = msgv .. "  " .. MENU[k] .. "     " }
       }
-    } else { msgv = logv }
+    } else {
+      if phase == 6 { msgv = listText() .. "   (Q BACK)" } else { msgv = logv }
+    }
   }
   if mode == 1 {
-    hudv = "\${ANAME[area]}  LV\${lv} HP \${hp}/\${hpMax()} XP \${xp}/\${lv * 12}  PIEROGI \${pie} CIGS \${cig}  UNCLES \${nu}/5"
-    if now < flashUntil { msgv = logv } else { msgv = "WASD walk   bump a goon to fight   free the caged uncles" }
+    hudv = "\${ANAME[area]}   LV\${lv} HP \${hp}/\${hpMax()} XP \${xp}/\${lv * 12}   ITEMS: Q"
+    if now < flashUntil { msgv = logv } else { msgv = "WASD walk  Q inventory  bump a guy to talk, a goon to fight  walk off the edge for the map" }
   }
+  if mode == 6 { hudv = "\${ANAME[area]}   SPACE: NEXT" }
+  if mode == 5 {
+    hudv = "WORLD MAP   LV\${lv} HP \${hp}/\${hpMax()}   ITEMS: Q"
+    if now < flashUntil { msgv = logv } else { msgv = "A/D DRIVE THE TINY CAR   Q INVENTORY   SPACE: GO TO \${NNAME[node]}" }
+  }
+  if mode == 4 { hudv = "SPACE: NEXT" }
   if mode == 3 {
-    hudv = "LV\${lv}  UNCLES \${nu}/5"
+    hudv = "LV\${lv}"
     msgv = logv
   }
 }
@@ -722,6 +1103,11 @@ ${strips.map(k => `    st${k} = ""\n    pb${k} = ""`).join('\n')}
   }
 }
 mod flush() {
+  // the wipe: 20 more rows a tick until the whole screen is redrawn
+  if wipe < ${H} {
+    for k in 0..20 { mark(wipe + k) }
+    wipe += 20
+  }
   for j in 0..dl.length() {
     let r = dl.get(j)
     dfl[r] = 0
@@ -748,12 +1134,16 @@ ${strips.map(k => `  PrintToConsole("dvrow|${k}|" .. st${k})`).join('\n')}
 on ChatCommand("dvsit", "debug: play as if seated (toggle)") -> (ctrl, args) {
   forced = forced == false
 }
-on ChatCommand("dvkey", "debug: hold w a s d space new for 3 ticks") -> (ctrl, args) {
+on ChatCommand("dvkey", "debug: hold w a s d space for 3 ticks") -> (ctrl, args) {
   dk = args
   dkN = 3
 }
 on ChatCommand("dvstate", "debug: print the game state") -> (ctrl, args) {
-  PrintToConsole("dvstate|mode \${mode}|area \${area}|x \${px}|y \${py}|lv \${lv}|xp \${xp}|hp \${hp}|unc \${unc}|boss \${boss}|pie \${pie}|cig \${cig}|gm \${gm}|phase \${phase}|e \${eHP}")
+  PrintToConsole("dvstate|mode \${mode}|area \${area}|node \${node}|unl \${unl}|cs \${cs}|x \${px}|y \${py}|lv \${lv}|xp \${xp}|hp \${hp}|boss \${boss}|inv \${inv.get(0)} \${inv.get(1)} \${inv.get(2)}|gm \${gm}|phase \${phase}|e \${eHP}")
+}
+on ChatCommand("dvgoto", "debug: unlock all and go to the map") -> (ctrl, args) {
+  unl = ${NN}
+  toMap()
 }
 ` : ''}on tick {
   if seated || forced {
@@ -762,13 +1152,15 @@ on ChatCommand("dvstate", "debug: print the game state") -> (ctrl, args) {
       rows.resize(${H}, "")
       dfl.resize(${H}, 0)
       sdf.resize(${NS}, 0)
+      inv.resize(${ITEMS.length}, 0)
       mode = 0
       area = 0
+      unl = 0
       hasSave = false
       if seated { peekSave() }
       introUntil = ServerUptime() + 3.5
       lastT = ServerUptime()
-      markAll()
+      wipeAll()
     }
     step()
     flush()
