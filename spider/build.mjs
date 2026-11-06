@@ -18,9 +18,11 @@ import { bundle } from '../tools/wsbundle.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MAP_OWNER = { id: OWNER.id, name: OWNER.name, display_name: OWNER.display };
 const L = 130, H = 100, R = 250, A1 = 50;        // segment length (owner's leg), body height, foot radius, seg 1 pitch
-const STEP = 55, SETTLE = 15, LEAD = 0.3, SWING = 0.28, LIFT = 45;
-const SPEED = 140, ACC = 220, TURN = 90, FOLLOW_GAP = 200, GOTO_GAP = 20;
-const DROPS = 5;                                  // sweeps of 100 down from body z + 150
+const STEP = 50, SETTLE = 15, LEAD = 0.2, SWING = 0.15, LIFT = 35;
+// erratic (owner 'faster and more spiratic'): heading wobbles +-WOB deg, and it darts then freezes (two-sine burst gate)
+const WOB = 35;
+const SPEED = 330, ACC = 900, TURN = 240, FOLLOW_GAP = 200, GOTO_GAP = 20;
+const DROPS = 9, TOP = 350;                        // sweeps of 100 down from body z + TOP: feet find roofs/ledges up to TOP above the body and climb (owner: 'crawl up things')
 const UP = 300;                                   // the chip floats UP above the ground it was loaded for (at ground it overlaps the floor)
 
 // ---- compiler (same as portal/build.mjs)
@@ -37,7 +39,7 @@ function compile(src, name, prefabs = {}) {
   return new Uint8Array(compileWs(src, name, '{}', JSON.stringify(reg)));
 }
 const lib = await import(pathToFileURL(path.join(here, '..', 'tools', 'brs4', 'dist.mjs')).href);
-const OFF = { player: false, weapon: false, interaction: false, physics: false, tool: false };
+const SOLID = { player: true, weapon: true, interaction: true, physics: true, tool: true }; // owner: 'make it collidable' (Sweeps ignore the parts)
 
 // ---- plain prefabs (bricks on the world grid; SpawnPrefab makes each one its own moving grid, origin = 0,0,0)
 function prefab(name, bricks, description) {
@@ -48,7 +50,7 @@ function prefab(name, bricks, description) {
   const w = new lib.World();
   const O = w.addOwner(MAP_OWNER);
   for (const [size, position, color, more = {}] of bricks)
-    w.addBrick({ asset: 'PB_DefaultMicroBrick', size, position, color, owner_index: O, collision: OFF, ...more });
+    w.addBrick({ asset: 'PB_DefaultMicroBrick', size, position, color, owner_index: O, collision: SOLID, ...more, ...(more.asset && !more.asset.startsWith('PB_') ? { size: [0, 0, 0] } : {}) });
   w.makePrefab({});
   const out = w.toBrz({ bundle: { description } });
   fs.writeFileSync(path.join(here, `${name}.brz`), out);
@@ -57,20 +59,20 @@ function prefab(name, bricks, description) {
 const BLACK = [0, 0, 0], GREY = [86, 86, 86], DARK = [34, 34, 36], GLOW = { material: 'BMC_Glow', material_intensity: 3 };
 // leg segment: pivot (joint) at the origin, bone along +x to the next joint at x = L (owner's bar: 120 long, 10 thick)
 const seg = prefab('seg', [
-  [[6, 7, 7], [0, 0, 0], GREY],
+  [[5, 5, 5], [0, 0, 0], GREY, { asset: 'B_Joint_Bearing', direction: 2, rotation: 0 }], // bearing at the joint (owner: 'make it have bearings'), axis = hinge (local y)
   [[60, 5, 5], [66, 0, 0], BLACK],
 ], 'spider leg segment');
-// body: faces +x, +y = its right; hips at x 45..-45, y +-40, z 0
-const body = prefab('body', [
-  [[60, 45, 18], [0, 0, 0], DARK],                 // thorax
-  [[50, 38, 4], [0, 0, 22], GREY],                 // top plate
-  [[16, 30, 14], [76, 0, 4], BLACK],               // sensor head
-  [[1, 6, 3], [93, 13, 8], [255, 20, 10], GLOW],   // eyes
-  [[1, 6, 3], [93, -13, 8], [255, 20, 10], GLOW],
-  [[1, 3, 2], [93, 5, -2], [255, 20, 10], GLOW],
-  [[1, 3, 2], [93, -5, -2], [255, 20, 10], GLOW],
-  [[50, 40, 30], [-110, 0, 12], BLACK],            // abdomen
-  [[30, 8, 2], [-110, 0, 44], [200, 25, 20]],      // red stripe on top
+// body: faces +x, +y = its right; hips at x 24..-24, y +-20, z 0
+const body = prefab('body', [                    // half size (owner 2026-11-05: 'its body smaller')
+  [[30, 24, 10], [0, 0, 0], DARK],                 // thorax
+  [[26, 20, 2], [0, 0, 12], GREY],                 // top plate
+  [[9, 16, 8], [39, 0, 2], BLACK],                 // sensor head
+  [[1, 3, 2], [49, 7, 5], [255, 20, 10], GLOW],    // eyes
+  [[1, 3, 2], [49, -7, 5], [255, 20, 10], GLOW],
+  [[1, 2, 1], [49, 3, -1], [255, 20, 10], GLOW],
+  [[1, 2, 1], [49, -3, -1], [255, 20, 10], GLOW],
+  [[26, 22, 16], [-56, 0, 6], BLACK],              // abdomen
+  [[16, 4, 1], [-56, 0, 23], [200, 25, 20]],       // red stripe on top
 ], 'spider body');
 
 // ---- brain source (one block per leg, unrolled: no array reads after writes)
@@ -78,7 +80,7 @@ const f1 = v => (Number.isInteger(v) ? v.toFixed(1) : String(+v.toFixed(4)));
 const ANG = [40, 75, 105, 140];
 const LEGS = [...Array(8).keys()].map(i => {
   const side = i < 4 ? 1 : -1, j = i % 4, th = ANG[j] * Math.PI / 180;
-  return { i, side, j, hip: [45 - 30 * j, 40 * side, 0], home: [R * Math.cos(th), side * R * Math.sin(th)] };
+  return { i, side, j, hip: [24 - 16 * j, 20 * side, 0], home: [R * Math.cos(th), side * R * Math.sin(th)] };
 });
 const nb = i => { const s = i < 4 ? 0 : 4, j = i % 4; return [j > 0 && s + j - 1, j < 3 && s + j + 1, (i + 4) % 8].filter(x => x !== false); };
 const wrap = e => `(${e} - 360.0 * floor((${e} + 180.0) / 360.0))`;
@@ -90,7 +92,7 @@ const legBlock = ({ i, hip, home }) => {
   const drop = k => k === DROPS
     ? `${'  '.repeat(k + 2)}b${i} = Vec(gx${i}, gy${i}, pz - ${f1(H)})
 ${'  '.repeat(k + 2)}misses += 1`
-    : `${'  '.repeat(k + 2)}let d${i}_${k} = Sweep(Vec(gx${i}, gy${i}, pz + ${f1(150 - 100 * k)}), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    : `${'  '.repeat(k + 2)}let d${i}_${k} = Sweep(Vec(gx${i}, gy${i}, pz + ${f1(TOP - 100 * k)}), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
 ${'  '.repeat(k + 2)}if d${i}_${k}.Hit {
 ${'  '.repeat(k + 3)}b${i} = d${i}_${k}.HitLocation
 ${'  '.repeat(k + 3)}hits += 1
@@ -232,10 +234,13 @@ ${LEGS.map(({ i }) => `    let A${i} = a${i}\n    let B${i} = b${i}\n    let T${
     let dist = sqrt(dx * dx + dy * dy)
     let gap = if M == 1 then ${f1(FOLLOW_GAP)} else ${f1(GOTO_GAP)}
     let active = M != 0 && MagnitudeSq(tgt) > 1.0 && dist > gap
-    let err = ${wrap('(Rad2Deg(atan2(dy, dx)) - Y)')}
+    let u = ServerUptime()
+    let wob = ${f1(WOB)} * sin(u * 3.1) * sin(u * 1.3 + 1.0)
+    let burst = if sin(u * 2.3) + sin(u * 5.1 + 2.0) > -0.4 then 1.0 else 0.0
+    let err = ${wrap('(Rad2Deg(atan2(dy, dx)) + wob - Y)')}
     let turn = if active then clamp(err, 0.0 - ${f1(TURN)} * dt, ${f1(TURN)} * dt) else 0.0
     let y2 = ${wrap('(Y + turn)')}
-    let vt = if active then ${f1(SPEED)} * clamp(1.0 - abs(err) / 70.0, 0.0, 1.0) * clamp((dist - gap) / 120.0, 0.25, 1.0) else 0.0
+    let vt = if active then burst * ${f1(SPEED)} * clamp(1.0 - abs(err) / 70.0, 0.0, 1.0) * clamp((dist - gap) / 120.0, 0.25, 1.0) else 0.0
     let v2 = V + clamp(vt - V, 0.0 - ${f1(ACC)} * dt, ${f1(ACC)} * dt)
     let c = cos(Deg2Rad(y2))
     let s = sin(Deg2Rad(y2))
@@ -245,7 +250,7 @@ ${LEGS.map(({ i }) => `    let A${i} = a${i}\n    let B${i} = b${i}\n    let T${
     let py = P.y + vy * dt
     let gz = (${LEGS.map(({ i }) => `B${i}.z`).join(' + ')}) / 8.0
     let pz = P.z
-    let pz2 = P.z + (gz + ${f1(H)} - P.z) * min(1.0, 3.0 * dt)
+    let pz2 = P.z + (gz + ${f1(H)} - P.z) * min(1.0, 4.0 * dt)
     if M == 2 && !active {
       mode = 0
     }

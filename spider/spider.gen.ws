@@ -269,11 +269,14 @@ on Clock(interval = 0.0) {
     let dist = sqrt(dx * dx + dy * dy)
     let gap = if M == 1 then 200.0 else 20.0
     let active = M != 0 && MagnitudeSq(tgt) > 1.0 && dist > gap
-    let err = ((Rad2Deg(atan2(dy, dx)) - Y) - 360.0 * floor(((Rad2Deg(atan2(dy, dx)) - Y) + 180.0) / 360.0))
-    let turn = if active then clamp(err, 0.0 - 90.0 * dt, 90.0 * dt) else 0.0
+    let u = ServerUptime()
+    let wob = 35.0 * sin(u * 3.1) * sin(u * 1.3 + 1.0)
+    let burst = if sin(u * 2.3) + sin(u * 5.1 + 2.0) > -0.4 then 1.0 else 0.0
+    let err = ((Rad2Deg(atan2(dy, dx)) + wob - Y) - 360.0 * floor(((Rad2Deg(atan2(dy, dx)) + wob - Y) + 180.0) / 360.0))
+    let turn = if active then clamp(err, 0.0 - 240.0 * dt, 240.0 * dt) else 0.0
     let y2 = ((Y + turn) - 360.0 * floor(((Y + turn) + 180.0) / 360.0))
-    let vt = if active then 140.0 * clamp(1.0 - abs(err) / 70.0, 0.0, 1.0) * clamp((dist - gap) / 120.0, 0.25, 1.0) else 0.0
-    let v2 = V + clamp(vt - V, 0.0 - 220.0 * dt, 220.0 * dt)
+    let vt = if active then burst * 330.0 * clamp(1.0 - abs(err) / 70.0, 0.0, 1.0) * clamp((dist - gap) / 120.0, 0.25, 1.0) else 0.0
+    let v2 = V + clamp(vt - V, 0.0 - 900.0 * dt, 900.0 * dt)
     let c = cos(Deg2Rad(y2))
     let s = sin(Deg2Rad(y2))
     let vx = c * v2
@@ -282,7 +285,7 @@ on Clock(interval = 0.0) {
     let py = P.y + vy * dt
     let gz = (B0.z + B1.z + B2.z + B3.z + B4.z + B5.z + B6.z + B7.z) / 8.0
     let pz = P.z
-    let pz2 = P.z + (gz + 100.0 - P.z) * min(1.0, 3.0 * dt)
+    let pz2 = P.z + (gz + 100.0 - P.z) * min(1.0, 4.0 * dt)
     if M == 2 && !active {
       mode = 0
     }
@@ -292,47 +295,71 @@ on Clock(interval = 0.0) {
     bodyE.SetLocationRotation(Vec(px, py, pz2), Rotation(0.0, y2, 0.0))
 
   // ---- leg 0
-  let gx0 = (px + c * 191.5111 - s * 160.6969) + vx * 0.3
-  let gy0 = (py + s * 191.5111 + c * 160.6969) + vy * 0.3
+  let gx0 = (px + c * 191.5111 - s * 160.6969) + vx * 0.2
+  let gy0 = (py + s * 191.5111 + c * 160.6969) + vy * 0.2
   let lag0 = sqrt((gx0 - B0.x) * (gx0 - B0.x) + (gy0 - B0.y) * (gy0 - B0.y))
-  let want0 = T0 >= 1.0 && lag0 > (if v2 > 5.0 then 55.0 else 15.0)
+  let want0 = T0 >= 1.0 && lag0 > (if v2 > 5.0 then 50.0 else 15.0)
   let lift0 = want0 && T1 >= 1.0 && T4 >= 1.0
-  let nt0 = min(T0 + dt / 0.28, 1.0)
+  let nt0 = min(T0 + dt / 0.15, 1.0)
   let ez0 = nt0 * nt0 * (3.0 - 2.0 * nt0)
-  let F0 = if T0 < 1.0 then lerp(A0, B0, ez0) + Vec(0.0, 0.0, 45.0 * sin(3.14159265 * nt0)) else B0
+  let F0 = if T0 < 1.0 then lerp(A0, B0, ez0) + Vec(0.0, 0.0, 35.0 * sin(3.14159265 * nt0)) else B0
   if T0 < 1.0 {
     t0 = nt0
   } else {
     if lift0 {
       a0 = B0
       t0 = 0.0
-    let d0_0 = Sweep(Vec(gx0, gy0, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    let d0_0 = Sweep(Vec(gx0, gy0, pz + 350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
     if d0_0.Hit {
       b0 = d0_0.HitLocation
       hits += 1
     } else {
-      let d0_1 = Sweep(Vec(gx0, gy0, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+      let d0_1 = Sweep(Vec(gx0, gy0, pz + 250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
       if d0_1.Hit {
         b0 = d0_1.HitLocation
         hits += 1
       } else {
-        let d0_2 = Sweep(Vec(gx0, gy0, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+        let d0_2 = Sweep(Vec(gx0, gy0, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
         if d0_2.Hit {
           b0 = d0_2.HitLocation
           hits += 1
         } else {
-          let d0_3 = Sweep(Vec(gx0, gy0, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+          let d0_3 = Sweep(Vec(gx0, gy0, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
           if d0_3.Hit {
             b0 = d0_3.HitLocation
             hits += 1
           } else {
-            let d0_4 = Sweep(Vec(gx0, gy0, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+            let d0_4 = Sweep(Vec(gx0, gy0, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
             if d0_4.Hit {
               b0 = d0_4.HitLocation
               hits += 1
             } else {
-              b0 = Vec(gx0, gy0, pz - 100.0)
-              misses += 1
+              let d0_5 = Sweep(Vec(gx0, gy0, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+              if d0_5.Hit {
+                b0 = d0_5.HitLocation
+                hits += 1
+              } else {
+                let d0_6 = Sweep(Vec(gx0, gy0, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                if d0_6.Hit {
+                  b0 = d0_6.HitLocation
+                  hits += 1
+                } else {
+                  let d0_7 = Sweep(Vec(gx0, gy0, pz + -350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                  if d0_7.Hit {
+                    b0 = d0_7.HitLocation
+                    hits += 1
+                  } else {
+                    let d0_8 = Sweep(Vec(gx0, gy0, pz + -450.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                    if d0_8.Hit {
+                      b0 = d0_8.HitLocation
+                      hits += 1
+                    } else {
+                      b0 = Vec(gx0, gy0, pz - 100.0)
+                      misses += 1
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -340,8 +367,8 @@ on Clock(interval = 0.0) {
     }
     }
   }
-  let hpx0 = (px + c * 45.0 - s * 40.0)
-  let hpy0 = (py + s * 45.0 + c * 40.0)
+  let hpx0 = (px + c * 24.0 - s * 20.0)
+  let hpy0 = (py + s * 24.0 + c * 20.0)
   let hpz0 = pz2
   let wx0 = F0.x - hpx0
   let wy0 = F0.y - hpy0
@@ -363,47 +390,71 @@ on Clock(interval = 0.0) {
   e2.SetLocationRotation(k20, Rotation(Rad2Deg(atan2(sin(a30), abs(cos(a30)))), if cos(a30) >= 0.0 then ly0 else ((ly0 + 180.0) - 360.0 * floor(((ly0 + 180.0) + 180.0) / 360.0)), 0.0))
 
   // ---- leg 1
-  let gx1 = (px + c * 64.7048 - s * 241.4815) + vx * 0.3
-  let gy1 = (py + s * 64.7048 + c * 241.4815) + vy * 0.3
+  let gx1 = (px + c * 64.7048 - s * 241.4815) + vx * 0.2
+  let gy1 = (py + s * 64.7048 + c * 241.4815) + vy * 0.2
   let lag1 = sqrt((gx1 - B1.x) * (gx1 - B1.x) + (gy1 - B1.y) * (gy1 - B1.y))
-  let want1 = T1 >= 1.0 && lag1 > (if v2 > 5.0 then 55.0 else 15.0)
+  let want1 = T1 >= 1.0 && lag1 > (if v2 > 5.0 then 50.0 else 15.0)
   let lift1 = want1 && T0 >= 1.0 && T2 >= 1.0 && T5 >= 1.0 && !lift0
-  let nt1 = min(T1 + dt / 0.28, 1.0)
+  let nt1 = min(T1 + dt / 0.15, 1.0)
   let ez1 = nt1 * nt1 * (3.0 - 2.0 * nt1)
-  let F1 = if T1 < 1.0 then lerp(A1, B1, ez1) + Vec(0.0, 0.0, 45.0 * sin(3.14159265 * nt1)) else B1
+  let F1 = if T1 < 1.0 then lerp(A1, B1, ez1) + Vec(0.0, 0.0, 35.0 * sin(3.14159265 * nt1)) else B1
   if T1 < 1.0 {
     t1 = nt1
   } else {
     if lift1 {
       a1 = B1
       t1 = 0.0
-    let d1_0 = Sweep(Vec(gx1, gy1, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    let d1_0 = Sweep(Vec(gx1, gy1, pz + 350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
     if d1_0.Hit {
       b1 = d1_0.HitLocation
       hits += 1
     } else {
-      let d1_1 = Sweep(Vec(gx1, gy1, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+      let d1_1 = Sweep(Vec(gx1, gy1, pz + 250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
       if d1_1.Hit {
         b1 = d1_1.HitLocation
         hits += 1
       } else {
-        let d1_2 = Sweep(Vec(gx1, gy1, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+        let d1_2 = Sweep(Vec(gx1, gy1, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
         if d1_2.Hit {
           b1 = d1_2.HitLocation
           hits += 1
         } else {
-          let d1_3 = Sweep(Vec(gx1, gy1, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+          let d1_3 = Sweep(Vec(gx1, gy1, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
           if d1_3.Hit {
             b1 = d1_3.HitLocation
             hits += 1
           } else {
-            let d1_4 = Sweep(Vec(gx1, gy1, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+            let d1_4 = Sweep(Vec(gx1, gy1, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
             if d1_4.Hit {
               b1 = d1_4.HitLocation
               hits += 1
             } else {
-              b1 = Vec(gx1, gy1, pz - 100.0)
-              misses += 1
+              let d1_5 = Sweep(Vec(gx1, gy1, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+              if d1_5.Hit {
+                b1 = d1_5.HitLocation
+                hits += 1
+              } else {
+                let d1_6 = Sweep(Vec(gx1, gy1, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                if d1_6.Hit {
+                  b1 = d1_6.HitLocation
+                  hits += 1
+                } else {
+                  let d1_7 = Sweep(Vec(gx1, gy1, pz + -350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                  if d1_7.Hit {
+                    b1 = d1_7.HitLocation
+                    hits += 1
+                  } else {
+                    let d1_8 = Sweep(Vec(gx1, gy1, pz + -450.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                    if d1_8.Hit {
+                      b1 = d1_8.HitLocation
+                      hits += 1
+                    } else {
+                      b1 = Vec(gx1, gy1, pz - 100.0)
+                      misses += 1
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -411,8 +462,8 @@ on Clock(interval = 0.0) {
     }
     }
   }
-  let hpx1 = (px + c * 15.0 - s * 40.0)
-  let hpy1 = (py + s * 15.0 + c * 40.0)
+  let hpx1 = (px + c * 8.0 - s * 20.0)
+  let hpy1 = (py + s * 8.0 + c * 20.0)
   let hpz1 = pz2
   let wx1 = F1.x - hpx1
   let wy1 = F1.y - hpy1
@@ -434,47 +485,71 @@ on Clock(interval = 0.0) {
   e5.SetLocationRotation(k21, Rotation(Rad2Deg(atan2(sin(a31), abs(cos(a31)))), if cos(a31) >= 0.0 then ly1 else ((ly1 + 180.0) - 360.0 * floor(((ly1 + 180.0) + 180.0) / 360.0)), 0.0))
 
   // ---- leg 2
-  let gx2 = (px + c * -64.7048 - s * 241.4815) + vx * 0.3
-  let gy2 = (py + s * -64.7048 + c * 241.4815) + vy * 0.3
+  let gx2 = (px + c * -64.7048 - s * 241.4815) + vx * 0.2
+  let gy2 = (py + s * -64.7048 + c * 241.4815) + vy * 0.2
   let lag2 = sqrt((gx2 - B2.x) * (gx2 - B2.x) + (gy2 - B2.y) * (gy2 - B2.y))
-  let want2 = T2 >= 1.0 && lag2 > (if v2 > 5.0 then 55.0 else 15.0)
+  let want2 = T2 >= 1.0 && lag2 > (if v2 > 5.0 then 50.0 else 15.0)
   let lift2 = want2 && T1 >= 1.0 && T3 >= 1.0 && T6 >= 1.0 && !lift1
-  let nt2 = min(T2 + dt / 0.28, 1.0)
+  let nt2 = min(T2 + dt / 0.15, 1.0)
   let ez2 = nt2 * nt2 * (3.0 - 2.0 * nt2)
-  let F2 = if T2 < 1.0 then lerp(A2, B2, ez2) + Vec(0.0, 0.0, 45.0 * sin(3.14159265 * nt2)) else B2
+  let F2 = if T2 < 1.0 then lerp(A2, B2, ez2) + Vec(0.0, 0.0, 35.0 * sin(3.14159265 * nt2)) else B2
   if T2 < 1.0 {
     t2 = nt2
   } else {
     if lift2 {
       a2 = B2
       t2 = 0.0
-    let d2_0 = Sweep(Vec(gx2, gy2, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    let d2_0 = Sweep(Vec(gx2, gy2, pz + 350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
     if d2_0.Hit {
       b2 = d2_0.HitLocation
       hits += 1
     } else {
-      let d2_1 = Sweep(Vec(gx2, gy2, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+      let d2_1 = Sweep(Vec(gx2, gy2, pz + 250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
       if d2_1.Hit {
         b2 = d2_1.HitLocation
         hits += 1
       } else {
-        let d2_2 = Sweep(Vec(gx2, gy2, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+        let d2_2 = Sweep(Vec(gx2, gy2, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
         if d2_2.Hit {
           b2 = d2_2.HitLocation
           hits += 1
         } else {
-          let d2_3 = Sweep(Vec(gx2, gy2, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+          let d2_3 = Sweep(Vec(gx2, gy2, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
           if d2_3.Hit {
             b2 = d2_3.HitLocation
             hits += 1
           } else {
-            let d2_4 = Sweep(Vec(gx2, gy2, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+            let d2_4 = Sweep(Vec(gx2, gy2, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
             if d2_4.Hit {
               b2 = d2_4.HitLocation
               hits += 1
             } else {
-              b2 = Vec(gx2, gy2, pz - 100.0)
-              misses += 1
+              let d2_5 = Sweep(Vec(gx2, gy2, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+              if d2_5.Hit {
+                b2 = d2_5.HitLocation
+                hits += 1
+              } else {
+                let d2_6 = Sweep(Vec(gx2, gy2, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                if d2_6.Hit {
+                  b2 = d2_6.HitLocation
+                  hits += 1
+                } else {
+                  let d2_7 = Sweep(Vec(gx2, gy2, pz + -350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                  if d2_7.Hit {
+                    b2 = d2_7.HitLocation
+                    hits += 1
+                  } else {
+                    let d2_8 = Sweep(Vec(gx2, gy2, pz + -450.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                    if d2_8.Hit {
+                      b2 = d2_8.HitLocation
+                      hits += 1
+                    } else {
+                      b2 = Vec(gx2, gy2, pz - 100.0)
+                      misses += 1
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -482,8 +557,8 @@ on Clock(interval = 0.0) {
     }
     }
   }
-  let hpx2 = (px + c * -15.0 - s * 40.0)
-  let hpy2 = (py + s * -15.0 + c * 40.0)
+  let hpx2 = (px + c * -8.0 - s * 20.0)
+  let hpy2 = (py + s * -8.0 + c * 20.0)
   let hpz2 = pz2
   let wx2 = F2.x - hpx2
   let wy2 = F2.y - hpy2
@@ -505,47 +580,71 @@ on Clock(interval = 0.0) {
   e8.SetLocationRotation(k22, Rotation(Rad2Deg(atan2(sin(a32), abs(cos(a32)))), if cos(a32) >= 0.0 then ly2 else ((ly2 + 180.0) - 360.0 * floor(((ly2 + 180.0) + 180.0) / 360.0)), 0.0))
 
   // ---- leg 3
-  let gx3 = (px + c * -191.5111 - s * 160.6969) + vx * 0.3
-  let gy3 = (py + s * -191.5111 + c * 160.6969) + vy * 0.3
+  let gx3 = (px + c * -191.5111 - s * 160.6969) + vx * 0.2
+  let gy3 = (py + s * -191.5111 + c * 160.6969) + vy * 0.2
   let lag3 = sqrt((gx3 - B3.x) * (gx3 - B3.x) + (gy3 - B3.y) * (gy3 - B3.y))
-  let want3 = T3 >= 1.0 && lag3 > (if v2 > 5.0 then 55.0 else 15.0)
+  let want3 = T3 >= 1.0 && lag3 > (if v2 > 5.0 then 50.0 else 15.0)
   let lift3 = want3 && T2 >= 1.0 && T7 >= 1.0 && !lift2
-  let nt3 = min(T3 + dt / 0.28, 1.0)
+  let nt3 = min(T3 + dt / 0.15, 1.0)
   let ez3 = nt3 * nt3 * (3.0 - 2.0 * nt3)
-  let F3 = if T3 < 1.0 then lerp(A3, B3, ez3) + Vec(0.0, 0.0, 45.0 * sin(3.14159265 * nt3)) else B3
+  let F3 = if T3 < 1.0 then lerp(A3, B3, ez3) + Vec(0.0, 0.0, 35.0 * sin(3.14159265 * nt3)) else B3
   if T3 < 1.0 {
     t3 = nt3
   } else {
     if lift3 {
       a3 = B3
       t3 = 0.0
-    let d3_0 = Sweep(Vec(gx3, gy3, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    let d3_0 = Sweep(Vec(gx3, gy3, pz + 350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
     if d3_0.Hit {
       b3 = d3_0.HitLocation
       hits += 1
     } else {
-      let d3_1 = Sweep(Vec(gx3, gy3, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+      let d3_1 = Sweep(Vec(gx3, gy3, pz + 250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
       if d3_1.Hit {
         b3 = d3_1.HitLocation
         hits += 1
       } else {
-        let d3_2 = Sweep(Vec(gx3, gy3, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+        let d3_2 = Sweep(Vec(gx3, gy3, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
         if d3_2.Hit {
           b3 = d3_2.HitLocation
           hits += 1
         } else {
-          let d3_3 = Sweep(Vec(gx3, gy3, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+          let d3_3 = Sweep(Vec(gx3, gy3, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
           if d3_3.Hit {
             b3 = d3_3.HitLocation
             hits += 1
           } else {
-            let d3_4 = Sweep(Vec(gx3, gy3, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+            let d3_4 = Sweep(Vec(gx3, gy3, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
             if d3_4.Hit {
               b3 = d3_4.HitLocation
               hits += 1
             } else {
-              b3 = Vec(gx3, gy3, pz - 100.0)
-              misses += 1
+              let d3_5 = Sweep(Vec(gx3, gy3, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+              if d3_5.Hit {
+                b3 = d3_5.HitLocation
+                hits += 1
+              } else {
+                let d3_6 = Sweep(Vec(gx3, gy3, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                if d3_6.Hit {
+                  b3 = d3_6.HitLocation
+                  hits += 1
+                } else {
+                  let d3_7 = Sweep(Vec(gx3, gy3, pz + -350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                  if d3_7.Hit {
+                    b3 = d3_7.HitLocation
+                    hits += 1
+                  } else {
+                    let d3_8 = Sweep(Vec(gx3, gy3, pz + -450.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                    if d3_8.Hit {
+                      b3 = d3_8.HitLocation
+                      hits += 1
+                    } else {
+                      b3 = Vec(gx3, gy3, pz - 100.0)
+                      misses += 1
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -553,8 +652,8 @@ on Clock(interval = 0.0) {
     }
     }
   }
-  let hpx3 = (px + c * -45.0 - s * 40.0)
-  let hpy3 = (py + s * -45.0 + c * 40.0)
+  let hpx3 = (px + c * -24.0 - s * 20.0)
+  let hpy3 = (py + s * -24.0 + c * 20.0)
   let hpz3 = pz2
   let wx3 = F3.x - hpx3
   let wy3 = F3.y - hpy3
@@ -576,47 +675,71 @@ on Clock(interval = 0.0) {
   e11.SetLocationRotation(k23, Rotation(Rad2Deg(atan2(sin(a33), abs(cos(a33)))), if cos(a33) >= 0.0 then ly3 else ((ly3 + 180.0) - 360.0 * floor(((ly3 + 180.0) + 180.0) / 360.0)), 0.0))
 
   // ---- leg 4
-  let gx4 = (px + c * 191.5111 - s * -160.6969) + vx * 0.3
-  let gy4 = (py + s * 191.5111 + c * -160.6969) + vy * 0.3
+  let gx4 = (px + c * 191.5111 - s * -160.6969) + vx * 0.2
+  let gy4 = (py + s * 191.5111 + c * -160.6969) + vy * 0.2
   let lag4 = sqrt((gx4 - B4.x) * (gx4 - B4.x) + (gy4 - B4.y) * (gy4 - B4.y))
-  let want4 = T4 >= 1.0 && lag4 > (if v2 > 5.0 then 55.0 else 15.0)
+  let want4 = T4 >= 1.0 && lag4 > (if v2 > 5.0 then 50.0 else 15.0)
   let lift4 = want4 && T5 >= 1.0 && T0 >= 1.0 && !lift0
-  let nt4 = min(T4 + dt / 0.28, 1.0)
+  let nt4 = min(T4 + dt / 0.15, 1.0)
   let ez4 = nt4 * nt4 * (3.0 - 2.0 * nt4)
-  let F4 = if T4 < 1.0 then lerp(A4, B4, ez4) + Vec(0.0, 0.0, 45.0 * sin(3.14159265 * nt4)) else B4
+  let F4 = if T4 < 1.0 then lerp(A4, B4, ez4) + Vec(0.0, 0.0, 35.0 * sin(3.14159265 * nt4)) else B4
   if T4 < 1.0 {
     t4 = nt4
   } else {
     if lift4 {
       a4 = B4
       t4 = 0.0
-    let d4_0 = Sweep(Vec(gx4, gy4, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    let d4_0 = Sweep(Vec(gx4, gy4, pz + 350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
     if d4_0.Hit {
       b4 = d4_0.HitLocation
       hits += 1
     } else {
-      let d4_1 = Sweep(Vec(gx4, gy4, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+      let d4_1 = Sweep(Vec(gx4, gy4, pz + 250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
       if d4_1.Hit {
         b4 = d4_1.HitLocation
         hits += 1
       } else {
-        let d4_2 = Sweep(Vec(gx4, gy4, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+        let d4_2 = Sweep(Vec(gx4, gy4, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
         if d4_2.Hit {
           b4 = d4_2.HitLocation
           hits += 1
         } else {
-          let d4_3 = Sweep(Vec(gx4, gy4, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+          let d4_3 = Sweep(Vec(gx4, gy4, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
           if d4_3.Hit {
             b4 = d4_3.HitLocation
             hits += 1
           } else {
-            let d4_4 = Sweep(Vec(gx4, gy4, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+            let d4_4 = Sweep(Vec(gx4, gy4, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
             if d4_4.Hit {
               b4 = d4_4.HitLocation
               hits += 1
             } else {
-              b4 = Vec(gx4, gy4, pz - 100.0)
-              misses += 1
+              let d4_5 = Sweep(Vec(gx4, gy4, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+              if d4_5.Hit {
+                b4 = d4_5.HitLocation
+                hits += 1
+              } else {
+                let d4_6 = Sweep(Vec(gx4, gy4, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                if d4_6.Hit {
+                  b4 = d4_6.HitLocation
+                  hits += 1
+                } else {
+                  let d4_7 = Sweep(Vec(gx4, gy4, pz + -350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                  if d4_7.Hit {
+                    b4 = d4_7.HitLocation
+                    hits += 1
+                  } else {
+                    let d4_8 = Sweep(Vec(gx4, gy4, pz + -450.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                    if d4_8.Hit {
+                      b4 = d4_8.HitLocation
+                      hits += 1
+                    } else {
+                      b4 = Vec(gx4, gy4, pz - 100.0)
+                      misses += 1
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -624,8 +747,8 @@ on Clock(interval = 0.0) {
     }
     }
   }
-  let hpx4 = (px + c * 45.0 - s * -40.0)
-  let hpy4 = (py + s * 45.0 + c * -40.0)
+  let hpx4 = (px + c * 24.0 - s * -20.0)
+  let hpy4 = (py + s * 24.0 + c * -20.0)
   let hpz4 = pz2
   let wx4 = F4.x - hpx4
   let wy4 = F4.y - hpy4
@@ -647,47 +770,71 @@ on Clock(interval = 0.0) {
   e14.SetLocationRotation(k24, Rotation(Rad2Deg(atan2(sin(a34), abs(cos(a34)))), if cos(a34) >= 0.0 then ly4 else ((ly4 + 180.0) - 360.0 * floor(((ly4 + 180.0) + 180.0) / 360.0)), 0.0))
 
   // ---- leg 5
-  let gx5 = (px + c * 64.7048 - s * -241.4815) + vx * 0.3
-  let gy5 = (py + s * 64.7048 + c * -241.4815) + vy * 0.3
+  let gx5 = (px + c * 64.7048 - s * -241.4815) + vx * 0.2
+  let gy5 = (py + s * 64.7048 + c * -241.4815) + vy * 0.2
   let lag5 = sqrt((gx5 - B5.x) * (gx5 - B5.x) + (gy5 - B5.y) * (gy5 - B5.y))
-  let want5 = T5 >= 1.0 && lag5 > (if v2 > 5.0 then 55.0 else 15.0)
+  let want5 = T5 >= 1.0 && lag5 > (if v2 > 5.0 then 50.0 else 15.0)
   let lift5 = want5 && T4 >= 1.0 && T6 >= 1.0 && T1 >= 1.0 && !lift4 && !lift1
-  let nt5 = min(T5 + dt / 0.28, 1.0)
+  let nt5 = min(T5 + dt / 0.15, 1.0)
   let ez5 = nt5 * nt5 * (3.0 - 2.0 * nt5)
-  let F5 = if T5 < 1.0 then lerp(A5, B5, ez5) + Vec(0.0, 0.0, 45.0 * sin(3.14159265 * nt5)) else B5
+  let F5 = if T5 < 1.0 then lerp(A5, B5, ez5) + Vec(0.0, 0.0, 35.0 * sin(3.14159265 * nt5)) else B5
   if T5 < 1.0 {
     t5 = nt5
   } else {
     if lift5 {
       a5 = B5
       t5 = 0.0
-    let d5_0 = Sweep(Vec(gx5, gy5, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    let d5_0 = Sweep(Vec(gx5, gy5, pz + 350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
     if d5_0.Hit {
       b5 = d5_0.HitLocation
       hits += 1
     } else {
-      let d5_1 = Sweep(Vec(gx5, gy5, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+      let d5_1 = Sweep(Vec(gx5, gy5, pz + 250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
       if d5_1.Hit {
         b5 = d5_1.HitLocation
         hits += 1
       } else {
-        let d5_2 = Sweep(Vec(gx5, gy5, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+        let d5_2 = Sweep(Vec(gx5, gy5, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
         if d5_2.Hit {
           b5 = d5_2.HitLocation
           hits += 1
         } else {
-          let d5_3 = Sweep(Vec(gx5, gy5, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+          let d5_3 = Sweep(Vec(gx5, gy5, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
           if d5_3.Hit {
             b5 = d5_3.HitLocation
             hits += 1
           } else {
-            let d5_4 = Sweep(Vec(gx5, gy5, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+            let d5_4 = Sweep(Vec(gx5, gy5, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
             if d5_4.Hit {
               b5 = d5_4.HitLocation
               hits += 1
             } else {
-              b5 = Vec(gx5, gy5, pz - 100.0)
-              misses += 1
+              let d5_5 = Sweep(Vec(gx5, gy5, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+              if d5_5.Hit {
+                b5 = d5_5.HitLocation
+                hits += 1
+              } else {
+                let d5_6 = Sweep(Vec(gx5, gy5, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                if d5_6.Hit {
+                  b5 = d5_6.HitLocation
+                  hits += 1
+                } else {
+                  let d5_7 = Sweep(Vec(gx5, gy5, pz + -350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                  if d5_7.Hit {
+                    b5 = d5_7.HitLocation
+                    hits += 1
+                  } else {
+                    let d5_8 = Sweep(Vec(gx5, gy5, pz + -450.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                    if d5_8.Hit {
+                      b5 = d5_8.HitLocation
+                      hits += 1
+                    } else {
+                      b5 = Vec(gx5, gy5, pz - 100.0)
+                      misses += 1
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -695,8 +842,8 @@ on Clock(interval = 0.0) {
     }
     }
   }
-  let hpx5 = (px + c * 15.0 - s * -40.0)
-  let hpy5 = (py + s * 15.0 + c * -40.0)
+  let hpx5 = (px + c * 8.0 - s * -20.0)
+  let hpy5 = (py + s * 8.0 + c * -20.0)
   let hpz5 = pz2
   let wx5 = F5.x - hpx5
   let wy5 = F5.y - hpy5
@@ -718,47 +865,71 @@ on Clock(interval = 0.0) {
   e17.SetLocationRotation(k25, Rotation(Rad2Deg(atan2(sin(a35), abs(cos(a35)))), if cos(a35) >= 0.0 then ly5 else ((ly5 + 180.0) - 360.0 * floor(((ly5 + 180.0) + 180.0) / 360.0)), 0.0))
 
   // ---- leg 6
-  let gx6 = (px + c * -64.7048 - s * -241.4815) + vx * 0.3
-  let gy6 = (py + s * -64.7048 + c * -241.4815) + vy * 0.3
+  let gx6 = (px + c * -64.7048 - s * -241.4815) + vx * 0.2
+  let gy6 = (py + s * -64.7048 + c * -241.4815) + vy * 0.2
   let lag6 = sqrt((gx6 - B6.x) * (gx6 - B6.x) + (gy6 - B6.y) * (gy6 - B6.y))
-  let want6 = T6 >= 1.0 && lag6 > (if v2 > 5.0 then 55.0 else 15.0)
+  let want6 = T6 >= 1.0 && lag6 > (if v2 > 5.0 then 50.0 else 15.0)
   let lift6 = want6 && T5 >= 1.0 && T7 >= 1.0 && T2 >= 1.0 && !lift5 && !lift2
-  let nt6 = min(T6 + dt / 0.28, 1.0)
+  let nt6 = min(T6 + dt / 0.15, 1.0)
   let ez6 = nt6 * nt6 * (3.0 - 2.0 * nt6)
-  let F6 = if T6 < 1.0 then lerp(A6, B6, ez6) + Vec(0.0, 0.0, 45.0 * sin(3.14159265 * nt6)) else B6
+  let F6 = if T6 < 1.0 then lerp(A6, B6, ez6) + Vec(0.0, 0.0, 35.0 * sin(3.14159265 * nt6)) else B6
   if T6 < 1.0 {
     t6 = nt6
   } else {
     if lift6 {
       a6 = B6
       t6 = 0.0
-    let d6_0 = Sweep(Vec(gx6, gy6, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    let d6_0 = Sweep(Vec(gx6, gy6, pz + 350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
     if d6_0.Hit {
       b6 = d6_0.HitLocation
       hits += 1
     } else {
-      let d6_1 = Sweep(Vec(gx6, gy6, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+      let d6_1 = Sweep(Vec(gx6, gy6, pz + 250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
       if d6_1.Hit {
         b6 = d6_1.HitLocation
         hits += 1
       } else {
-        let d6_2 = Sweep(Vec(gx6, gy6, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+        let d6_2 = Sweep(Vec(gx6, gy6, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
         if d6_2.Hit {
           b6 = d6_2.HitLocation
           hits += 1
         } else {
-          let d6_3 = Sweep(Vec(gx6, gy6, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+          let d6_3 = Sweep(Vec(gx6, gy6, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
           if d6_3.Hit {
             b6 = d6_3.HitLocation
             hits += 1
           } else {
-            let d6_4 = Sweep(Vec(gx6, gy6, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+            let d6_4 = Sweep(Vec(gx6, gy6, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
             if d6_4.Hit {
               b6 = d6_4.HitLocation
               hits += 1
             } else {
-              b6 = Vec(gx6, gy6, pz - 100.0)
-              misses += 1
+              let d6_5 = Sweep(Vec(gx6, gy6, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+              if d6_5.Hit {
+                b6 = d6_5.HitLocation
+                hits += 1
+              } else {
+                let d6_6 = Sweep(Vec(gx6, gy6, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                if d6_6.Hit {
+                  b6 = d6_6.HitLocation
+                  hits += 1
+                } else {
+                  let d6_7 = Sweep(Vec(gx6, gy6, pz + -350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                  if d6_7.Hit {
+                    b6 = d6_7.HitLocation
+                    hits += 1
+                  } else {
+                    let d6_8 = Sweep(Vec(gx6, gy6, pz + -450.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                    if d6_8.Hit {
+                      b6 = d6_8.HitLocation
+                      hits += 1
+                    } else {
+                      b6 = Vec(gx6, gy6, pz - 100.0)
+                      misses += 1
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -766,8 +937,8 @@ on Clock(interval = 0.0) {
     }
     }
   }
-  let hpx6 = (px + c * -15.0 - s * -40.0)
-  let hpy6 = (py + s * -15.0 + c * -40.0)
+  let hpx6 = (px + c * -8.0 - s * -20.0)
+  let hpy6 = (py + s * -8.0 + c * -20.0)
   let hpz6 = pz2
   let wx6 = F6.x - hpx6
   let wy6 = F6.y - hpy6
@@ -789,47 +960,71 @@ on Clock(interval = 0.0) {
   e20.SetLocationRotation(k26, Rotation(Rad2Deg(atan2(sin(a36), abs(cos(a36)))), if cos(a36) >= 0.0 then ly6 else ((ly6 + 180.0) - 360.0 * floor(((ly6 + 180.0) + 180.0) / 360.0)), 0.0))
 
   // ---- leg 7
-  let gx7 = (px + c * -191.5111 - s * -160.6969) + vx * 0.3
-  let gy7 = (py + s * -191.5111 + c * -160.6969) + vy * 0.3
+  let gx7 = (px + c * -191.5111 - s * -160.6969) + vx * 0.2
+  let gy7 = (py + s * -191.5111 + c * -160.6969) + vy * 0.2
   let lag7 = sqrt((gx7 - B7.x) * (gx7 - B7.x) + (gy7 - B7.y) * (gy7 - B7.y))
-  let want7 = T7 >= 1.0 && lag7 > (if v2 > 5.0 then 55.0 else 15.0)
+  let want7 = T7 >= 1.0 && lag7 > (if v2 > 5.0 then 50.0 else 15.0)
   let lift7 = want7 && T6 >= 1.0 && T3 >= 1.0 && !lift6 && !lift3
-  let nt7 = min(T7 + dt / 0.28, 1.0)
+  let nt7 = min(T7 + dt / 0.15, 1.0)
   let ez7 = nt7 * nt7 * (3.0 - 2.0 * nt7)
-  let F7 = if T7 < 1.0 then lerp(A7, B7, ez7) + Vec(0.0, 0.0, 45.0 * sin(3.14159265 * nt7)) else B7
+  let F7 = if T7 < 1.0 then lerp(A7, B7, ez7) + Vec(0.0, 0.0, 35.0 * sin(3.14159265 * nt7)) else B7
   if T7 < 1.0 {
     t7 = nt7
   } else {
     if lift7 {
       a7 = B7
       t7 = 0.0
-    let d7_0 = Sweep(Vec(gx7, gy7, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+    let d7_0 = Sweep(Vec(gx7, gy7, pz + 350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
     if d7_0.Hit {
       b7 = d7_0.HitLocation
       hits += 1
     } else {
-      let d7_1 = Sweep(Vec(gx7, gy7, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+      let d7_1 = Sweep(Vec(gx7, gy7, pz + 250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
       if d7_1.Hit {
         b7 = d7_1.HitLocation
         hits += 1
       } else {
-        let d7_2 = Sweep(Vec(gx7, gy7, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+        let d7_2 = Sweep(Vec(gx7, gy7, pz + 150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
         if d7_2.Hit {
           b7 = d7_2.HitLocation
           hits += 1
         } else {
-          let d7_3 = Sweep(Vec(gx7, gy7, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+          let d7_3 = Sweep(Vec(gx7, gy7, pz + 50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
           if d7_3.Hit {
             b7 = d7_3.HitLocation
             hits += 1
           } else {
-            let d7_4 = Sweep(Vec(gx7, gy7, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+            let d7_4 = Sweep(Vec(gx7, gy7, pz + -50.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
             if d7_4.Hit {
               b7 = d7_4.HitLocation
               hits += 1
             } else {
-              b7 = Vec(gx7, gy7, pz - 100.0)
-              misses += 1
+              let d7_5 = Sweep(Vec(gx7, gy7, pz + -150.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+              if d7_5.Hit {
+                b7 = d7_5.HitLocation
+                hits += 1
+              } else {
+                let d7_6 = Sweep(Vec(gx7, gy7, pz + -250.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                if d7_6.Hit {
+                  b7 = d7_6.HitLocation
+                  hits += 1
+                } else {
+                  let d7_7 = Sweep(Vec(gx7, gy7, pz + -350.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                  if d7_7.Hit {
+                    b7 = d7_7.HitLocation
+                    hits += 1
+                  } else {
+                    let d7_8 = Sweep(Vec(gx7, gy7, pz + -450.0), Vec(0.0, 0.0, -1.0), 100.0, ignoreList = parts, detectBricks = true, detectMap = true)
+                    if d7_8.Hit {
+                      b7 = d7_8.HitLocation
+                      hits += 1
+                    } else {
+                      b7 = Vec(gx7, gy7, pz - 100.0)
+                      misses += 1
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -837,8 +1032,8 @@ on Clock(interval = 0.0) {
     }
     }
   }
-  let hpx7 = (px + c * -45.0 - s * -40.0)
-  let hpy7 = (py + s * -45.0 + c * -40.0)
+  let hpx7 = (px + c * -24.0 - s * -20.0)
+  let hpy7 = (py + s * -24.0 + c * -20.0)
   let hpz7 = pz2
   let wx7 = F7.x - hpx7
   let wy7 = F7.y - hpy7
