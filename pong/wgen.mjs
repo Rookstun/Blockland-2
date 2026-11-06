@@ -6,7 +6,7 @@
 export const W = 240, H = 160, STRIP = 16; // landscape (Rookstun: "each row 240 micro bricks wide, stack 160")
 export const PAL = ['000000'];
 
-export const LH0 = 0.0806, WS0 = 2.0; // strip LineHeight / WidthScale at cell 0.125 (0.125 x 0.645); tune live with /pgcal
+export const LH0 = 0.0806, WS0 = 1.645; // strip LineHeight / WidthScale at cell 0.125 (0.125 x 0.645); tune live with /pgcal
 export function generate({ debug = false } = {}) {
   const NS = H / STRIP, q = JSON.stringify;
   const strips = Array.from({ length: NS }, (_, k) => k);
