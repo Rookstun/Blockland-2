@@ -74,6 +74,7 @@ var kt: float = 1.0
 var lastT: float = 0.0
 var overUntil: float = 0.0
 var beep: int = 0
+var most: int = 0
 var lhv: float = ${LH0}
 var wsv: float = ${WS0}
 var titlev: string = "NIGHT PONG"
@@ -330,6 +331,7 @@ mod step() {
         if y < ${H}.0 { alive += 1 }
       }
     }
+    if alive > most { most = alive }
     if alive >= 10 && won == false {
       won = true
       winTune()
@@ -345,8 +347,8 @@ mod step() {
   }
   lastBa = ba
   if waiting {
-    if over > 0 { hudv = "GAME OVER  SCORE \${score}  -  SPACE TO PLAY AGAIN" } else { hudv = "PRESS SPACE TO START  BEST \${best}" }
-  } else { hudv = "SCORE \${score}  BALLS \${alive}  BEST \${best}" }
+    if over > 0 { hudv = "GAME OVER  MOST BALLS \${most}  -  SPACE TO PLAY AGAIN" } else { hudv = "PRESS SPACE TO START  MOST BALLS \${most}" }
+  } else { hudv = "BALLS \${alive}  MOST \${most}" } // Rookstun: no score number; the most balls ever on screen at once
 }
 // the player left: back to idle as if untouched (Rookstun): game stopped, screen blank, score cleared
 mod idle() {
