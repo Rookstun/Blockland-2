@@ -26,8 +26,9 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
 
   const TK = Math.max(1, gen.H * cell / 40);
   const Z1 = Math.max(48, 26 + 4 * TK + gen.H * cell), UP = Z1 - 48;
-  // the six chips side by side on the hood, 30 apart
-  const at = i => [-75 + i * 30, 12, 60 + UP];
+  // the six chips in a 3 x 2 block over the hood and head, inside the cabinet's own width (a 150-wide row of them
+  // overlapped the next cabinet and two chips were rejected, 2026-11-06)
+  const at = i => [-24 + (i % 3) * 24, 12 + Math.floor(i / 3) * 24, 60 + UP];
   const cpu = await bundle(cpuBytes, { owner: OWNER, offset: at(0), hide: true, bare: true });
   const chs = [];
   for (let k = 0; k < NCH; k++) chs.push(await bundle(chBytes[k], { into: cpu, offset: at(k + 1), hide: true, bare: true }));
