@@ -131,10 +131,14 @@ on ServerUptime() {
   let dt = min(max(now - lastT, 0.0), 0.2)
   lastT = now
   if seated {
-    if up && lastUp == false { sel = (sel + 3) % 4 }
-    if down && lastDown == false { sel = (sel + 1) % 4 }
+    // slider select (fix: the redraw check ran after lastUp/lastDown were overwritten, so the marker never moved)
+    let pu = up && lastUp == false
+    let pd = down && lastDown == false
     lastUp = up
     lastDown = down
+    if pu { sel = (sel + 3) % 4 }
+    if pd { sel = (sel + 1) % 4 }
+    if pu || pd { draw() }
     let d = (if right then 1.0 else 0.0) - (if left then 1.0 else 0.0)
     if d != 0.0 {
       let step = d * 30.0 * dt // 30 pixels a second
@@ -144,11 +148,10 @@ on ServerUptime() {
       if sel == 3 { y1 = min(max(y1 + step, 0.0), ${H - 1}.0) }
       draw()
     }
-    if up != lastUp || down != lastDown { draw() }
   }
 }
 `;
-  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: false, noClock: true, titleMid: true, titleLH: 4, exactScreen: true, textPorts: true, synths: ['Square'] };
+  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: false, noClock: true, titleMid: true, titleLH: 4, exactScreen: true, textPorts: true, synths: ['Square'], seatBack: 140 }; // seat 14 studs back from the 192-wide screen
 }
 
 // the same span math in JS, for the self-check / tests: which columns row r lights for a line a -> b

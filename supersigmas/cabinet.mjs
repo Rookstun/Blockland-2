@@ -86,8 +86,8 @@ function speakers(b) {
   box(-BW, 2, 24, BW, 22, 50 + UP);     // head behind the screen
   box(-BW, -8, 50 + UP, BW, 22, 58 + UP, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: title, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
   box(-BW, -8, 0, BW, 22, 24);     // base / desk
-  w.addBrick({ asset: 'PB_DefaultBrick', color: GREY, size: [5, 5, 6], position: [0, -22, 6], owner_index: O }); // stool
-  const seat = w.addBrick({ asset: 'B_Seat', position: [0, -23, 23], direction: 4, rotation: 0, color: [255, 255, 255], owner_index: O,
+  w.addBrick({ asset: 'PB_DefaultBrick', color: GREY, size: [5, 5, 6], position: [0, -22 - (gen.seatBack ?? 0), 6], owner_index: O }); // stool (gen.seatBack: big screens sit the player further back)
+  const seat = w.addBrick({ asset: 'B_Seat', position: [0, -23 - (gen.seatBack ?? 0), 23], direction: 4, rotation: 0, color: [255, 255, 255], owner_index: O,
     components: [{ type: C.Seat.NAME, data: { bAllowHeldItems: false, bAllowNearbyInteraction: false, PromptCustomLabel: `Play ${title}` } }] });
 
   // ---- screen = the owner's white panel x -13..13, y 0..2, z 26..48
