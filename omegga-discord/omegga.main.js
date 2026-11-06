@@ -68,6 +68,14 @@ module.exports = class Discord {
       this.handlers.push([e, h]);
     };
     on('chat', this.onChat);
+    // broadcasts (!ai, [claude], plugins) never fire 'chat': pick them out of the log; skip player chat and our own [Discord] echo
+    on('line', l => {
+      const m = /LogChat: (?!\[SenderId:|\[Discord\])(.+)$/.exec(l);
+      if (!m) return;
+      const t = unescape(m[1]).trim();
+      const tag = /^\[([^\]]+)\](?:\[[^\]]*\])*:?\s*(.*)$/.exec(t);
+      return tag ? this.send(tag[1], mdSafe(tag[2])) : this.send(null, mdSafe(t));
+    });
     for (const e of ['chatcmd:discord', 'chatcmd:Discord', 'cmd:discord']) on(e, name => this.omegga.whisper(name, '<color="9cf">Discord: <link="https://discord.gg/Eu4qtXcGnR">https://discord.gg/Eu4qtXcGnR</></>'));
     on('join', p => {
       note('lastJoin', `${p?.name} ${new Date().toISOString()}`);
