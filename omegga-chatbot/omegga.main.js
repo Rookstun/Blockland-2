@@ -926,7 +926,7 @@ module.exports = class Plugin {
     const started = Date.now();
     const secs = () => `${((Date.now() - started) / 1000).toFixed(1)}s`;
     this.log('ask', `${name}: ${text}`);
-    this.stage(name, `${loading()} ${name}'s request...`);
+    // no thinking lines in chat (owner 2026-11-06)
 
     const message = { role: 'user', content: `[${name}] ${text}${await this.nearbyBuilds(name)}` };
     let reply;
@@ -970,7 +970,6 @@ module.exports = class Plugin {
           if (!reply && !done.length && empties < 2) {
             empties++;
             this.log('retry', `empty answer for ${name}, asking again (${empties}/2)`);
-            this.stage(name, `got an empty answer, asking again (${empties}/2)...`);
             continue;
           }
           break;
@@ -998,7 +997,7 @@ module.exports = class Plugin {
             if ((use.name === 'build' && !image) || use.name === 'build_image' || use.name === 'gridhouse') job.built++;
             if (use.name === 'undo_build' && job.built) job.built--;
             this.log('tool', `${use.name} ok: ${result}`);
-            this.stage(name, image ? `draft ${job.reviews} rendered at ${secs()}, reviewing it...` : String(result).split('\n')[0]);
+            if (!image) this.stage(name, String(result).split('\n')[0]);
           } catch (err) {
             result = `Error: ${err.message ?? err}`;
             this.log('tool', `${use.name} failed: ${err.message ?? err}`);
@@ -1069,14 +1068,8 @@ module.exports = class Plugin {
     if (done.length) this.stage(name, `done in ${secs()}`);
   }
 
-  /** One model call, with a "still thinking... Ns" heartbeat in chat while it runs. */
+  /** One model call, no chat heartbeat (owner: no thinking in chat). */
   async callModel(name, system, tools, messages, doing) {
-    // Big models behind FCC can take a minute or more
-    const waitStart = Date.now();
-    const ticker = setInterval(
-      () => this.stage(name, `still ${loading().toLowerCase()}... ${Math.round((Date.now() - waitStart) / 1000)}s`),
-      (this.config['progress-seconds'] ?? 15) * 1000
-    );
     try {
       const models = [this.config.model || 'claude-opus-5', ...MODEL_FALLBACKS];
       let response;
@@ -1110,7 +1103,6 @@ module.exports = class Plugin {
       this.showThinking(name, response);
       return response;
     } finally {
-      clearInterval(ticker);
     }
   }
 
@@ -1275,7 +1267,7 @@ module.exports = class Plugin {
         if (steps >= maxSteps) { summary = `Stopped after ${maxSteps} steps without finishing.`; break; }
         if (Date.now() > deadline) { summary = 'Ran out of time before finishing.'; break; }
         steps++;
-        this.stage(name, `step ${steps}/${maxSteps}: ${loading().toLowerCase()}...`);
+        // no 'step N: thinking' line in chat
         const response = await this.callModel(name, agentSystem(maxSteps), AGENT_TOOLS, messages, `on step ${steps}`);
         const u = response.usage ?? {};
         this.log('model', `agent step ${steps} for ${name} at ${secs()}: stop=${response.stop_reason}, tokens in=${u.input_tokens ?? '?'} out=${u.output_tokens ?? '?'}, blocks [${response.content.map(b => b.type).join(', ')}]`);
@@ -1288,7 +1280,6 @@ module.exports = class Plugin {
             empties++;
             steps--;
             this.log('retry', `agent empty answer for ${name}, asking again (${empties}/2)`);
-            this.stage(name, `got an empty answer, asking again (${empties}/2)...`);
             continue;
           }
           summary = said || 'Done.';

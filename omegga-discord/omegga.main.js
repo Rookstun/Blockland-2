@@ -74,6 +74,7 @@ module.exports = class Discord {
       if (!m) return;
       const t = unescape(m[1]).trim();
       const tag = /^\[([^\]]+)\](?:\[[^\]]*\])*:?\s*(.*)$/.exec(t);
+      if (tag && /^still .*\.\.\. \d+s$/.test(tag[2])) return; // !ai "still thinking... 15s" heartbeat
       return tag ? this.send(tag[1], mdSafe(tag[2])) : this.send(null, mdSafe(t));
     });
     for (const e of ['chatcmd:discord', 'chatcmd:Discord', 'cmd:discord']) on(e, name => this.omegga.whisper(name, '<color="9cf">Discord: <link="https://discord.gg/Eu4qtXcGnR">https://discord.gg/Eu4qtXcGnR</></>'));
