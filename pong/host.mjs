@@ -1,4 +1,4 @@
-// node pong/host.mjs [--fps 10] [--maxlines 20] [--force] : single-player pong for the PONG cabinet (pong/gen.mjs chip), run on the server.
+// node pong/host.mjs [--fps 5] [--maxlines 6] [--force] : single-player pong for the PONG cabinet (pong/gen.mjs chip), run on the server.
 // 160x240 portrait, paddle at the bottom (A/D), a new ball every 2 returns, game over when the last ball drops.
 // Input: tails the game log for "pgin|<mask>" (bit 256 = seated). Output: changed rows as run-length records in
 // "br.Chat.Command /pg ..." lines (<= 480 chars, <= maxlines a second) through the bridge inbox, HUD as "/pgs".
@@ -9,7 +9,7 @@ import { AL, W, H } from './gen.mjs';
 
 const a = process.argv.slice(2), arg = (k, d) => { const i = a.indexOf(k); return i < 0 ? d : a[i + 1]; };
 const HOME = process.env.HOME || '', BRIDGE = join(HOME, 'omegga-server/bridge'), LOGS = arg('--log', join(HOME, 'omegga-server/data/logs'));
-const FPS = +arg('--fps', 10), MAXLINES = +arg('--maxlines', 20), LINE = 480;
+const FPS = +arg('--fps', 5), MAXLINES = +arg('--maxlines', 6), LINE = 480;
 
 // ---- row codec (the chip's decoder in gen.mjs mirrors decode)
 function encode(r, row) { // row = W chars '#'/' '
