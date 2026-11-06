@@ -55,7 +55,6 @@ module.exports = class Discord {
     this.handlers = [];
     this.botId = null;
     this.queue = Promise.resolve();
-    this.threads = new Map(); // !ai ticket -> Promise<thread id | null>
   }
 
   async init() {
@@ -76,20 +75,8 @@ module.exports = class Discord {
       const t = unescape(m[1]).trim();
       const tag = /^\[([^\]]+)\](?:\[[^\]]*\])*:?\s*(.*)$/.exec(t);
       if (tag && /^still .*\.\.\. \d+s$/.test(tag[2])) return; // !ai "still thinking... 15s" heartbeat
-      // !ai ticket start: post it, then open a thread on it for that ticket's progress + thinking
-      const start = /^\[AI\] Ticket #(\d+) \((.+?)\) - working on it now/.exec(t);
-      if (start) {
-        const msg = this.send(tag[1], mdSafe(tag[2]));
-        this.threads.set(start[1], msg.then(m => m?.id && this.makeThread(m.id, `#${start[1]} ${start[2]}`)));
-        if (this.threads.size > 50) this.threads.delete(this.threads.keys().next().value);
-        return msg;
-      }
-      const sub = /^\[AI\]\[#(\d+)\]/.exec(t);
-      // progress lines ("Built 46 bricks", "done in") go in the thread; replies ("[AI][#n]: text") stay in the channel
-      if (sub && this.threads.has(sub[1]) && !/^\[AI\]\[#\d+\]:/.test(t)) return this.send(tag[1], mdSafe(tag[2]), this.threads.get(sub[1]));
       return tag ? this.send(tag[1], mdSafe(tag[2])) : this.send(null, mdSafe(t));
     });
-    this.tailThinking();
     for (const e of ['chatcmd:discord', 'chatcmd:Discord', 'cmd:discord']) on(e, name => this.omegga.whisper(name, '<color="9cf">Discord: <link="https://discord.gg/Eu4qtXcGnR">https://discord.gg/Eu4qtXcGnR</></>'));
     on('join', p => {
       note('lastJoin', `${p?.name} ${new Date().toISOString()}`);
@@ -109,7 +96,6 @@ module.exports = class Discord {
     for (const [e, h] of this.handlers) this.omegga.off(e, h);
     this.handlers = [];
     clearInterval(this.hb);
-    clearInterval(this.tail);
     try {
       this.ws?.close(1000);
     } catch {}
@@ -122,69 +108,22 @@ module.exports = class Discord {
     return this.send(name, mdSafe(text));
   }
 
-  // thread: optional Promise<thread id>; a null thread drops the message (never spill into the channel)
-  send(name, content, thread) {
+  send(name, content) {
     content = String(content).slice(0, 1900);
     if (!content.trim()) return Promise.resolve();
     // one at a time: keeps order, respects rate limits
     this.queue = this.queue
-      .then(async () => {
-        const tid = thread && (await thread);
-        if (thread && !tid) return;
-        return this.post(name, content, tid);
-      })
+      .then(() => this.post(name, content))
       .catch(err => console.error('[discord] send', err?.message ?? err));
     return this.queue;
   }
 
-  async makeThread(msgId, name) {
-    if (!this.config.token || !this.config.channel) return null;
-    const res = await fetch(`${API}/channels/${this.config.channel}/messages/${msgId}/threads`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bot ${this.config.token}` },
-      body: JSON.stringify({ name: name.slice(0, 100), auto_archive_duration: 60 }),
-    });
-    if (!res.ok) return note('threadError', `${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`), null;
-    return (await res.json()).id;
-  }
-
-  // chatbot logs every thought as "<iso> think  #<ticket> <name>: <text>" (newlines as " | "): post them in the ticket's thread
-  tailThinking() {
-    const file = require('path').join(__dirname, '..', 'chatbot', 'logs', 'chatbot.log');
-    let pos = null;
-    let rest = '';
-    this.tail = setInterval(() => {
-      let size;
-      try {
-        size = fs.statSync(file).size;
-      } catch {
-        return;
-      }
-      if (pos === null || size < pos) pos = pos === null ? size : 0; // start at the end; rotated -> from the top
-      if (size === pos) return;
-      const fd = fs.openSync(file, 'r');
-      const buf = Buffer.alloc(Math.min(size - pos, 1 << 20));
-      fs.readSync(fd, buf, 0, buf.length, pos);
-      fs.closeSync(fd);
-      pos += buf.length;
-      const lines = (rest + buf.toString('utf8')).split('\n');
-      rest = lines.pop();
-      for (const l of lines) {
-        const m = /^\S+ think\s+#(\d+) [^:]*: (.*)$/.exec(l);
-        if (!m || !this.threads.has(m[1])) continue;
-        const text = m[2].replace(/ \| /g, '\n');
-        // 1900-char pieces, at most 4 per thought
-        for (let i = 0; i < Math.min(text.length, 4 * 1900); i += 1900) this.send('AI thinking', mdSafe(text.slice(i, i + 1900)), this.threads.get(m[1]));
-      }
-    }, 1000);
-  }
-
-  async post(name, content, thread, tries = 0) {
+  async post(name, content, tries = 0) {
     const hook = this.config.webhook;
     let res;
     if (hook) {
       const username = name ? `${String(name).slice(0, 70)}` : 'Server';
-      res = await fetch(`${hook}${hook.includes('?') ? '&' : '?'}wait=true${thread ? `&thread_id=${thread}` : ''}`, {
+      res = await fetch(`${hook}${hook.includes('?') ? '&' : '?'}wait=true`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         // webhook names may not contain "discord"/"clyde"
@@ -192,7 +131,7 @@ module.exports = class Discord {
       });
     } else if (this.config.token && this.config.channel) {
       if (name) content = `**${mdSafe(name)}**: ${content}`;
-      res = await fetch(`${API}/channels/${thread || this.config.channel}/messages`, {
+      res = await fetch(`${API}/channels/${this.config.channel}/messages`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bot ${this.config.token}` },
         body: JSON.stringify({ content, allowed_mentions: { parse: [] }, flags: SILENT }),
@@ -201,7 +140,7 @@ module.exports = class Discord {
     if (res.status === 429 && tries < 5) {
       const j = await res.json().catch(() => ({}));
       await sleep(Math.ceil((j.retry_after ?? 1) * 1000));
-      return this.post(name, content, thread, tries + 1);
+      return this.post(name, content, tries + 1);
     }
     if (!res.ok) return note('postError', `${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
     note('lastToDiscord', content.slice(0, 80));
@@ -259,9 +198,6 @@ module.exports = class Discord {
 
   onDiscord(m) {
     if (m.channel_id !== String(this.config.channel)) return;
-    // type 18 = "started a thread" notice Discord drops in the channel per !ai ticket: delete our own
-    if (m.type === 18 && m.author?.id === this.botId)
-      return fetch(`${API}/channels/${m.channel_id}/messages/${m.id}`, { method: 'DELETE', headers: { authorization: `Bot ${this.config.token}` } }).then(r => r.ok || note('threadNoticeError', r.status));
     if (m.author?.bot || m.webhook_id || m.author?.id === this.botId) return;
     const name = m.member?.nick || m.author?.global_name || m.author?.username || '?';
     let text = String(m.content ?? '');
