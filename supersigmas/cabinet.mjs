@@ -55,7 +55,7 @@ function speakers(b) {
 {
   // one hidden chip lying on the hood (top z 58), no outer pins: the seat wires into its port gates, its port gates
   // wire straight into the screen, and the seat adapter (splitter, compares, clock) sits on the chip's own plane
-  const TK = Math.max(1, (cell ?? 0.5) / 0.5); // HUD/msg text scale: big-pixel screens (pong cell 2) get big type; 1 = the old size
+  const TK = Math.max(1, gen.H * (cell ?? 0.5) / 40); // HUD/msg text scale with screen height (pong 320 tall -> 8x, readable); old cabinets (<= 40 tall) 1
   const Z1 = Math.max(48, 26 + 4 * TK + gen.H * (cell ?? 0.5)), UP = Z1 - 48; // room for the HUD + msg lines above the base (z 24) // tall pictures (pong 160x240) raise the screen top, head, hood and chip
   const b = await bundle(compiled, { owner: OWNER, offset: [0, 12, 60 + UP], hide: true, bare: true });
   const { w, C, O } = b;
