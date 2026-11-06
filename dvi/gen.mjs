@@ -305,6 +305,7 @@ export function generate({ debug = false } = {}) {
   const NS = H / STRIP, q = JSON.stringify, T = spriteTables(), RB = T.ROWBASE;
   const GR = gapRows(), GTAGS = [...new Set(GR)], GIDX = GR.map(c => GTAGS.indexOf(c));
   const GROUND = H - 4, PUB = 3, NA = AREAS.length, NN = NODES.length;
+  const LANE0 = Math.ceil(SKY / STRIP) * STRIP + 2, LANEMAX = (H / STRIP - 1) * STRIP + 2; // first/last lane top (42, 142)
   // dialogue lines flattened; each npc gets [first, last] line indices
   const DLG = [], NPC = [];
   AREAS.forEach((a, ai) => a.npcs.forEach(([x, y, g, who]) => { const f = DLG.length; DLG.push(...TALK[who]); NPC.push({ ai, x, y, g, f, l: DLG.length - 1, gift: GIFT[who] ?? 0 }); }));
@@ -416,7 +417,8 @@ var area: int = 0
 var node: int = 0
 var unl: int = 0
 var px: float = 20.0
-var py: float = 90.0
+var py: float = 102.0
+var laneT: float = 0.0
 var opx: float = -1.0
 var opy: float = -1.0
 var lv: int = 1
@@ -921,7 +923,7 @@ mod step() {
           area = 0
           node = 0
           px = 20.0
-          py = 100.0
+          py = 102.0
           cs = 0
           tNext = now + 4.0
           mode = 4
@@ -942,7 +944,7 @@ mod step() {
       if cs >= ${CUTSCENE.length} {
         unl = 1
         enterArea(0, 20.0)
-        py = 100.0
+        py = 102.0
         flash("YOU STAND IN THE RUBBLE. THE NEIGHBOR HAS SOMETHING TO SAY.")
       }
     }
@@ -960,7 +962,7 @@ mod step() {
       tune(1.0, 1.12, 1.0)
     }
     if pS {
-      py = 100.0
+      py = 102.0
       enterArea(NF[node], 10.0)
       flash("\${ANAME[area]}")
     }
@@ -989,11 +991,21 @@ mod step() {
     }
   }
   if mode == 1 {
-    if kU { py -= 4.0 * kt }
-    if kD { py += 4.0 * kt }
+    // LANES (owner screenshot: Daniel torn in two): each text strip reaches the players on its own, so a sprite across
+    // a strip boundary can show half old, half new. Daniel walks in lanes that sit inside one strip (strip top + 2,
+    // 18 rows with his shadow): left/right only ever redraws one strip; W/S hop a lane (held = repeat every 0.18 s).
+    if kU && now >= laneT {
+      py -= ${STRIP}.0
+      laneT = now + 0.18
+    }
+    if kD && now >= laneT {
+      py += ${STRIP}.0
+      laneT = now + 0.18
+    }
+    if kU == false && kD == false { laneT = 0.0 }
     if kL { px -= 4.0 * kt }
     if kR { px += 4.0 * kt }
-    py = min(max(py, ${SKY}.0), ${GROUND - 16}.0)
+    py = min(max(py, ${LANE0}.0), ${LANEMAX}.0)
     // a living boss blocks the way on
     let ba2 = BOSSA[area]
     if ba2 >= 0 {

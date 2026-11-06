@@ -145,3 +145,16 @@ test('GBA polish: sprites are auto-shaded, skies are gradients, characters have 
   assert.equal(variant('b', '+'), variant('b', '+'), 'variants are cached');
   assert.equal(mixHex('000000', 'ffffff', 0.5), '808080');
 });
+
+test('lanes: Daniel always fits inside one strip, and every goon, guy, item and the man is reachable from a lane', () => {
+  const SKY = 34, lanes = [];
+  for (let y = Math.ceil(SKY / STRIP) * STRIP + 2; y <= (H / STRIP - 1) * STRIP + 2; y += STRIP) lanes.push(y);
+  for (const y of lanes) assert.equal(Math.floor(y / STRIP), Math.floor((y + 17) / STRIP), `lane ${y} straddles a strip`);
+  const reach = (top, bot) => lanes.some(py => py + 16 > top && py < bot);
+  for (const a of AREAS) {
+    for (const [, y] of a.goons) assert.ok(reach(y + 5, y + 20), `${a.name} goon at ${y}`);
+    for (const [, y] of a.npcs) assert.ok(reach(y, y + 16), `${a.name} guy at ${y}`);
+    for (const [, y] of a.items) assert.ok(reach(y, y + 4), `${a.name} item at ${y}`);
+  }
+  assert.ok(reach(70, 86), 'the man in Italy');
+});
