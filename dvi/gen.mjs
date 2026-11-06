@@ -18,7 +18,7 @@ export const W = 240, H = 160, STRIP = 20;
 export const PAL = ['101828'];
 const SKY = 34; // rows 2..SKY-1 = scenery band in places; rows SKY.. = the ground everything walks on
 
-const COL = { h: '5a3a1a', s: 'f0c090', e: '202020', b: '3070d0', p: '203060', k: '101010', g: '909090', w: 'ffffff',
+export const COL = { h: '5a3a1a', s: 'f0c090', e: '202020', b: '3070d0', p: '203060', k: '101010', g: '909090', w: 'ffffff',
   d: '404048', o: '556b2f', q: 'a07040', f: '0a0a0a', y: 'ffd040', n: '4a3420', l: '8090a0', t: 'c0c8d0',
   r: 'c01818', v: '4a5a2a', z: 'd0a020', c: 'e8c878', i: 'ff6a10', a: 'c0b090', u: 'ff3030', m: '6a2a9a',
   A: 'e0d0b0', B: 'b08850', C: '2e7d32', D: 'c49a6c', E: '8a8a8a', F: '303030', G: '6a1a1a', I: 'f0e0c0',
@@ -38,7 +38,7 @@ const recolor = (art, map) => art.map(l => l.replace(/[A-E]/g, ch => map[ch] ?? 
 const GUY = ['...HHHH.....', '..HHHHHH....', '..HssssH....', '..sesses....', '..ssssss....', '...ssss.....', '..SSSSSS....',
   '.SSSSSSSS...', 'sSSSSSSSSs..', '.SSSSSSSS...', '..SSSSSS....', '..PPPPPP....', '..PP..PP....', '..PP..PP....', '..PP..PP....', '.kkk..kkk...'];
 const guy = (h, sh, pa) => GUY.map(l => l.replace(/H/g, h).replace(/S/g, sh).replace(/P/g, pa));
-const SPRITES = {
+export const SPRITES = {
   daniel: ['...hhhh......', '..hhhhhh.....', '..hssssh.....', '..sseses.....', '..ssssss.....', '...ssss......',
     '..bbbbbb.....', '.bbbbbbbsggg.', 'sbbbbbbbbggg.', '.bbbbbbbb....', '..bbbbbb.....', '..pppppp.....',
     '..pp..pp.....', '..pp..pp.....', '..pp..pp.....', '.kkk..kkk....'],
@@ -67,7 +67,7 @@ const SPRITES = {
   boss2: recolor(BOSS_ART, { A: 'r', B: 's', C: 'v', D: 'z', E: 'v' }), // NEO SADDAM: red beret, shades, olive + gold
 };
 const CKEYS = Object.keys(COL);
-function spriteTables() {
+export function spriteTables() {
   const SI = [0], SS = [], SE = [], SC = [], ROWBASE = {};
   let n = 0;
   for (const [name, art] of Object.entries(SPRITES)) {
@@ -81,7 +81,7 @@ function spriteTables() {
 }
 
 // places (scenes). scen = scenery band shapes; npcs [x, y, guy, first line, last line, gift 0/1 pierogi/2 cigarette]
-const AREAS = [
+export const AREAS = [
   { name: 'TURKEY, HOME', sky: '3a4a8a', ground: '9a7a4a', scen: [['house', 20, 44, 22, 'A', 'P'], ['cbd', 90], ['palm', 160], ['olive', 190], ['olive', 215]],
     goons: [], items: [], npcs: [[150, 90, 1, 'neighbor']], boss: -1 },
   { name: 'GREEK VILLAGE', sky: '3a7ad0', ground: 'd8c8a0', scen: [['whitehouse', 10], ['whitehouse', 60], ['windmill', 120], ['whitehouse', 170], ['whitehouse', 205]],
@@ -102,13 +102,13 @@ const AREAS = [
 const TURKEY_RUBBLE = AREAS.length; // scenery slot 8 = Turkey after the fat guy; slot 9 = the world map (whole screen)
 const MAP_SLOT = AREAS.length + 1;
 // world map places: name, map x, y, first area, last area
-const NODES = [
+export const NODES = [
   ['TURKEY', 222, 92, 0, 0], ['GREEK VILLAGE', 196, 100, 1, 1], ['ITALIAN VILLAGE', 172, 82, 2, 2],
   ['LONG ISLAND', 58, 62, 3, 4], ['NEWARK', 40, 72, 5, 6], ['THE BRONX', 50, 52, 7, 7],
 ];
 const BOSSPOS = [[175, 70], [170, 80], [150, 80]]; // boss 0 SWOLE GOON (area 4), 1 THE FAT ONE (area 6), 2 NEO SADDAM (area 7)
 // dialogue, Kingdom of Loathing tone. Each guy has a block of lines, shown one at a time with Space.
-const TALK = {
+export const TALK = {
   neighbor: ['NEIGHBOR: THEY WENT WEST, DANIEL. TO AMERICA.', 'NEIGHBOR: TAKE YOUR LITTLE CAR. IT GETS 90 MILES TO THE GALLON AND 4 TO THE POTHOLE.', 'NEIGHBOR: I SAVED NOTHING FROM YOUR STORE. I WANT TO BE HONEST ABOUT THAT.'],
   greek: ['OLD GREEK GUY: ISIS CAME THROUGH. THEY ASKED THE WAY TO NEW JERSEY.', 'OLD GREEK GUY: I LIED TO THEM. THEY WENT ANYWAY. NEW JERSEY IS LIKE THAT.'],
   fisher: ['FISHERMAN: MY COUSIN MARRIED A POLISH WOMAN. THE WEDDING HAD 400 PIEROGI.', 'FISHERMAN: HERE. HAVE ONE BEFORE IT HAS YOU.'],
@@ -118,7 +118,7 @@ const TALK = {
   bodega: ['BODEGA GUY: NEO SADDAM IS DOWN THE BLOCK. HE WENT IN FOR A LOTTO TICKET AND NEVER CAME OUT.', 'BODEGA GUY: BRING A PIEROGI. BRING TWO. BRING A GROWN-UP.'],
 };
 const GIFT = { fisher: 1, nonno: 2 };
-const CUTSCENE = [
+export const CUTSCENE = [
   'I LOVE LIVING IN TURKEY.',
   'BUT ONE DAY I WILL GO TO AMERICA AND BE A CBD SALESMAN.',
   'THEN ISIS SHOWED UP.',
@@ -133,12 +133,12 @@ const CUTSCENE = [
 const BLX = 205, BLY = 70, BLOCK_AREA = 2;
 // THE ITEM LIST (owner: "ketchup is not an enumerated object its an item that goes into the list of items you have"):
 // every item is an entry here; the chip keeps a count per entry (inv[]), Q shows the ones you have, Space uses one.
-const ITEMS = [
+export const ITEMS = [
   ['PIEROGI', 'HEALS 12 HP. WARM, DENSE, GRANDMOTHERLY.'],
   ['CIGARETTE', 'YOUR NEXT 3 HITS DO DOUBLE. ZELDA STYLE.'],
   ['KETCHUP', 'A CONDIMENT. SOMEONE, SOMEWHERE, IS AFRAID OF IT.'],
 ];
-const EATSCENE = [
+export const EATSCENE = [
   'YOU APPLY THE KETCHUP. HE LOOKS CONCERNED.',
   'YOU EAT HIM ALIVE.',
   'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH',
@@ -148,7 +148,29 @@ const EATSCENE = [
 ];
 const EATSCENE_T = [3.0, 2.5, 5.0, 2.5, 6.0, 3.5]; // seconds each line stays (the screams are the long ones)
 
-function sceneryTables() {
+// SONGBOOK (owner: "make a song for every town or city"). One char = one step (3 ticks at 20 Hz): C D E F G A B =
+// octave 1, c d e f g a b = an octave up, H = Bb, I = Eb, J = Ab, K = F#, L = C#, _ = rest; spaces only group bars.
+// Pitches multiply the synth's base note. All melodies are original.
+export const NOTE = { C: 1, D: 1.122, E: 1.26, F: 1.335, G: 1.498, A: 1.682, B: 1.888, H: 1.782, I: 1.189, J: 1.587, K: 1.414, L: 1.059, _: 0 };
+for (const k of 'CDEFGAB') NOTE[k.toLowerCase()] = NOTE[k] * 2;
+export const SONGS = {
+  'TURKEY, HOME': 'DIKG A_HA GKID ____ AHcH AGKI D_I_ D___',          // a hijaz-flavoured lament over the rubble
+  'GREEK VILLAGE': 'EEAA BBcc dccB A___ EEAA BBcc dedc B___',         // a quickening line-dance tune
+  'ITALIAN VILLAGE': 'AEAcAc edecBA EAEcAc BGBA__',                    // tarantella, in sixes
+  'LONG ISLAND, PARKING LOT': 'C_G_ c_G_ A_E_ F_G_ C_G_ c_e_ d_c_ G___', // late-night synth-pop in a parking lot
+  'PLANET FITNESS, GYM FLOOR': 'CCGC CCGC FFcF GGdG CCGC CCGC FFcF GG__', // four on the floor, one more rep
+  "NEWARK, CHILI'S DINING ROOM": 'G_GA B_d_ c_B_ A_G_ G_GA B_d_ e_d_ c___', // countryish, for the ribs
+  "CHILI'S KITCHEN": 'cBAG cBAG dcBA dcBA ecdB cAB_ G___',              // frantic, something is on fire
+  'THE BRONX': 'C__C _I_C __H_ G___ C__C _I_F __I_ D___',             // a slow boom-bap walk
+};
+export const THEMES = {
+  map: 'G_E_C_E_ G_c_A_G_ F_A_c_A_ G___E___',
+  battle: 'C_C_D_C_ E_E_D_C_ C_C_D_C_ G_E_D___',
+  boss: 'C_IC _G_F I_D_ C___ C_IC _G_H G_F_ I___',
+};
+export const tuneOf = t => t.replace(/ /g, '').split('').map(ch => { if (!(ch in NOTE)) throw Error(`bad note ${ch}`); return NOTE[ch]; });
+
+export function sceneryTables() {
   const idx = [0], S = [], E = [], C = [];
   const slots = [...AREAS.map(a => ({ scen: a.scen })), { scen: [['rubble', 20], ['rubble', 90], ['palm', 160], ['olive', 190], ['olive', 215]] }, { map: true }];
   for (const slot of slots) {
@@ -213,10 +235,11 @@ export function generate({ debug = false } = {}) {
   const GI = [0], GX = [], GY = [], II = [0], IX = [], IY = [], IK = [];
   for (const a of AREAS) { for (const [x, y] of a.goons) { GX.push(x); GY.push(y); } GI.push(GX.length); for (const [x, y, k] of a.items) { IX.push(x); IY.push(y); IK.push(k); } II.push(IX.length); }
   const AN = AREAS.map((_, ai) => NODES.findIndex(nd => ai >= nd[3] && ai <= nd[4])); // area -> its place on the map
-  const N = { C: 1, D: 1.122, E: 1.26, F: 1.335, G: 1.498, A: 1.682, B: 1.888, c: 2, _: 0 };
-  const tuneOf = t => t.replace(/ /g, '').split('').map(ch => N[ch]);
-  const MUS = tuneOf('C_EG A_GE F_AF E_D_ C_EG A_cA G_ED C___'), BMUS = tuneOf('C_C_D_C_ E_E_D_C_ C_C_D_C_ G_E_D___').map(x => x * 0.75);
-  const MAPMUS = tuneOf('G_E_C_E_ G_c_A_G_ F_A_c_A_ G___E___');
+  // per-place songs, flattened: place a plays MUSA[MI[a] .. MI[a + 1]]
+  if (AREAS.some(a => !SONGS[a.name])) throw Error('self-check: every place has a song');
+  const MUSA = [], MI = [0];
+  for (const a of AREAS) { MUSA.push(...tuneOf(SONGS[a.name])); MI.push(MUSA.length); }
+  const BMUS = tuneOf(THEMES.battle).map(x => x * 0.75), BOSSMUS = tuneOf(THEMES.boss).map(x => x * 0.75), MAPMUS = tuneOf(THEMES.map);
   const PRESENTS = 'RENDERMAN INDEPENDENT SOFTWARE COMPANY ENTERTAINMENT CLAUDE LLC PRESENTS';
   const ENAME = ['GOON', 'SWOLE GOON', 'THE FAT ONE', 'NEO SADDAM'], EHP = [0, 60, 90, 140], EATK = [0, 5, 7, 9], EXP = [0, 50, 90, 0];
   const strips = Array.from({ length: NS }, (_, k) => k);
@@ -279,7 +302,9 @@ const EHP = [${EHP.join(', ')}]
 const EATK = [${EATK.join(', ')}]
 const EXP = [${EXP.join(', ')}]
 const P2 = [1, 2, 4, 8, 16, 32, 64, 128, 256]
-const MUS = [${MUS.join(', ')}]
+const MUSA = [${MUSA.join(', ')}]
+const MI = [${MI.join(', ')}]
+const BOSSMUS = [${BOSSMUS.join(', ')}]
 const BMUS = [${BMUS.join(', ')}]
 const MAPMUS = [${MAPMUS.join(', ')}]
 const MENU = ["FIGHT", "ITEM", "RUN"]
@@ -782,8 +807,10 @@ mod step() {
   } else { aV0 = 0.0 }
   var m: float = 0.0
   m = 0.0
-  if mode == 1 || mode == 6 { m = MUS[(musT / 3) % ${MUS.length}] }
-  if mode == 2 { m = BMUS[(musT / 3) % ${BMUS.length}] }
+  if mode == 1 || mode == 6 || mode == 7 { m = MUSA[MI[area] + (musT / 3) % (MI[area + 1] - MI[area])] }
+  if mode == 2 {
+    if eKind == 0 { m = BMUS[(musT / 3) % ${BMUS.length}] } else { m = BOSSMUS[(musT / 3) % ${BOSSMUS.length}] }
+  }
   if mode == 5 { m = MAPMUS[(musT / 3) % ${MAPMUS.length}] }
   aP1 = max(m * 0.5, 0.1)
   aV1 = if m > 0.0 then 0.22 else 0.0
