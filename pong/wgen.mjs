@@ -7,7 +7,8 @@ export const W = 240, H = 160, STRIP = 20; // landscape (Rookstun: "each row 240
 export const PAL = ['000000'];
 
 export const LH0 = 0.129, WS0 = 2.0; // strip LineHeight / WidthScale at cell 0.2 (0.2 x 0.645); /pgcal tunes them live
-export function generate({ debug = false } = {}) {
+export function generate({ debug = false, cell = 0.2 } = {}) {
+  const lh0 = +(cell * 0.645).toFixed(4), ws0 = WS0; // strip text size follows the pixel size (pong20 = cell 0.1)
   const NS = H / STRIP, q = JSON.stringify;
   const strips = Array.from({ length: NS }, (_, k) => k);
   const PY = H - 12, PW = 28, BS = 4, CX = 60, CY = 70, CR = 32; // CX/CY/CR = the round bumper
@@ -75,8 +76,8 @@ var lastT: float = 0.0
 var overUntil: float = 0.0
 var beep: int = 0
 var most: int = 0
-var lhv: float = ${LH0}
-var wsv: float = ${WS0}
+var lhv: float = ${lh0}
+var wsv: float = ${ws0}
 var titlev: string = "NIGHT PONG"
 var mel: float[]
 var melPos: int = 0
