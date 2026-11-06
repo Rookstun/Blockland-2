@@ -117,6 +117,7 @@ function speakers(b) {
   const port = (g, p) => { if (!g.c.PORTS[p]) throw Error(`bad port ${g.c.NAME}.${p}`); return { brick: g.h, component_type: g.c.NAME, port: g.c.PORTS[p] }; };
   const num = v => ({ $variant: 'f64', value: v });
   wireTo({ brick: seat, component_type: C.Seat.NAME, port: 'bIsOccupied' }, 'seated');
+  if (gen.sitterPin) wireTo({ brick: seat, component_type: C.Seat.NAME, port: 'SittingCharacter' }, 'sitter'); // the sitter's character (dvi RPG: savegame via their leaderboard)
   const pilot = gate(C.MicrochipInput, { PortLabel: 'pilot', PortOrder: 99 });
   w.addWire({ brick: seat, component_type: C.Seat.NAME, port: 'SittingCharacter' }, port(pilot, 'RER_Input'));
   const split = gate(C.InputSplitter);
