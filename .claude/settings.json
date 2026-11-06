@@ -1,13 +1,39 @@
 {
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/status.mjs\" busy" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/status.mjs\" busy"
+          }
+        ]
+      }
     ],
     "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/status.mjs\" busy" }] }
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/status.mjs\" busy"
+          }
+        ]
+      }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/status.mjs\" idle" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/status.mjs\" idle"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/usage-auto.mjs\""
+          }
+        ]
+      }
     ]
   }
 }
