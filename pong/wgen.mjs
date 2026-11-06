@@ -301,7 +301,21 @@ on tick {
       flush()
     }
   } else {
-    was = false
+    // the player left: back to idle as if untouched (Rookstun): game stopped, screen blank, score cleared
+    if was {
+      was = false
+      bx.resize(0, 0.0)
+      by.resize(0, 0.0)
+      vx.resize(0, 0.0)
+      vy.resize(0, 0.0)
+      dl.resize(0, 0)
+      dfl.fill(0)
+      won = false
+      over = 0
+      score = 0
+      hudv = ""
+${strips.map(k => `      st${k} = ""`).join('\n')}
+    }
   }
 }
 `;
