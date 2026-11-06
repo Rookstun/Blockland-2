@@ -259,6 +259,9 @@ module.exports = class Discord {
 
   onDiscord(m) {
     if (m.channel_id !== String(this.config.channel)) return;
+    // type 18 = "started a thread" notice Discord drops in the channel per !ai ticket: delete our own
+    if (m.type === 18 && m.author?.id === this.botId)
+      return fetch(`${API}/channels/${m.channel_id}/messages/${m.id}`, { method: 'DELETE', headers: { authorization: `Bot ${this.config.token}` } }).then(r => r.ok || note('threadNoticeError', r.status));
     if (m.author?.bot || m.webhook_id || m.author?.id === this.botId) return;
     const name = m.member?.nick || m.author?.global_name || m.author?.username || '?';
     let text = String(m.content ?? '');
