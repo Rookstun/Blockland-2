@@ -2,8 +2,11 @@
 // over a thin stem, some glowing, some glass. node mapgen/indescribable.mjs X Y Z [SEED] > job.json
 import { makeBuilder, rng } from './builder.mjs';
 
-const OWNER = { id: 'c1a0de00-0000-4b0b-9a11-0000000001de', name: 'Claude Indescribable', display_name: 'Claude Indescribable' };
 const [X = 0, Y = 0, Z = 0, SEED = 13] = process.argv.slice(2).map(Number);
+// seed 13 = dirt's original; any other seed is its own build with its own owner (comfycookie's ugly abstract = 99)
+const OWNER = SEED === 13
+  ? { id: 'c1a0de00-0000-4b0b-9a11-0000000001de', name: 'Claude Indescribable', display_name: 'Claude Indescribable' }
+  : { id: `c1a0de00-0000-4b0b-9a11-${String(SEED).padStart(12, '0')}`, name: `Claude Abstract ${SEED}`, display_name: `Claude Abstract ${SEED}` };
 const B = makeBuilder();
 const rand = rng(SEED);
 const MB = 'PB_DefaultMicroBrick';
