@@ -49,8 +49,11 @@ if (cmd === 'usage') {
 } else if (cmd === 'say') {
   const text = rest.join(' ').trim();
   if (!text) throw new Error('usage: chat.mjs say "<text>"');
-  const msg = `[claude] ${safe(text)}`; // usage moved to the status HUD (owner 2026-11-06); [claude] keeps the watcher from reading its own lines
-  const out = await ssh(JOB, JSON.stringify({ ops: [{ op: 'say', msg }] }));
+  // long lines were silently dropped by the game (a ~600-char comparison never arrived): split at words, <= 200 chars a line
+  const parts = [];
+  for (const word of text.split(/\s+/)) { const last = parts.at(-1); if (last != null && (last + ' ' + word).length <= 200) parts[parts.length - 1] = last + ' ' + word; else parts.push(word); }
+  const ops = parts.map(p => ({ op: 'say', msg: `[claude] ${safe(p)}` })); // usage lives on the status HUD; [claude] keeps the watcher off its own lines
+  const out = await ssh(JOB, JSON.stringify({ ops }));
   if (!/"ok":true/.test(out)) throw new Error(`say failed: ${out.slice(0, 200)}`);
 } else if (cmd === 'listen') {
   const p = spawn('ssh', [HOST, 'stdbuf -oL bash ~/claude_listen.sh'], { stdio: ['ignore', 'pipe', 'inherit'] });
