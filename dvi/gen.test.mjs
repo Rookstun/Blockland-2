@@ -44,7 +44,7 @@ test('sprite span tables: one index entry per row, spans inside the sprite and n
 
 test('scenery tables: every slot covers all rows, spans in range, sorted, no overlap', () => {
   const S = sceneryTables();
-  const slots = AREAS.length + 2; // places + Turkey rubble + the world map
+  const slots = AREAS.length + 4; // places + Turkey rubble + 2 maps + the crossing
   assert.equal(S.idx.length - 1, slots * H);
   for (let row = 0; row < slots * H; row++) {
     let last = 0;
@@ -123,7 +123,7 @@ test('generated chip source: no undefined/NaN, every table present', () => {
     assert.ok(!/undefined|NaN/.test(g.src), 'no undefined/NaN in the source');
     for (const name of ['MUSA', 'BASSA', 'MI', 'BOSSMUS', 'BOSSBASS', 'MAPBASS', 'INAME', 'DLG', 'CUT', 'EAT', 'AI', 'SI']) assert.match(g.src, new RegExp(`const ${name} = \\[`));
     assert.equal(g.sitterPin, true);
-    assert.deepEqual(g.synths, ['Square', 'Triangle', 'Triangle'], 'effects, melody, bass');
+    assert.deepEqual(g.synths, ['Square', 'Triangle', 'Triangle', 'Noise'], 'effects, melody, bass, splash');
     assert.equal(g.src.includes('on ChatCommand("dvkey"'), debug, 'debug commands only in debug builds');
   }
 });
@@ -145,7 +145,7 @@ test('GBA polish: sprites are auto-shaded, skies are gradients, characters have 
   assert.ok(shadedKeys.size >= 10, `only ${shadedKeys.size} shade colours in the sprites`);
   for (const k of ['shadow', 'bshadow', 'platform']) assert.ok(SPRITES[k], `${k} sprite`);
   const G = gapRows();
-  assert.equal(G.length, (AREAS.length + 1) * H, 'a gap colour per row of every place + the map');
+  assert.equal(G.length, (AREAS.length + 3) * H, 'a gap colour per row of every place, both maps and the crossing');
   const lum = h => [0, 2, 4].reduce((n, i) => n + parseInt(h.slice(i, i + 2), 16), 0);
   for (let a = 0; a < AREAS.length; a++) assert.ok(lum(G[a * H + 3]) < lum(G[a * H + 33]), `${AREAS[a].name}: sky is darker at the top than at the horizon`);
   assert.equal(variant('b', '+'), variant('b', '+'), 'variants are cached');
@@ -163,4 +163,28 @@ test('lanes: Daniel always fits inside one strip, and every goon, guy, item and 
     for (const [, y] of a.items) assert.ok(reach(y, y + 4), `${a.name} item at ${y}`);
   }
   assert.ok(reach(70, 86), 'the man in Italy');
+});
+
+test('maps: Turkey and the US are on different maps, every place sits on land, the crossing joins them', async () => {
+  const { MAPS, NODES: ND, sceneryTables: st, COL: C } = await import('./gen.mjs');
+  assert.equal(MAPS.length, 2);
+  const side = n => ND.find(nd => nd[0] === n)[5];
+  assert.equal(side('TURKEY'), 0);
+  assert.equal(side('THE BRONX'), 1);
+  assert.notEqual(side('TURKEY'), side('LONG ISLAND'), 'different places');
+  assert.ok(ND.every((nd, i) => i === 0 || nd[5] >= ND[i - 1][5]), 'one crossing, Europe first');
+  const S = st(), keys = Object.keys(C);
+  for (const [name, x, y, , , m] of ND) {
+    const row = (AREAS.length + 1 + m) * H + y + 2;
+    let land = false;
+    for (let t = S.idx[row]; t < S.idx[row + 1]; t++) if (S.S[t] <= x + 2 && S.E[t] > x + 2 && keys[S.C[t]] !== 'z') land = true;
+    assert.ok(land, `${name} is in the sea`);
+  }
+});
+
+test('the entrance (left 50 px, where Daniel arrives) is clear of people, goons and bosses', () => {
+  for (const a of AREAS) {
+    for (const [x] of a.npcs) assert.ok(x >= 50, `${a.name}: a guy at x ${x} stands in the entrance`);
+    for (const [x] of a.goons) assert.ok(x >= 50, `${a.name}: a goon at x ${x} stands in the entrance`);
+  }
 });

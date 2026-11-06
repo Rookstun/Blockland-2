@@ -39,10 +39,16 @@ AREAS.forEach((a, i) => {
   sprite(px, 'shadow', 20, 105); sprite(px, 'daniel', 20, 90);
   save(px, `area${i}`);
 });
-const map = canvas(AREAS.length + 1, AREAS.length);
-NODES.forEach(([, x, y]) => sprite(map, 'node', x, y));
-sprite(map, 'car', NODES[2][1] - 7, NODES[2][2] - 8);
-save(map, 'map');
+for (const m of [0, 1]) {
+  const map = canvas(AREAS.length + 1 + m, AREAS.length + m);
+  NODES.filter(nd => nd[5] === m).forEach(([, x, y]) => sprite(map, 'node', x, y));
+  const here = NODES.find(nd => nd[5] === m);
+  sprite(map, 'car', here[1] - 7, here[2] - 8);
+  save(map, `map${m}`);
+}
+const under = canvas(AREAS.length + 3, AREAS.length + 2);
+sprite(under, 'sub', 110, 76); sprite(under, 'bubbles', 130, 70);
+save(under, 'crossing');
 const bat = canvas(7, 7);
 sprite(bat, 'platform', 39, 104); sprite(bat, 'platform', 155, 104); sprite(bat, 'daniel', 50, 90); sprite(bat, 'boss2', 160, 78);
 save(bat, 'battle_bronx');

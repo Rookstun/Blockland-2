@@ -90,6 +90,8 @@ const RAW_SPRITES = {
   car: ['....rrrrrr........', '...rttttttr.......', '..rrttttttrrr.....', 'rrrrrrrrrrrrrrrr..', 'rrrrrrrrrrrrrrrrr.',
     'rrrkkrrrrrrrkkrrr.', '...kk.......kk....'],
   node: ['.yy.', 'yyyy', 'yyyy', '.yy.'],
+  sub: ['.......g..........', '.......gg.........', '....rrrrrr........', '...rttttttr.......', '..rrttttttrrr.....', 'rrrrrrrrrrrrrrrr..', 'rrrrrrrrrrrrrrrrrl', 'rrrkkrrrrrrrkkrrr.', '...kk.......kk....'],
+  bubbles: ['..t.', '....', '.t..', 't..t'],
   ketchup: ['.ww.', '.rr.', 'rrrr', 'rKKr', 'rrrr', 'rrrr', 'rrrr'],
   blocker: guy('k', 'z', 'n'), // THE MAN WHO BLOCKS THE PATH (italian village)
   nodeoff: ['.EE.', 'EEEE', 'EEEE', '.EE.'],
@@ -123,27 +125,58 @@ export const AREAS = [
   { name: 'TURKEY, HOME', sky: '3a4a8a', ground: '9a7a4a', scen: [['house', 20, 44, 22, 'A', 'P'], ['cbd', 90], ['palm', 160], ['olive', 190], ['olive', 215]],
     goons: [], items: [], npcs: [[150, 90, 1, 'neighbor']], boss: -1 },
   { name: 'GREEK VILLAGE', sky: '3a7ad0', ground: 'd8c8a0', scen: [['whitehouse', 10], ['whitehouse', 60], ['windmill', 120], ['whitehouse', 170], ['whitehouse', 205]],
-    goons: [[110, 60], [190, 110]], items: [[60, 120, 0], [210, 45, 2]], npcs: [[40, 60, 0, 'greek'], [150, 120, 5, 'fisher']], boss: -1 },
+    goons: [[110, 60], [190, 110]], items: [[60, 120, 0], [210, 45, 2]], npcs: [[60, 60, 0, 'greek'], [150, 120, 5, 'fisher']], boss: -1 },
   { name: 'ITALIAN VILLAGE', sky: '4a6ab0', ground: 'b89a6a', scen: [['terra', 10], ['cypress', 70], ['terra', 95], ['cypress', 150], ['terra', 175]],
-    goons: [[90, 100], [160, 55], [205, 115]], items: [[130, 80, 1]], npcs: [[40, 100, 2, 'nonno']], boss: -1 },
+    goons: [[90, 100], [160, 55], [205, 115]], items: [[130, 80, 1]], npcs: [[60, 100, 2, 'nonno']], boss: -1 },
   { name: 'LONG ISLAND, PARKING LOT', sky: '20304a', ground: '585858', scen: [['pf', 40], ['lamp', 10], ['lamp', 200], ['parkedcar', 150]],
-    goons: [[80, 60], [130, 110], [180, 70]], items: [[60, 120, 0]], npcs: [[30, 90, 3, 'frontdesk']], boss: -1 },
+    goons: [[80, 60], [130, 110], [180, 70]], items: [[60, 120, 0]], npcs: [[60, 90, 3, 'frontdesk']], boss: -1 },
   { name: 'PLANET FITNESS, GYM FLOOR', sky: '4a2a6a', ground: '303038', scen: [['gymwall', 0], ['treadmill', 20], ['treadmill', 60], ['rack', 110], ['treadmill', 200]],
     goons: [[70, 100], [120, 55]], items: [[40, 60, 1]], npcs: [], boss: 0 },
   { name: 'NEWARK, CHILI\'S DINING ROOM', sky: '5a1a1a', ground: '6a4028', scen: [['chiliwall', 0], ['booth', 20], ['booth', 80], ['pepper', 140], ['booth', 180]],
-    goons: [[90, 60], [140, 110], [190, 70]], items: [[60, 120, 0]], npcs: [[40, 70, 4, 'waiter']], boss: -1 },
+    goons: [[90, 60], [140, 110], [190, 70]], items: [[60, 120, 0]], npcs: [[60, 70, 4, 'waiter']], boss: -1 },
   { name: 'CHILI\'S KITCHEN', sky: '3a3a40', ground: '8a8a90', scen: [['steelwall', 0], ['fryer', 30], ['fryer', 70], ['counter', 120]],
     goons: [[80, 110]], items: [[50, 60, 1]], npcs: [], boss: 1 },
   { name: 'THE BRONX', sky: '1a2030', ground: '505058', scen: [['brick', 0], ['brick', 60], ['eltrain', 0], ['brick', 130], ['brick', 190]],
-    goons: [[70, 60], [110, 115]], items: [[40, 120, 0]], npcs: [[30, 60, 5, 'bodega']], boss: 2 },
+    goons: [[70, 60], [110, 115]], items: [[40, 120, 0]], npcs: [[60, 60, 5, 'bodega']], boss: 2 },
 ];
-const TURKEY_RUBBLE = AREAS.length; // scenery slot 8 = Turkey after the fat guy; slot 9 = the world map (whole screen)
-const MAP_SLOT = AREAS.length + 1;
-// world map places: name, map x, y, first area, last area
-export const NODES = [
-  ['TURKEY', 222, 92, 0, 0], ['GREEK VILLAGE', 196, 100, 1, 1], ['ITALIAN VILLAGE', 172, 82, 2, 2],
-  ['LONG ISLAND', 58, 62, 3, 4], ['NEWARK', 40, 72, 5, 6], ['THE BRONX', 50, 52, 7, 7],
+// scenery slots: places 0..7, 8 = Turkey after the fat guy, 9 = the Mediterranean map, 10 = the New York map,
+// 11 = under the Atlantic (the submarine crossing). Gap-colour slots: places 0..7, then the 3 whole-screen scenes.
+const TURKEY_RUBBLE = AREAS.length, MAP_SLOT = AREAS.length + 1, UNDER_SLOT = AREAS.length + 3;
+// the two maps: lon/lat box -> the 240x160 screen (rows 4..156)
+export const MAPS = [
+  { name: 'THE MEDITERRANEAN', lon: [5, 45], lat: [33, 47] },
+  { name: 'NEW YORK HARBOR', lon: [-74.6, -72.0], lat: [40.35, 41.25] },
 ];
+export const proj = (m, lon, lat) => [Math.round((lon - MAPS[m].lon[0]) / (MAPS[m].lon[1] - MAPS[m].lon[0]) * W), Math.round(4 + (MAPS[m].lat[1] - lat) / (MAPS[m].lat[1] - MAPS[m].lat[0]) * (H - 8))];
+// coastlines (lon, lat), simplified by hand from real geography
+export const COASTS = [
+  [ // the Mediterranean: Alps/France, Italy, the islands, the Balkans + Greece, Turkey, North Africa + the Levant, Crete, Cyprus, north of the Black Sea
+    [[5, 47], [5, 43.2], [7, 43.6], [7.5, 45.8], [10, 46.5], [13.7, 46.5], [13.7, 47]],
+    [[7, 44], [7.5, 45.8], [10, 46.5], [13.7, 46.5], [13.7, 45.6], [12.4, 45.4], [12.3, 44.5], [13.6, 43.5], [14.2, 42.5], [16.2, 41.9], [18.5, 40.2], [17, 39], [17.1, 38.9], [16.1, 38], [15.6, 38.2], [15.8, 39.6], [14.9, 40.2], [14, 40.8], [12.5, 41.6], [11.1, 42.4], [10.1, 43.9], [8.8, 44.4], [7.5, 43.8]],
+    [[12.4, 37.8], [15.6, 38.3], [15.1, 36.7], [12.6, 37.6]], [[8.4, 41], [9.8, 41.1], [9.6, 39.1], [8.5, 39]], [[8.6, 43], [9.5, 42.9], [9.3, 41.4], [8.7, 41.7]],
+    [[13.7, 47], [13.7, 45.6], [15, 45], [16, 43.5], [18.5, 42.5], [19.5, 41.8], [19.4, 40.3], [20.2, 39.6], [21, 38.5], [21.6, 37.7], [21.8, 36.8], [22.5, 36.4], [23.1, 36.7], [22.8, 37.6], [23.4, 38], [24.1, 38.2], [22.9, 38.9], [22.6, 39.5], [23.3, 39.9], [23.8, 40.4], [24.4, 40.9], [26, 40.8], [26.2, 41.7], [28, 41.9], [28.9, 41.3], [28.3, 43.5], [29.7, 45.2], [28, 47]],
+    [[26.2, 40.1], [27.5, 40.5], [29.1, 41.1], [31, 41.2], [33, 42], [35, 42], [38, 41], [41.5, 41.5], [45, 41.2], [45, 37], [42, 37.2], [40, 36.9], [36.7, 36.8], [36, 36], [34.6, 36.8], [32.5, 36.1], [30.6, 36.8], [29.6, 36.2], [28.2, 36.7], [27.4, 37.3], [26.3, 38.3], [26.6, 39.1], [26.1, 39.5]],
+    [[5, 36.9], [10, 37.3], [11, 37], [10.2, 35.5], [11, 35], [10.5, 33.6], [11.5, 33], [15, 32.3], [20, 30.5], [20, 32], [21, 32.8], [23, 32.5], [25, 31.6], [29, 30.9], [32, 31.2], [34.2, 31.3], [35, 33], [36, 34.6], [36, 36], [45, 36], [45, 32], [5, 32]],
+    [[23.5, 35.6], [26.3, 35.3], [26.1, 34.95], [23.6, 35.2]], [[32.3, 35.1], [34.6, 35.7], [34, 34.6], [32.4, 34.7]],
+    [[24.9, 36.8], [25.9, 36.7], [25.8, 36.0], [25.0, 36.1]], // Santorini and friends, drawn a little big so the Greek village is on land
+    [[29.7, 45.2], [30.5, 46.6], [33, 46], [33.6, 44.4], [35, 45], [36.5, 45.3], [38, 47], [28, 47]],
+  ],
+  [ // New York harbor: New Jersey, the Bronx + Westchester + Connecticut, Manhattan, Staten Island, Long Island (+ Brooklyn/Queens)
+    [[-74.6, 41.25], [-73.92, 41.25], [-73.95, 40.85], [-74.02, 40.7], [-74.1, 40.65], [-74.25, 40.5], [-74, 40.42], [-74, 40.35], [-74.6, 40.35]],
+    [[-73.92, 41.25], [-73.95, 40.85], [-73.93, 40.8], [-73.78, 40.8], [-73.6, 40.98], [-73.0, 41.15], [-72, 41.2], [-72, 41.25]],
+    [[-74.02, 40.7], [-73.97, 40.71], [-73.93, 40.8], [-73.95, 40.85], [-73.92, 40.87], [-74.01, 40.76]],
+    [[-74.25, 40.5], [-74.05, 40.6], [-74.07, 40.65], [-74.2, 40.63]],
+    [[-74.04, 40.58], [-73.9, 40.57], [-73.4, 40.6], [-72.5, 40.85], [-72, 41.0], [-72, 41.1], [-72.4, 40.95], [-73.1, 40.92], [-73.7, 40.88], [-73.78, 40.8], [-73.93, 40.78], [-73.97, 40.71], [-74.02, 40.65]],
+  ],
+];
+// world map places: name, map, lon, lat, first area, last area (Cappadocia, Santorini, Amalfi, Levittown, Newark, the Bronx)
+const PLACES = [
+  ['TURKEY', 0, 34.8, 38.6, 0, 0], ['GREEK VILLAGE', 0, 25.4, 36.4, 1, 1], ['ITALIAN VILLAGE', 0, 14.6, 40.6, 2, 2],
+  ['LONG ISLAND', 1, -73.51, 40.72, 3, 4], ['NEWARK', 1, -74.17, 40.73, 5, 6], ['THE BRONX', 1, -73.86, 40.85, 7, 7],
+];
+// name, x, y, first area, last area, map
+export const NODES = PLACES.map(([n, m, lon, lat, f, l]) => { const [x, y] = proj(m, lon, lat); return [n, x - 2, y - 2, f, l, m]; });
+const CROSS = 2; // driving on from this place (Italy) means the Atlantic crossing
 const BOSSPOS = [[175, 70], [170, 80], [150, 80]]; // boss 0 SWOLE GOON (area 4), 1 THE FAT ONE (area 6), 2 NEO SADDAM (area 7)
 // dialogue, Kingdom of Loathing tone. Each guy has a block of lines, shown one at a time with Space.
 export const TALK = {
@@ -240,20 +273,31 @@ export const tuneOf = t => t.replace(/ /g, '').split('').map(ch => { if (!(ch in
 
 export function sceneryTables() {
   const idx = [0], S = [], E = [], C = [];
-  const slots = [...AREAS.map(a => ({ scen: a.scen, sky: a.sky })), { scen: [['rubble', 20], ['rubble', 90], ['palm', 160], ['olive', 190], ['olive', 215]], sky: AREAS[0].sky }, { map: true }];
+  const slots = [...AREAS.map(a => ({ scen: a.scen, sky: a.sky })), { scen: [['rubble', 20], ['rubble', 90], ['palm', 160], ['olive', 190], ['olive', 215]], sky: AREAS[0].sky }, { map: 0 }, { map: 1 }, { under: true }];
   for (const slot of slots) {
-    const rowsN = slot.map ? H : SKY;
+    const whole = slot.map !== undefined || slot.under, rowsN = whole ? H : SKY;
     const g = Array.from({ length: rowsN }, () => new Array(W).fill(null));
     const put = (x0, y0, w, h, c) => { for (let y = Math.max(2, Math.round(y0)); y < Math.min(rowsN, Math.round(y0 + h)); y++) for (let x = Math.max(0, Math.round(x0)); x < Math.min(W, Math.round(x0 + w)); x++) g[y][x] = c; };
-    if (slot.map) {
-      // world map: America on the left, Europe + Turkey on the right, the Atlantic between (gap colour = ocean)
-      for (const [x, y, w, h] of [[0, 20, 70, 110], [0, 30, 82, 80], [10, 110, 40, 30], [30, 40, 45, 50]]) put(x, y, w, h, 'R');
-      for (const [x, y, w, h] of [[150, 30, 90, 50], [160, 70, 80, 25], [166, 78, 14, 30], [188, 92, 20, 18], [205, 82, 35, 22], [140, 20, 40, 20]]) put(x, y, w, h, 'R');
-      put(166, 100, 30, 6, 'Q'); // the Mediterranean bites in
-      for (let i = 0; i + 1 < NODES.length; i++) { // dotted route
-        const [, x0, y0] = NODES[i], [, x1, y1] = NODES[i + 1], n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 5);
-        for (let k = 1; k < n; k++) put(x0 + 1 + (x1 - x0) * k / n, y0 + 1 + (y1 - y0) * k / n, 2, 2, 't');
+    if (slot.map !== undefined) {
+      // a real map: fill each coastline polygon (even-odd), then the dotted road between this map's places
+      const polys = COASTS[slot.map].map(poly => poly.map(([lon, lat]) => proj(slot.map, lon, lat)));
+      for (let y = 2; y < rowsN; y++) for (let x = 0; x < W; x++) {
+        // union of the polygons (each one even-odd on its own), so overlapping coastlines don't punch holes
+        const inPoly = poly => { let inside = false; for (let a = 0, b = poly.length - 1; a < poly.length; b = a++) { const [xa, ya] = poly[a], [xb, yb] = poly[b]; if ((ya > y + 0.5) !== (yb > y + 0.5) && x + 0.5 < xa + (y + 0.5 - ya) * (xb - xa) / (yb - ya)) inside = !inside; } return inside; };
+        if (polys.some(inPoly)) g[y][x] = 'R';
       }
+      const here = NODES.filter(nd => nd[5] === slot.map);
+      for (let k = 0; k + 1 < here.length; k++) {
+        const [, x0, y0] = here[k], [, x1, y1] = here[k + 1], n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 4);
+        for (let t = 1; t < n; t++) put(x0 + 1 + (x1 - x0) * t / n, y0 + 1 + (y1 - y0) * t / n, 1, 1, 'z');
+      }
+    }
+    if (slot.under) {
+      // under the Atlantic: a sandy seabed with dunes, rocks and swaying weed (static), the surface glinting at the top
+      for (let x = 0; x < W; x++) { const top = 140 + Math.round(4 * Math.sin(x / 13) + 2 * Math.sin(x / 5)); put(x, top, 1, H - top, 'D'); }
+      for (const x of [20, 70, 118, 160, 205]) { put(x, 128, 12, 12, 'E'); put(x + 3, 124, 6, 4, 'E'); }
+      for (const x of [8, 45, 52, 95, 140, 147, 185, 228]) for (let y = 104; y < 142; y++) put(x + Math.round(2 * Math.sin(y / 5)), y, 2, 1, 'R');
+      for (let x = 0; x < W; x += 9) put(x, 3, 5, 1, 't');
     }
     for (const [kind, x, ...o] of slot.scen ?? []) {
       const B = SKY;
@@ -281,13 +325,13 @@ export function sceneryTables() {
       if (kind === 'brick') { put(x, 4, 50, B - 4, 'P'); for (let yy = 8; yy < B - 6; yy += 8) for (let xx = 6; xx < 46; xx += 12) put(x + xx, yy, 6, 4, 'y'); put(x + 18, B - 10, 12, 10, 'h'); }
       if (kind === 'eltrain') { put(0, 12, W, 4, 'T'); for (let xx = 10; xx < W; xx += 40) put(xx, 16, 4, B - 16, 'T'); put(90, 6, 60, 6, 'O'); }
     }
-    if (slot.map) { // beaches: land touching the sea
+    if (slot.map !== undefined) { // beaches: land touching the sea
       const land = g.map(row => row.map(c => c === 'R'));
       for (let y = 2; y < rowsN; y++) for (let x = 0; x < W; x++) if (land[y][x] && [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([dx, dy]) => !(land[y + dy]?.[x + dx]))) g[y][x] = 'c';
     }
     const shaded = shadeGrid(g);
     for (let y = 0; y < rowsN; y++) g[y] = shaded[y];
-    if (!slot.map && slot.sky) { // sky dressing, behind everything (only on empty sky)
+    if (!whole && slot.sky) { // sky dressing, behind everything (only on empty sky)
       const night = hex3(slot.sky).reduce((a, b) => a + b) < 3 * 0x48;
       let seed = slot.sky.split('').reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) >>> 0;
       const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
@@ -326,7 +370,8 @@ export function gapRows() {
     if (Math.floor((r - SKY) / 6) % 2) c = mixHex(c, '000000', 0.06);                               // texture bands
     out.push(mixHex(c, '000000', Math.round(d * 4) * 0.05));                                         // darker foreground
   }
-  for (let r = 0; r < H; r++) out.push(mixHex(mixHex('2a6ab0', '0e2a5a', r / H), 'ffffff', r % 7 === 3 ? 0.12 : 0));
+  for (const m of [0, 1]) for (let r = 0; r < H; r++) out.push(mixHex(mixHex('2a6ab0', '0e2a5a', r / H), 'ffffff', r % 7 === 3 ? 0.12 : 0));
+  for (let r = 0; r < H; r++) out.push(mixHex(mixHex('1a5a9a', '020a24', r / H), '9ad0ff', r < 40 && r % 9 < 2 ? 0.25 : 0));
   return out;
 }
 
@@ -334,7 +379,7 @@ export function generate({ debug = false } = {}) {
   const SCN = sceneryTables(); // first: it adds the shaded scenery colours to the palette
   const NS = H / STRIP, q = JSON.stringify, T = spriteTables(), RB = T.ROWBASE;
   const GR = gapRows(), GTAGS = [...new Set(GR)], GIDX = GR.map(c => GTAGS.indexOf(c));
-  const GROUND = H - 4, PUB = 3, NA = AREAS.length, NN = NODES.length;
+  const GROUND = H - 4, PUB = 1, NA = AREAS.length, NN = NODES.length;
   const LANE0 = Math.ceil(SKY / STRIP) * STRIP + 2, LANEMAX = (H / STRIP - 1) * STRIP + 2; // first/last lane top (42, 142)
   // dialogue lines flattened; each npc gets [first, last] line indices
   const DLG = [], NPC = [];
@@ -386,6 +431,9 @@ const NNAME = [${NODES.map(nd => q(nd[0])).join(', ')}]
 const NX = [${NODES.map(nd => nd[1]).join(', ')}]
 const NY = [${NODES.map(nd => nd[2]).join(', ')}]
 const NF = [${NODES.map(nd => nd[3]).join(', ')}]
+const NM = [${NODES.map(nd => nd[5]).join(', ')}]
+const MAPNAME = [${MAPS.map(m => q(m.name)).join(', ')}]
+const IRIS = ${q('<color="000000">')}
 const NL = [${NODES.map(nd => nd[4]).join(', ')}]
 const GI = [${GI.join(', ')}]
 const GX = [${GX.join(', ')}]
@@ -499,6 +547,19 @@ var xc: float = 0.0
 var mel: float[]
 var melPos: int = 0
 var musT: int = 0
+var musT0: float = 0.0
+var melNext: float = 0.0
+var frames: int = 0
+var crossDir: int = 0
+var crossT0: float = 0.0
+var splashT: float = -9.0
+var irisR: float = 999.0
+var irisX: float = 120.0
+var irisY: float = 80.0
+var irisPh: int = 0
+var irisT0: float = 0.0
+var aP3: float = 1.0
+var aV3: float = 0.0
 var aP0: float = 1.0
 var aV0: float = 0.0
 var aP1: float = 1.0
@@ -516,6 +577,8 @@ ${strips.map(k => `@right out strip${k}: string = st${k}`).join('\n')}
 @right out V1: float = aV1
 @right out P2: float = aP2
 @right out V2: float = aV2
+@right out P3: float = aP3
+@right out V3: float = aV3
 
 mod setStrip(k: int, v: string) {
 ${strips.map(k => `  if k == ${k} { pb${k} = v }`).join('\n')}
@@ -559,6 +622,7 @@ mod note(p: float, n: int) {
 mod tune(a: float, b: float, c: float) {
   mel.resize(0, 0.0)
   melPos = 0
+  melNext = ServerUptime() + 0.05
   note(a, 2)
   note(b, 2)
   note(c, 4)
@@ -566,6 +630,7 @@ mod tune(a: float, b: float, c: float) {
 mod scream(n: int) {
   mel.resize(0, 0.0)
   melPos = 0
+  melNext = ServerUptime() + 0.05
   for k in 0..n {
     mel.push(2.5 + (k % 3) * 0.18)
     mel.push(2.95 - (k % 2) * 0.2)
@@ -660,7 +725,7 @@ mod enterArea(a: int, x: float) {
 mod toMap() {
   mode = 5
   titlev = ""
-  musT = 0
+  musT0 = ServerUptime()
   save()
   wipeAll()
 }
@@ -695,12 +760,14 @@ mod useItem(i: int, inBattle: bool) {
 }
 // ---- drawing
 mod scenSlot() -> int {
-  if mode == 5 { return ${MAP_SLOT} }
+  if mode == 5 { return ${MAP_SLOT} + NM[node] }
+  if mode == 9 { return ${UNDER_SLOT} }
   if area == 0 && (unl >= 1 || (mode == 4 && cs >= 5)) { return ${TURKEY_RUBBLE} }
   return area
 }
 mod gapTag(r: int) -> string {
-  if mode == 5 { return GTAGS[GIDX[${AREAS.length * H} + r]] }
+  if mode == 5 { return GTAGS[GIDX[(${AREAS.length} + NM[node]) * ${H} + r]] }
+  if mode == 9 { return GTAGS[GIDX[${(AREAS.length + 2) * H} + r]] }
   return GTAGS[GIDX[area * ${H} + r]]
 }
 mod renderRow(r: int) {
@@ -725,10 +792,19 @@ mod renderRow(r: int) {
     let sl = scenSlot()
     let ai = sl * ${H} + r
     for t in AI[ai]..AI[ai + 1] { span(AS[t], AE[t], AC[t]) }
+    if mode == 9 {
+      // the crossing: the little car, now a submarine, bubbles trailing behind it
+      let tt = ServerUptime() - crossT0
+      let sx = if crossDir > 0 then 230.0 - tt * 62.0 else tt * 62.0 - 20.0
+      let sy = floor(76.0 + 6.0 * sin(tt * 2.5))
+      if r >= sy && r < sy + 9 { spr(${RB.sub}, r - sy, floor(sx)) }
+      let bx = if crossDir > 0 then sx + 20.0 else sx - 6.0
+      if r >= sy - 6 && r < sy - 2 { spr(${RB.bubbles}, r - sy + 6, floor(bx)) }
+    }
     if mode == 5 {
       // the map: places (yellow = open), the tiny car at the current one
       for k in 0..${NN} {
-        if r >= NY[k] && r < NY[k] + 4 {
+        if NM[k] == NM[node] && r >= NY[k] && r < NY[k] + 4 {
           if k < unl { spr(${RB.node}, r - NY[k], NX[k]) } else { spr(${RB.nodeoff}, r - NY[k], NX[k]) }
         }
       }
@@ -771,18 +847,36 @@ mod renderRow(r: int) {
   }
   is.sortMultiple(ie, ic)
   let gt = gapTag(r)
+  // the circular zoom (owner): only the window [lw, rw) of this row is inside the iris; the rest is black
+  var lw: float = 0.0
+  var rw: float = ${W}.0
+  lw = 0.0
+  rw = ${W}.0
+  if irisR < 900.0 {
+    let dy = r + 0.5 - irisY
+    if abs(dy) >= irisR {
+      lw = ${W}.0
+      rw = ${W}.0
+    } else {
+      let hw = sqrt(irisR * irisR - dy * dy)
+      lw = min(max(round(irisX - hw), 0.0), ${W}.0)
+      rw = min(max(round(irisX + hw), lw), ${W}.0)
+    }
+  }
   s = ""
-  xc = 0.0
+  if lw > 0.0 { s = IRIS .. BL.Substring(0, lw) .. "</>" }
+  xc = lw
   for j in 0..is.length() {
-    let a = max(max(is.get(j), xc), 0.0)
-    let b = min(ie.get(j), ${W}.0)
+    let a = max(max(is.get(j), xc), lw)
+    let b = min(ie.get(j), rw)
     if b > a {
       if a > xc { s = s .. gt .. BL.Substring(0, a - xc) .. "</>" }
       s = s .. COLS[ic.get(j)] .. BL.Substring(0, b - a) .. "</>"
       xc = b
     }
   }
-  if xc < ${W}.0 { s = s .. gt .. BL.Substring(0, ${W}.0 - xc) .. "</>" }
+  if xc < rw { s = s .. gt .. BL.Substring(0, rw - xc) .. "</>" }
+  if rw < ${W}.0 { s = s .. IRIS .. BL.Substring(0, ${W}.0 - rw) .. "</>" }
   rows[r] = s
   sdf[r / ${STRIP}] = 1
 }
@@ -804,7 +898,7 @@ mod startBattle(kind: int, idx: int) {
   cur = 0
   buff = 0
   mode = 2
-  musT = 0
+  musT0 = ServerUptime()
   if kind == 0 { logv = "A GOON BLOCKS YOUR PATH." } else { logv = "\${ENAME[kind]} STEPS FORWARD." }
   tune(0.8, 1.0, 1.26)
   wipeAll()
@@ -928,36 +1022,39 @@ mod step() {
   if melPos < mel.length() {
     aP0 = max(mel.get(melPos), 0.1)
     aV0 = if mel.get(melPos) > 0.0 then 0.5 else 0.0
-    melPos += 1
+    if now >= melNext {
+      melPos += 1
+      melNext = now + 0.05
+    }
   } else { aV0 = 0.0 }
+  let ms = max(floor((now - musT0) / 0.15), 0.0)
   var m: float = 0.0
   var bn: float = 0.0
   m = 0.0
   bn = 0.0
   if mode == 1 || mode == 6 || mode == 7 {
-    let mi = MI[area] + (musT / 3) % (MI[area + 1] - MI[area])
+    let mi = MI[area] + ms % (MI[area + 1] - MI[area])
     m = MUSA[mi]
     bn = BASSA[mi]
   }
   if mode == 2 {
     if eKind == 0 {
-      m = BMUS[(musT / 3) % ${BMUS.length}]
-      bn = BBASS[(musT / 3) % ${BBASS.length}]
+      m = BMUS[ms % ${BMUS.length}]
+      bn = BBASS[ms % ${BBASS.length}]
     } else {
-      m = BOSSMUS[(musT / 3) % ${BOSSMUS.length}]
-      bn = BOSSBASS[(musT / 3) % ${BOSSBASS.length}]
+      m = BOSSMUS[ms % ${BOSSMUS.length}]
+      bn = BOSSBASS[ms % ${BOSSBASS.length}]
     }
   }
   if mode == 5 {
-    m = MAPMUS[(musT / 3) % ${MAPMUS.length}]
-    bn = MAPBASS[(musT / 3) % ${MAPBASS.length}]
+    m = MAPMUS[ms % ${MAPMUS.length}]
+    bn = MAPBASS[ms % ${MAPBASS.length}]
   }
   aP1 = max(m * 0.5, 0.1)
   aV1 = if m > 0.0 then 0.22 else 0.0
   // bass voice: the note rings for its step (rests between)
   aP2 = max(bn * 0.5, 0.1)
   aV2 = if bn > 0.0 then 0.3 else 0.0
-  musT += 1
   if mode == 0 {
     // title: the presents card, then continue / new game
     if now < introUntil { titlev = "${PRESENTS}" } else {
@@ -1008,22 +1105,83 @@ mod step() {
   }
   if mode == 5 {
     // the world map: A/D drive between open places, Space goes in
-    if pL && node > 0 {
-      node -= 1
-      wipeAll()
-      tune(1.0, 1.12, 1.0)
-    }
-    if pR && node < unl - 1 {
-      node += 1
-      wipeAll()
-      tune(1.0, 1.12, 1.0)
-    }
-    if pS {
-      py = 102.0
-      enterArea(NF[node], 10.0)
-      flash("\${ANAME[area]}")
+    if irisPh == 0 {
+      if pL && node < unl - 1 {
+        if node == ${CROSS} {
+          // the Atlantic: the car dives (splash), crosses as a submarine, surfaces in New York
+          mode = 9
+          crossDir = 1
+          crossT0 = now
+          splashT = now
+          wipeAll()
+        } else {
+          node += 1
+          wipeAll()
+          tune(1.0, 1.12, 1.0)
+        }
+      }
+      if pR && node > 0 {
+        if node == ${CROSS + 1} {
+          mode = 9
+          crossDir = -1
+          crossT0 = now
+          splashT = now
+          wipeAll()
+        } else {
+          node -= 1
+          wipeAll()
+          tune(1.0, 1.12, 1.0)
+        }
+      }
+      if pS {
+        irisPh = 1
+        irisT0 = now
+        irisX = NX[node] + 2.0
+        irisY = NY[node] - 2.0
+      }
     }
   }
+  if mode == 9 {
+    // the crossing lasts 4.2 s; every frame redraws the sub's rows; then the surfacing splash on the other map
+    markSpan(60.0, 40)
+    if now >= crossT0 + 4.2 {
+      node = if crossDir > 0 then ${CROSS + 1} else ${CROSS}
+      mode = 5
+      splashT = now
+      save()
+      wipeAll()
+    }
+  }
+  if irisPh == 1 {
+    // closing on the car (0.5 s), then into the place
+    irisR = max(170.0 * (1.0 - (now - irisT0) / 0.5), 0.0)
+    for r in 0..${H} { mark(r) }
+    if irisR <= 0.0 {
+      py = 102.0
+      enterArea(NF[node], 2.0)
+      flash("\${ANAME[area]}")
+      wipe = ${H}
+      irisPh = 2
+      irisT0 = now
+      irisX = 16.0
+      irisY = py + 8.0
+    }
+  } else {
+    if irisPh == 2 {
+      // opening out of Daniel (0.5 s)
+      irisR = 170.0 * min((now - irisT0) / 0.5, 1.0)
+      for r in 0..${H} { mark(r) }
+      if now >= irisT0 + 0.5 {
+        irisPh = 0
+        irisR = 999.0
+      }
+    }
+  }
+  // the splash: white noise, fading out over 1.2 s
+  if now < splashT + 1.2 {
+    aP3 = 1.0
+    aV3 = 0.7 * (1.0 - (now - splashT) / 1.2)
+  } else { aV3 = 0.0 }
   if mode == 6 {
     // talking: Space for the next line; the last line may come with a gift
     msgv = DLG[talkL]
@@ -1256,10 +1414,14 @@ mod step() {
   }
   if mode == 6 { hudv = "\${ANAME[area]}   SPACE: NEXT" }
   if mode == 5 {
-    hudv = "WORLD MAP   LV\${lv} HP \${hp}/\${hpMax()}   ITEMS: Q"
-    if now < flashUntil { msgv = logv } else { msgv = "A/D DRIVE THE TINY CAR   Q INVENTORY   SPACE: GO TO \${NNAME[node]}" }
+    hudv = "\${MAPNAME[NM[node]]}   LV\${lv} HP \${hp}/\${hpMax()}   ITEMS: Q"
+    if now < flashUntil { msgv = logv } else { msgv = "A: DRIVE ON   D: DRIVE BACK   Q INVENTORY   SPACE: GO TO \${NNAME[node]}" }
   }
   if mode == 4 { hudv = "SPACE: NEXT" }
+  if mode == 9 {
+    hudv = "THE ATLANTIC"
+    msgv = "THE LITTLE CAR IS ALSO, IT TURNS OUT, A SUBMARINE."
+  }
   if mode == 3 {
     hudv = "LV\${lv}"
     msgv = logv
@@ -1277,6 +1439,9 @@ mod idle() {
     aV0 = 0.0
     aV1 = 0.0
     aV2 = 0.0
+    aV3 = 0.0
+    irisPh = 0
+    irisR = 999.0
     mel.resize(0, 0.0)
     melPos = 0
 ${strips.map(k => `    st${k} = ""\n    pb${k} = ""`).join('\n')}
@@ -1319,13 +1484,16 @@ on ChatCommand("dvkey", "debug: hold w a s d space for 3 ticks") -> (ctrl, args)
   dkN = 3
 }
 on ChatCommand("dvstate", "debug: print the game state") -> (ctrl, args) {
-  PrintToConsole("dvstate|mode \${mode}|area \${area}|node \${node}|unl \${unl}|cs \${cs}|x \${px}|y \${py}|lv \${lv}|xp \${xp}|hp \${hp}|boss \${boss}|inv \${inv.get(0)} \${inv.get(1)} \${inv.get(2)}|gm \${gm}|phase \${phase}|e \${eHP}")
+  PrintToConsole("dvstate|frames \${frames}|mode \${mode}|area \${area}|node \${node}|unl \${unl}|cs \${cs}|x \${px}|y \${py}|lv \${lv}|xp \${xp}|hp \${hp}|boss \${boss}|inv \${inv.get(0)} \${inv.get(1)} \${inv.get(2)}|gm \${gm}|phase \${phase}|e \${eHP}")
 }
 on ChatCommand("dvgoto", "debug: unlock all and go to the map") -> (ctrl, args) {
   unl = ${NN}
   toMap()
 }
-` : ''}on tick {
+` : ''}// FRAME TICK (owner: "make the framerate 60"): runs every server frame (ServerUptime changes each frame), no clock
+// gate; everything moves by elapsed time (kt) and the music/sound effects run on the clock, so the frame rate only adds
+// smoothness. The strips are swapped onto the screen every frame (PUB = 1).
+on ServerUptime() {
   if seated || forced {
     if was == false {
       was = true
@@ -1345,6 +1513,7 @@ on ChatCommand("dvgoto", "debug: unlock all and go to the map") -> (ctrl, args) 
     step()
     flush()
     pubT += 1
+    frames += 1
     if pubDirty && pubT % ${PUB} == 0 { publish() }
   } else {
     idle()
@@ -1354,5 +1523,5 @@ on Change(seated) {
   if seated == false && forced == false { idle() }
 }
 `;
-  return { src, W, H, STRIP, PAL, clockWhenSeated: !debug, titleMid: true, titleLH: 2.2, exactScreen: true, sitterPin: true, synths: ['Square', 'Triangle', 'Triangle'] };
+  return { src, W, H, STRIP, PAL, clockWhenSeated: !debug, noClock: true, titleMid: true, titleLH: 2.2, exactScreen: true, sitterPin: true, synths: ['Square', 'Triangle', 'Triangle', 'Noise'] };
 }
