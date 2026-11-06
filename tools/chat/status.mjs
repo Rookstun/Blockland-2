@@ -15,9 +15,10 @@ const OWNER = { id: 'c1a0de00-0000-4b0b-9a11-0000005a7a75', name: 'Claude Status
 const STATE = join(dirname(fileURLToPath(import.meta.url)), 'status.state');
 
 const USAGE = join(dirname(fileURLToPath(import.meta.url)), 'usage.json');
-// beacon 0 = state (colour); beacons 1 and 2 = 5-hour and weekly usage as the brick's height in units (2-unit steps)
+// beacon 0 = state (colour); beacons 1 and 2 = 5-hour and weekly usage: a 2-tall brick whose CENTRE sits pct units up,
+// so its top is pct + 1 (whole-percent precision; a height encoding could only do even numbers)
 export function job(state, { h5 = 0, wk = 0 } = {}) {
-  const col = (x, pct) => { const h = Math.max(2, Math.min(100, Math.round(pct / 2) * 2)); return { asset: 'PB_DefaultMicroBrick', size: [4, 4, h / 2], position: [x, 0, h / 2], color: [90, 90, 90], visibility: false }; };
+  const col = (x, pct) => ({ asset: 'PB_DefaultMicroBrick', size: [4, 4, 1], position: [x, 0, Math.max(1, Math.min(100, Math.round(pct)))], color: [90, 90, 90], visibility: false });
   return { ops: [{ op: 'clear', owner: OWNER }, { op: 'bricks', at: BEACON, owner: OWNER, captureMs: 0,
     bricks: [{ asset: 'PB_DefaultMicroBrick', size: [4, 4, 2], position: [0, 0, 2], color: COLOURS[state], visibility: false }, col(20, h5), col(40, wk)] }] };
 }

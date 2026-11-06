@@ -37,11 +37,11 @@ on Clock(interval = 0.15) {
   // usage beacons: each brick's height above the beacon base = percent used
   let u5 = Sweep(Vec(${BEACON[0] + 20}.0, ${BEACON[1]}.0, ${BEACON[2] + 120}.0), Vec(0.0, 0.0, -1.0), 150.0, detectBricks = true, detectMap = false, ignoreOwningGrid = false)
   on u5.Hit {
-    h5 = round(u5.HitLocation.z - ${BEACON[2]}.0)
+    h5 = round(u5.HitLocation.z - ${BEACON[2] + 1}.0) // brick top = base + pct + 1
   }
   let uw = Sweep(Vec(${BEACON[0] + 40}.0, ${BEACON[1]}.0, ${BEACON[2] + 120}.0), Vec(0.0, 0.0, -1.0), 150.0, detectBricks = true, detectMap = false, ignoreOwningGrid = false)
   on uw.Hit {
-    wk = round(uw.HitLocation.z - ${BEACON[2]}.0)
+    wk = round(uw.HitLocation.z - ${BEACON[2] + 1}.0)
   }
   f = (f + 1) % ${STAR.length}
   slow += 1
