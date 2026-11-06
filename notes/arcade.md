@@ -45,3 +45,4 @@ Moved verbatim from CLAUDE.md 2026-10-22. Newest facts win; append new entries h
     EXACT SCREEN (Rookstun measured 16 x 12 micro bricks): cabinet gen.exactScreen = panel half width W*cell/2 exactly (no +1 margin) + HUD/msg boxes in bezel grey [60,60,64] -> black screen 30 x 20 units = 15 x 10 micro bricks.
     LIVE CALIBRATION (Rookstun: picture overflows the 15x10 glass at 16 px a micro brick): cabinet textPorts wires chip lh_/ws_ into every strip; /pgcal h+ h- w+ w- (5% steps, any player) shows + logs pgcal|lh|ws; bake the final pair into wgen LH0/WS0 (start 0.0806 / 2).
     WIDTH: Rookstun saw the picture past the glass left and right only; WS0 now 1.645 (4 x w-), height 0.0806 fine. Still being tuned.
+    BACK (Rookstun, 22:53): 10x10 px a micro brick (cell 0.2, LH 0.129, WS 2), HUD = balls + most balls ever (no score), LIVE at Prefab.Load "pong" 5393 -24907 0 0 16 where Rookstun had a copy (he removed his copy himself; owner PONG b0e6).
