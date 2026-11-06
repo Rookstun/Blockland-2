@@ -1,6 +1,7 @@
 // pong/gen.mjs: high-res (160x240) cabinet chip. The game runs on the server (pong/host.mjs); the chip only decodes
 // changed rows into text strips, so the wire cost is per changed row, not per pixel (that is what caps the old
-// on-chip games at 48x32). Feed: "/pg <rec>..." where rec = 2 AL chars row (hi*64+lo), then run lengths (AL index,
+// on-chip games at 48x32). Feed: "/pg <fin><rec>..." (fin '1' = last line of the frame: only then are the dirty
+// strips redrawn, all in one exec, so a frame never shows half old / half new = no tearing) where rec = 2 AL chars row (hi*64+lo), then run lengths (AL index,
 // 0..63) alternating space/block starting with space, then '.'. "/pgs <text>" sets the HUD. Pad out as "pgin|<mask>"
 // (left 64, right 128, a 1, seated 256).
 export const W = 160, H = 240, STRIP = 16;
@@ -50,8 +51,9 @@ on ChatCommand("pg", "pong frame feed (host.mjs)") -> (ctrl, args) {
     dflag.resize(${NS}, 0)
   }
   mode = 0
+  let fin = args.Substring(0, 1) == "1"
   let n = args.Length()
-  for c in 0..n {
+  for c in 1..n {
     let p = MAP[args.Substring(c, 1).ToCharCode().Codepoint - 33]
     if mode == 0 {
       r = p * 64
@@ -80,7 +82,7 @@ on ChatCommand("pg", "pong frame feed (host.mjs)") -> (ctrl, args) {
     }
   }
   for k in 0..${NS} {
-    if dflag.get(k) == 1 {
+    if fin && dflag.get(k) == 1 {
       dflag[k] = 0
       var acc: string = ""
       acc = ""

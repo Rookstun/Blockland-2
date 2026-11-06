@@ -91,13 +91,14 @@ function readInput() {
 function send(rows) {
   const ops = [], recs = [];
   rows.forEach((row, r) => { if (row !== prev[r]) recs.push([r, encode(r, row)]); });
-  let line = '', done = [];
-  const flush = () => { if (!line) return; budget--; ops.push({ op: 'cmd', line: `br.Chat.Command /pg ${line}`, captureMs: 0 }); for (const r of done) prev[r] = rows[r]; line = ''; done = []; };
-  for (const [r, rec] of recs) {
-    if (line.length + rec.length > LINE) { if (budget <= 1) break; flush(); } // over the rate: the rest next frame (prev kept)
-    line += rec; done.push(r);
+  const lines = [];
+  for (const [, rec] of recs) { if (!lines.length || lines.at(-1).length + rec.length > LINE) lines.push(''); lines[lines.length - 1] += rec; }
+  // whole frame or nothing: the chip redraws only on the fin ('1') line, so a frame never lands half-drawn (tearing)
+  if (lines.length && lines.length <= budget) {
+    budget -= lines.length;
+    lines.forEach((l, i) => ops.push({ op: 'cmd', line: `br.Chat.Command /pg ${i === lines.length - 1 ? 1 : 0}${l}`, captureMs: 0 }));
+    for (const [r] of recs) prev[r] = rows[r];
   }
-  if (budget > 0) flush();
   const hud = over ? `GAME OVER  SCORE ${score}  BEST ${best}` : `SCORE ${score}  BALLS ${balls.length}  BEST ${best}`;
   if (hud !== hudPrev && budget > 0) { budget--; hudPrev = hud; ops.push({ op: 'cmd', line: `br.Chat.Command /pgs ${hud}`, captureMs: 0 }); }
   if (!ops.length) return;
