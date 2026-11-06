@@ -1118,7 +1118,8 @@ module.exports = class Plugin {
       .join(' ')
       .trim();
     if (!thought) return;
-    this.log('think', `${name}: ${thought}`);
+    const tk = this.current.getStore()?.ticket;
+    this.log('think', `${tk ? `#${tk} ` : ''}${name}: ${thought}`); // discord relay threads these by ticket
     const mode = this.config['show-thinking'] ?? 'everyone';
     if (mode === 'off') return;
     const max = Math.max(1, this.config['thinking-lines'] ?? 3);
