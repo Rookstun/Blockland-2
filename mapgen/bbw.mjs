@@ -1,10 +1,13 @@
 // The bbw (owner gag: no-go builds get "ask for a bbw instead"; comfycookie asked, 2026-11-06):
 // a cheerful, fully clothed big lady statue in a sundress and sun hat, holding a pie.
-// node mapgen/bbw.mjs X Y Z > job.json   (faces +x)
+// node mapgen/bbw.mjs X Y Z [COUNT] > job.json   (faces +x; COUNT > 1 = the bbw army, comfycookie 2026-11-06,
+// copies in a loose staggered formation with their own dress colours and their own owner)
 import { makeBuilder } from './builder.mjs';
 
-const OWNER = { id: 'c1a0de00-0000-4b0b-9a11-00000000bb01', name: 'Claude Statue', display_name: 'Claude Statue' };
-const [X = 0, Y = 0, Z = 0] = process.argv.slice(2).map(Number);
+const [X = 0, Y = 0, Z = 0, COUNT = 1] = process.argv.slice(2).map(Number);
+const OWNER = COUNT > 1
+  ? { id: 'c1a0de00-0000-4b0b-9a11-00000000bb02', name: 'Claude BBW Army', display_name: 'Claude BBW Army' }
+  : { id: 'c1a0de00-0000-4b0b-9a11-00000000bb01', name: 'Claude Statue', display_name: 'Claude Statue' };
 const B = makeBuilder();
 const MB = 'PB_DefaultMicroBrick';
 const m = color => ({ asset: MB, color });
@@ -44,6 +47,15 @@ c(0, 0, 26, 26, 112, 114, HAT, 'hat brim');
 c(0, 0, 13, 13, 114, 118, BAND, 'hat band');
 c(0, 0, 13, 13, 118, 126, HAT, 'hat crown');
 if (B.dropped.length) throw new Error(`bbw: ${B.dropped.length} dropped: ${B.dropped[0]}`);
-const bricks = B.bricks.map(({ label, ...b }) => b);
+const one = B.bricks.map(({ label, ...b }) => b);
+const DRESSES = [[90, 150, 210], [210, 80, 120], [120, 190, 90], [240, 180, 60], [160, 100, 200], [230, 120, 70], [80, 190, 190], [200, 60, 60], [250, 250, 250]];
+const cols = Math.ceil(Math.sqrt(COUNT));
+const bricks = [];
+for (let k = 0; k < COUNT; k++) {
+  // rows of cols, every other row shifted half a slot; 100 units apart (plinths are 80 wide)
+  const r = Math.floor(k / cols), q = k % cols, ox = -r * 100, oy = (q - (cols - 1) / 2) * 100 + (r % 2) * 50;
+  const dress = DRESSES[k % DRESSES.length];
+  for (const b of one) bricks.push({ ...b, color: b.color === DRESS.color ? dress : b.color, position: [b.position[0] + ox, b.position[1] + oy, b.position[2]] });
+}
 process.stderr.write(`bbw: ${bricks.length} bricks at ${X} ${Y} ${Z}\n`);
 console.log(JSON.stringify({ ops: [{ op: 'clear', owner: OWNER }, { op: 'bricks', at: [X, Y, Z], owner: OWNER, captureMs: 4000, bricks }] }));
