@@ -73,6 +73,8 @@ var kt: float = 1.0
 var lastT: float = 0.0
 var overUntil: float = 0.0
 var beep: int = 0
+var mel: float[]
+var melPos: int = 0
 var waiting: bool = false
 var lastBa: bool = false
 var sb: float = 1.0
@@ -186,6 +188,37 @@ mod renderRow(r: int) {
   rows[r] = s .. SP.Substring(0, ${W}.0 - cur) // full width: the TextDisplay centres each line, short rows drifted right
   sdf[r / ${STRIP}] = 1
 }
+mod note(p: float, n: int) {
+  for k in 0..n { mel.push(p) }
+}
+mod sadTune() {
+  mel.resize(0, 0.0)
+  melPos = 0
+  note(1.0, 5)
+  note(0.94, 5)
+  note(0.89, 5)
+  note(0.0, 1)
+  note(0.75, 12)
+}
+mod happyTune() {
+  mel.resize(0, 0.0)
+  melPos = 0
+  note(1.0, 2)
+  note(1.26, 2)
+  note(1.5, 3)
+}
+mod winTune() {
+  mel.resize(0, 0.0)
+  melPos = 0
+  note(1.5, 3)
+  note(0.0, 1)
+  note(1.5, 2)
+  note(1.68, 3)
+  note(2.0, 3)
+  note(0.0, 1)
+  note(1.68, 2)
+  note(2.0, 10)
+}
 // DELTA TIME (Rookstun): every tick moves things by the real time since the last one (k = dt / 0.1 s; velocities are
 // pixels per 0.1 s), so speed no longer depends on the tick rate; game over lasts 3 s of real time
 mod step() {
@@ -193,11 +226,17 @@ mod step() {
   kt = min(max((now - lastT) * 10.0, 0.0), 2.5)
   lastT = now
   // bouncy blip (Rookstun): 3 ticks, pitch sweeping up from the surface's base note
-  if beep > 0 {
+  if melPos < mel.length() {
+    // tune playing (Rookstun: sad game over, happy new ball, a different happy one at 10 balls): one pitch a tick, 0 = rest
+    aP0 = max(mel.get(melPos), 0.1)
+    aV0 = if mel.get(melPos) > 0.0 then 0.5 else 0.0
+    melPos += 1
+    beep = 0
+  } else { if beep > 0 {
     aP0 = sb * (1.0 + (3 - beep) * 0.35)
     aV0 = 0.5
     beep -= 1
-  } else { aV0 = 0.0 }
+  } else { aV0 = 0.0 } }
   // a round starts only on the player's confirm (Rookstun): Space / right mouse, after sitting down or a game over
   if waiting {
     if ba && lastBa == false {
@@ -271,7 +310,10 @@ mod step() {
           score += 1
           sb = 1.2
           beep = 3
-          if score % 2 == 0 && alive < 10 { newBall() } // at most 10 balls (Rookstun)
+          if score % 2 == 0 && alive < 10 {
+            newBall() // at most 10 balls (Rookstun)
+            happyTune()
+          }
         }
         bx[i] = x
         by[i] = y
@@ -283,12 +325,14 @@ mod step() {
     }
     if alive >= 10 && won == false {
       won = true
+      winTune()
       for r in ${CY - CR}..${CY + CR} { mark(r) }
     }
     if alive == 0 {
       if score > best { best = score }
       over = 1
       waiting = true
+      sadTune()
       for r in ${CY - CR}..${CY + CR} { mark(r) }
     }
   }
@@ -311,6 +355,8 @@ mod idle() {
     over = 0
     score = 0
     aV0 = 0.0
+    mel.resize(0, 0.0)
+    melPos = 0
     hudv = ""
 ${strips.map(k => `    st${k} = ""`).join('\n')}
   }
