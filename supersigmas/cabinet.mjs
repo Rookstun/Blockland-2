@@ -78,7 +78,10 @@ function speakers(b) {
   const wireTo = (src, port) => w.addWire(src, { brick: b.portIn(port), component_type: INC, port: 'RER_Input' });
 
   // 48 cells = the owner's 26-wide panel; wider pictures widen panel + cabinet (clown: 64)
-  const PW = cell ? Math.ceil(gen.W * cell / 2 + 1) : Math.ceil(13 * gen.W / 48), BW = PW + 2;
+  // gen.exactScreen: the black panel is exactly the picture (no 1-unit margin) and the HUD/msg boxes take the bezel colour,
+  // so the screen reads at the picture's ratio (pong, Rookstun: 15 x 10 micro bricks, not 16 x 12)
+  const PW = cell ? (gen.exactScreen ? gen.W * cell / 2 : Math.ceil(gen.W * cell / 2 + 1)) : Math.ceil(13 * gen.W / 48), BW = PW + 2;
+  const HUDC = gen.exactScreen ? [60, 60, 64] : null;
   // ---- the owner's cabinet (clipboard bricks, rotated into this frame)
   box(-BW, 2, 24, BW, 22, 50 + UP);     // head behind the screen
   box(-BW, -8, 50 + UP, BW, 22, 58 + UP, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: title, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
@@ -97,9 +100,9 @@ function speakers(b) {
     if (gen.textPorts) { wireFrom('lh_', s, 'LineHeight'); wireFrom('ws_', s, 'WidthScale'); } // big type on text screens
   }
   const z0 = Z1 - gen.H * CELL; // 30
-  const hud = box(-PW, 0, z0 - 2 * TK, PW, 2, z0, { color: base, components: text({ LineHeight: 0.8 * TK, Color: rgba([248, 208, 64]) }) });
+  const hud = box(-PW, 0, z0 - 2 * TK, PW, 2, z0, { color: HUDC ?? base, components: text({ LineHeight: 0.8 * TK, Color: rgba([248, 208, 64]) }) });
   wireFrom('hud_', hud, 'Text');
-  const msg = box(-PW, 0, Math.min(26, z0 - 4 * TK), PW, 2, z0 - 2 * TK, { color: base, components: text({ LineHeight: 0.8 * TK, Color: rgba([240, 240, 240]) }) });
+  const msg = box(-PW, 0, Math.min(26, z0 - 4 * TK), PW, 2, z0 - 2 * TK, { color: HUDC ?? base, components: text({ LineHeight: 0.8 * TK, Color: rgba([240, 240, 240]) }) });
   wireFrom('msg_', msg, 'Text');
   const titleB = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, gen.titleMid ? Math.round(Z1 - gen.H * CELL / 2) : 42 + UP], visibility: false, collision: false, owner_index: O, // titleMid: centred on the screen (pong)
     components: text({ Font: font('Bungee'), LineHeight: gen.titleLH ?? 2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });

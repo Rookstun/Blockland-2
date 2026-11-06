@@ -425,5 +425,5 @@ on Change(seated) {
   if seated == false && forced == false { idle() }
 }
 `;
-  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, titleMid: true, titleLH: 4, synths: ['Square'] }; // P0/V0 = hit blip (paddle high, circle low) // debug builds keep the clock for /pgsit
+  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, titleMid: true, titleLH: 4, exactScreen: true, synths: ['Square'] }; // P0/V0 = hit blip (paddle high, circle low) // debug builds keep the clock for /pgsit
 }
