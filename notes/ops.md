@@ -61,4 +61,4 @@
 - Stage order = `mapgen/pipeline.mjs` (new section = add a stage + a stage() call). Tunables via `tune(key, def, note)`; Brickgen editor `node mapgen/wgsite/server.mjs` (:8788; `node mapgen/wgsite/verify.mjs` must print "exact" after heightmap changes).
 - Heightmap changes re-roll sites map-wide: pin sites (snow.at etc.) or composite (mapgen/composite.mjs).
 - Stairs: 3x3 landings both ends, floor under treads, never across windows. Windows never touch doors.
-
+- ACTIVE WORLD CHECK (2026-11-06, built on the wrong world): logs rotate into omegga-<date>.N.log, 100+ a day; `ls -t` + tail across them returns the OLDEST hit. Use: `grep -h 'Opening existing bundle at .*Worlds' omegga-<date>*.log | sort | tail -1` (lines start with a timestamp, so sort = time order). Check right before each build, not once a night.
