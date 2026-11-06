@@ -253,6 +253,23 @@ mod step() {
   }
   if over > 0 { hudv = "GAME OVER  SCORE \${score}  BEST \${best}" } else { hudv = "SCORE \${score}  BALLS \${alive}  BEST \${best}" }
 }
+// the player left: back to idle as if untouched (Rookstun): game stopped, screen blank, score cleared
+mod idle() {
+  if was {
+    was = false
+    bx.resize(0, 0.0)
+    by.resize(0, 0.0)
+    vx.resize(0, 0.0)
+    vy.resize(0, 0.0)
+    dl.resize(0, 0)
+    dfl.fill(0)
+    won = false
+    over = 0
+    score = 0
+    hudv = ""
+${strips.map(k => `    st${k} = ""`).join('\n')}
+  }
+}
 mod flush() {
   for j in 0..dl.length() {
     let r = dl.get(j)
@@ -301,23 +318,13 @@ on tick {
       flush()
     }
   } else {
-    // the player left: back to idle as if untouched (Rookstun): game stopped, screen blank, score cleared
-    if was {
-      was = false
-      bx.resize(0, 0.0)
-      by.resize(0, 0.0)
-      vx.resize(0, 0.0)
-      vy.resize(0, 0.0)
-      dl.resize(0, 0)
-      dfl.fill(0)
-      won = false
-      over = 0
-      score = 0
-      hudv = ""
-${strips.map(k => `      st${k} = ""`).join('\n')}
-    }
+    idle()
   }
 }
+// the seat emptying resets at once: the release clock stops with the seat (clockWhenSeated), so no tick would come
+on Change(seated) {
+  if seated == false && forced == false { idle() }
+}
 `;
-  return { src, W, H, STRIP, PAL, textColor: 'ffffff', synths: [] };
+  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, synths: [] }; // debug builds keep the clock for /pgsit
 }

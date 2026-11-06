@@ -129,6 +129,8 @@ function speakers(b) {
   wireTo(cmp('Expr_CompareGreater', add(port(split, 'bPressedLeftMouse'), port(split, 'bPressedE')), 0.5), pins.b);
   for (const [pin, key] of Object.entries(extra)) wireTo(cmp('Expr_CompareGreater', port(split, key), 0.5), pin);
   const clock = gate(C.Clock, { IntervalSeconds: 0.05, bEnabled: true });
+  // gen.clockWhenSeated: the clock only runs while the seat is occupied (pong, Rookstun: no updates with nobody seated)
+  if (gen.clockWhenSeated) w.addWire({ brick: seat, component_type: C.Seat.NAME, port: 'bIsOccupied' }, port(clock, 'bEnabled'));
   wireTo(port(clock, 'Pulse'), 'tick');
 
   fs.writeFileSync(join(here, `${name}.brz`), b.finish({ extraAssets: assets.slice(b.ext.length), description: `${title} cabinet` }));
