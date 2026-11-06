@@ -1,7 +1,7 @@
-// node pong/build.mjs -> pong/pong.brz (cabinet) + pong_chip.brz. Load: br.Prefab.Load "pong" x y z 0 16. Owner "PONG".
+// node pong/build.mjs (pure wires, no host) -> pong/pong.brz (cabinet) + pong_chip.brz. Load: br.Prefab.Load "pong" x y z 0 16. Owner "PONG".
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generate } from './gen.mjs';
+import { generate } from './wgen.mjs'; // pure-wire game (Rookstun 2026-11-05); ./gen.mjs = the server-host version
 import { buildCabinet } from '../supersigmas/cabinet.mjs';
 
 await buildCabinet({
