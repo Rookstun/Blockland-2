@@ -66,7 +66,7 @@ on ChatCommand("pg", "pong frame feed (host.mjs)") -> (ctrl, args) {
         blk = false
       } else {
         if p < 0 {
-          rows[r] = "<color=\\"ffffff\\">" .. s .. "</>"
+          rows[r] = s // no rich-text tags: the strip TextDisplay colour is white (gen textColor), cheaper to lay out
           dflag[r / ${STRIP}] = 1
           mode = 0
         } else {
@@ -111,5 +111,5 @@ ${strips.map(k => `  PrintToConsole("pgrow|${k}|" .. st${k})`).join('\n')}
   }
 }
 `;
-  return { src, W, H, STRIP, PAL, synths: [] };
+  return { src, W, H, STRIP, PAL, textColor: 'ffffff', synths: [] };
 }

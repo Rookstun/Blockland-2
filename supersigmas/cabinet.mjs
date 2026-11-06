@@ -91,7 +91,7 @@ function speakers(b) {
   const SH = gen.STRIP * CELL;
   for (let k = 0; k < gen.H / gen.STRIP; k++) {
     const s = box(-PW, 0, Z1 - (k + 1) * SH, PW, 2, Z1 - k * SH, { color: base,
-      components: text({ LineHeight: +(CELL * 0.645).toFixed(4), WidthScale: 2, Color: rgba(base) }) });
+      components: text({ LineHeight: +(CELL * 0.645).toFixed(4), WidthScale: 2, Color: rgba(gen.textColor ? hex(gen.textColor) : base) }) }); // textColor: untagged text (pong) draws in it
     wireFrom(`strip${k}`, s, 'Text');
     if (gen.textPorts) { wireFrom('lh_', s, 'LineHeight'); wireFrom('ws_', s, 'WidthScale'); } // big type on text screens
   }
