@@ -17,10 +17,12 @@ const STATE = join(dirname(fileURLToPath(import.meta.url)), 'status.state');
 const USAGE = join(dirname(fileURLToPath(import.meta.url)), 'usage.json');
 // beacon 0 = state (colour); beacons 1 and 2 = 5-hour and weekly usage: a 2-tall brick whose CENTRE sits pct units up,
 // so its top is pct + 1 (whole-percent precision; a height encoding could only do even numbers)
-export function job(state, { h5 = 0, wk = 0 } = {}) {
+export function job(state, { h5 = 0, wk = 0, reset = null } = {}) {
+  // beacon 3 = minutes until the 5-hour window resets (centre that many units up, 0..300); the chip counts down itself
+  const mins = reset ? Math.max(1, Math.min(300, Math.round((Date.parse(reset) - Date.now()) / 60000))) : 1;
   const col = (x, pct) => ({ asset: 'PB_DefaultMicroBrick', size: [4, 4, 1], position: [x, 0, Math.max(1, Math.min(100, Math.round(pct)))], color: [90, 90, 90], visibility: false });
   return { ops: [{ op: 'clear', owner: OWNER }, { op: 'bricks', at: BEACON, owner: OWNER, captureMs: 0,
-    bricks: [{ asset: 'PB_DefaultMicroBrick', size: [4, 4, 2], position: [0, 0, 2], color: COLOURS[state], visibility: false }, col(20, h5), col(40, wk)] }] };
+    bricks: [{ asset: 'PB_DefaultMicroBrick', size: [4, 4, 2], position: [0, 0, 2], color: COLOURS[state], visibility: false }, col(20, h5), col(40, wk), { ...col(60, 1), position: [60, 0, mins] }] }] };
 }
 const readJSON = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } };
 // send the current state + usage (detached: returns at once)

@@ -20,6 +20,6 @@ try {
   if (!(h5 >= 0 && wk >= 0)) process.exit(0);
   let old = {};
   try { old = JSON.parse(fs.readFileSync(USAGE, 'utf8')); } catch {}
-  fs.writeFileSync(USAGE, JSON.stringify({ h5, wk, at: Date.now() }));
+  fs.writeFileSync(USAGE, JSON.stringify({ h5, wk, reset: j.five_hour?.resets_at ?? null, at: Date.now() }));
   if (old.h5 !== h5 || old.wk !== wk) (await import('./status.mjs')).push();
 } catch {}

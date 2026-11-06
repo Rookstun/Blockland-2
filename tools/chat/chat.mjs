@@ -41,9 +41,9 @@ function ssh(cmd, input) {
 
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === 'usage') {
-  const [h5, wk] = rest.map(Number);
-  if (!(h5 >= 0 && wk >= 0)) throw new Error('usage: chat.mjs usage <5h%> <weekly%>');
-  fs.writeFileSync(USAGE, JSON.stringify({ h5, wk, at: Date.now() }));
+  const [h5, wk] = rest.slice(0, 2).map(Number), reset = rest[2] ?? null; // reset: ISO time the 5-hour window resets
+  if (!(h5 >= 0 && wk >= 0)) throw new Error('usage: chat.mjs usage <5h%> <weekly%> [5h-reset-ISO]');
+  fs.writeFileSync(USAGE, JSON.stringify({ h5, wk, reset, at: Date.now() }));
   const { push } = await import('./status.mjs');
   push(); // refresh the HUD beacons with the new numbers
 } else if (cmd === 'say') {

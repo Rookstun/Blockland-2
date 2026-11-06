@@ -20,8 +20,17 @@ var seen: bool = false
 var h5: int = 0
 var wk: int = 0
 var f: int = 0
+var baseM: float = 0.0
+var baseT: float = 0.0
+var lastM: int = -1
 var slow: int = 0
 const STAR = [${STAR.map(s => JSON.stringify(s)).join(', ')}]
+mod left() -> string {
+  let m = max(baseM - (ServerUptime() - baseT) / 60.0, 0.0)
+  let h = floor(m / 60.0)
+  let mm = floor(m - h * 60.0)
+  return "(resets \${h}h\${mm}m)"
+}
 mod col(p: int) -> string {
   return if p >= 90 then "ff4444" else if p >= 75 then "ff9933" else if p >= 50 then "eedd33" else "55dd55"
 }
@@ -43,6 +52,16 @@ on Clock(interval = 0.15) {
   on uw.Hit {
     wk = round(uw.HitLocation.z - ${BEACON[2] + 1}.0)
   }
+  // minutes until the 5-hour window resets: re-based whenever the beacon moves, counted down locally in between
+  let ur = Sweep(Vec(${BEACON[0] + 60}.0, ${BEACON[1]}.0, ${BEACON[2] + 320}.0), Vec(0.0, 0.0, -1.0), 330.0, detectBricks = true, detectMap = false, ignoreOwningGrid = false)
+  on ur.Hit {
+    let m = round(ur.HitLocation.z - ${BEACON[2] + 1}.0)
+    if m != lastM {
+      lastM = m
+      baseM = m
+      baseT = ServerUptime()
+    }
+  }
   f = (f + 1) % ${STAR.length}
   slow += 1
   // working: spin every tick; idle: refresh once a second (cheap)
@@ -50,7 +69,7 @@ on Clock(interval = 0.15) {
     slow = 0
     players.fillFromPlayers()
     let head = if busy then "<color=\\"d97757\\">" .. STAR[f] .. "</> claude is working" else "<color=\\"888888\\">·</> claude idle"
-    let text = if seen == false then "" else "<font=\\"MonaspaceKrypton\\">" .. head .. "   5h <color=\\"" .. col(h5) .. "\\">\${h5}%</>  wk <color=\\"" .. col(wk) .. "\\">\${wk}%</></>"
+    let text = if seen == false then "" else "<font=\\"MonaspaceKrypton\\">" .. head .. "   5h <color=\\"" .. col(h5) .. "\\">\${h5}%</> " .. left() .. "  wk <color=\\"" .. col(wk) .. "\\">\${wk}%</></>"
     for p in 0..players.length() {
       players.get(p).DisplayText(text, positionX = 0.0, positionY = -500.0, fontSize = 20, lifetime = if busy then 0.4 else 1.3, textId = 9705)
     }
