@@ -1,3 +1,5 @@
+// VERSION Baseline240Engine (Rookstun 2026-11-06: "dub the current Night Pong machine as version (Baseline240Engine)"):
+// the machine at 5790 -25014 (prefab pong120, owner PONG 120ea89 b120) = this file built in a git-archive of 120ea89.
 // pong/wgen.mjs: PONG 160x240 in pure wires (Rookstun: "just use wires to update and render the pong cabinet").
 // No server host: the chip runs the game and draws it. The trick that keeps 160x240 inside the wire budget: a row is
 // never drawn per pixel. Each changed row is rebuilt from the objects on it (balls, paddle, game-over bar) as
