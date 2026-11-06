@@ -379,6 +379,7 @@ export function generate({ debug = false } = {}) {
   const SCN = sceneryTables(); // first: it adds the shaded scenery colours to the palette
   const NS = H / STRIP, q = JSON.stringify, T = spriteTables(), RB = T.ROWBASE;
   const GR = gapRows(), GTAGS = [...new Set(GR)], GIDX = GR.map(c => GTAGS.indexOf(c));
+  const RCAP = 40; // rows redrawn per frame at most
   const GROUND = H - 4, PUB = 1, NA = AREAS.length, NN = NODES.length;
   const LANE0 = Math.ceil(SKY / STRIP) * STRIP + 2, LANEMAX = (H / STRIP - 1) * STRIP + 2; // first/last lane top (42, 142)
   // dialogue lines flattened; each npc gets [first, last] line indices
@@ -550,6 +551,8 @@ var musT: int = 0
 var musT0: float = 0.0
 var melNext: float = 0.0
 var frames: int = 0
+var dlp: int = 0
+var irisStep: int = -1
 var crossDir: int = 0
 var crossT0: float = 0.0
 var splashT: float = -9.0
@@ -1136,6 +1139,7 @@ mod step() {
       if pS {
         irisPh = 1
         irisT0 = now
+        irisStep = -1
         irisX = NX[node] + 2.0
         irisY = NY[node] - 2.0
       }
@@ -1154,23 +1158,31 @@ mod step() {
   }
   if irisPh == 1 {
     // closing on the car (0.5 s), then into the place
-    irisR = max(170.0 * (1.0 - (now - irisT0) / 0.5), 0.0)
-    for r in 0..${H} { mark(r) }
+    let st1 = floor((now - irisT0) / 0.1)
+    if st1 != irisStep {
+      irisStep = st1
+      irisR = max(170.0 * (1.0 - (st1 + 1) / 5.0), 0.0)
+      for r in 0..${H} { mark(r) }
+    }
     if irisR <= 0.0 {
       py = 102.0
       enterArea(NF[node], 2.0)
       flash("\${ANAME[area]}")
-      wipe = ${H}
       irisPh = 2
       irisT0 = now
+      irisStep = -1
       irisX = 16.0
       irisY = py + 8.0
     }
   } else {
     if irisPh == 2 {
       // opening out of Daniel (0.5 s)
-      irisR = 170.0 * min((now - irisT0) / 0.5, 1.0)
-      for r in 0..${H} { mark(r) }
+      let st2 = floor((now - irisT0) / 0.1)
+      if st2 != irisStep {
+        irisStep = st2
+        irisR = 170.0 * min((st2 + 1) / 5.0, 1.0)
+        for r in 0..${H} { mark(r) }
+      }
       if now >= irisT0 + 0.5 {
         irisPh = 0
         irisR = 999.0
@@ -1432,6 +1444,7 @@ mod idle() {
     was = false
     mode = 0
     dl.resize(0, 0)
+    dlp = 0
     dfl.fill(0)
     hudv = ""
     msgv = ""
@@ -1453,12 +1466,19 @@ mod flush() {
     for k in 0..20 { mark(wipe + k) }
     wipe += 20
   }
-  for j in 0..dl.length() {
-    let r = dl.get(j)
+  // at most ${RCAP} rows a frame (owner: the zoom froze a bar at the bottom: redrawing all 160 rows in one frame ran out
+  // of time and left rows flagged forever); the rest stay queued for the next frame
+  let n0 = min(dl.length() - dlp, ${RCAP})
+  for j in 0..n0 {
+    let r = dl.get(dlp + j)
     dfl[r] = 0
     renderRow(r)
   }
-  dl.resize(0, 0)
+  dlp += n0
+  if dlp >= dl.length() {
+    dl.resize(0, 0)
+    dlp = 0
+  }
   for k in 0..${NS} {
     if sdf.get(k) == 1 {
       sdf[k] = 0
@@ -1514,7 +1534,7 @@ on ServerUptime() {
     flush()
     pubT += 1
     frames += 1
-    if pubDirty && pubT % ${PUB} == 0 { publish() }
+    if pubDirty && dl.length() == 0 && pubT % ${PUB} == 0 { publish() }
   } else {
     idle()
   }
