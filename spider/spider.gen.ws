@@ -13,6 +13,8 @@ var pos: vector = Vec(0.0, 0.0, 0.0)
 var yaw: float = 0.0
 var speed: float = 0.0
 var hits: int = 0
+var pan: float = 0.0
+var flk: bool = false
 var misses: int = 0
 var parts: entity[]
 var bodyE: entity
@@ -239,6 +241,9 @@ on Clock(interval = 0.0) {
     let V = speed
     let M = mode
     let G = goal
+    let PN = pan
+    let FL = flk
+    let panicking = PN > 0.0
     let A0 = a0
     let B0 = b0
     let T0 = t0
@@ -275,12 +280,17 @@ on Clock(interval = 0.0) {
     let err = ((Rad2Deg(atan2(dy, dx)) + wob - Y) - 360.0 * floor(((Rad2Deg(atan2(dy, dx)) + wob - Y) + 180.0) / 360.0))
     let turn = if active then clamp(err, 0.0 - 240.0 * dt, 240.0 * dt) else 0.0
     let y2 = ((Y + turn) - 360.0 * floor(((Y + turn) + 180.0) / 360.0))
-    let vt = if active then burst * 330.0 * clamp(1.0 - abs(err) / 70.0, 0.0, 1.0) * clamp((dist - gap) / 120.0, 0.25, 1.0) else 0.0
+    let vt = if active && !panicking then burst * 330.0 * clamp(1.0 - abs(err) / 70.0, 0.0, 1.0) * clamp((dist - gap) / 120.0, 0.25, 1.0) else 0.0
     let v2 = V + clamp(vt - V, 0.0 - 900.0 * dt, 900.0 * dt)
-    let c = cos(Deg2Rad(y2))
-    let s = sin(Deg2Rad(y2))
-    let vx = c * v2
-    let vy = s * v2
+    // rider on its back (owner: 'if you are on top of it it freaks out and tries to flick you off'): buck + spin + stomp, then fling
+    let sh = if panicking then 28.0 * sin(u * 41.0) else 0.0
+    let rl = if panicking then 12.0 * sin(u * 37.0) else 0.0
+    let bob = if panicking then 14.0 * abs(sin(u * 29.0)) else 0.0
+    let yv = y2 + sh
+    let c = cos(Deg2Rad(yv))
+    let s = sin(Deg2Rad(yv))
+    let vx = cos(Deg2Rad(y2)) * v2
+    let vy = sin(Deg2Rad(y2)) * v2
     let px = P.x + vx * dt
     let py = P.y + vy * dt
     let gz = (B0.z + B1.z + B2.z + B3.z + B4.z + B5.z + B6.z + B7.z) / 8.0
@@ -292,13 +302,26 @@ on Clock(interval = 0.0) {
     pos = Vec(px, py, pz2)
     yaw = y2
     speed = v2
-    bodyE.SetLocationRotation(Vec(px, py, pz2), Rotation(0.0, y2, 0.0))
+    bodyE.SetLocationRotation(Vec(px, py, pz2 + bob), Rotation(0.0, yv, rl))
+    let rd = Sweep(Vec(px - c * 17.0, py - s * 17.0, pz2 + 40.0), Vec(0.0, 0.0, 1.0), 100.0, radius = 50.0, ignoreList = parts, detectPlayers1 = true, detectPlayers2 = true, detectPlayers3 = true, detectPlayers4 = true)
+    if rd.Hit {
+      if !panicking {
+        pan = 1.4
+        flk = false
+      } else if PN < 0.5 && !FL {
+        rd.HitEntity.AddVelocity(linear = Vec(cos(u * 13.0) * 1100.0, sin(u * 13.0) * 1100.0, 1400.0))
+        flk = true
+      }
+    }
+    if panicking {
+      pan = PN - dt
+    }
 
   // ---- leg 0
   let gx0 = (px + c * 191.5111 - s * 160.6969) + vx * 0.2
   let gy0 = (py + s * 191.5111 + c * 160.6969) + vy * 0.2
   let lag0 = sqrt((gx0 - B0.x) * (gx0 - B0.x) + (gy0 - B0.y) * (gy0 - B0.y))
-  let want0 = T0 >= 1.0 && lag0 > (if v2 > 5.0 then 50.0 else 15.0)
+  let want0 = T0 >= 1.0 && (panicking || lag0 > (if v2 > 5.0 then 50.0 else 15.0))
   let lift0 = want0 && T1 >= 1.0 && T4 >= 1.0
   let nt0 = min(T0 + dt / 0.15, 1.0)
   let ez0 = nt0 * nt0 * (3.0 - 2.0 * nt0)
@@ -369,7 +392,7 @@ on Clock(interval = 0.0) {
   }
   let hpx0 = (px + c * 24.0 - s * 20.0)
   let hpy0 = (py + s * 24.0 + c * 20.0)
-  let hpz0 = pz2
+  let hpz0 = pz2 + bob
   let wx0 = F0.x - hpx0
   let wy0 = F0.y - hpy0
   let hl0 = max(sqrt(wx0 * wx0 + wy0 * wy0), 1.0)
@@ -393,7 +416,7 @@ on Clock(interval = 0.0) {
   let gx1 = (px + c * 64.7048 - s * 241.4815) + vx * 0.2
   let gy1 = (py + s * 64.7048 + c * 241.4815) + vy * 0.2
   let lag1 = sqrt((gx1 - B1.x) * (gx1 - B1.x) + (gy1 - B1.y) * (gy1 - B1.y))
-  let want1 = T1 >= 1.0 && lag1 > (if v2 > 5.0 then 50.0 else 15.0)
+  let want1 = T1 >= 1.0 && (panicking || lag1 > (if v2 > 5.0 then 50.0 else 15.0))
   let lift1 = want1 && T0 >= 1.0 && T2 >= 1.0 && T5 >= 1.0 && !lift0
   let nt1 = min(T1 + dt / 0.15, 1.0)
   let ez1 = nt1 * nt1 * (3.0 - 2.0 * nt1)
@@ -464,7 +487,7 @@ on Clock(interval = 0.0) {
   }
   let hpx1 = (px + c * 8.0 - s * 20.0)
   let hpy1 = (py + s * 8.0 + c * 20.0)
-  let hpz1 = pz2
+  let hpz1 = pz2 + bob
   let wx1 = F1.x - hpx1
   let wy1 = F1.y - hpy1
   let hl1 = max(sqrt(wx1 * wx1 + wy1 * wy1), 1.0)
@@ -488,7 +511,7 @@ on Clock(interval = 0.0) {
   let gx2 = (px + c * -64.7048 - s * 241.4815) + vx * 0.2
   let gy2 = (py + s * -64.7048 + c * 241.4815) + vy * 0.2
   let lag2 = sqrt((gx2 - B2.x) * (gx2 - B2.x) + (gy2 - B2.y) * (gy2 - B2.y))
-  let want2 = T2 >= 1.0 && lag2 > (if v2 > 5.0 then 50.0 else 15.0)
+  let want2 = T2 >= 1.0 && (panicking || lag2 > (if v2 > 5.0 then 50.0 else 15.0))
   let lift2 = want2 && T1 >= 1.0 && T3 >= 1.0 && T6 >= 1.0 && !lift1
   let nt2 = min(T2 + dt / 0.15, 1.0)
   let ez2 = nt2 * nt2 * (3.0 - 2.0 * nt2)
@@ -559,7 +582,7 @@ on Clock(interval = 0.0) {
   }
   let hpx2 = (px + c * -8.0 - s * 20.0)
   let hpy2 = (py + s * -8.0 + c * 20.0)
-  let hpz2 = pz2
+  let hpz2 = pz2 + bob
   let wx2 = F2.x - hpx2
   let wy2 = F2.y - hpy2
   let hl2 = max(sqrt(wx2 * wx2 + wy2 * wy2), 1.0)
@@ -583,7 +606,7 @@ on Clock(interval = 0.0) {
   let gx3 = (px + c * -191.5111 - s * 160.6969) + vx * 0.2
   let gy3 = (py + s * -191.5111 + c * 160.6969) + vy * 0.2
   let lag3 = sqrt((gx3 - B3.x) * (gx3 - B3.x) + (gy3 - B3.y) * (gy3 - B3.y))
-  let want3 = T3 >= 1.0 && lag3 > (if v2 > 5.0 then 50.0 else 15.0)
+  let want3 = T3 >= 1.0 && (panicking || lag3 > (if v2 > 5.0 then 50.0 else 15.0))
   let lift3 = want3 && T2 >= 1.0 && T7 >= 1.0 && !lift2
   let nt3 = min(T3 + dt / 0.15, 1.0)
   let ez3 = nt3 * nt3 * (3.0 - 2.0 * nt3)
@@ -654,7 +677,7 @@ on Clock(interval = 0.0) {
   }
   let hpx3 = (px + c * -24.0 - s * 20.0)
   let hpy3 = (py + s * -24.0 + c * 20.0)
-  let hpz3 = pz2
+  let hpz3 = pz2 + bob
   let wx3 = F3.x - hpx3
   let wy3 = F3.y - hpy3
   let hl3 = max(sqrt(wx3 * wx3 + wy3 * wy3), 1.0)
@@ -678,7 +701,7 @@ on Clock(interval = 0.0) {
   let gx4 = (px + c * 191.5111 - s * -160.6969) + vx * 0.2
   let gy4 = (py + s * 191.5111 + c * -160.6969) + vy * 0.2
   let lag4 = sqrt((gx4 - B4.x) * (gx4 - B4.x) + (gy4 - B4.y) * (gy4 - B4.y))
-  let want4 = T4 >= 1.0 && lag4 > (if v2 > 5.0 then 50.0 else 15.0)
+  let want4 = T4 >= 1.0 && (panicking || lag4 > (if v2 > 5.0 then 50.0 else 15.0))
   let lift4 = want4 && T5 >= 1.0 && T0 >= 1.0 && !lift0
   let nt4 = min(T4 + dt / 0.15, 1.0)
   let ez4 = nt4 * nt4 * (3.0 - 2.0 * nt4)
@@ -749,7 +772,7 @@ on Clock(interval = 0.0) {
   }
   let hpx4 = (px + c * 24.0 - s * -20.0)
   let hpy4 = (py + s * 24.0 + c * -20.0)
-  let hpz4 = pz2
+  let hpz4 = pz2 + bob
   let wx4 = F4.x - hpx4
   let wy4 = F4.y - hpy4
   let hl4 = max(sqrt(wx4 * wx4 + wy4 * wy4), 1.0)
@@ -773,7 +796,7 @@ on Clock(interval = 0.0) {
   let gx5 = (px + c * 64.7048 - s * -241.4815) + vx * 0.2
   let gy5 = (py + s * 64.7048 + c * -241.4815) + vy * 0.2
   let lag5 = sqrt((gx5 - B5.x) * (gx5 - B5.x) + (gy5 - B5.y) * (gy5 - B5.y))
-  let want5 = T5 >= 1.0 && lag5 > (if v2 > 5.0 then 50.0 else 15.0)
+  let want5 = T5 >= 1.0 && (panicking || lag5 > (if v2 > 5.0 then 50.0 else 15.0))
   let lift5 = want5 && T4 >= 1.0 && T6 >= 1.0 && T1 >= 1.0 && !lift4 && !lift1
   let nt5 = min(T5 + dt / 0.15, 1.0)
   let ez5 = nt5 * nt5 * (3.0 - 2.0 * nt5)
@@ -844,7 +867,7 @@ on Clock(interval = 0.0) {
   }
   let hpx5 = (px + c * 8.0 - s * -20.0)
   let hpy5 = (py + s * 8.0 + c * -20.0)
-  let hpz5 = pz2
+  let hpz5 = pz2 + bob
   let wx5 = F5.x - hpx5
   let wy5 = F5.y - hpy5
   let hl5 = max(sqrt(wx5 * wx5 + wy5 * wy5), 1.0)
@@ -868,7 +891,7 @@ on Clock(interval = 0.0) {
   let gx6 = (px + c * -64.7048 - s * -241.4815) + vx * 0.2
   let gy6 = (py + s * -64.7048 + c * -241.4815) + vy * 0.2
   let lag6 = sqrt((gx6 - B6.x) * (gx6 - B6.x) + (gy6 - B6.y) * (gy6 - B6.y))
-  let want6 = T6 >= 1.0 && lag6 > (if v2 > 5.0 then 50.0 else 15.0)
+  let want6 = T6 >= 1.0 && (panicking || lag6 > (if v2 > 5.0 then 50.0 else 15.0))
   let lift6 = want6 && T5 >= 1.0 && T7 >= 1.0 && T2 >= 1.0 && !lift5 && !lift2
   let nt6 = min(T6 + dt / 0.15, 1.0)
   let ez6 = nt6 * nt6 * (3.0 - 2.0 * nt6)
@@ -939,7 +962,7 @@ on Clock(interval = 0.0) {
   }
   let hpx6 = (px + c * -8.0 - s * -20.0)
   let hpy6 = (py + s * -8.0 + c * -20.0)
-  let hpz6 = pz2
+  let hpz6 = pz2 + bob
   let wx6 = F6.x - hpx6
   let wy6 = F6.y - hpy6
   let hl6 = max(sqrt(wx6 * wx6 + wy6 * wy6), 1.0)
@@ -963,7 +986,7 @@ on Clock(interval = 0.0) {
   let gx7 = (px + c * -191.5111 - s * -160.6969) + vx * 0.2
   let gy7 = (py + s * -191.5111 + c * -160.6969) + vy * 0.2
   let lag7 = sqrt((gx7 - B7.x) * (gx7 - B7.x) + (gy7 - B7.y) * (gy7 - B7.y))
-  let want7 = T7 >= 1.0 && lag7 > (if v2 > 5.0 then 50.0 else 15.0)
+  let want7 = T7 >= 1.0 && (panicking || lag7 > (if v2 > 5.0 then 50.0 else 15.0))
   let lift7 = want7 && T6 >= 1.0 && T3 >= 1.0 && !lift6 && !lift3
   let nt7 = min(T7 + dt / 0.15, 1.0)
   let ez7 = nt7 * nt7 * (3.0 - 2.0 * nt7)
@@ -1034,7 +1057,7 @@ on Clock(interval = 0.0) {
   }
   let hpx7 = (px + c * -24.0 - s * -20.0)
   let hpy7 = (py + s * -24.0 + c * -20.0)
-  let hpz7 = pz2
+  let hpz7 = pz2 + bob
   let wx7 = F7.x - hpx7
   let wy7 = F7.y - hpy7
   let hl7 = max(sqrt(wx7 * wx7 + wy7 * wy7), 1.0)

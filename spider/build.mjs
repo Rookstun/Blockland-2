@@ -104,7 +104,7 @@ ${'  '.repeat(k + 2)}}`;
   let gx${i} = ${mx} + vx * ${f1(LEAD)}
   let gy${i} = ${my} + vy * ${f1(LEAD)}
   let lag${i} = sqrt((gx${i} - B${i}.x) * (gx${i} - B${i}.x) + (gy${i} - B${i}.y) * (gy${i} - B${i}.y))
-  let want${i} = T${i} >= 1.0 && lag${i} > (if v2 > 5.0 then ${f1(STEP)} else ${f1(SETTLE)})
+  let want${i} = T${i} >= 1.0 && (panicking || lag${i} > (if v2 > 5.0 then ${f1(STEP)} else ${f1(SETTLE)}))
   let lift${i} = want${i}${nb(i).map(k => ` && T${k} >= 1.0`).join('')}${nb(i).filter(k => k < i).map(k => ` && !lift${k}`).join('')}
   let nt${i} = min(T${i} + dt / ${f1(SWING)}, 1.0)
   let ez${i} = nt${i} * nt${i} * (3.0 - 2.0 * nt${i})
@@ -120,7 +120,7 @@ ${drop(0)}
   }
   let hpx${i} = ${hx}
   let hpy${i} = ${hy}
-  let hpz${i} = pz2
+  let hpz${i} = pz2 + bob
   let wx${i} = F${i}.x - hpx${i}
   let wy${i} = F${i}.y - hpy${i}
   let hl${i} = max(sqrt(wx${i} * wx${i} + wy${i} * wy${i}), 1.0)
@@ -156,6 +156,8 @@ var pos: vector = Vec(0.0, 0.0, 0.0)
 var yaw: float = 0.0
 var speed: float = 0.0
 var hits: int = 0
+var pan: float = 0.0
+var flk: bool = false
 var misses: int = 0
 var parts: entity[]
 var bodyE: entity
@@ -227,6 +229,9 @@ ${LEGS.map(({ i, home }) => `    b${i} = Vec(o.x + ${f1(home[0])}, o.y + ${f1(ho
     let V = speed
     let M = mode
     let G = goal
+    let PN = pan
+    let FL = flk
+    let panicking = PN > 0.0
 ${LEGS.map(({ i }) => `    let A${i} = a${i}\n    let B${i} = b${i}\n    let T${i} = t${i}`).join('\n')}
     let tgt = if M == 1 then ctl.CharacterOf().GetLocation() else G
     let dx = tgt.x - P.x
@@ -240,12 +245,17 @@ ${LEGS.map(({ i }) => `    let A${i} = a${i}\n    let B${i} = b${i}\n    let T${
     let err = ${wrap('(Rad2Deg(atan2(dy, dx)) + wob - Y)')}
     let turn = if active then clamp(err, 0.0 - ${f1(TURN)} * dt, ${f1(TURN)} * dt) else 0.0
     let y2 = ${wrap('(Y + turn)')}
-    let vt = if active then burst * ${f1(SPEED)} * clamp(1.0 - abs(err) / 70.0, 0.0, 1.0) * clamp((dist - gap) / 120.0, 0.25, 1.0) else 0.0
+    let vt = if active && !panicking then burst * ${f1(SPEED)} * clamp(1.0 - abs(err) / 70.0, 0.0, 1.0) * clamp((dist - gap) / 120.0, 0.25, 1.0) else 0.0
     let v2 = V + clamp(vt - V, 0.0 - ${f1(ACC)} * dt, ${f1(ACC)} * dt)
-    let c = cos(Deg2Rad(y2))
-    let s = sin(Deg2Rad(y2))
-    let vx = c * v2
-    let vy = s * v2
+    // rider on its back (owner: 'if you are on top of it it freaks out and tries to flick you off'): buck + spin + stomp, then fling
+    let sh = if panicking then 28.0 * sin(u * 41.0) else 0.0
+    let rl = if panicking then 12.0 * sin(u * 37.0) else 0.0
+    let bob = if panicking then 14.0 * abs(sin(u * 29.0)) else 0.0
+    let yv = y2 + sh
+    let c = cos(Deg2Rad(yv))
+    let s = sin(Deg2Rad(yv))
+    let vx = cos(Deg2Rad(y2)) * v2
+    let vy = sin(Deg2Rad(y2)) * v2
     let px = P.x + vx * dt
     let py = P.y + vy * dt
     let gz = (${LEGS.map(({ i }) => `B${i}.z`).join(' + ')}) / 8.0
@@ -257,7 +267,20 @@ ${LEGS.map(({ i }) => `    let A${i} = a${i}\n    let B${i} = b${i}\n    let T${
     pos = Vec(px, py, pz2)
     yaw = y2
     speed = v2
-    bodyE.SetLocationRotation(Vec(px, py, pz2), Rotation(0.0, y2, 0.0))
+    bodyE.SetLocationRotation(Vec(px, py, pz2 + bob), Rotation(0.0, yv, rl))
+    let rd = Sweep(Vec(px - c * 17.0, py - s * 17.0, pz2 + 40.0), Vec(0.0, 0.0, 1.0), 100.0, radius = 50.0, ignoreList = parts, detectPlayers1 = true, detectPlayers2 = true, detectPlayers3 = true, detectPlayers4 = true)
+    if rd.Hit {
+      if !panicking {
+        pan = 1.4
+        flk = false
+      } else if PN < 0.5 && !FL {
+        rd.HitEntity.AddVelocity(linear = Vec(cos(u * 13.0) * 1100.0, sin(u * 13.0) * 1100.0, 1400.0))
+        flk = true
+      }
+    }
+    if panicking {
+      pan = PN - dt
+    }
 ${LEGS.map(legBlock).join('\n')}
   }
 }
