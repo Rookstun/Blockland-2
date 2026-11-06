@@ -136,8 +136,8 @@ on ServerUptime() {
     let pd = down && lastDown == false
     lastUp = up
     lastDown = down
-    if pu { sel = (sel + 3) % 4 }
-    if pd { sel = (sel + 1) % 4 }
+    if pu { sel = (sel + 1) % 4 } // inverted (Computational En2ty): W moves the marker right
+    if pd { sel = (sel + 3) % 4 }
     if pu || pd { draw() }
     let d = (if right then 1.0 else 0.0) - (if left then 1.0 else 0.0)
     if d != 0.0 {
