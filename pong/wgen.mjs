@@ -120,7 +120,7 @@ mod renderRow(r: int) {
       cur = b
     }
   }
-  rows[r] = s
+  rows[r] = s .. SP.Substring(0, ${W}.0 - cur) // full width: the TextDisplay centres each line, short rows drifted right
   sdf[r / ${STRIP}] = 1
 }
 mod step() {
@@ -159,8 +159,12 @@ mod step() {
           y = 6.0 - y
           dy = abs(dy)
         }
-        if dy > 0.0 && y + ${BS}.0 >= ${PY}.0 && y + ${BS}.0 <= ${PY + 4}.0 + dy && x + ${BS}.0 > px && x < px + ${PW}.0 {
-          let off = (x + ${BS / 2}.0 - (px + ${PW / 2}.0)) / ${PW / 2}.0
+        // swept paddle test (Rookstun: balls went through): where was the ball when its bottom crossed the paddle top?
+        let oy = by.get(i)
+        let xc = bx.get(i) + vx.get(i) * min(max((${PY}.0 - oy - ${BS}.0) / max(dy, 0.01), 0.0), 1.0)
+        if dy > 0.0 && oy + ${BS}.0 <= ${PY + 2}.0 && y + ${BS}.0 >= ${PY}.0 && xc + ${BS}.0 > px - 1.0 && xc < px + ${PW + 1}.0 {
+          let off = min(max((xc + ${BS / 2}.0 - (px + ${PW / 2}.0)) / ${PW / 2}.0, -1.0), 1.0)
+          x = min(max(xc, 0.0), ${W - BS}.0)
           let sp = min(9.0, sqrt(dx * dx + dy * dy) + 0.15)
           dx = sp * off * 0.8
           dy = 0.0 - sqrt(sp * sp - dx * dx)
