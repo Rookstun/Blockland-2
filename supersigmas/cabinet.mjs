@@ -55,7 +55,8 @@ function speakers(b) {
 {
   // one hidden chip lying on the hood (top z 58), no outer pins: the seat wires into its port gates, its port gates
   // wire straight into the screen, and the seat adapter (splitter, compares, clock) sits on the chip's own plane
-  const b = await bundle(compiled, { owner: OWNER, offset: [0, 12, 60], hide: true, bare: true });
+  const Z1 = Math.max(48, 30 + gen.H * (cell ?? 0.5)), UP = Z1 - 48; // tall pictures (pong 160x240) raise the screen top, head, hood and chip
+  const b = await bundle(compiled, { owner: OWNER, offset: [0, 12, 60 + UP], hide: true, bare: true });
   const { w, C, O } = b;
   const assets = [...b.ext, ...speakers(b)];
   const font = name => { let i = assets.findIndex(e => e.type === 'BrickFontDescriptor' && e.name === name); if (i < 0) { assets.push({ type: 'BrickFontDescriptor', name }); i = assets.length - 1; } return i; };
@@ -78,8 +79,8 @@ function speakers(b) {
   // 48 cells = the owner's 26-wide panel; wider pictures widen panel + cabinet (clown: 64)
   const PW = cell ? Math.ceil(gen.W * cell / 2 + 1) : Math.ceil(13 * gen.W / 48), BW = PW + 2;
   // ---- the owner's cabinet (clipboard bricks, rotated into this frame)
-  box(-BW, 2, 24, BW, 22, 50);     // head behind the screen
-  box(-BW, -8, 50, BW, 22, 58, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: title, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
+  box(-BW, 2, 24, BW, 22, 50 + UP);     // head behind the screen
+  box(-BW, -8, 50 + UP, BW, 22, 58 + UP, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: title, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) }); // hood + marquee
   box(-BW, -8, 0, BW, 22, 24);     // base / desk
   w.addBrick({ asset: 'PB_DefaultBrick', color: GREY, size: [5, 5, 6], position: [0, -22, 6], owner_index: O }); // stool
   const seat = w.addBrick({ asset: 'B_Seat', position: [0, -23, 23], direction: 4, rotation: 0, color: [255, 255, 255], owner_index: O,
@@ -87,7 +88,7 @@ function speakers(b) {
 
   // ---- screen = the owner's white panel x -13..13, y 0..2, z 26..48
   const CELL = cell ?? 0.5, base = hex(gen.PAL[0]);
-  const Z1 = 48, SH = gen.STRIP * CELL;
+  const SH = gen.STRIP * CELL;
   for (let k = 0; k < gen.H / gen.STRIP; k++) {
     const s = box(-PW, 0, Z1 - (k + 1) * SH, PW, 2, Z1 - k * SH, { color: base,
       components: text({ LineHeight: +(CELL * 0.645).toFixed(4), WidthScale: 2, Color: rgba(base) }) });
@@ -99,7 +100,7 @@ function speakers(b) {
   wireFrom('hud_', hud, 'Text');
   const msg = box(-PW, 0, Math.min(26, z0 - 4), PW, 2, z0 - 2, { color: base, components: text({ LineHeight: 0.8, Color: rgba([240, 240, 240]) }) });
   wireFrom('msg_', msg, 'Text');
-  const titleB = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, 42], visibility: false, collision: false, owner_index: O,
+  const titleB = w.addBrick({ asset: MB, color: [0, 0, 0], size: [1, 1, 1], position: [0, -3, 42 + UP], visibility: false, collision: false, owner_index: O,
     components: text({ Font: font('Bungee'), LineHeight: 2, Offset: { X: 0, Y: 0, Z: 0 }, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 3, OutlineColor: rgba([120, 20, 60]) }) });
   wireFrom('title_', titleB, 'Text');
 
