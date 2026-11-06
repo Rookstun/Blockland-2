@@ -6,6 +6,7 @@
 export const W = 240, H = 160, STRIP = 16; // landscape (Rookstun: "each row 240 micro bricks wide, stack 160")
 export const PAL = ['000000'];
 
+export const LH0 = 0.0806, WS0 = 2.0; // strip LineHeight / WidthScale at cell 0.125 (0.125 x 0.645); tune live with /pgcal
 export function generate({ debug = false } = {}) {
   const NS = H / STRIP, q = JSON.stringify;
   const strips = Array.from({ length: NS }, (_, k) => k);
@@ -73,6 +74,8 @@ var kt: float = 1.0
 var lastT: float = 0.0
 var overUntil: float = 0.0
 var beep: int = 0
+var lhv: float = ${LH0}
+var wsv: float = ${WS0}
 var titlev: string = "NIGHT PONG"
 var mel: float[]
 var melPos: int = 0
@@ -98,6 +101,8 @@ ${strips.map(k => `@right out strip${k}: string = st${k}`).join('\n')}
 @right out msg_: string = "A/D move  -  new ball every 2 returns"
 @right out hud_: string = hudv
 @right out title_: string = titlev
+@right out lh_: float = lhv
+@right out ws_: float = wsv
 @right out P0: float = aP0
 @right out V0: float = aV0
 
@@ -402,6 +407,16 @@ on ChatCommand("pgsit", "debug: play as if seated (toggle)") -> (ctrl, args) {
   forced = forced == false
 }
 ` : ''}// 20 Hz tick, game at 10 fps; only while somebody sits (a new sitter = new game, full redraw)
+// live text calibration (Rookstun: the font will not draw the 0.125 grid at the computed size): /pgcal h+ h- w+ w-
+// = line height / width scale +-5%; tells the caller and logs pgcal|lh|ws so the values can be baked into LH0/WS0
+on ChatCommand("pgcal", "Night Pong screen fit: h+ h- (row height) w+ w- (width)") -> (ctrl, args) {
+  if args == "h+" { lhv = lhv * 1.05 }
+  if args == "h-" { lhv = lhv / 1.05 }
+  if args == "w+" { wsv = wsv * 1.05 }
+  if args == "w-" { wsv = wsv / 1.05 }
+  ctrl.DisplayText("row height \${lhv}  width \${wsv}", positionY = -300.0, fontSize = 30, lifetime = 3.0, textId = 9703)
+  PrintToConsole("pgcal|\${lhv}|\${wsv}")
+}
 on tick {
   if seated || forced {
     if was == false {
@@ -425,5 +440,5 @@ on Change(seated) {
   if seated == false && forced == false { idle() }
 }
 `;
-  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, titleMid: true, titleLH: 4, exactScreen: true, synths: ['Square'] }; // P0/V0 = hit blip (paddle high, circle low) // debug builds keep the clock for /pgsit
+  return { src, W, H, STRIP, PAL, textColor: 'ffffff', clockWhenSeated: !debug, titleMid: true, titleLH: 4, exactScreen: true, textPorts: true, synths: ['Square'] }; // P0/V0 = hit blip (paddle high, circle low) // debug builds keep the clock for /pgsit
 }
