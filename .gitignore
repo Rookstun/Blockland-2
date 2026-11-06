@@ -30,3 +30,4 @@ nes/roms/
 nes/out/
 puppet/pose_landmarker_*.task
 tools/chat/usage.json
+tools/chat/status.state
