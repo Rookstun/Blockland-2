@@ -14,9 +14,20 @@ export const COLOURS = { busy: [217, 119, 87], idle: [128, 128, 128] };
 const OWNER = { id: 'c1a0de00-0000-4b0b-9a11-0000005a7a75', name: 'Claude Status', display_name: 'Claude Status' };
 const STATE = join(dirname(fileURLToPath(import.meta.url)), 'status.state');
 
-export function job(state) {
+const USAGE = join(dirname(fileURLToPath(import.meta.url)), 'usage.json');
+// beacon 0 = state (colour); beacons 1 and 2 = 5-hour and weekly usage as the brick's height in units (2-unit steps)
+export function job(state, { h5 = 0, wk = 0 } = {}) {
+  const col = (x, pct) => { const h = Math.max(2, Math.min(100, Math.round(pct / 2) * 2)); return { asset: 'PB_DefaultMicroBrick', size: [4, 4, h / 2], position: [x, 0, h / 2], color: [90, 90, 90], visibility: false }; };
   return { ops: [{ op: 'clear', owner: OWNER }, { op: 'bricks', at: BEACON, owner: OWNER, captureMs: 0,
-    bricks: [{ asset: 'PB_DefaultMicroBrick', size: [4, 4, 2], position: [0, 0, 2], color: COLOURS[state], visibility: false }] }] };
+    bricks: [{ asset: 'PB_DefaultMicroBrick', size: [4, 4, 2], position: [0, 0, 2], color: COLOURS[state], visibility: false }, col(20, h5), col(40, wk)] }] };
+}
+const readJSON = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } };
+// send the current state + usage (detached: returns at once)
+export function push(state) {
+  state ??= (() => { try { return fs.readFileSync(STATE, 'utf8').trim(); } catch { return 'idle'; } })();
+  const p = spawn('ssh', ['pzedlo.hopto.org', '~/node22/bin/node ~/omegga-server/bridge/tools/job.mjs'], { detached: true, stdio: ['pipe', 'ignore', 'ignore'] });
+  p.stdin.end(JSON.stringify(job(state, readJSON(USAGE))));
+  p.unref();
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
@@ -26,8 +37,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try { last = fs.readFileSync(STATE, 'utf8').trim(); } catch {}
   if (last !== state) {
     fs.writeFileSync(STATE, state);
-    const p = spawn('ssh', ['pzedlo.hopto.org', '~/node22/bin/node ~/omegga-server/bridge/tools/job.mjs'], { detached: true, stdio: ['pipe', 'ignore', 'ignore'] });
-    p.stdin.end(JSON.stringify(job(state)));
-    p.unref();
+    push(state);
   }
 }

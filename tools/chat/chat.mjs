@@ -44,10 +44,12 @@ if (cmd === 'usage') {
   const [h5, wk] = rest.map(Number);
   if (!(h5 >= 0 && wk >= 0)) throw new Error('usage: chat.mjs usage <5h%> <weekly%>');
   fs.writeFileSync(USAGE, JSON.stringify({ h5, wk, at: Date.now() }));
+  const { push } = await import('./status.mjs');
+  push(); // refresh the HUD beacons with the new numbers
 } else if (cmd === 'say') {
   const text = rest.join(' ').trim();
   if (!text) throw new Error('usage: chat.mjs say "<text>"');
-  const msg = `${tag(readUsage())} ${safe(text)}`; // no outer quotes: the colour tags carry their own (like the Discord relay)
+  const msg = `[claude] ${safe(text)}`; // usage moved to the status HUD (owner 2026-11-06); [claude] keeps the watcher from reading its own lines
   const out = await ssh(JOB, JSON.stringify({ ops: [{ op: 'say', msg }] }));
   if (!/"ok":true/.test(out)) throw new Error(`say failed: ${out.slice(0, 200)}`);
 } else if (cmd === 'listen') {
