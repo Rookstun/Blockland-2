@@ -3,7 +3,7 @@
 // never drawn per pixel. Each changed row is rebuilt from the objects on it (balls, paddle, game-over bar) as
 // intervals, sorted, then joined as SP/BL substrings (a few concats a row); only strips (16 rows) holding a changed
 // row are re-joined. Same pins/outputs as pong/gen.mjs, so it uses the same cabinet.
-export const W = 240, H = 160, STRIP = 20; // landscape (Rookstun: "each row 240 micro bricks wide, stack 160")
+export const W = 240, H = 160, STRIP = 40; // 4 strips of 40 rows (Rookstun 2026-11-06: fewer separately-sent text bricks = less flicker); landscape (Rookstun: "each row 240 micro bricks wide, stack 160")
 export const PAL = ['000000'];
 
 export const LH0 = 0.129, WS0 = 2.0; // strip LineHeight / WidthScale at cell 0.2 (0.2 x 0.645); /pgcal tunes them live
