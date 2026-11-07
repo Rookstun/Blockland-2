@@ -122,6 +122,9 @@ var bys: float[]
 var is: float[]
 var ie: float[]
 var pbA: string = ""
+var fA: int = -1
+var pbO: string = ""
+var fO: int = -1
 var stA: string = ""
 var readyO: int = 0
 var s: string = ""
@@ -181,6 +184,10 @@ mod row(lr: int) -> string {
 }
 // a new frame on the bus: copy the balls off their wires, draw both strips into the back buffers, report ready
 on Change(frame) {
+  // keep the previous frame too: go can arrive after the next frame already landed here (seam tearing, Rookstun 2026-11-06)
+  pbO = pbA
+  fO = fA
+  fA = frame
   bxs.resize(0, 0.0)
   bys.resize(0, 0.0)
 ${Array.from({ length: NB }, (_, i) => `  bxs.push(bx${i})\n  bys.push(by${i})`).join('\n')}
@@ -198,7 +205,7 @@ ${Array.from({ length: NB }, (_, i) => `  bxs.push(bx${i})\n  bys.push(by${i})`)
 }
 // the swap chip says every channel has the same frame: show it
 on Change(go) {
-  stA = pbA
+  if go == fA { stA = pbA } else { if go == fO { stA = pbO } }
 }
 `;
 }
