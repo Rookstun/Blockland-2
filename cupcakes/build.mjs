@@ -19,7 +19,7 @@ box(-40, -20, 28, 40, 20, 32, WOOD);
 for (const [x, y] of [[-36, -16], [32, -16], [-36, 12], [32, 12]]) box(x, y, 0, x + 4, y + 4, 28, LEG);
 box(-36, -12, 32, 36, 12, 34, [240, 236, 228]);
 // cupcakes: [x, scale, frosting colour, label]. The game clamps Character SetScale to 0.5 .. 2 (0.4 / 3 read back as 0.5 / 2)
-const CAKES = [[-24, 0.5, [90, 150, 240], 'Eat me (tiny)'], [0, 1, [250, 250, 250], 'Eat me (normal)'], [24, 2, [230, 60, 70], 'Eat me (giant)']];
+const CAKES = [[-24, 0.1, [90, 150, 240], 'Eat me (tiny)'], [0, 1, [250, 250, 250], 'Eat me (normal)'], [24, 10, [230, 60, 70], 'Eat me (giant)']];
 let gi = 0;
 const gate = (c, data = {}) => ({ h: w.addBrick({ asset: c.BRICK, position: [-30 + (gi % 7) * 10, -6 + Math.floor(gi++ / 7) * 10, 14], color: [200, 200, 200],
   owner_index: O, visibility: false, collision: { player: false, weapon: false, interaction: false, tool: true, physics: false }, components: [{ type: c.NAME, data }] }), c });
@@ -29,7 +29,9 @@ for (const [x, scale, frost, label] of CAKES) {
   box(x - 7, -7, 44, x + 7, 7, 48, frost);
   const top = box(x - 5, -5, 48, x + 5, 5, 52, frost, { components: [{ type: C.Button.NAME, data: { PromptCustomLabel: label, bAllowNearbyInteraction: true, bHiddenInteraction: false } }] });
   box(x - 2, -2, 52, x + 2, 2, 56, [200, 20, 40]); // cherry
-  const edge = gate(C.Expr_EdgeDetectorExec), set = gate(C.Exec_Character_SetScale, { Scale: scale });
+  const edge = gate(C.Expr_EdgeDetectorExec), set = gate(C.Exec_Character_SetScale, { Scale: Math.min(Math.max(scale, 0.5), 2) });
+  // past the stored 0.5..2 clamp (Rookstun: "as small as possible" / "waaaay more"): feed Scale from a Variable wire
+  if (scale !== 1) { const v = gate(C.Var, { Value: { $variant: 'f64', value: scale } }); w.addWire(port(v, 'Value'), port(set, 'Scale')); }
   w.addWire({ brick: top, component_type: C.Button.NAME, port: 'bHeld' }, port(edge, 'Input'));
   w.addWire(port(edge, 'OnRisingEdge'), port(set, 'Exec'));
   w.addWire({ brick: top, component_type: C.Button.NAME, port: 'Character' }, port(set, 'Character'));
