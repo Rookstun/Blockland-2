@@ -11,11 +11,14 @@
 import { generate as baseline, W, H, STRIP } from '../pong/Baseline240Engine_wgen.mjs';
 
 export { W, H, STRIP };
-export const NCH = 5, NB = 10; // 5 channels x 16 rows: one 4-unit strip each (16 x 0.25), whole brick sizes
+// output size from DMA_W x DMA_H (default 120 x 80; Rookstun 2026-11-07 also wanted 180 x 120 on the same 30 x 20 micros).
+// 5 channels, one strip each: 16 rows x 0.25 or 24 rows x 1/6 = 4 units, whole brick sizes
+export const NCH = 5, NB = 10;
 const PY = H - 12, PW = 28, BS = 4; // Baseline240Engine's paddle row, paddle width, ball size
 // Screen at HALF resolution (Rookstun 2026-11-06: 120 x 80 on 30 x 20 micros): the game still runs on the 240 x 160 grid,
 // the channels sample every 2nd logical pixel (output x' shows logical 2x'). OW/OH = output size.
-export const SC = 2, OW = W / SC, OH = H / SC, ROWS = OH / NCH, OSTRIP = ROWS;
+export const OW = +(process.env.DMA_W ?? 120), OH = +(process.env.DMA_H ?? 80), SC = W / OW, ROWS = OH / NCH, OSTRIP = ROWS;
+if (H / OH !== SC || ROWS % 1) throw Error(`dmapong: ${OW} x ${OH} must be ${W} x ${H} scaled, rows a multiple of ${NCH}`);
 const FONT = { U: ['101', '101', '101', '101', '111'], R: ['110', '101', '110', '101', '101'], D: ['110', '101', '101', '101', '110'],
   I: ['111', '010', '010', '010', '111'], T: ['111', '010', '010', '010', '010'], '.': ['000', '000', '000', '000', '010'],
   W: ['101', '101', '101', '111', '101'], N: ['110', '101', '101', '101', '101'], A: ['010', '101', '111', '101', '101'],
@@ -38,7 +41,7 @@ export function bumperRows(msgs) {
     return iv;
   });
 }
-const CY2 = 70 / SC, WIN = [['U R DID IT.', CY2 - 6], ['WINRAR!', CY2 + 1]], OVER = [['GAME', CY2 - 6], ['OVER', CY2 + 1]];
+const CY2 = Math.round(70 / SC), WIN = [['U R DID IT.', CY2 - 6], ['WINRAR!', CY2 + 1]], OVER = [['GAME', CY2 - 6], ['OVER', CY2 + 1]];
 
 const cutMod = (src, name) => {
   const i = src.indexOf(`mod ${name}(`);
@@ -172,23 +175,24 @@ var cur: float = 0.0
 @right out ready_: int = readyO
 
 mod row(lr: int) -> string {
-  let r = (${r0} + lr) * ${SC}
+  // everything in SCREEN pixels: logical position / ${SC} (the game runs on ${W} x ${H})
+  let ro = ${r0} + lr
   is.resize(0, 0.0)
   ie.resize(0, 0.0)
   for i in 0..nb {
     // a ball is 3 x 3 screen pixels round its centre (Rookstun 2026-11-07); physics keeps the ${BS}-logical-pixel ball
-    let yc = floor((bys.get(i) + ${BS / 2}.0) / ${SC}.0)
-    if r >= (yc - 1.0) * ${SC} && r <= (yc + 1.0) * ${SC} {
-      let xc = floor((bxs.get(i) + ${BS / 2}.0) / ${SC}.0)
+    let yc = floor((bys.get(i) + ${BS / 2}.0) / ${SC})
+    if ro >= yc - 1.0 && ro <= yc + 1.0 {
+      let xc = floor((bxs.get(i) + ${BS / 2}.0) / ${SC})
       is.push(xc - 1.0)
       ie.push(xc + 2.0)
     }
   }
-  if r >= ${PY} && r < ${PY + 4} {
-    is.push(floor((floor(px) + 1.0) / 2.0))
-    ie.push(floor((floor(px) + ${PW + 1}.0) / 2.0))
+  if ro >= ${Math.floor(PY / SC)} && ro < ${Math.floor((PY + 4) / SC)} {
+    is.push(floor(px / ${SC}))
+    ie.push(floor((px + ${PW}.0) / ${SC}))
   }
-  if r < 2 {
+  if ro < ${Math.ceil(2 / SC)} {
     is.push(0.0)
     ie.push(${OW}.0)
   }
