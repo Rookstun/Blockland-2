@@ -1,0 +1,13 @@
+name: discord
+on: push
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          HOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          EVENT: ${{ toJson(github.event) }}
+        # flags 4096 = SUPPRESS_NOTIFICATIONS: shows in the channel, pings nobody
+        run: |
+          echo "$EVENT" | jq '{flags: 4096, content: ("**\(.repository.name)** \(.ref | sub("refs/heads/"; "")): \(.commits | length) commit(s)\n" + ([.commits[] | "[`\(.id[0:7])`](<\(.url)>) \(.message | split("\n")[0]) - \(.author.name)"] | join("\n")))[0:2000]}' \
+            | curl -fsS -H 'Content-Type: application/json' -d @- "$HOOK"
