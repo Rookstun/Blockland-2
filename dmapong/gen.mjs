@@ -89,7 +89,7 @@ ${Array.from({ length: NB }, (_, i) => `      if n == ${i} {\n        bxO${i} = 
   s = s.replace('var half: bool = false', `var half: bool = false\n${busVars}`);
   s = s.replace('@right out msg_:', `${busOuts}\n@right out msg_:`);
   s = s.replace('mod note(', `${busMod}mod note(`);
-  s = integerBalls(s);
+  // s = integerBalls(s); // integer motion: Rookstun undid it 2026-11-07 ("keep the calculations"), kept for reference
   return s;
 }
 
@@ -176,12 +176,12 @@ mod row(lr: int) -> string {
   is.resize(0, 0.0)
   ie.resize(0, 0.0)
   for i in 0..nb {
-    // a ball is ONE output pixel at its centre (Rookstun 2026-11-06); physics keeps the ${BS}-logical-pixel ball
+    // a ball is 3 x 3 screen pixels round its centre (Rookstun 2026-11-07); physics keeps the ${BS}-logical-pixel ball
     let yc = floor((bys.get(i) + ${BS / 2}.0) / ${SC}.0)
-    if r == yc * ${SC} {
+    if r >= (yc - 1.0) * ${SC} && r <= (yc + 1.0) * ${SC} {
       let xc = floor((bxs.get(i) + ${BS / 2}.0) / ${SC}.0)
-      is.push(xc)
-      ie.push(xc + 1.0)
+      is.push(xc - 1.0)
+      ie.push(xc + 2.0)
     }
   }
   if r >= ${PY} && r < ${PY + 4} {
