@@ -138,11 +138,12 @@ mod row(lr: int) -> string {
   is.resize(0, 0.0)
   ie.resize(0, 0.0)
   for i in 0..nb {
-    let y0 = floor(bys.get(i))
-    if r >= y0 && r < y0 + ${BS} {
-      let x0 = floor(bxs.get(i))
-      is.push(floor((x0 + 1.0) / 2.0))
-      ie.push(floor((x0 + ${BS + 1}.0) / 2.0))
+    // a ball is ONE output pixel at its centre (Rookstun 2026-11-06); physics keeps the ${BS}-logical-pixel ball
+    let yc = floor((bys.get(i) + ${BS / 2}.0) / ${SC}.0)
+    if r == yc * ${SC} {
+      let xc = floor((bxs.get(i) + ${BS / 2}.0) / ${SC}.0)
+      is.push(xc)
+      ie.push(xc + 1.0)
     }
   }
   if r >= ${PY} && r < ${PY + 4} {
