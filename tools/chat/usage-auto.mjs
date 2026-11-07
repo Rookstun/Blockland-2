@@ -12,6 +12,10 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const ON = join(here, 'usage-auto.on'), USAGE = join(here, 'usage.json');
 if (!fs.existsSync(ON)) process.exit(0);
+// throttle (owner 2026-11-07: "it does [update] but not enough"): now also run on every tool call, so skip if the last
+// fetch was under MIN_S seconds ago
+const MIN_S = 60;
+try { if (Date.now() - JSON.parse(fs.readFileSync(USAGE, 'utf8')).at < MIN_S * 1000) process.exit(0); } catch {}
 try {
   const tok = JSON.parse(fs.readFileSync(join(os.homedir(), '.claude', '.credentials.json'), 'utf8')).claudeAiOauth.accessToken;
   const r = await fetch('https://api.anthropic.com/api/oauth/usage', { headers: { Authorization: `Bearer ${tok}`, 'anthropic-beta': 'oauth-2025-04-20' }, signal: AbortSignal.timeout(5000) });

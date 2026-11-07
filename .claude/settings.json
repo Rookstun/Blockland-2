@@ -6,6 +6,10 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/status.mjs\" busy"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/usage-auto.mjs\""
           }
         ]
       }
@@ -17,6 +21,10 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/status.mjs\" busy"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/chat/usage-auto.mjs\""
           }
         ]
       }
