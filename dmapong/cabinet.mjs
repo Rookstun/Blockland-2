@@ -64,7 +64,8 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   };
   const text = data => [{ type: C.TextDisplay.NAME, data: { ...TEXT, ...data } }];
   const wireText = (chip, port, brick, target = 'Text') => w.addWire({ brick: chip.portOut(port), component_type: OUTC, port: 'RER_Output' }, { brick, component_type: C.TextDisplay.NAME, port: target });
-  const PW = Math.ceil(gen.W * cell / 2 + 1), BW = PW + 2;
+  // screen exactly as wide as the picture (Rookstun 2026-11-07: one micro less, centred); body keeps its old width
+  const PW = Math.ceil(gen.W * cell / 2), BW = Math.ceil(gen.W * cell / 2 + 1) + 2;
   box(-BW, 2, 24, BW, 22, 50 + UP);
   box(-BW, -8, 50 + UP, BW, 22, 58 + UP, { components: text({ Font: font('Bungee'), LineHeight: 2, Text: title, Color: rgba([248, 208, 64]), Outline: 2, OutlineWidth: 2, OutlineColor: rgba([120, 20, 60]) }) });
   box(-BW, -8, 0, BW, 22, 24);
