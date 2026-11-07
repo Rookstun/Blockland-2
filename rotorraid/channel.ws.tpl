@@ -9,8 +9,9 @@
 
 const BL = "{{BL}}"
 const COLS = [{{COLS}}]
-const MI = [{{MI}}]
 const MP = [{{MP}}]
+const MB = [{{MB}}]
+const ME = [{{ME}}]
 const SRI = [{{SRI}}]
 const SRS = [{{SRS}}]
 const SP = [{{SP}}]
@@ -30,9 +31,6 @@ var lo: int = 0
 var pc: int = -1
 var ps: int = 0
 var pe: int = 0
-var pbB: string = ""
-var pbOB: string = ""
-var stB: string = ""
 var hi: int = 0
 var acc: string = ""
 var pbA: string = ""
@@ -43,7 +41,6 @@ var stA: string = ""
 var readyO: int = 0
 
 @right out stripA_: string = stA
-@right out stripB_: string = stB
 @right out ready_: int = readyO
 
 mod paint(a: int, b: int, c: int) {
@@ -68,7 +65,7 @@ mod put(a: int, b: int, c: int) {
 // terrain runs of image row iy straight to text, screen x0..x1 (no pixel work)
 mod terrain(iy: int, x0: int, x1: int) {
   if iy >= 0 && iy < {{IH}} {
-    for j in MI[iy]..MI[iy + 1] {
+    for j in MB[iy * {{NBK1}} + max(x0 + camx, 0) / 64]..ME[iy * {{NBK1}} + min((x1 + camx + 63) / 64, {{NBK}})] {
       let p = MP[j]
       put(max(p % 1024 - camx, x0), min((p / 1024) % 1024 - camx, x1), p / 1048576)
     }
@@ -97,7 +94,7 @@ mod row(sr: int) -> string {
   }
   terrain(iy, 0, lo)
   if iy >= 0 && iy < {{IH}} {
-    for j in MI[iy]..MI[iy + 1] {
+    for j in MB[iy * {{NBK1}} + max(lo + camx, 0) / 64]..ME[iy * {{NBK1}} + min((hi + camx + 63) / 64, {{NBK}})] {
       let p = MP[j]
       paint(p % 1024 - camx, (p / 1024) % 1024 - camx, p / 1048576)
     }
@@ -129,7 +126,6 @@ mod row(sr: int) -> string {
 }
 on Change(frame) {
   pbO = pbA
-  pbOB = pbB
   fO = fA
   fA = frame
   if px.length() != {{W}} { px.resize({{W}}, 0) }
@@ -138,23 +134,12 @@ on Change(frame) {
   os.resize(0, 0)
 {{OUNPACK}}
   acc = ""
-  for j in 0..{{HR}} {
-    if j < {{HR1}} { acc = acc .. row({{R0}} + j) .. "\n" } else { acc = acc .. row({{R0}} + j) }
-  }
-  pbA = acc
-  acc = ""
-  for j in {{HR}}..{{ROWS}} {
+  for j in 0..{{ROWS}} {
     if j < {{ROWS1}} { acc = acc .. row({{R0}} + j) .. "\n" } else { acc = acc .. row({{R0}} + j) }
   }
-  pbB = acc
+  pbA = acc
   readyO = frame
 }
 on Change(go) {
-  if go == fA {
-    stA = pbA
-    stB = pbB
-  } else { if go == fO {
-    stA = pbO
-    stB = pbOB
-  } }
+  if go == fA { stA = pbA } else { if go == fO { stA = pbO } }
 }
