@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { bundle } from './wsbundle_multi.mjs';
 import { cpuSrc, channelSrc, swapSrc, cabinetGen, NCH, NB } from './gen.mjs';
 
-export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0.2 }) {
+export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0.25 }) {
   const gen = cabinetGen();
   const sdk = join(dir, '..', 'tools', 'wspkg');
   const wasm = await import(pathToFileURL(join(sdk, 'wasm.js')).href);
@@ -28,7 +28,7 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   const Z1 = Math.max(48, 26 + 4 * TK + gen.H * cell), UP = Z1 - 48;
   // the six chips in a 3 x 2 block over the hood and head, inside the cabinet's own width (a 150-wide row of them
   // overlapped the next cabinet and two chips were rejected, 2026-11-06)
-  const at = i => [-24 + (i % 3) * 24, 12 + Math.floor(i / 3) * 24, 60 + UP];
+  const at = i => [-24 + (i % 3) * 24, 12 + Math.floor(i / 3) * 24, 60 + UP]; // 7 chips: 3 x 3 (last row partly empty)
   const cpu = await bundle(cpuBytes, { owner: OWNER, offset: at(0), hide: true, bare: true });
   const chs = [];
   for (let k = 0; k < NCH; k++) chs.push(await bundle(chBytes[k], { into: cpu, offset: at(k + 1), hide: true, bare: true }));
@@ -75,7 +75,7 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   const SH = gen.STRIP * cell, NS = gen.H / gen.STRIP;
   for (let s = 0; s < NS; s++) {
     const st = box(-PW, 0, Z1 - (s + 1) * SH, PW, 2, Z1 - s * SH, { color: [0, 0, 0], components: text({ LineHeight: +(cell * 0.645).toFixed(4), WidthScale: 2, Color: rgba([255, 255, 255]) }) });
-    wireText(chs[Math.floor(s / 2)], s % 2 ? 'stripB_' : 'stripA_', st);
+    wireText(chs[s], 'stripA_', st); // one strip per channel
   }
   const z0 = Z1 - gen.H * cell;
   const hud = box(-PW, 0, z0 - 2 * TK, PW, 2, z0, { color: [0, 0, 0], components: text({ LineHeight: 0.8 * TK, Color: rgba([248, 208, 64]) }) });
@@ -111,5 +111,5 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   w.addWire({ brick: seat, component_type: C.Seat.NAME, port: 'bIsOccupied' }, port(clock, 'bEnabled'));
   wireTo(port(clock, 'Pulse'), 'tick');
   fs.writeFileSync(join(dir, `${name}.brz`), cpu.finish({ extraAssets: assets.slice(cpu.ext.length), description: `${title} DMA cabinet` }));
-  console.log(`wrote ${name}.brz (6 chips: cpu, ${NCH} channels, swap; ${bus.length} bus wires per channel)`);
+  console.log(`wrote ${name}.brz (${NCH + 2} chips: cpu, ${NCH} channels, swap; ${bus.length} bus wires per channel)`);
 }
