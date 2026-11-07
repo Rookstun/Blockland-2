@@ -27,6 +27,12 @@ var s: string = ""
 var cur: int = 0
 var st: int = 0
 var lo: int = 0
+var pc: int = -1
+var ps: int = 0
+var pe: int = 0
+var pbB: string = ""
+var pbOB: string = ""
+var stB: string = ""
 var hi: int = 0
 var acc: string = ""
 var pbA: string = ""
@@ -37,13 +43,27 @@ var stA: string = ""
 var readyO: int = 0
 
 @right out stripA_: string = stA
+@right out stripB_: string = stB
 @right out ready_: int = readyO
 
 mod paint(a: int, b: int, c: int) {
   for x in max(a, lo)..min(b, hi) { px[x] = c }
 }
+// runs are merged with the previous one when the colour carries on (fewer tags = shorter text)
+mod flush() {
+  if pe > ps { s = s .. COLS[pc] .. BL.Substring(0, pe - ps) .. "</>" }
+  ps = 0
+  pe = 0
+}
 mod put(a: int, b: int, c: int) {
-  if b > a { s = s .. COLS[c] .. BL.Substring(0, b - a) .. "</>" }
+  if b > a {
+    if c == pc && a == pe { pe = b } else {
+      flush()
+      pc = c
+      ps = a
+      pe = b
+    }
+  }
 }
 // terrain runs of image row iy straight to text, screen x0..x1 (no pixel work)
 mod terrain(iy: int, x0: int, x1: int) {
@@ -58,6 +78,9 @@ mod terrain(iy: int, x0: int, x1: int) {
 mod row(sr: int) -> string {
   let iy = camy + sr
   s = ""
+  pc = -1
+  ps = 0
+  pe = 0
   lo = {{W}}
   hi = 0
   for k in 0..ox.length() {
@@ -69,6 +92,7 @@ mod row(sr: int) -> string {
   }
   if hi <= lo {
     terrain(iy, 0, {{W}})
+    flush()
     return s
   }
   terrain(iy, 0, lo)
@@ -100,10 +124,12 @@ mod row(sr: int) -> string {
   }
   put(st, hi, cur)
   terrain(iy, hi, {{W}})
+  flush()
   return s
 }
 on Change(frame) {
   pbO = pbA
+  pbOB = pbB
   fO = fA
   fA = frame
   if px.length() != {{W}} { px.resize({{W}}, 0) }
@@ -112,12 +138,23 @@ on Change(frame) {
   os.resize(0, 0)
 {{OUNPACK}}
   acc = ""
-  for j in 0..{{ROWS}} {
-    if j < {{ROWS1}} { acc = acc .. row({{R0}} + j) .. "\n" } else { acc = acc .. row({{R0}} + j) }
+  for j in 0..{{HR}} {
+    if j < {{HR1}} { acc = acc .. row({{R0}} + j) .. "\n" } else { acc = acc .. row({{R0}} + j) }
   }
   pbA = acc
+  acc = ""
+  for j in {{HR}}..{{ROWS}} {
+    if j < {{ROWS1}} { acc = acc .. row({{R0}} + j) .. "\n" } else { acc = acc .. row({{R0}} + j) }
+  }
+  pbB = acc
   readyO = frame
 }
 on Change(go) {
-  if go == fA { stA = pbA } else { if go == fO { stA = pbO } }
+  if go == fA {
+    stA = pbA
+    stB = pbB
+  } else { if go == fO {
+    stA = pbO
+    stB = pbOB
+  } }
 }

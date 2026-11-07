@@ -78,7 +78,8 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   const SH = gen.STRIP * cell, NS = gen.H / gen.STRIP;
   for (let s = 0; s < NS; s++) {
     const st = box(-PW, 0, Z1 - (s + 1) * SH, PW, 2, Z1 - s * SH, { color: [0, 0, 0], components: text({ LineHeight: +(cell * 0.645).toFixed(4), WidthScale: 2, Color: rgba([255, 255, 255]) }) });
-    wireText(chs[s], 'stripA_', st); // one strip per channel
+    const spc = NS / NCH; // strips per channel (pong 1: stripA_; rotorraid 2: stripA_ stripB_)
+    wireText(chs[Math.floor(s / spc)], 'strip' + 'ABCD'[s % spc] + '_', st);
   }
   const z0 = Z1 - gen.H * cell;
   const hud = box(-PW, 0, z0 - 2 * TK, PW, 2, z0, { color: [0, 0, 0], components: text({ LineHeight: 0.8 * TK, Color: rgba([248, 208, 64]) }) });
@@ -113,6 +114,11 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   const clock = gate(C.Clock, { IntervalSeconds: 0.05, bEnabled: true });
   w.addWire({ brick: seat, component_type: C.Seat.NAME, port: 'bIsOccupied' }, port(clock, 'bEnabled'));
   wireTo(port(clock, 'Pulse'), 'tick');
+  if (gen.renderHz) { // a second clock just for drawing (Rookstun: split the refresh from the game, 48 fps)
+    const rclock = gate(C.Clock, { IntervalSeconds: 1 / gen.renderHz, bEnabled: true });
+    w.addWire({ brick: seat, component_type: C.Seat.NAME, port: 'bIsOccupied' }, port(rclock, 'bEnabled'));
+    wireTo(port(rclock, 'Pulse'), 'rtick');
+  }
   fs.writeFileSync(join(dir, `${name}.brz`), cpu.finish({ extraAssets: assets.slice(cpu.ext.length), description: `${title} DMA cabinet` }));
   console.log(`wrote ${name}.brz (${NCH + 2} chips: cpu, ${NCH} channels, swap; ${bus.length} bus wires per channel)`);
 }

@@ -10,7 +10,7 @@ import { makeTiles, mapImage, sprites, makePalette, SPR, MW, MH, IW, IH, MOX, MO
 import { swapSrc as dmaSwap } from '../dmapong/gen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const W = 180, H = 120, NCH = 5, ROWS = H / NCH, NOB = 24, STRIP = ROWS;
+export const W = 180, H = 120, NCH = 5, ROWS = H / NCH, NOB = 24, STRIP = ROWS / 2; // 2 strips of 12 rows (2 units) per channel: shorter texts
 export const proj = (x, y, z) => [(x - y) * MSC + MOX, (x + y) * MSC / 2 - z * MSC + MOY];
 export const BUS = ['frame', 'camx', 'camy', ...Array.from({ length: NOB }, (_, i) => `o${i}`)];
 const q = JSON.stringify, fill = (tpl, v) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => { if (!(k in v)) throw Error(`template: no ${k}`); return v[k]; });
@@ -69,7 +69,7 @@ export function channelSrc(k) {
     }
   }`).join('\n');
   return fill(fs.readFileSync(join(here, 'channel.ws.tpl'), 'utf8'), {
-    K: k, R0, R1, W, H, IH, ROWS, ROWS1: ROWS - 1, BL: '█'.repeat(W),
+    K: k, R0, R1, W, H, IH, ROWS, ROWS1: ROWS - 1, HR: ROWS / 2, HR1: ROWS / 2 - 1, BL: '█'.repeat(W),
     OINS: Array.from({ length: NOB }, (_, i) => `@left in o${i}: int`).join('\n'),
     COLS: g.palette.map(h => q(`<color="${h}">`)).join(', '), MI: MI.join(', '), MP: MP.join(', ') || '0',
     SRI: SRI.join(', '), SRS: SRS.join(', '), SP: SP.join(', ') || '0',
@@ -78,4 +78,4 @@ export function channelSrc(k) {
 }
 export const swapSrc = dmaSwap;
 // cabinet options (the DMA cabinet reads W/H/STRIP/titleLH from here)
-export const cabinetGen = () => ({ W, H, STRIP, src: cpuSrc(), titleLH: 1.1, synths: ['Square'] });
+export const cabinetGen = () => ({ W, H, STRIP, src: cpuSrc(), titleLH: 1.1, synths: ['Square'], renderHz: 48 });
