@@ -89,6 +89,44 @@ ${Array.from({ length: NB }, (_, i) => `      if n == ${i} {\n        bxO${i} = 
   s = s.replace('var half: bool = false', `var half: bool = false\n${busVars}`);
   s = s.replace('@right out msg_:', `${busOuts}\n@right out msg_:`);
   s = s.replace('mod note(', `${busMod}mod note(`);
+  s = integerBalls(s);
+  return s;
+}
+
+// Integer ball motion (Rookstun 2026-11-06: "remove the sin, cos, and sqrt math entirely. Lock the ball's velocity to
+// strict whole integers on your grid"): a ball moves exactly 1 screen pixel (= 2 logical) in x AND y every tick, no
+// delta time, no speed-up; walls/paddle/bumper only flip signs, so positions stay on even logical pixels.
+const SUBS = [
+  ['  let a = Random(-0.6, 0.6)\n', ''],
+  ['  vx.push(5.0 * sin(a))\n  vy.push(5.0 * cos(a))\n', '  vx.push(if Random(0.0, 1.0) < 0.5 then -2.0 else 2.0)\n  vy.push(2.0)\n'],
+  ['        x = bx.get(i) + vx.get(i) * kt\n        y = by.get(i) + vy.get(i) * kt\n', '        x = bx.get(i) + vx.get(i)\n        y = by.get(i) + vy.get(i)\n'],
+  [/        let d = max\(sqrt\(nx \* nx \+ ny \* ny\), 0\.01\)\n[\s\S]*?\n          y = 70\.0 \+ uy \* 34\.5 - 2\.0\n        }\n/,
+   `        // inside the bumper (squared distance, no sqrt): flip whichever velocity sign points into it, step back out
+        if nx * nx + ny * ny < 1156.0 {
+          var fl: int = 0
+          fl = 0
+          if abs(nx) + 4.0 >= abs(ny) && nx * dx < 0.0 {
+            dx = 0.0 - dx
+            fl = 1
+          }
+          if abs(ny) + 4.0 >= abs(nx) && ny * dy < 0.0 {
+            dy = 0.0 - dy
+            fl = 1
+          }
+          if fl > 0 {
+            x = bx.get(i)
+            y = by.get(i)
+            sb = 0.7
+            beep = 3
+          }
+        }
+`],
+  [/        let xc = bx\.get\(i\) \+ vx\.get\(i\) \* kt \* [^\n]*\n/, '        let xc = bx.get(i)\n'],
+  [/          let sp = min\(9\.0, sqrt[^\n]*\n          dx = sp \* off \* 0\.8\n          dy = 0\.0 - sqrt[^\n]*\n/, '          dx = if off < 0.0 then -2.0 else 2.0\n          dy = -2.0\n'],
+];
+function integerBalls(s) {
+  for (const [a, b] of SUBS) { const t = s.replace(a, b); if (t === s) throw Error(`integerBalls: no match for ${a}`); s = t; }
+  if (/\b(sin|cos|sqrt)\(/.test(s)) throw Error('integerBalls: trig/sqrt left'); // self-check
   return s;
 }
 
