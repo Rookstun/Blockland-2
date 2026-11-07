@@ -7,9 +7,12 @@ import fs from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { bundle } from './wsbundle_multi.mjs';
-import { cpuSrc, channelSrc, swapSrc, cabinetGen, NCH, NB } from './gen.mjs';
+import * as pong from './gen.mjs';
+// game = another DMA game module with the same exports (rotorraid/gen.mjs): cpuSrc channelSrc swapSrc cabinetGen NCH BUS
+const PONG_BUS = ['frame', 'nb', 'px', 'over', 'won', 'vis', ...Array.from({ length: pong.NB }, (_, i) => [`bx${i}`, `by${i}`]).flat()];
 
-export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0.25 }) {
+export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0.25, game = pong }) {
+  const { cpuSrc, channelSrc, swapSrc, cabinetGen, NCH } = game;
   const gen = cabinetGen();
   const sdk = join(dir, '..', 'tools', 'wspkg');
   const wasm = await import(pathToFileURL(join(sdk, 'wasm.js')).href);
@@ -37,7 +40,7 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   const OUTC = 'BrickComponentType_Internal_MicrochipOutput', INC = 'BrickComponentType_Internal_MicrochipInput';
   const link = (from, out, to, inp) => w.addWire({ brick: from.portOut(out), component_type: OUTC, port: 'RER_Output' }, { brick: to.portIn(inp), component_type: INC, port: 'RER_Input' });
   // ---- the DMA bus: CPU -> every channel, one wire per value; channels -> swap -> channels
-  const bus = ['frame', 'nb', 'px', 'over', 'won', 'vis', ...Array.from({ length: NB }, (_, i) => [`bx${i}`, `by${i}`]).flat()];
+  const bus = game.BUS ?? PONG_BUS;
   for (const ch of chs) for (const v of bus) link(cpu, `${v}_`, ch, v);
   chs.forEach((ch, k) => { link(ch, 'ready_', swap, `r${k}`); link(swap, 'go_', ch, 'go'); });
 
