@@ -25,7 +25,7 @@ for (const [x0, y0, x1, y1] of [[-HX - 6, -HY - 6, HX + 6, -HY], [-HX - 6, HY, H
     else box(x0, y0, z, x1, y1, z + 12, (z / 12) % 2 ? LOG : LOG2, 'log');
   }
 }
-for (const x of [-58, 2]) box(x, -HY - 4, 24, x + 56, -HY - 2, 96, GLASS, 'glass door');
+for (const x of [-58, 2]) box(x, -HY - 4, 24, x + 56, -HY - 2, 96, { ...GLASS, collision: false }, 'glass door'); // walk-through (VAUX: "open the doors")
 box(-80, -HY - 10, 104, 80, -HY - 6, 130, SIGN, 'sign board'); // "LUNKER LODGE OUTFITTERS" board (plain glow)
 // roof: stepped gable along x, overhanging
 for (let s = 0; s < 14; s++) box(-HX - 20, -HY - 20 + s * 15, H + s * 8, HX + 20, HY + 20 - s * 15, H + s * 8 + 8, ROOF, 'roof');
