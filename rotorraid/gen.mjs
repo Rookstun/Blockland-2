@@ -14,12 +14,13 @@ export const W = 180, H = 120, NCH = 5, ROWS = H / NCH, NOB = 24, STRIP = ROWS;
 export const proj = (x, y, z) => [(x - y) * MSC + MOX, (x + y) * MSC / 2 - z * MSC + MOY];
 export const BUS = ['frame', 'camx', 'camy', ...Array.from({ length: NOB }, (_, i) => `o${i}`)];
 const q = JSON.stringify, fill = (tpl, v) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => { if (!(k in v)) throw Error(`template: no ${k}`); return v[k]; });
+const BRIEF = ['MISSION 1: OPERATION SOGGY BISCUIT   (SPACE)', 'Grubb Island makes jam for very bad toast.', 'Blow up all 3 of its jam factories.',
+  'Four accountants are stuck on the sandbar.', 'Land near them, then fly them home to the H.', 'WASD fly  SPACE gun  E missile  Q land   SPACE: go'];
 const TEXT = {
-  BRIEF: 'MISSION 1\nOPERATION SOGGY BISCUIT\n\nGrubb Island makes jam\nfor very bad toast.\nBlow up all 3 factories.\n\nFour accountants are\nstuck on the sandbar.\nLand by them, then fly\nthem home to the H.\n\nSPACE: fly',
-  WIN: 'MISSION COMPLETE\n\nGrubb Island is jam-free.\nThe accountants are home\nand already invoicing you.\n\nSPACE: again',
+  WIN: 'MISSION COMPLETE. The accountants are home and already invoicing you.   SPACE: again',
   NOLAND: 'That is not a landing spot. That is a tree, or the sea.',
-  NOFUEL: 'OUT OF FUEL\nGravity was waiting\nthe whole time.',
-  SHOTDOWN: 'SHOT DOWN\nYour helicopter is now\nmodern sculpture.',
+  NOFUEL: 'OUT OF FUEL. Gravity was waiting the whole time.',
+  SHOTDOWN: 'SHOT DOWN. Your helicopter is now modern sculpture.',
   DELIVER: 'Accountants delivered. They bill you for the ride.',
   BOARD: 'An accountant climbs aboard and files a complaint.',
   FACTORY: 'Factory down. Somewhere, a slice of toast weeps.',
@@ -45,8 +46,8 @@ export function cpuSrc() {
     OVARS: Array.from({ length: NOB }, (_, i) => `var oO${i}: int = -1`).join('\n'),
     OOUTS: Array.from({ length: NOB }, (_, i) => `@right out o${i}_: int = oO${i}`).join('\n'),
     OASSIGN: Array.from({ length: NOB }, (_, i) => `  oO${i} = if base + ${i} < n then floor(vals.get(base + ${i})) else -1`).join('\n'),
-    SPAWN: spawn, PEOPLE: people, BRIEF: q(TEXT.BRIEF), WIN: q(TEXT.WIN),
-    NOLAND: TEXT.NOLAND, NOFUEL: TEXT.NOFUEL.replace(/\n/g, '\\n'), SHOTDOWN: TEXT.SHOTDOWN.replace(/\n/g, '\\n'), DELIVER: TEXT.DELIVER, BOARD: TEXT.BOARD, FACTORY: TEXT.FACTORY,
+    SPAWN: spawn, PEOPLE: people, BRIEF: BRIEF.map(t => q(t)).join(', '), NBRIEF: BRIEF.length, WIN: q(TEXT.WIN),
+    NOLAND: TEXT.NOLAND, NOFUEL: TEXT.NOFUEL, SHOTDOWN: TEXT.SHOTDOWN, DELIVER: TEXT.DELIVER, BOARD: TEXT.BOARD, FACTORY: TEXT.FACTORY,
     S_GUN: SPR.gun, S_GUNDEAD: SPR.gunDead, S_FACT: SPR.factory, S_FACTDEAD: SPR.factoryDead, S_TANK: SPR.tank0, S_PERSON: SPR.person0,
     S_BOOM0: SPR.boom0, S_BOOM1: SPR.boom1, S_EBULLET: SPR.ebullet, S_MISSILE: SPR.missile, S_BULLET: SPR.bullet, S_SHADOW: SPR.shadow,
   });
@@ -72,7 +73,7 @@ export function channelSrc(k) {
     OINS: Array.from({ length: NOB }, (_, i) => `@left in o${i}: int`).join('\n'),
     COLS: g.palette.map(h => q(`<color="${h}">`)).join(', '), MI: MI.join(', '), MP: MP.join(', ') || '0',
     SRI: SRI.join(', '), SRS: SRS.join(', '), SP: SP.join(', ') || '0',
-    SH: g.sprites.map(s => s.h).join(', '), SAX: g.sprites.map(s => s.ax).join(', '), SAY: g.sprites.map(s => s.ay).join(', '), OUNPACK: unpack,
+    SH: g.sprites.map(s => s.h).join(', '), SAX: g.sprites.map(s => s.ax).join(', '), SAY: g.sprites.map(s => s.ay).join(', '), SW: g.sprites.map(s => s.w).join(', '), OUNPACK: unpack,
   });
 }
 export const swapSrc = dmaSwap;

@@ -17,6 +17,7 @@ const SP = [{{SP}}]
 const SH = [{{SH}}]
 const SAX = [{{SAX}}]
 const SAY = [{{SAY}}]
+const SW = [{{SW}}]
 
 var px: int[]
 var ox: int[]
@@ -25,6 +26,8 @@ var os: int[]
 var s: string = ""
 var cur: int = 0
 var st: int = 0
+var lo: int = 0
+var hi: int = 0
 var acc: string = ""
 var pbA: string = ""
 var fA: int = -1
@@ -37,16 +40,44 @@ var readyO: int = 0
 @right out ready_: int = readyO
 
 mod paint(a: int, b: int, c: int) {
-  for x in max(a, 0)..min(b, {{W}}) { px[x] = c }
+  for x in max(a, lo)..min(b, hi) { px[x] = c }
 }
+mod put(a: int, b: int, c: int) {
+  if b > a { s = s .. COLS[c] .. BL.Substring(0, b - a) .. "</>" }
+}
+// terrain runs of image row iy straight to text, screen x0..x1 (no pixel work)
+mod terrain(iy: int, x0: int, x1: int) {
+  if iy >= 0 && iy < {{IH}} {
+    for j in MI[iy]..MI[iy + 1] {
+      let p = MP[j]
+      put(max(p % 1024 - camx, x0), min((p / 1024) % 1024 - camx, x1), p / 1048576)
+    }
+  } else { put(x0, x1, 0) }
+}
+// a row: plain terrain runs, except the x range sprites cover on this row, which is painted per pixel (cheap: small)
 mod row(sr: int) -> string {
   let iy = camy + sr
+  s = ""
+  lo = {{W}}
+  hi = 0
+  for k in 0..ox.length() {
+    let r = sr - oy.get(k)
+    if r >= 0 && r < SH[os.get(k)] {
+      lo = max(min(lo, ox.get(k)), 0)
+      hi = min(max(hi, ox.get(k) + SW[os.get(k)]), {{W}})
+    }
+  }
+  if hi <= lo {
+    terrain(iy, 0, {{W}})
+    return s
+  }
+  terrain(iy, 0, lo)
   if iy >= 0 && iy < {{IH}} {
     for j in MI[iy]..MI[iy + 1] {
       let p = MP[j]
       paint(p % 1024 - camx, (p / 1024) % 1024 - camx, p / 1048576)
     }
-  } else { px.fill(0) }
+  } else { paint(lo, hi, 0) }
   for k in 0..ox.length() {
     let r = sr - oy.get(k)
     let spr = os.get(k)
@@ -58,17 +89,18 @@ mod row(sr: int) -> string {
       }
     }
   }
-  s = ""
-  cur = px.get(0)
-  st = 0
-  for x in 1..{{W}} {
+  cur = px.get(lo)
+  st = lo
+  for x in lo + 1..hi {
     if px.get(x) != cur {
-      s = s .. COLS[cur] .. BL.Substring(0, x - st) .. "</>"
+      put(st, x, cur)
       cur = px.get(x)
       st = x
     }
   }
-  return s .. COLS[cur] .. BL.Substring(0, {{W}} - st) .. "</>"
+  put(st, hi, cur)
+  terrain(iy, hi, {{W}})
+  return s
 }
 on Change(frame) {
   pbO = pbA

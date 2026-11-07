@@ -13,8 +13,10 @@ const TILE = [{{TILES}}]
 const DIRT = [4, 3, 2, 5, -1, 1, 6, 7, 0]
 const DX = [{{DX}}]
 const DY = [{{DY}}]
+const BRIEF = [{{BRIEF}}]
 
 var mode: int = 0
+var page: int = 0
 var was: bool = false
 var hx: float = {{SX}}
 var hy: float = {{SY}}
@@ -233,8 +235,8 @@ mod crash(why: string) {
   timer = 40
   boom(hx, hy)
   sadTune()
-  titlev = why .. "\n\nSPACE: try again"
-  msgv = ""
+  titlev = ""
+  msgv = why .. "   SPACE: try again"
 }
 mod step() {
   tk += 1
@@ -257,16 +259,20 @@ mod step() {
   if mode == 0 {
     if pa {
       mode = 1
-      titlev = {{BRIEF}}
+      page = 0
+      titlev = ""
+      msgv = BRIEF[0]
     }
     return
   }
   if mode == 1 {
     if pa {
-      mode = 2
-      titlev = ""
-      msgv = "WASD fly   SPACE gun   E missile   Q land / lift off"
-      landing = 1
+      page += 1
+      if page < {{NBRIEF}} { msgv = BRIEF[page] } else {
+        mode = 2
+        msgv = "WASD fly   SPACE gun   E missile   Q land / lift off"
+        landing = 1
+      }
     }
     return
   }
@@ -275,7 +281,8 @@ mod step() {
     if timer == 0 && pa {
       reset()
       mode = 1
-      titlev = {{BRIEF}}
+      page = 0
+      msgv = BRIEF[0]
     }
   }
   if mode == 2 {
@@ -439,7 +446,7 @@ mod step() {
       mode = 4
       timer = 40
       happyTune()
-      titlev = {{WIN}}
+      msgv = {{WIN}}
     }
   }
   for i in 0..xt.length() {
@@ -507,12 +514,12 @@ on tick {
       was = true
       reset()
       mode = 0
-      titlev = "ROTOR RAID\n\nSPACE: start"
+      titlev = "ROTOR RAID"
       hudv = ""
-      msgv = ""
+      msgv = "SPACE: start"
     }
     step()
-    if tk % 2 == 0 { bus() }
+    if tk % 3 == 0 { bus() }
   } else {
     if was {
       was = false
