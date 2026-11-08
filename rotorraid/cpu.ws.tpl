@@ -489,8 +489,9 @@ mod bus() {
   let rz = hz + hvz * fr
   let ix = (rx - ry) * {{MSC}}.0 + {{MOX}}.0
   let iy = (rx + ry) * {{HSC}}.0 - rz * {{MSC}}.0 + {{MOY}}.0
-  camxO = min(max(floor(ix) - {{HALFW}}, 0), {{IW}} - {{W}})
-  camyO = min(max(floor(iy) - {{HALFH}}, 0), {{IH}} - {{H}})
+  // same rounding as put(): the helicopter stays on one screen pixel instead of twitching (up/down moves half a px a tick)
+  camxO = min(max(floor(ix + 0.5) - {{HALFW}}, 0), {{IW}} - {{W}})
+  camyO = min(max(floor(iy + 0.5) - {{HALFH}}, 0), {{IH}} - {{H}})
   keys.resize(0, 0.0)
   vals.resize(0, 0.0)
   for i in 0..ek.length() {
