@@ -93,6 +93,7 @@ function heli(d, f) {
     if (box(u, v, z, -0.25, -0.25, 1.25, 0.25, 0.25, 1.55)) return HELI.dark; // mast
     if (box(u, v, z, 0.9, -0.5, 0.45, 1.7, 0.5, 1.15) && u - 0.9 > (z - 0.45) * 0.4 - 0.2) return HELI.glass; // cockpit glazing
     if (box(u, v, z, -1.2, -0.62, 0.35, 1.7, 0.62, 1.25)) return HELI.body;
+    if (u >= 1.7 && u < 2.5) { const t = (u - 1.7) / 0.8; if (Math.abs(v) < 0.5 * (1 - t * 0.6) && z >= 0.4 + t * 0.1 && z < 0.95 - t * 0.25) return t > 0.75 ? HELI.dark : HELI.body; } // nose (Rookstun): tapers forward, dark tip
     if (box(u, v, z, -0.9, -0.75, 1.0, 0.4, 0.75, 1.3)) return HELI.dark; // engines
     if (box(u, v, z, -3.6, -0.18, 0.8, -1.2, 0.18, 1.1)) return HELI.body; // tail boom
     if (box(u, v, z, -3.7, -0.12, 1.1, -3.3, 0.12, 1.9)) return HELI.body; // fin
