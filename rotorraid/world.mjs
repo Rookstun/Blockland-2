@@ -137,16 +137,24 @@ export const SPR = {}; let SID = 0; const SPRITES = [];
 const add = (name, fn, zmax = 8) => { SPR[name] = SID++; SPRITES.push({ name, fn, zmax }); };
 for (let d = 0; d < 8; d++) for (let f = 0; f < 2; f++) add(`heli${d}_${f}`, heli(d, f));
 add('shadow', flat([36, 46, 40], 1.9, 1.9));
-add('person0', person(0)); add('person1', person(1));
+// people are hand-drawn pixels (Rookstun: "people should be 3 pixels tall"): head, shirt, legs; waving = arms up
+const PX = { h: [228, 180, 140], s: [236, 236, 228], l: [50, 60, 110], a: [228, 180, 140], H: [70, 80, 50], o: [90, 100, 60], g: [10, 10, 10], L: [60, 66, 40], b: [184, 164, 112], B: [150, 132, 92], x: [40, 36, 32] };
+const addPix = (name, rows) => { SPR[name] = SID++; SPRITES.push({ name, rows }); };
+addPix('person0', ['h', 's', 'l']); addPix('person1', ['aha', '.s.', '.l.']);
 for (let d = 0; d < 4; d++) add(`tank${d}`, tank(d));
-add('gun', gun(false)); add('gunDead', gun(true));
+// sandbag post: a 3 px soldier (helmet, body, legs) with a 1 px black gun, bags around his legs (Rookstun)
+addPix('gun', ['..H..', '..og.', 'bBLBb']); addPix('gunDead', ['.....', '..x..', 'bxBxb']);
 add('factory', factory(false), 8); add('factoryDead', factory(true), 3);
 add('bullet', bolt([255, 236, 90], 0.45, 0.14)); add('ebullet', ball([250, 80, 60], [255, 200, 120], 0.45)); add('missile', bolt([240, 240, 240], 0.8, 0.18));
 add('boom0', ball([250, 140, 40], [255, 236, 130], 1.3)); add('boom1', ball([200, 80, 40], [250, 170, 60], 2.1));
-add('person_board', person(0)); // spare id for people walking to the helicopter
+addPix('person_board', ['h', 's', 'l']); // spare id for people walking to the helicopter
 
 export function sprites(pal) {
-  return SPRITES.map(({ name, fn, zmax }) => {
+  return SPRITES.map(({ name, fn, zmax, rows }) => {
+    if (rows) { // pixel sprite: anchor = bottom centre (feet on the ground point)
+      const w = rows[0].length, h = rows.length, px = rows.flatMap(r => [...r].map(c => (c === '.' ? null : PX[c])));
+      return { name, px, w, h, ax: Math.floor(w / 2), ay: h, rows: spans(px, w, h, pal) };
+    }
     const W = 72, H = 72, ox = 36, oy = 54;
     const px = render({ w: W, h: H, ox, oy, sc: 2, zmax, zmin: 0, dz: 0.04, solid: (x, y, z) => fn(x, y, z) != null, mat: (x, y, z) => fn(x, y, z) });
     const c = crop(px, W, H, ox, oy);
