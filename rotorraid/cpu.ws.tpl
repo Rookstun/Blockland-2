@@ -391,9 +391,14 @@ mod step() {
         sby[i] = sby.get(i) + sdy.get(i)
         for j in 0..ek.length() {
           if slife.get(i) > 0 && ehp.get(j) > 0 {
-            let dx = sbx.get(i) - ex.get(j)
-            let dy = sby.get(i) - ey.get(j)
-            let r = if ek.get(j) == 2 then 1.0 else 0.55
+            // hitboxes match the sprites (Rookstun): sandbag post ~5 px, tank ~8 px, factory ~2 tiles; the test is swept
+            // along this tick's flight so a fast shot can't skip over a small target
+            let ax = sbx.get(i) - sdx.get(i)
+            let ay = sby.get(i) - sdy.get(i)
+            let t = min(max(((ex.get(j) - ax) * sdx.get(i) + (ey.get(j) - ay) * sdy.get(i)) / max(sdx.get(i) * sdx.get(i) + sdy.get(i) * sdy.get(i), 0.0001), 0.0), 1.0)
+            let dx = ax + sdx.get(i) * t - ex.get(j)
+            let dy = ay + sdy.get(i) * t - ey.get(j)
+            let r = if ek.get(j) == 2 then 0.95 else (if ek.get(j) == 1 then 0.32 else 0.22)
             if dx * dx + dy * dy < r * r {
               ehp[j] = ehp.get(j) - (if skind.get(i) == 1 then 4 else 1)
               slife[i] = 0
@@ -448,7 +453,7 @@ mod step() {
         qy[i] = qy.get(i) + qdy.get(i)
         let dx = qx.get(i) - hx
         let dy = qy.get(i) - hy
-        if mode == 2 && hz > 0.3 && dx * dx + dy * dy < 0.36 {
+        if mode == 2 && hz > 0.3 && dx * dx + dy * dy < 0.2 { // helicopter hitbox ~0.45 tile (its ~15 px body)
           qlife[i] = 0
           armor -= 1
           sb = 0.5
