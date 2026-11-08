@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { makeTiles, mapImage, sprites, makePalette, SPR, MW, MH, IW, IH, MOX, MOY, MSC, FACTORIES, GUNS, TANKS, PEOPLE, START } from './world.mjs';
+import { makeTiles, mapImage, sprites, makePalette, SPR, NTR, MW, MH, IW, IH, MOX, MOY, MSC, FACTORIES, GUNS, TANKS, PEOPLE, START } from './world.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // 10 channels x 12 rows (one 2-unit strip each): half the work per channel event (5 x 24 rows ran out: panels went blank)
@@ -43,6 +43,7 @@ export function cpuSrc() {
   const people = PEOPLE.map(([x, y]) => `  ppx.push(${r(x)})\n  ppy.push(${r(y)})\n  pst.push(0)`).join('\n');
   return fill(fs.readFileSync(join(here, 'cpu.ws.tpl'), 'utf8'), {
     TILES: g.tiles.join(', '), DX: Array.from({ length: 8 }, (_, d) => r(Math.cos(d * Math.PI / 4))).join(', '), DY: Array.from({ length: 8 }, (_, d) => r(Math.sin(d * Math.PI / 4))).join(', '),
+    TX: Array.from({ length: NTR }, (_, k) => r(Math.cos(k * 2 * Math.PI / NTR))).join(', '), TY: Array.from({ length: NTR }, (_, k) => r(Math.sin(k * 2 * Math.PI / NTR))).join(', '), NTR,
     SX: r(START[0]), SY: r(START[1]), MW, MH, MSC, HSC: MSC / 2, MOX, MOY, W, H, HALFW: W / 2, HALFH: H / 2, IW, IH, NOB, NPEOPLE: PEOPLE.length,
     OVARS: Array.from({ length: NOB }, (_, i) => `var oO${i}: int = -1`).join('\n'),
     OOUTS: Array.from({ length: NOB }, (_, i) => `@right out o${i}_: int = oO${i}`).join('\n'),

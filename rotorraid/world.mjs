@@ -150,10 +150,21 @@ for (let d = 0; d < 4; d++) add(`tank${d}`, tank(d));
 addPix('gun', ['..HH..', '..oog.', '..oo..', 'bBLLBb']); addPix('gunDead', ['......', '......', '..xx..', 'bxBBxb']);
 add('factory', factory(false), 8); add('factoryDead', factory(true), 3);
 // tracers: 4 px lines pointing the way they fly, bright pixel at the front (Rookstun), one per heading d (world angle d*45 deg)
-const TRACE = [['12..', '..23'], ['1', '2', '2', '3'], ['..21', '32..'], ['3221'], ['32..', '..21'], ['3', '2', '2', '1'], ['..23', '12..'], ['1223']];
+// tracers: 4 px lines along the screen direction of each of 16 world headings (22.5 deg apart: gives true screen
+// diagonals too, Rookstun), bright pixel at the front
+export const NTR = 16;
+function tracer(k, dim, mid, hot) {
+  const a = k * 2 * Math.PI / NTR, wx = Math.cos(a), wy = Math.sin(a), sx = wx - wy, sy = (wx + wy) / 2, m = Math.max(Math.abs(sx), Math.abs(sy));
+  const pts = [0, 1, 2, 3].map(i => [Math.round(i * sx / m), Math.round(i * sy / m)]);
+  const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), w = Math.max(...pts.map(p => p[0])) - x0 + 1, h = Math.max(...pts.map(p => p[1])) - y0 + 1;
+  const g = Array.from({ length: h }, () => Array(w).fill('.'));
+  pts.forEach(([x, y], i) => { g[y - y0][x - x0] = i === 3 ? hot : i === 0 ? dim : mid; });
+  return g.map(r => r.join(''));
+}
 Object.assign(PX, { 1: [200, 170, 60], 2: [255, 230, 90], 3: [255, 255, 220], 4: [170, 50, 40], 5: [240, 90, 60], 6: [255, 210, 160] });
-TRACE.forEach((r, d) => addPix(`bullet${d}`, r));
-TRACE.forEach((r, d) => addPix(`ebullet${d}`, r.map(t => t.replace(/[123]/g, c => String(+c + 3))))); add('missile', bolt([240, 240, 240], 0.8, 0.18));
+for (let k = 0; k < NTR; k++) addPix(`bullet${k}`, tracer(k, '1', '2', '3'));
+for (let k = 0; k < NTR; k++) addPix(`ebullet${k}`, tracer(k, '4', '5', '6'));
+add('missile', bolt([240, 240, 240], 0.8, 0.18));
 add('boom0', ball([250, 140, 40], [255, 236, 130], 1.3)); add('boom1', ball([200, 80, 40], [250, 170, 60], 2.1));
 addPix('person_board', ['hh', 'ss', 'ss', 'll']);
 // target lock marker (right mouse cycles targets): 4 corner pixels around the locked target

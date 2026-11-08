@@ -14,6 +14,8 @@ const TILE = [{{TILES}}]
 const DIRT = [4, 3, 2, 5, -1, 1, 6, 7, 0]
 const DX = [{{DX}}]
 const DY = [{{DY}}]
+const TX = [{{TX}}]
+const TY = [{{TY}}]
 const BRIEF = [{{BRIEF}}]
 
 var mode: int = 0
@@ -274,8 +276,8 @@ mod shoot(kind: int) {
   // tracer drawn along the way the round really flies (nearest of 8 headings), not the nose
   var bd: int = 0
   bd = 0
-  for k in 1..8 {
-    if DX[k] * sdx.get(slot) + DY[k] * sdy.get(slot) > DX[bd] * sdx.get(slot) + DY[bd] * sdy.get(slot) { bd = k }
+  for k in 1..{{NTR}} {
+    if TX[k] * sdx.get(slot) + TY[k] * sdy.get(slot) > TX[bd] * sdx.get(slot) + TY[bd] * sdy.get(slot) { bd = k }
   }
   sdir[slot] = bd
   slife[slot] = if kind == 0 then 16 else 26
@@ -312,8 +314,8 @@ mod eshoot(i: int) {
   qdz[slot] = (hz - 0.15) / max(d / 0.15, 1.0)
   var best: int = 0
   best = 0
-  for k in 1..8 {
-    if DX[k] * dx + DY[k] * dy > DX[best] * dx + DY[best] * dy { best = k }
+  for k in 1..{{NTR}} {
+    if TX[k] * dx + TY[k] * dy > TX[best] * dx + TY[best] * dy { best = k }
   }
   qd[slot] = best
 }
