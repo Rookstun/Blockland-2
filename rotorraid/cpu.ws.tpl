@@ -70,6 +70,7 @@ var skind: int[]
 var sdir: int[]
 var sz: float[]
 var szd: float[]
+var stg: int[]
 var qx: float[]
 var qy: float[]
 var qdx: float[]
@@ -195,6 +196,7 @@ mod reset() {
   sdir.resize(0, 0)
   sz.resize(0, 0.0)
   szd.resize(0, 0.0)
+  stg.resize(0, 0)
   tgt = -1
   qx.resize(0, 0.0)
   qy.resize(0, 0.0)
@@ -215,7 +217,7 @@ mod inFront(j: int) -> bool {
   let tx = ex.get(j) - hx
   let ty = ey.get(j) - hy
   let td = sqrt(tx * tx + ty * ty)
-  if td < 0.05 || td > 7.0 { return false }
+  if td < 0.05 { return false } // no range limit: a locked target is hit wherever it is (Rookstun)
   return (tx * DX[hd] + ty * DY[hd]) / td > 0.17 // the guns swing through 160 deg (Rookstun): +-80 from the nose
 }
 mod shoot(kind: int) {
@@ -235,6 +237,7 @@ mod shoot(kind: int) {
     sdir.push(0)
     sz.push(0.0)
     szd.push(0.0)
+    stg.push(-1)
     slot = slife.length() - 1
   }
   let sp = if kind == 0 then 0.42 else 0.3
@@ -265,13 +268,15 @@ mod shoot(kind: int) {
   if inFront(tgt) { bj = tgt }
   sz[slot] = hz * 0.85
   szd[slot] = 0.0
+  stg[slot] = -1
   if bj >= 0 {
-    szd[slot] = -0.2
+    stg[slot] = bj
     let tx = ex.get(bj) - hx
     let ty = ey.get(bj) - hy
     let td = sqrt(tx * tx + ty * ty)
     sdx[slot] = tx / td * sp
     sdy[slot] = ty / td * sp
+    szd[slot] = 0.0 - (hz * 0.85 - 0.05) / max(td / sp, 1.0)
   }
   // tracer drawn along the way the round really flies (nearest of 8 headings), not the nose
   var bd: int = 0
@@ -281,6 +286,7 @@ mod shoot(kind: int) {
   }
   sdir[slot] = bd
   slife[slot] = if kind == 0 then 16 else 26
+  if stg.get(slot) >= 0 { slife[slot] = floor(sqrt((ex.get(stg.get(slot)) - hx) * (ex.get(stg.get(slot)) - hx) + (ey.get(stg.get(slot)) - hy) * (ey.get(stg.get(slot)) - hy)) / sp) + 4 }
   skind[slot] = kind
 }
 mod eshoot(i: int) {
@@ -485,6 +491,16 @@ mod step() {
     for i in 0..slife.length() {
       if slife.get(i) > 0 {
         slife[i] = slife.get(i) - 1
+        // a round fired at a target homes on it every tick, so it lands whatever the distance or the target's motion
+        let g = stg.get(i)
+        if g >= 0 && ehp.get(g) > 0 {
+          let gx = ex.get(g) - sbx.get(i)
+          let gy = ey.get(g) - sby.get(i)
+          let gd = max(sqrt(gx * gx + gy * gy), 0.001)
+          let sp2 = sqrt(sdx.get(i) * sdx.get(i) + sdy.get(i) * sdy.get(i))
+          sdx[i] = gx / gd * sp2
+          sdy[i] = gy / gd * sp2
+        }
         sbx[i] = sbx.get(i) + sdx.get(i)
         sby[i] = sby.get(i) + sdy.get(i)
         // shots dive from the helicopter to the ground: hits are tested at ground level, so the tracer has to be drawn
