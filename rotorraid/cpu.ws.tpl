@@ -223,6 +223,33 @@ mod shoot(kind: int) {
   sby[slot] = hy + DY[hd] * 0.6
   sdx[slot] = DX[hd] * sp
   sdy[slot] = DY[hd] * sp
+  // aim by turning (Rookstun): a live ground target within 7 tiles and ~30 deg of the nose gets the shot steered at it,
+  // so the gun's downward angle never has to be managed by hand
+  var bestc: float = 0.87
+  var bj: int = -1
+  bestc = 0.87
+  bj = -1
+  for j in 0..ek.length() {
+    if ehp.get(j) > 0 {
+      let tx = ex.get(j) - hx
+      let ty = ey.get(j) - hy
+      let td = sqrt(tx * tx + ty * ty)
+      if td > 0.05 && td < 7.0 {
+        let c = (tx * DX[hd] + ty * DY[hd]) / td
+        if c > bestc {
+          bestc = c
+          bj = j
+        }
+      }
+    }
+  }
+  if bj >= 0 {
+    let tx = ex.get(bj) - hx
+    let ty = ey.get(bj) - hy
+    let td = sqrt(tx * tx + ty * ty)
+    sdx[slot] = tx / td * sp
+    sdy[slot] = ty / td * sp
+  }
   slife[slot] = if kind == 0 then 16 else 26
   skind[slot] = kind
   sdir[slot] = hd
