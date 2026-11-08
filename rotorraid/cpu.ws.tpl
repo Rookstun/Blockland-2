@@ -255,7 +255,7 @@ mod shoot(kind: int) {
     stg.push(-1)
     slot = slife.length() - 1
   }
-  let sp = if kind == 0 then 0.42 else 0.3
+  let sp = if kind == 0 then 0.65 else 0.48
   sbx[slot] = hx + DX[hd] * 0.6
   sby[slot] = hy + DY[hd] * 0.6
   sdx[slot] = DX[hd] * sp
@@ -326,13 +326,13 @@ mod eshoot(i: int) {
   }
   qx[slot] = ex.get(i)
   qy[slot] = ey.get(i)
-  qdx[slot] = dx / d * 0.15
-  qdy[slot] = dy / d * 0.15
+  qdx[slot] = dx / d * 0.24
+  qdy[slot] = dy / d * 0.24
   qlife[slot] = 70
   // the soldier fires from chest height (Rookstun: they fired too high) and the round climbs to the helicopter's height
   // by the time it covers the distance; tracer points along the nearest of the 8 headings
   qz[slot] = 0.15
-  qdz[slot] = (hz - 0.15) / max(d / 0.15, 1.0)
+  qdz[slot] = (hz - 0.15) / max(d / 0.24, 1.0)
   var best: int = 0
   best = 0
   for k in 1..{{NTR}} {
@@ -404,13 +404,13 @@ mod step() {
   if mode == 2 {
     // ---- helicopter
     if landing == 1 {
-      hz = min(hz + 0.04, 1.0)
-      hvz = if hz < 1.0 then 0.04 else 0.0
+      hz = min(hz + 0.06, 1.0)
+      hvz = if hz < 1.0 then 0.06 else 0.0
       if hz >= 1.0 { landing = 0 }
     }
     if landing == -1 {
-      hz = max(hz - 0.04, 0.0)
-      hvz = if hz > 0.0 then -0.04 else 0.0
+      hz = max(hz - 0.06, 0.0)
+      hvz = if hz > 0.0 then -0.06 else 0.0
       if hz <= 0.0 {
         landing = 0
         mvx = 0.0
@@ -434,11 +434,11 @@ mod step() {
       tvy = 0.0
       if d >= 0 {
         hd = d
-        tvx = DX[d] * 0.13
-        tvy = DY[d] * 0.13
+        tvx = DX[d] * 0.21
+        tvy = DY[d] * 0.21
       }
-      mvx = mvx + (tvx - mvx) * 0.05
-      mvy = mvy + (tvy - mvy) * 0.05
+      mvx = mvx + (tvx - mvx) * 0.06
+      mvy = mvy + (tvy - mvy) * 0.06
       hvx = mvx
       hvy = mvy
       hx = min(max(hx + mvx, 0.5), {{MW}}.0 - 0.5)
@@ -476,7 +476,7 @@ mod step() {
       if bb && gcd == 0 && gunA > 0 {
         shoot(0)
         gunA -= 1
-        gcd = 3
+        gcd = 2
         sb = 2.2
         beep = 1
       }
@@ -489,7 +489,7 @@ mod step() {
     }
     if hz > 0.0 {
       fc += 1
-      if fc >= 30 {
+      if fc >= 24 { // 1 fuel per 1.2 s, the same pace as before (Rookstun)
         fc = 0
         fuel -= 1
         if fuel <= 0 { crash("{{NOFUEL}}") }
@@ -523,8 +523,8 @@ mod step() {
             sb = 1.5
             beep = 2
           } else {
-            ppx[i] = ppx.get(i) + dx / d * 0.035
-            ppy[i] = ppy.get(i) + dy / d * 0.035
+            ppx[i] = ppx.get(i) + dx / d * 0.055
+            ppy[i] = ppy.get(i) + dy / d * 0.055
           }
         }
       }
@@ -582,7 +582,7 @@ mod step() {
       if ehp.get(i) > 0 && onScreen(ex.get(i), ey.get(i), 24.0) {
         if ek.get(i) == 1 {
           var p: float = 0.0
-          p = ep.get(i) + edr.get(i) * 0.01
+          p = ep.get(i) + edr.get(i) * 0.016
           if p > 1.0 {
             p = 1.0
             edr[i] = -1.0
@@ -601,7 +601,7 @@ mod step() {
           let dy = hy - ey.get(i)
           if ecd.get(i) <= 0 && hz > 0.3 && dx * dx + dy * dy < 36.0 {
             eshoot(i)
-            ecd[i] = 34 + floor(Random(0.0, 24.0))
+            ecd[i] = 22 + floor(Random(0.0, 16.0))
           }
         }
       }

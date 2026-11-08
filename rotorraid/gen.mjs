@@ -12,7 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 // 10 channels x 12 rows (one 2-unit strip each): half the work per channel event (5 x 24 rows ran out: panels went blank)
 export const W = +(process.env.RR_W ?? 120), H = +(process.env.RR_H ?? 80), NCH = 10, ROWS = H / NCH, NOB = 24, STRIP = ROWS;
 const NBK = IW / 64;
-const GHZ = 25; // game clock (Rookstun: speed the whole game up a little, was 20)
+const GHZ = 20; // game clock 50 ms (Rookstun: keep it; everything moves and fires faster instead, fuel same pace)
 export const proj = (x, y, z) => [(x - y) * MSC + MOX, (x + y) * MSC / 2 - z * MSC + MOY];
 export const BUS = ['frame', 'phase', 'camx', 'camy', ...Array.from({ length: NOB }, (_, i) => `o${i}`)];
 const q = JSON.stringify, fill = (tpl, v) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => { if (!(k in v)) throw Error(`template: no ${k}`); return v[k]; });
