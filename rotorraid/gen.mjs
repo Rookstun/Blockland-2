@@ -80,7 +80,7 @@ export function channelSrc(k) {
     }
   }`).join('\n');
   return fill(fs.readFileSync(join(here, 'channel.ws.tpl'), 'utf8'), {
-    K: k, PH: Math.floor(k * 2 / NCH), R0, R1, W, H, IH, ROWS, ROWS1: ROWS - 1, BL: '█'.repeat(W),
+    K: k, PH: Math.floor(k * 3 / NCH), R0, R1, W, H, IH, ROWS, ROWS1: ROWS - 1, BL: '█'.repeat(W),
     OINS: Array.from({ length: NOB }, (_, i) => `@left in o${i}: int`).join('\n'),
     COLS: g.palette.map(h => q(`<color="${h}">`)).join(', '), NBK, NBK1: NBK + 1, CHUNK, CHUNKCONSTS: consts.join('\n'), CHUNKMODS: mods.join('\n'),
     SRI: SRI.join(', '), SRS: SRS.join(', '), SP: SP.join(', ') || '0',
