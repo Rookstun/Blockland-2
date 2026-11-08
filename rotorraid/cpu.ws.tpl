@@ -63,6 +63,7 @@ var sdy: float[]
 var slife: int[]
 var skind: int[]
 var sdir: int[]
+var sz: float[]
 var qx: float[]
 var qy: float[]
 var qdx: float[]
@@ -186,6 +187,7 @@ mod reset() {
   slife.resize(0, 0)
   skind.resize(0, 0)
   sdir.resize(0, 0)
+  sz.resize(0, 0.0)
   qx.resize(0, 0.0)
   qy.resize(0, 0.0)
   qdx.resize(0, 0.0)
@@ -213,6 +215,7 @@ mod shoot(kind: int) {
     slife.push(0)
     skind.push(0)
     sdir.push(0)
+    sz.push(0.0)
     slot = slife.length() - 1
   }
   let sp = if kind == 0 then 0.42 else 0.3
@@ -223,6 +226,7 @@ mod shoot(kind: int) {
   slife[slot] = if kind == 0 then 16 else 26
   skind[slot] = kind
   sdir[slot] = hd
+  sz[slot] = hz * 0.85
 }
 mod eshoot(i: int) {
   let dx = hx - ex.get(i)
@@ -412,6 +416,9 @@ mod step() {
         slife[i] = slife.get(i) - 1
         sbx[i] = sbx.get(i) + sdx.get(i)
         sby[i] = sby.get(i) + sdy.get(i)
+        // shots dive from the helicopter to the ground: hits are tested at ground level, so the tracer has to be drawn
+        // there too (Rookstun: had to aim way above their heads when it flew at a fixed height)
+        sz[i] = max(sz.get(i) - 0.2, 0.05)
         for j in 0..ek.length() {
           if slife.get(i) > 0 && ehp.get(j) > 0 {
             // hitboxes match the sprites (Rookstun): sandbag post ~5 px, tank ~8 px, factory ~2 tiles; the test is swept
@@ -545,7 +552,7 @@ mod bus() {
     if qlife.get(i) > 0 { put(qx.get(i) + qdx.get(i) * fr, qy.get(i) + qdy.get(i) * fr, qz.get(i), {{S_EBULLET}} + qd.get(i), 900.0) }
   }
   for i in 0..slife.length() {
-    if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, 0.9, if skind.get(i) == 1 then {{S_MISSILE}} else {{S_BULLET}} + sdir.get(i), 901.0) }
+    if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, sz.get(i), if skind.get(i) == 1 then {{S_MISSILE}} else {{S_BULLET}} + sdir.get(i), 901.0) }
   }
   if mode != 3 {
     put(rx, ry, 0.0, {{S_SHADOW}}, rx + ry - 0.05)
