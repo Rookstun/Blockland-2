@@ -9,9 +9,7 @@
 
 const BL = "{{BL}}"
 const COLS = [{{COLS}}]
-{{MPCONSTS}}
-const MB = [{{MB}}]
-const ME = [{{ME}}]
+{{CHUNKCONSTS}}
 const SRI = [{{SRI}}]
 const SRS = [{{SRS}}]
 const SP = [{{SP}}]
@@ -47,11 +45,9 @@ mod paint(a: int, b: int, c: int) {
   for x in max(a, lo)..min(b, hi) { px[x] = c }
 }
 // runs are merged with the previous one when the colour carries on (fewer tags = shorter text)
-// constant arrays stop working past 4096 entries (map rows after 192 vanished: Rookstun's 'bottom half near the tanks'),
-// so the span table is split into chunks of {{MPCHUNK}}
-mod mp(j: int) -> int {
-{{MPGET}}
-}
+// constant arrays stop working somewhere past ~1-4 k entries (rows read nothing: the bottom half vanished near the tanks),
+// so every big table is split into chunks of {{CHUNK}} with a getter
+{{CHUNKMODS}}
 mod flush() {
   if pe > ps { s = s .. COLS[pc] .. BL.Substring(0, pe - ps) .. "</>" }
   ps = 0
@@ -70,7 +66,7 @@ mod put(a: int, b: int, c: int) {
 // terrain runs of image row iy straight to text, screen x0..x1 (no pixel work)
 mod terrain(iy: int, x0: int, x1: int) {
   if iy >= 0 && iy < {{IH}} {
-    for j in MB[iy * {{NBK1}} + max(x0 + camx, 0) / 64]..ME[iy * {{NBK1}} + min((x1 + camx + 63) / 64, {{NBK}})] {
+    for j in mb(iy * {{NBK1}} + max(x0 + camx, 0) / 64)..me(iy * {{NBK1}} + min((x1 + camx + 63) / 64, {{NBK}})) {
       let p = mp(j)
       put(max(p % 1024 - camx, x0), min((p / 1024) % 1024 - camx, x1), p / 1048576)
     }
@@ -99,7 +95,7 @@ mod row(sr: int) -> string {
   }
   terrain(iy, 0, lo)
   if iy >= 0 && iy < {{IH}} {
-    for j in MB[iy * {{NBK1}} + max(lo + camx, 0) / 64]..ME[iy * {{NBK1}} + min((hi + camx + 63) / 64, {{NBK}})] {
+    for j in mb(iy * {{NBK1}} + max(lo + camx, 0) / 64)..me(iy * {{NBK1}} + min((hi + camx + 63) / 64, {{NBK}})) {
       let p = mp(j)
       paint(p % 1024 - camx, (p / 1024) % 1024 - camx, p / 1048576)
     }
