@@ -27,6 +27,9 @@ var hy: float = {{SY}}
 var hz: float = 0.0
 var hd: int = 2
 var th: int = 2
+var aimTh: int = -1
+var leadX: float = 0.0
+var leadY: float = 0.0
 var hvx: float = 0.0
 var mvx: float = 0.0
 var mvy: float = 0.0
@@ -469,6 +472,16 @@ mod step() {
       // the stick sets where the nose should point; it swings there one 22.5 deg step every 2 ticks (Rookstun: needs
       // time to turn), the shorter way round, and thrust is along the nose, not the stick
       if d >= 0 { th = d * 2 }
+      // aim hold (Rookstun): holding the aim button (right mouse) swings the nose at the locked target; letting go puts
+      // the nose back where it was before the aim
+      if rmb && aimTh < 0 { aimTh = th }
+      if rmb && tgt >= 0 && tgt < ek.length() {
+        if ehp.get(tgt) > 0 { th = floor(atan2(ey.get(tgt) - hy, ex.get(tgt) - hx) / 6.2831853 * 16.0 + 16.5) % 16 }
+      }
+      if rmb == false && aimTh >= 0 {
+        th = aimTh
+        aimTh = -1
+      }
       if tk % 2 == 0 && th != hd {
         let df = (th - hd + 16) % 16
         hd = (hd + (if df <= 8 then 1 else 15)) % 16
@@ -710,8 +723,11 @@ mod bus() {
   let ix = (rx - ry) * {{MSC}}.0 + {{MOX}}.0
   let iy = (rx + ry) * {{HSC}}.0 - rz * {{MSC}}.0 + {{MOY}}.0
   // same rounding as put(): the helicopter stays on one screen pixel instead of twitching (up/down moves half a px a tick)
-  camxO = min(max(floor(ix + 0.5) - {{HALFW}}, 0), {{IW}} - {{W}})
-  camyO = min(max(floor(iy + 0.5) - {{HALFH}}, 0), {{IH}} - {{H}})
+  // camera leads ahead of the nose (Rookstun), easing so turns don't whip the view
+  leadX = leadX + ((TX[hd] - TY[hd]) * {{MSC}}.0 * 2.5 - leadX) * 0.03
+  leadY = leadY + ((TX[hd] + TY[hd]) * {{HSC}}.0 * 2.5 - leadY) * 0.03
+  camxO = min(max(floor(ix + leadX + 0.5) - {{HALFW}}, 0), {{IW}} - {{W}})
+  camyO = min(max(floor(iy + leadY + 0.5) - {{HALFH}}, 0), {{IH}} - {{H}})
   keys.resize(0, 0.0)
   vals.resize(0, 0.0)
   for i in 0..ek.length() {
