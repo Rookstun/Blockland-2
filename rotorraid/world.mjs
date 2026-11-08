@@ -50,8 +50,7 @@ export function makeTiles() {
 const C = { deep: [36, 74, 140], shallow: [58, 120, 176], sand: [222, 200, 140], grass: [92, 150, 70], grass2: [80, 136, 62], tree: [44, 100, 52], trunk: [100, 70, 40],
   road: [110, 108, 104], conc: [168, 166, 160], pad: [150, 150, 150], mark: [250, 250, 250], asph: [70, 70, 74], wall: [214, 196, 160], roof: [170, 70, 50],
   hangar: [150, 156, 160], door: [60, 62, 66] };
-export function mapImage(tiles, pal) { return spans(mapPixels(tiles), IW, IH, pal); }
-export function mapPixels(tiles) {
+export function mapImage(tiles, pal) {
   const at = (x, y) => (x >= 0 && y >= 0 && x < MW && y < MH ? tiles[y * MW + x] : T.OCEAN);
   // above-ground solids per tile type, in tile-local coords (fx, fy in 0..1)
   const tall = (X, Y, Z) => {
@@ -76,7 +75,7 @@ export function mapPixels(tiles) {
     return C.grass;
   };
   const px = render({ w: IW, h: IH, ox: MOX, oy: MOY, sc: MSC, zmax: 2, dz: 1 / 16, solid, mat });
-  return px;
+  return spans(px, IW, IH, pal);
 }
 
 // ---- sprites (sc 2: 1 unit = 1/4 tile). Each model: solid(x, y, z) -> colour or null, in its own frame
@@ -196,4 +195,4 @@ export function sprites(pal) {
     return { name, ...c, rows: spans(c.px, c.w, c.h, pal) };
   });
 }
-export { makePalette, spans };
+export { makePalette };

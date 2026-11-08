@@ -12,7 +12,6 @@
 @left in rmb: bool
 
 const TILE = [{{TILES}}]
-const PSPR = [{{PSPR}}]
 const DIRT = [4, 3, 2, 5, -1, 1, 6, 7, 0]
 const DX = [{{DX}}]
 const DY = [{{DY}}]
@@ -668,12 +667,12 @@ mod bus() {
     let dead = ehp.get(i) <= 0
     var spr: int = 0
     spr = 0
-    // gun posts and factories are baked into the map; only a destroyed one is sent, as its patch (ground + wreck)
-    if k != 1 { spr = PSPR[i] }
+    if k == 0 { spr = if dead then {{S_GUNDEAD}} else {{S_GUN}} }
+    if k == 2 { spr = if dead then {{S_FACTDEAD}} else {{S_FACT}} }
     if k == 1 {
       spr = {{S_TANK}} + (if eax.get(i) == ebx.get(i) then (if edr.get(i) > 0.0 then 1 else 3) else (if edr.get(i) > 0.0 then 0 else 2))
     }
-    if (k != 1 && dead) || (k == 1 && dead == false) { put(ex.get(i), ey.get(i), 0.0, spr, ex.get(i) + ey.get(i) - 0.5) }
+    if k != 1 || dead == false { put(ex.get(i), ey.get(i), 0.0, spr, ex.get(i) + ey.get(i)) }
   }
   for i in 0..pst.length() {
     if pst.get(i) < 2 { put(ppx.get(i), ppy.get(i), 0.0, {{S_PERSON}} + (if pst.get(i) == 0 && (tk / 8 + i) % 2 == 0 then 1 else 0), ppx.get(i) + ppy.get(i)) }
