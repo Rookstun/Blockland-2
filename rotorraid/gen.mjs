@@ -10,7 +10,7 @@ import { makeTiles, mapImage, sprites, makePalette, SPR, MW, MH, IW, IH, MOX, MO
 
 const here = dirname(fileURLToPath(import.meta.url));
 // 10 channels x 12 rows (one 2-unit strip each): half the work per channel event (5 x 24 rows ran out: panels went blank)
-export const W = 120, H = 80, NCH = 10, ROWS = H / NCH, NOB = 24, STRIP = ROWS;
+export const W = +(process.env.RR_W ?? 120), H = +(process.env.RR_H ?? 80), NCH = 10, ROWS = H / NCH, NOB = 24, STRIP = ROWS;
 const NBK = IW / 64;
 export const proj = (x, y, z) => [(x - y) * MSC + MOX, (x + y) * MSC / 2 - z * MSC + MOY];
 export const BUS = ['frame', 'phase', 'camx', 'camy', ...Array.from({ length: NOB }, (_, i) => `o${i}`)];
