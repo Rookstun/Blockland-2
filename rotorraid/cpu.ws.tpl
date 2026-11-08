@@ -51,6 +51,10 @@ var lastBb: bool = false
 var lastBq: bool = false
 var lastRmb: bool = false
 var tgt: int = -1
+var mcd: int = 0
+var xNext: int = 0
+var xk: int[]
+var xz: float[]
 var ck: float[]
 var cj: float[]
 var ek: int[]
@@ -147,10 +151,25 @@ mod sadTune() {
   note(0.5, 4)
   note(0.4, 8)
 }
+// effects: kind 0 explosion (12 ticks), 1 missile smoke puff, 2 launch flash
+// a ring of 24 effect slots (missile smoke would otherwise grow the lists without end)
+mod fx(x: float, y: float, z: float, k: int, t: int) {
+  if xt.length() != 24 {
+    xx.resize(24, 0.0)
+    xy.resize(24, 0.0)
+    xz.resize(24, 0.0)
+    xk.resize(24, 0)
+    xt.resize(24, 0)
+  }
+  xx[xNext] = x
+  xy[xNext] = y
+  xz[xNext] = z
+  xk[xNext] = k
+  xt[xNext] = t
+  xNext = (xNext + 1) % 24
+}
 mod boom(x: float, y: float) {
-  xx.push(x)
-  xy.push(y)
-  xt.push(12)
+  fx(x, y, 0.4, 0, 12)
 }
 mod enemy(k: int, x: float, y: float, hp: int, ax: float, ay: float, bx: float, by: float) {
   ek.push(k)
@@ -219,6 +238,9 @@ mod reset() {
   xx.resize(0, 0.0)
   xy.resize(0, 0.0)
   xt.resize(0, 0)
+  xk.resize(0, 0)
+  xz.resize(0, 0.0)
+  mcd = 0
 }
 // on the screen the player sees (camera from the last frame, a few px margin): only these can be aimed at or act
 mod onScreen(x: float, y: float, m: float) -> bool {
@@ -295,6 +317,16 @@ mod shoot(kind: int) {
     sdy[slot] = ty / td * sp
     szd[slot] = 0.0 - (hz * 0.85 - 0.05) / max(td / sp, 1.0)
   }
+  // no target (Rookstun): the round flies on to a little past the edge of the screen in its heading and lands there
+  if bj < 0 {
+    let svx = abs((sdx.get(slot) - sdy.get(slot)) * {{MSC}}.0)
+    let svy = abs((sdx.get(slot) + sdy.get(slot)) * {{HSC}}.0)
+    let lx = if svx > 0.01 then {{HALFW}}.0 / svx else 999.0
+    let ly = if svy > 0.01 then {{HALFH}}.0 / svy else 999.0
+    let life = floor(min(lx, ly)) + 3
+    slife[slot] = life
+    szd[slot] = 0.0 - (sz.get(slot) - 0.05) / max(life * 1.0, 1.0)
+  }
   // tracer drawn along the way the round really flies (nearest of 8 headings), not the nose
   var bd: int = 0
   bd = 0
@@ -302,7 +334,7 @@ mod shoot(kind: int) {
     if TX[k] * sdx.get(slot) + TY[k] * sdy.get(slot) > TX[bd] * sdx.get(slot) + TY[bd] * sdy.get(slot) { bd = k }
   }
   sdir[slot] = bd
-  slife[slot] = if kind == 0 then 16 else 26
+  if bj >= 0 { slife[slot] = if kind == 0 then 16 else 26 }
   if stg.get(slot) >= 0 { slife[slot] = floor(sqrt((ex.get(stg.get(slot)) - hx) * (ex.get(stg.get(slot)) - hx) + (ey.get(stg.get(slot)) - hy) * (ey.get(stg.get(slot)) - hy)) / sp) + 4 }
   skind[slot] = kind
 }
@@ -384,7 +416,7 @@ mod step() {
       page += 1
       if page < {{NBRIEF}} { msgv = BRIEF[page] } else {
         mode = 2
-        msgv = "WASD fly   LMB/E guns   SPACE missile   RMB lock   Q land / lift off"
+        msgv = "WASD fly   LMB/E guns   RMB lock   SPACE missile (needs lock)   Q land"
         landing = 1
       }
     }
@@ -488,11 +520,22 @@ mod step() {
         sb = 2.2
         beep = 1
       }
-      if pa && msl > 0 {
-        shoot(1)
-        msl -= 1
-        sb = 0.9
-        beep = 3
+      // SPACE = missile: only with a lock, 2 s reload; launch = flash at the heli, a message and a whoosh (Rookstun)
+      if mcd > 0 { mcd -= 1 }
+      if pa {
+        if inFront(tgt) == false { msgv = "MISSILE: lock a target first (right mouse)" } else { if mcd > 0 { msgv = "MISSILE RELOADING" } else { if msl > 0 {
+          shoot(1)
+          msl -= 1
+          mcd = 40
+          fx(hx + TX[hd] * 0.4, hy + TY[hd] * 0.4, hz, 2, 4)
+          msgv = "MISSILE AWAY"
+          mel.resize(0, 0.0)
+          melPos = 0
+          note(0.5, 1)
+          note(0.7, 1)
+          note(0.95, 2)
+          note(1.3, 3)
+        } } }
       }
     }
     if hz > 0.0 {
@@ -554,6 +597,7 @@ mod step() {
         }
         sbx[i] = sbx.get(i) + sdx.get(i)
         sby[i] = sby.get(i) + sdy.get(i)
+        if skind.get(i) == 1 && slife.get(i) % 2 == 0 { fx(sbx.get(i) - sdx.get(i) * 1.5, sby.get(i) - sdy.get(i) * 1.5, sz.get(i), 1, 8) }
         // shots dive from the helicopter to the ground: hits are tested at ground level, so the tracer has to be drawn
         // there too (Rookstun: had to aim way above their heads when it flew at a fixed height)
         sz[i] = max(sz.get(i) + szd.get(i), 0.05) // locked shots dive to their ground target, free shots fly level
@@ -686,7 +730,11 @@ mod bus() {
     if pst.get(i) < 2 { put(ppx.get(i), ppy.get(i), 0.0, {{S_PERSON}} + (if pst.get(i) == 0 && (tk / 8 + i) % 2 == 0 then 1 else 0), ppx.get(i) + ppy.get(i)) }
   }
   for i in 0..xt.length() {
-    if xt.get(i) > 0 { put(xx.get(i), xy.get(i), 0.4, if xt.get(i) > 6 then {{S_BOOM0}} else {{S_BOOM1}}, xx.get(i) + xy.get(i) + 0.3) }
+    if xt.get(i) > 0 {
+      let k = xk.get(i)
+      let spr = if k == 2 then {{S_FLASH}} else (if k == 1 then (if xt.get(i) > 4 then {{S_PUFF0}} else {{S_PUFF1}}) else (if xt.get(i) > 6 then {{S_BOOM0}} else {{S_BOOM1}}))
+      put(xx.get(i), xy.get(i), xz.get(i), spr, if k == 0 then xx.get(i) + xy.get(i) + 0.3 else 902.0)
+    }
   }
   for i in 0..qlife.length() {
     if qlife.get(i) > 0 { put(qx.get(i) + qdx.get(i) * fr, qy.get(i) + qdy.get(i) * fr, qz.get(i), {{S_EBULLET}} + qd.get(i), 900.0) }

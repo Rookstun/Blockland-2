@@ -168,16 +168,20 @@ for (let k = 0; k < NTR; k++) addPix(`ebullet${k}`, tracer(k, '4', '5', '6'));
 // missiles (Rookstun: "your own way"): a little shaded 3D rocket, ray-marched like the helicopter so it matches the
 // art: white body with a red band, dark nose cone, four tail fins, and a hot exhaust plume fading yellow -> orange -> red
 // behind it; 16 headings
+// missile v3 (Rookstun: "redo the missile art, make it clear it's being fired"): fat olive body with a yellow band, red
+// warhead, black cruciform fins, and a long white-hot -> yellow -> orange flame; puffs of smoke behind it come from the CPU
 const missileModel = k => (x0, y0, z0) => {
-  const x = x0 / 1.5, y = y0 / 1.5, z = z0 / 1.5; // x1.5: about 8-9 px long with the plume
-  const [u, v] = rot(x, y, k * 2 * Math.PI / NTR), w = z - 0.55, r = Math.hypot(v, w);
-  if (u >= 1.1 && u < 1.6 && r < 0.2 * (1.6 - u) / 0.5) return [70, 70, 76]; // nose cone
-  if (u >= -1.1 && u < 1.1 && r < 0.2) return u > 0.55 && u < 0.75 ? [210, 50, 40] : [232, 232, 226]; // body + band
-  if (u >= -1.1 && u < -0.6 && ((Math.abs(v) < 0.05 && Math.abs(w) < 0.42) || (Math.abs(w) < 0.05 && Math.abs(v) < 0.42))) return [150, 150, 156]; // fins
-  if (u < -1.1 && u > -2.3 && r < 0.17 * (u + 2.3) / 1.2) return u > -1.5 ? [255, 236, 140] : u > -1.9 ? [255, 150, 50] : [210, 70, 40]; // plume
+  const x = x0 / 1.6, y = y0 / 1.6, z = z0 / 1.6;
+  const [u, v] = rot(x, y, k * 2 * Math.PI / NTR), w = z - 0.6, r = Math.hypot(v, w);
+  if (u >= 1.0 && u < 1.6 && r < 0.28 * (1.6 - u) / 0.6) return [220, 40, 30]; // warhead
+  if (u >= -1.0 && u < 1.0 && r < 0.28) return u > 0.3 && u < 0.5 ? [250, 210, 40] : [90, 100, 60]; // body + band
+  if (u >= -1.0 && u < -0.5 && ((Math.abs(v) < 0.06 && Math.abs(w) < 0.55) || (Math.abs(w) < 0.06 && Math.abs(v) < 0.55))) return [30, 30, 32]; // fins
+  if (u < -1.0 && u > -2.8 && r < 0.26 * (u + 2.8) / 1.8) return u > -1.4 ? [255, 255, 230] : u > -2.0 ? [255, 220, 80] : [255, 130, 40]; // flame
   return null;
 };
 for (let k = 0; k < NTR; k++) add(`missile${k}`, missileModel(k), 3);
+add('puff0', ball([200, 200, 196], [235, 235, 230], 0.6)); add('puff1', ball([150, 150, 146], [180, 180, 176], 0.9)); // missile smoke trail
+add('flash', ball([255, 240, 160], [255, 255, 255], 1.1)); // launch flash at the helicopter
 add('boom0', ball([250, 140, 40], [255, 236, 130], 1.3)); add('boom1', ball([200, 80, 40], [250, 170, 60], 2.1));
 addPix('person_board', ['hh', 'ss', 'ss', 'll']);
 // target lock marker (right mouse cycles targets): 4 corner pixels around the locked target
