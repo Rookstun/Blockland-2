@@ -4,5 +4,5 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDmaCabinet } from '../dmapong/cabinet.mjs';
 import * as game from './gen.mjs';
-await buildDmaCabinet({ dir: dirname(fileURLToPath(import.meta.url)), name: 'rotorraid', title: 'ROTOR RAID', cell: 1 / 6, game,
+await buildDmaCabinet({ dir: dirname(fileURLToPath(import.meta.url)), name: 'rotorraid', title: 'ROTOR RAID', cell: 1 / 4, game, // 120 x 80 on the same 30 x 20 screen (Rookstun)
   owner: { id: 'b0e60000-0000-4b0b-9a11-0000000a07a1', name: 'ROTOR RAID', display_name: 'ROTOR RAID' } });
