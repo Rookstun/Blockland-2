@@ -723,9 +723,9 @@ mod bus() {
   let ix = (rx - ry) * {{MSC}}.0 + {{MOX}}.0
   let iy = (rx + ry) * {{HSC}}.0 - rz * {{MSC}}.0 + {{MOY}}.0
   // same rounding as put(): the helicopter stays on one screen pixel instead of twitching (up/down moves half a px a tick)
-  // camera leads ahead of the nose (Rookstun), easing so turns don't whip the view
-  leadX = leadX + ((TX[hd] - TY[hd]) * {{MSC}}.0 * 2.5 - leadX) * 0.03
-  leadY = leadY + ((TX[hd] + TY[hd]) * {{HSC}}.0 * 2.5 - leadY) * 0.03
+  // camera leads ahead of the nose (Rookstun), re-centres fast (0.15 a render tick: "recorrect much faster")
+  leadX = leadX + ((TX[hd] - TY[hd]) * {{MSC}}.0 * 2.5 - leadX) * 0.15
+  leadY = leadY + ((TX[hd] + TY[hd]) * {{HSC}}.0 * 2.5 - leadY) * 0.15
   camxO = min(max(floor(ix + leadX + 0.5) - {{HALFW}}, 0), {{IW}} - {{W}})
   camyO = min(max(floor(iy + leadY + 0.5) - {{HALFH}}, 0), {{IH}} - {{H}})
   keys.resize(0, 0.0)
