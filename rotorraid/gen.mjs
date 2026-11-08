@@ -103,4 +103,4 @@ ${r.map(v => `on Change(${v}) {\n  check()\n}`).join('\n')}
 `;
 }
 // cabinet options (the DMA cabinet reads W/H/STRIP/titleLH from here)
-export const cabinetGen = () => ({ W, H, STRIP, src: cpuSrc(), titleLH: 1.1, synths: ['Square'], clockHz: 60, rmbPin: true }); // RotorRaid FastCabinetRender (Rookstun): only the clock is faster, the game speeds up with it
+export const cabinetGen = () => ({ W, H, STRIP, src: cpuSrc(), titleLH: 1.1, synths: ['Square'], clockHz: 20, renderHz: 100, rmbPin: true }); // RotorRaid FastCabinetRender (Rookstun): game clock 50 ms, free render clock 10 ms
