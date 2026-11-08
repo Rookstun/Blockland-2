@@ -25,7 +25,8 @@ var was: bool = false
 var hx: float = {{SX}}
 var hy: float = {{SY}}
 var hz: float = 0.0
-var hd: int = 1
+var hd: int = 2
+var th: int = 2
 var hvx: float = 0.0
 var mvx: float = 0.0
 var mvy: float = 0.0
@@ -168,7 +169,8 @@ mod reset() {
   hx = {{SX}}
   hy = {{SY}}
   hz = 0.0
-  hd = 1
+  hd = 2
+  th = 2
   landing = 0
   mvx = 0.0
   mvy = 0.0
@@ -233,7 +235,7 @@ mod inFront(j: int) -> bool {
   let ty = ey.get(j) - hy
   let td = sqrt(tx * tx + ty * ty)
   if td < 0.05 { return false } // no range limit: a locked target is hit wherever it is (Rookstun)
-  return (tx * DX[hd] + ty * DY[hd]) / td > 0.17 // the guns swing through 160 deg (Rookstun): +-80 from the nose
+  return (tx * TX[hd] + ty * TY[hd]) / td > 0.17 // the guns swing through 160 deg (Rookstun): +-80 from the nose
 }
 mod shoot(kind: int) {
   // reuse a dead slot, else push
@@ -256,10 +258,10 @@ mod shoot(kind: int) {
     slot = slife.length() - 1
   }
   let sp = if kind == 0 then 0.65 else 0.48
-  sbx[slot] = hx + DX[hd] * 0.6
-  sby[slot] = hy + DY[hd] * 0.6
-  sdx[slot] = DX[hd] * sp
-  sdy[slot] = DY[hd] * sp
+  sbx[slot] = hx + TX[hd] * 0.6
+  sby[slot] = hy + TY[hd] * 0.6
+  sdx[slot] = TX[hd] * sp
+  sdy[slot] = TY[hd] * sp
   // aim by turning (Rookstun): a live ground target within 7 tiles and ~30 deg of the nose gets the shot steered at it,
   // so the gun's downward angle never has to be managed by hand
   var bestc: float = 0.0
@@ -272,7 +274,7 @@ mod shoot(kind: int) {
       let ty = ey.get(j) - hy
       let td = sqrt(tx * tx + ty * ty)
       if td > 0.05 && td < 7.0 && onScreen(ex.get(j), ey.get(j), 0.0) {
-        let c = (tx * DX[hd] + ty * DY[hd]) / td
+        let c = (tx * TX[hd] + ty * TY[hd]) / td
         if c > bestc {
           bestc = c
           bj = j
@@ -432,10 +434,16 @@ mod step() {
       var tvy: float = 0.0
       tvx = 0.0
       tvy = 0.0
+      // the stick sets where the nose should point; it swings there one 22.5 deg step every 2 ticks (Rookstun: needs
+      // time to turn), the shorter way round, and thrust is along the nose, not the stick
+      if d >= 0 { th = d * 2 }
+      if tk % 2 == 0 && th != hd {
+        let df = (th - hd + 16) % 16
+        hd = (hd + (if df <= 8 then 1 else 15)) % 16
+      }
       if d >= 0 {
-        hd = d
-        tvx = DX[d] * 0.21
-        tvy = DY[d] * 0.21
+        tvx = TX[hd] * 0.21
+        tvy = TY[hd] * 0.21
       }
       mvx = mvx + (tvx - mvx) * 0.06
       mvy = mvy + (tvy - mvy) * 0.06
@@ -455,7 +463,7 @@ mod step() {
             let ty = ey.get(j) - hy
             let td = sqrt(tx * tx + ty * ty)
             if td > 0.05 && td < 10.0 && onScreen(ex.get(j), ey.get(j), 0.0) {
-              ck.push(floor((1.0 - (tx * DX[hd] + ty * DY[hd]) / td) * 8.0) * 100.0 + td)
+              ck.push(floor((1.0 - (tx * TX[hd] + ty * TY[hd]) / td) * 8.0) * 100.0 + td)
               cj.push(j)
             }
           }

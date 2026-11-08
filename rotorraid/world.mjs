@@ -85,7 +85,7 @@ const HELI = { body: [64, 70, 60], dark: [44, 48, 42], glass: [90, 140, 170], ro
 // HS = length scale (Rookstun: 14 px long, was ~12), HZ = height scale (+2 px taller)
 const HS = 16 / 12, HZ = 1.25; // 16 px long (Rookstun: 2 more)
 function heli(d, f) {
-  const a = d * Math.PI / 4;
+  const a = d * Math.PI / 8; // 16 headings, 22.5 deg apart (Rookstun)
   return (x0, y0, z0) => {
     const x = x0 / HS, y = y0 / HS, z = z0 / HZ;
     const [u, v] = rot(x, y, a);
@@ -139,7 +139,7 @@ const bolt = (col, len, wid) => (x, y, z) => (Math.abs(x) < len && Math.abs(y) <
 // id order is the bus contract with gen.mjs
 export const SPR = {}; let SID = 0; const SPRITES = [];
 const add = (name, fn, zmax = 8) => { SPR[name] = SID++; SPRITES.push({ name, fn, zmax }); };
-for (let d = 0; d < 8; d++) for (let f = 0; f < 2; f++) add(`heli${d}_${f}`, heli(d, f));
+for (let d = 0; d < 16; d++) for (let f = 0; f < 2; f++) add(`heli${d}_${f}`, heli(d, f));
 add('shadow', flat([36, 46, 40], 1.9, 1.9));
 // people are hand-drawn pixels (Rookstun: "people should be 3 pixels tall"): head, shirt, legs; waving = arms up
 const PX = { h: [228, 180, 140], s: [236, 236, 228], l: [50, 60, 110], a: [228, 180, 140], H: [70, 80, 50], o: [90, 100, 60], g: [10, 10, 10], L: [60, 66, 40], b: [184, 164, 112], B: [150, 132, 92], x: [40, 36, 32] };
