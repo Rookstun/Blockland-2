@@ -47,6 +47,8 @@ var lastBb: bool = false
 var lastBq: bool = false
 var lastRmb: bool = false
 var tgt: int = -1
+var ck: float[]
+var cj: float[]
 var ek: int[]
 var ex: float[]
 var ey: float[]
@@ -416,14 +418,29 @@ mod step() {
         hy = min(max(hy + DY[d] * 0.085, 0.5), {{MH}}.0 - 0.5)
       }
       // right mouse: lock the next target in front (cycles), none left = unlock
+      // right mouse: any live target within 10 tiles, in any direction (Rookstun), ordered by how close it is to
+      // where the nose points (then distance); each click steps to the next in that order, wrapping round
       if pr {
-        var nt: int = -1
-        nt = -1
-        for k in 1..ek.length() + 1 {
-          let j = (tgt + k + ek.length()) % ek.length()
-          if nt < 0 && inFront(j) && j != tgt { nt = j }
+        ck.resize(0, 0.0)
+        cj.resize(0, 0.0)
+        for j in 0..ek.length() {
+          if ehp.get(j) > 0 {
+            let tx = ex.get(j) - hx
+            let ty = ey.get(j) - hy
+            let td = sqrt(tx * tx + ty * ty)
+            if td > 0.05 && td < 10.0 {
+              ck.push(floor((1.0 - (tx * DX[hd] + ty * DY[hd]) / td) * 8.0) * 100.0 + td)
+              cj.push(j)
+            }
+          }
         }
-        tgt = nt
+        ck.sortMultiple(cj)
+        var pos: int = -1
+        pos = -1
+        for k in 0..cj.length() {
+          if floor(cj.get(k)) == tgt { pos = k }
+        }
+        tgt = if cj.length() == 0 then -1 else floor(cj.get((pos + 1) % cj.length()))
         sb = 1.8
         beep = 1
       }
