@@ -31,6 +31,10 @@ var ps: int = 0
 var pe: int = 0
 var hi: int = 0
 var acc: string = ""
+var rs: string[]
+var rk1: int[]
+var rk2: int[]
+var hs: int = 0
 var pbA: string = ""
 var fA: int = -1
 var pbO: string = ""
@@ -134,9 +138,26 @@ mod draw() {
   oy.resize(0, 0)
   os.resize(0, 0)
 {{OUNPACK}}
+  // row cache (Rookstun, optimisation 1): a row is rebuilt only when the camera or the sprites crossing it changed
+  if rs.length() != {{ROWS}} {
+    rs.resize({{ROWS}}, "")
+    rk1.resize({{ROWS}}, -1)
+    rk2.resize({{ROWS}}, -1)
+  }
   acc = ""
   for j in 0..{{ROWS}} {
-    if j < {{ROWS1}} { acc = acc .. row({{R0}} + j) .. "\n" } else { acc = acc .. row({{R0}} + j) }
+    let sr = {{R0}} + j
+    hs = 7
+    for k in 0..ox.length() {
+      let r = sr - oy.get(k)
+      if r >= 0 && r < SH[os.get(k)] { hs = (hs * 31 + (ox.get(k) + 512) * 1009 + r * 37 + os.get(k) * 7919) % 1000000007 }
+    }
+    if rk1.get(j) != camx * 4096 + camy || rk2.get(j) != hs {
+      rs[j] = row(sr)
+      rk1[j] = camx * 4096 + camy
+      rk2[j] = hs
+    }
+    if j < {{ROWS1}} { acc = acc .. rs.get(j) .. "\n" } else { acc = acc .. rs.get(j) }
   }
   pbA = acc
   readyO = frame

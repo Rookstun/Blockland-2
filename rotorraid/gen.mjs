@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { makeTiles, mapImage, sprites, makePalette, SPR, NTR, MW, MH, IW, IH, MOX, MOY, MSC, FACTORIES, GUNS, TANKS, PEOPLE, START } from './world.mjs';
+import { makeTiles, mapPixels, spans, sprites, makePalette, SPR, NTR, MW, MH, IW, IH, MOX, MOY, MSC, FACTORIES, GUNS, TANKS, PEOPLE, START } from './world.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // 10 channels x 12 rows (one 2-unit strip each): half the work per channel event (5 x 24 rows ran out: panels went blank)
@@ -30,8 +30,23 @@ const TEXT = {
 let cache;
 export function build() {
   if (cache) return cache;
-  const pal = makePalette(), tiles = makeTiles(), map = mapImage(tiles, pal), spr = sprites(pal);
-  cache = { tiles, map, sprites: spr, palette: pal.hex(), IW, IH, SPR, START, proj };
+  const pal = makePalette(), tiles = makeTiles(), base = mapPixels(tiles), spr = sprites(pal);
+  // static targets (gun posts, factories) are BAKED into the map (Rookstun, optimisation 3): they cost the channels
+  // nothing while alive; a dead one is drawn as a patch sprite = the ground behind it with its wreck on top
+  const at = ([x, y]) => proj(x, y, 0).map(v => Math.floor(v + 0.5));
+  const stamp = (img, w, s, X, Y, ox = 0, oy = 0) => { for (let j = 0; j < s.h; j++) for (let i = 0; i < s.w; i++) { const c = s.px[j * s.w + i]; const x = X - s.ax + i - ox, y = Y - s.ay + j - oy; if (c && x >= 0 && y >= 0 && x < w) img[y * w + x] = c; } };
+  const baked = base.slice(), statics = [...GUNS.map(p => ['gun', 'gunDead', p]), ...FACTORIES.map(p => ['factory', 'factoryDead', p])];
+  const patches = statics.map(([alive, dead, p], i) => {
+    const A = spr[SPR[alive]], D = spr[SPR[dead]], [X, Y] = at(p);
+    stamp(baked, IW, A, X, Y);
+    const x0 = X - Math.max(A.ax, D.ax), y0 = Y - Math.max(A.ay, D.ay), x1 = X + Math.max(A.w - A.ax, D.w - D.ax), y1 = Y + Math.max(A.h - A.ay, D.h - D.ay);
+    const w = x1 - x0, h = y1 - y0, px = [];
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) px.push(base[y * IW + x]);
+    stamp(px, w, D, X, Y, x0, y0);
+    return { name: `patch${i}`, px, w, h, ax: X - x0, ay: Y - y0, rows: spans(px, w, h, pal) };
+  });
+  const map = spans(baked, IW, IH, pal), all = [...spr, ...patches];
+  cache = { tiles, map, sprites: all, palette: pal.hex(), IW, IH, SPR, START, proj, PATCH0: spr.length, NSTATIC: statics.length };
   return cache;
 }
 export function cpuSrc() {
@@ -49,6 +64,7 @@ export function cpuSrc() {
     OVARS: Array.from({ length: NOB }, (_, i) => `var oO${i}: int = -1`).join('\n'),
     OOUTS: Array.from({ length: NOB }, (_, i) => `@right out o${i}_: int = oO${i}`).join('\n'),
     OASSIGN: Array.from({ length: NOB }, (_, i) => `  oO${i} = if base + ${i} < n then floor(vals.get(base + ${i})) else -1`).join('\n'),
+    PSPR: [...GUNS.map((_, i) => g.PATCH0 + i), ...TANKS.map(() => -1), ...FACTORIES.map((_, i) => g.PATCH0 + GUNS.length + i)].join(', '),
     SPAWN: spawn, PEOPLE: people, BRIEF: BRIEF.map(t => q(t)).join(', '), NBRIEF: BRIEF.length, WIN: q(TEXT.WIN),
     NOLAND: TEXT.NOLAND, NOFUEL: TEXT.NOFUEL, SHOTDOWN: TEXT.SHOTDOWN, DELIVER: TEXT.DELIVER, BOARD: TEXT.BOARD, FACTORY: TEXT.FACTORY,
     S_GUN: SPR.gun, S_GUNDEAD: SPR.gunDead, S_FACT: SPR.factory, S_FACTDEAD: SPR.factoryDead, S_TANK: SPR.tank0, S_PERSON: SPR.person0,
