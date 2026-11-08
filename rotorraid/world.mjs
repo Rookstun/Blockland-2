@@ -83,13 +83,13 @@ const box = (x, y, z, x0, y0, z0, x1, y1, z1) => x >= x0 && x < x1 && y >= y0 &&
 const rot = (x, y, a) => [x * Math.cos(a) + y * Math.sin(a), -x * Math.sin(a) + y * Math.cos(a)];
 const HELI = { body: [64, 70, 60], dark: [44, 48, 42], glass: [90, 140, 170], rotor: [26, 26, 28] };
 // HS = length scale (Rookstun: 14 px long, was ~12), HZ = height scale (+2 px taller)
-const HS = 14 / 12, HZ = 1.25;
+const HS = 16 / 12, HZ = 1.25; // 16 px long (Rookstun: 2 more)
 function heli(d, f) {
   const a = d * Math.PI / 4;
   return (x0, y0, z0) => {
     const x = x0 / HS, y = y0 / HS, z = z0 / HZ;
     const [u, v] = rot(x, y, a);
-    if (z >= 1.55 && z < 1.75) { const [p, q] = rot(u, v, f ? Math.PI / 4 : 0); if ((Math.abs(p) < 2.7 && Math.abs(q) < 0.24) || (Math.abs(q) < 2.7 && Math.abs(p) < 0.24)) return HELI.rotor; } // blades >= 1 px at every heading
+    if (z >= 1.6 && z < 1.72) { const [p, q] = rot(u, v, f ? Math.PI / 4 : 0); if ((Math.abs(p) < 2.7 && Math.abs(q) < 0.16) || (Math.abs(q) < 2.7 && Math.abs(p) < 0.16)) return HELI.rotor; } // thin blades (Rookstun), still >= 1 px
     if (box(u, v, z, -0.25, -0.25, 1.25, 0.25, 0.25, 1.55)) return HELI.dark; // mast
     if (box(u, v, z, 0.9, -0.5, 0.45, 1.7, 0.5, 1.15) && u - 0.9 > (z - 0.45) * 0.4 - 0.2) return HELI.glass; // cockpit glazing
     if (box(u, v, z, -1.2, -0.62, 0.35, 1.7, 0.62, 1.25)) return HELI.body;

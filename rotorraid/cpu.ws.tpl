@@ -214,7 +214,7 @@ mod inFront(j: int) -> bool {
   let ty = ey.get(j) - hy
   let td = sqrt(tx * tx + ty * ty)
   if td < 0.05 || td > 7.0 { return false }
-  return (tx * DX[hd] + ty * DY[hd]) / td > 0.5
+  return (tx * DX[hd] + ty * DY[hd]) / td > 0.17 // the guns swing through 160 deg (Rookstun): +-80 from the nose
 }
 mod shoot(kind: int) {
   // reuse a dead slot, else push
@@ -242,9 +242,9 @@ mod shoot(kind: int) {
   sdy[slot] = DY[hd] * sp
   // aim by turning (Rookstun): a live ground target within 7 tiles and ~30 deg of the nose gets the shot steered at it,
   // so the gun's downward angle never has to be managed by hand
-  var bestc: float = 0.87
+  var bestc: float = 0.0
   var bj: int = -1
-  bestc = 0.87
+  bestc = if kind == 0 then 0.17 else 0.87 // guns 160 deg arc, missiles ~60 deg
   bj = -1
   for j in 0..ek.length() {
     if ehp.get(j) > 0 {
@@ -271,9 +271,15 @@ mod shoot(kind: int) {
     sdx[slot] = tx / td * sp
     sdy[slot] = ty / td * sp
   }
+  // tracer drawn along the way the round really flies (nearest of 8 headings), not the nose
+  var bd: int = 0
+  bd = 0
+  for k in 1..8 {
+    if DX[k] * sdx.get(slot) + DY[k] * sdy.get(slot) > DX[bd] * sdx.get(slot) + DY[bd] * sdy.get(slot) { bd = k }
+  }
+  sdir[slot] = bd
   slife[slot] = if kind == 0 then 16 else 26
   skind[slot] = kind
-  sdir[slot] = hd
 }
 mod eshoot(i: int) {
   let dx = hx - ex.get(i)
@@ -353,7 +359,7 @@ mod step() {
       page += 1
       if page < {{NBRIEF}} { msgv = BRIEF[page] } else {
         mode = 2
-        msgv = "WASD fly   SPACE gun   E missile   RMB lock   Q land / lift off"
+        msgv = "WASD fly   LMB/E guns   SPACE missile   RMB lock   Q land / lift off"
         landing = 1
       }
     }
@@ -415,14 +421,15 @@ mod step() {
       }
       if tgt >= 0 && ehp.get(tgt) <= 0 { tgt = -1 }
       if gcd > 0 { gcd -= 1 }
-      if ba && gcd == 0 && gunA > 0 {
+      // LMB/E = guns (held), SPACE = missiles (Rookstun)
+      if bb && gcd == 0 && gunA > 0 {
         shoot(0)
         gunA -= 1
         gcd = 3
         sb = 2.2
         beep = 1
       }
-      if pb && msl > 0 {
+      if pa && msl > 0 {
         shoot(1)
         msl -= 1
         sb = 0.9
