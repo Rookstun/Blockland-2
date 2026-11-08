@@ -537,7 +537,7 @@ on tick {
       msgv = "SPACE: start"
     }
     step()
-    bus()
+    if tk % 4 == 0 { bus() } // 5 fps (Rookstun: option b; 20 fps of coloured text choked the clients)
   } else {
     if was {
       was = false
