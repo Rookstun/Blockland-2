@@ -486,9 +486,12 @@ mod step() {
         let df = (th - hd + 16) % 16
         hd = (hd + (if df <= 8 then 1 else 15)) % 16
       }
+      // aiming (RMB held on a lock): the nose stays on the target but the stick still flies you around (strafe),
+      // otherwise thrust is along the nose (Rookstun: was stuck flying at what it aimed at)
       if d >= 0 {
-        tvx = TX[hd] * 0.21
-        tvy = TY[hd] * 0.21
+        let k = if aimTh >= 0 then d * 2 else hd
+        tvx = TX[k] * 0.21
+        tvy = TY[k] * 0.21
       }
       mvx = mvx + (tvx - mvx) * 0.06
       mvy = mvy + (tvy - mvy) * 0.06
