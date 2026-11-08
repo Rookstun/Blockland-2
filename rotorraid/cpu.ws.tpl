@@ -434,8 +434,8 @@ mod step() {
       tvy = 0.0
       if d >= 0 {
         hd = d
-        tvx = DX[d] * 0.085
-        tvy = DY[d] * 0.085
+        tvx = DX[d] * 0.13
+        tvy = DY[d] * 0.13
       }
       mvx = mvx + (tvx - mvx) * 0.08
       mvy = mvy + (tvy - mvy) * 0.08
