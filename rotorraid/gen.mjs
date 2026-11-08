@@ -50,7 +50,7 @@ export function cpuSrc() {
     SPAWN: spawn, PEOPLE: people, BRIEF: BRIEF.map(t => q(t)).join(', '), NBRIEF: BRIEF.length, WIN: q(TEXT.WIN),
     NOLAND: TEXT.NOLAND, NOFUEL: TEXT.NOFUEL, SHOTDOWN: TEXT.SHOTDOWN, DELIVER: TEXT.DELIVER, BOARD: TEXT.BOARD, FACTORY: TEXT.FACTORY,
     S_GUN: SPR.gun, S_GUNDEAD: SPR.gunDead, S_FACT: SPR.factory, S_FACTDEAD: SPR.factoryDead, S_TANK: SPR.tank0, S_PERSON: SPR.person0,
-    S_BOOM0: SPR.boom0, S_BOOM1: SPR.boom1, S_EBULLET: SPR.ebullet, S_MISSILE: SPR.missile, S_BULLET: SPR.bullet, S_SHADOW: SPR.shadow,
+    S_BOOM0: SPR.boom0, S_BOOM1: SPR.boom1, S_EBULLET: SPR.ebullet0, S_MISSILE: SPR.missile, S_BULLET: SPR.bullet0, S_SHADOW: SPR.shadow,
   });
 }
 export function channelSrc(k) {

@@ -62,11 +62,15 @@ var sdx: float[]
 var sdy: float[]
 var slife: int[]
 var skind: int[]
+var sdir: int[]
 var qx: float[]
 var qy: float[]
 var qdx: float[]
 var qdy: float[]
 var qlife: int[]
+var qd: int[]
+var qz: float[]
+var qdz: float[]
 var xx: float[]
 var xy: float[]
 var xt: int[]
@@ -181,11 +185,15 @@ mod reset() {
   sdy.resize(0, 0.0)
   slife.resize(0, 0)
   skind.resize(0, 0)
+  sdir.resize(0, 0)
   qx.resize(0, 0.0)
   qy.resize(0, 0.0)
   qdx.resize(0, 0.0)
   qdy.resize(0, 0.0)
   qlife.resize(0, 0)
+  qd.resize(0, 0)
+  qz.resize(0, 0.0)
+  qdz.resize(0, 0.0)
   xx.resize(0, 0.0)
   xy.resize(0, 0.0)
   xt.resize(0, 0)
@@ -204,6 +212,7 @@ mod shoot(kind: int) {
     sdy.push(0.0)
     slife.push(0)
     skind.push(0)
+    sdir.push(0)
     slot = slife.length() - 1
   }
   let sp = if kind == 0 then 0.42 else 0.3
@@ -213,6 +222,7 @@ mod shoot(kind: int) {
   sdy[slot] = DY[hd] * sp
   slife[slot] = if kind == 0 then 16 else 26
   skind[slot] = kind
+  sdir[slot] = hd
 }
 mod eshoot(i: int) {
   let dx = hx - ex.get(i)
@@ -229,6 +239,9 @@ mod eshoot(i: int) {
     qdx.push(0.0)
     qdy.push(0.0)
     qlife.push(0)
+    qd.push(0)
+    qz.push(0.0)
+    qdz.push(0.0)
     slot = qlife.length() - 1
   }
   qx[slot] = ex.get(i)
@@ -236,6 +249,16 @@ mod eshoot(i: int) {
   qdx[slot] = dx / d * 0.15
   qdy[slot] = dy / d * 0.15
   qlife[slot] = 70
+  // the soldier fires from chest height (Rookstun: they fired too high) and the round climbs to the helicopter's height
+  // by the time it covers the distance; tracer points along the nearest of the 8 headings
+  qz[slot] = 0.15
+  qdz[slot] = (hz - 0.15) / max(d / 0.15, 1.0)
+  var best: int = 0
+  best = 0
+  for k in 1..8 {
+    if DX[k] * dx + DY[k] * dy > DX[best] * dx + DY[best] * dy { best = k }
+  }
+  qd[slot] = best
 }
 mod crash(why: string) {
   mode = 3
@@ -451,6 +474,7 @@ mod step() {
         qlife[i] = qlife.get(i) - 1
         qx[i] = qx.get(i) + qdx.get(i)
         qy[i] = qy.get(i) + qdy.get(i)
+        qz[i] = min(max(qz.get(i) + qdz.get(i), 0.0), 1.0)
         let dx = qx.get(i) - hx
         let dy = qy.get(i) - hy
         if mode == 2 && hz > 0.3 && dx * dx + dy * dy < 0.2 { // helicopter hitbox ~0.45 tile (its ~15 px body)
@@ -518,10 +542,10 @@ mod bus() {
     if xt.get(i) > 0 { put(xx.get(i), xy.get(i), 0.4, if xt.get(i) > 6 then {{S_BOOM0}} else {{S_BOOM1}}, xx.get(i) + xy.get(i) + 0.3) }
   }
   for i in 0..qlife.length() {
-    if qlife.get(i) > 0 { put(qx.get(i) + qdx.get(i) * fr, qy.get(i) + qdy.get(i) * fr, 0.8, {{S_EBULLET}}, 900.0) }
+    if qlife.get(i) > 0 { put(qx.get(i) + qdx.get(i) * fr, qy.get(i) + qdy.get(i) * fr, qz.get(i), {{S_EBULLET}} + qd.get(i), 900.0) }
   }
   for i in 0..slife.length() {
-    if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, 0.9, if skind.get(i) == 1 then {{S_MISSILE}} else {{S_BULLET}}, 901.0) }
+    if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, 0.9, if skind.get(i) == 1 then {{S_MISSILE}} else {{S_BULLET}} + sdir.get(i), 901.0) }
   }
   if mode != 3 {
     put(rx, ry, 0.0, {{S_SHADOW}}, rx + ry - 0.05)

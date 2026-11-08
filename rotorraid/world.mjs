@@ -145,7 +145,11 @@ for (let d = 0; d < 4; d++) add(`tank${d}`, tank(d));
 // sandbag post: a 3 px soldier (helmet, body, legs) with a 1 px black gun, bags around his legs (Rookstun)
 addPix('gun', ['..H..', '..og.', 'bBLBb']); addPix('gunDead', ['.....', '..x..', 'bxBxb']);
 add('factory', factory(false), 8); add('factoryDead', factory(true), 3);
-add('bullet', bolt([255, 236, 90], 0.45, 0.14)); add('ebullet', ball([250, 80, 60], [255, 200, 120], 0.45)); add('missile', bolt([240, 240, 240], 0.8, 0.18));
+// tracers: 4 px lines pointing the way they fly, bright pixel at the front (Rookstun), one per heading d (world angle d*45 deg)
+const TRACE = [['12..', '..23'], ['1', '2', '2', '3'], ['..21', '32..'], ['3221'], ['32..', '..21'], ['3', '2', '2', '1'], ['..23', '12..'], ['1223']];
+Object.assign(PX, { 1: [200, 170, 60], 2: [255, 230, 90], 3: [255, 255, 220], 4: [170, 50, 40], 5: [240, 90, 60], 6: [255, 210, 160] });
+TRACE.forEach((r, d) => addPix(`bullet${d}`, r));
+TRACE.forEach((r, d) => addPix(`ebullet${d}`, r.map(t => t.replace(/[123]/g, c => String(+c + 3))))); add('missile', bolt([240, 240, 240], 0.8, 0.18));
 add('boom0', ball([250, 140, 40], [255, 236, 130], 1.3)); add('boom1', ball([200, 80, 40], [250, 170, 60], 2.1));
 addPix('person_board', ['h', 's', 'l']); // spare id for people walking to the helicopter
 
