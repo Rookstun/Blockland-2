@@ -539,9 +539,9 @@ on tick {
       msgv = "SPACE: start"
     }
     step()
-    // a frame every 3 ticks: bus on phase 0, channels draw in thirds on phases 0, 1, 2 (shared per-tick wire budget)
-    if tk % 3 == 0 { bus() }
-    phaseO = tk % 3
+    // a frame every 2 ticks (10 fps, Rookstun): bus on phase 0, channels draw in halves on phases 0, 1 (shared per-tick wire budget)
+    if tk % 2 == 0 { bus() }
+    phaseO = tk % 2
   } else {
     if was {
       was = false
