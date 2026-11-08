@@ -16,7 +16,7 @@ export const proj = (x, y, z) => [(x - y) * MSC + MOX, (x + y) * MSC / 2 - z * M
 export const BUS = ['frame', 'phase', 'camx', 'camy', ...Array.from({ length: NOB }, (_, i) => `o${i}`)];
 const q = JSON.stringify, fill = (tpl, v) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => { if (!(k in v)) throw Error(`template: no ${k}`); return v[k]; });
 const BRIEF = ['MISSION 1: OPERATION SOGGY BISCUIT   (SPACE)', 'Grubb Island makes jam for very bad toast.', 'Blow up all 3 of its jam factories.',
-  'Four accountants are stuck on the sandbar.', 'Land near them, then fly them home to the H.', 'WASD fly  SPACE gun  E missile  Q land   SPACE: go'];
+  'Four accountants are stuck on the sandbar.', 'Land near them, then fly them home to the H.', 'WASD fly  SPACE gun  E missile  RMB lock target  Q land   SPACE: go'];
 const TEXT = {
   WIN: 'MISSION COMPLETE. The accountants are home and already invoicing you.   SPACE: again',
   NOLAND: 'That is not a landing spot. That is a tree, or the sea.',
@@ -50,7 +50,7 @@ export function cpuSrc() {
     SPAWN: spawn, PEOPLE: people, BRIEF: BRIEF.map(t => q(t)).join(', '), NBRIEF: BRIEF.length, WIN: q(TEXT.WIN),
     NOLAND: TEXT.NOLAND, NOFUEL: TEXT.NOFUEL, SHOTDOWN: TEXT.SHOTDOWN, DELIVER: TEXT.DELIVER, BOARD: TEXT.BOARD, FACTORY: TEXT.FACTORY,
     S_GUN: SPR.gun, S_GUNDEAD: SPR.gunDead, S_FACT: SPR.factory, S_FACTDEAD: SPR.factoryDead, S_TANK: SPR.tank0, S_PERSON: SPR.person0,
-    S_BOOM0: SPR.boom0, S_BOOM1: SPR.boom1, S_EBULLET: SPR.ebullet0, S_MISSILE: SPR.missile, S_BULLET: SPR.bullet0, S_SHADOW: SPR.shadow,
+    S_BOOM0: SPR.boom0, S_BOOM1: SPR.boom1, S_EBULLET: SPR.ebullet0, S_MISSILE: SPR.missile, S_BULLET: SPR.bullet0, S_SHADOW: SPR.shadow, S_LOCK: SPR.lock,
   });
 }
 export function channelSrc(k) {
@@ -102,4 +102,4 @@ ${r.map(v => `on Change(${v}) {\n  check()\n}`).join('\n')}
 `;
 }
 // cabinet options (the DMA cabinet reads W/H/STRIP/titleLH from here)
-export const cabinetGen = () => ({ W, H, STRIP, src: cpuSrc(), titleLH: 1.1, synths: ['Square'], clockHz: 60 }); // RotorRaid FastCabinetRender (Rookstun): only the clock is faster, the game speeds up with it
+export const cabinetGen = () => ({ W, H, STRIP, src: cpuSrc(), titleLH: 1.1, synths: ['Square'], clockHz: 60, rmbPin: true }); // RotorRaid FastCabinetRender (Rookstun): only the clock is faster, the game speeds up with it

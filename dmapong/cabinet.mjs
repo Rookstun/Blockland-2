@@ -108,7 +108,10 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   wireTo(cmp('Expr_CompareGreater', port(split, 'InputRight'), 0.5), 'right');
   wireTo(cmp('Expr_CompareGreater', port(split, 'InputForward'), 0.5), 'up');
   wireTo(cmp('Expr_CompareLess', port(split, 'InputForward'), -0.5), 'down');
-  wireTo(cmp('Expr_CompareGreater', add(port(split, 'InputUp'), port(split, 'bPressedRightMouse')), 0.5), 'ba');
+  if (gen.rmbPin) { // right mouse on its own pin (rotorraid: switch targets); Space alone is ba
+    wireTo(cmp('Expr_CompareGreater', port(split, 'InputUp'), 0.5), 'ba');
+    wireTo(cmp('Expr_CompareGreater', port(split, 'bPressedRightMouse'), 0.5), 'rmb');
+  } else wireTo(cmp('Expr_CompareGreater', add(port(split, 'InputUp'), port(split, 'bPressedRightMouse')), 0.5), 'ba');
   wireTo(cmp('Expr_CompareGreater', add(port(split, 'bPressedLeftMouse'), port(split, 'bPressedE')), 0.5), 'bb');
   wireTo(cmp('Expr_CompareGreater', port(split, 'bPressedQ'), 0.5), 'bq'); // Q = add a ball (Rookstun, hidden)
   const clock = gate(C.Clock, { IntervalSeconds: gen.clockHz ? 1 / gen.clockHz : 0.05, bEnabled: true }); // clockHz: faster clock = more per-tick wire budget a second

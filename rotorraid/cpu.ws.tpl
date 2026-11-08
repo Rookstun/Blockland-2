@@ -8,6 +8,7 @@
 @left in ba: bool
 @left in bb: bool
 @left in bq: bool
+@left in rmb: bool
 
 const TILE = [{{TILES}}]
 const DIRT = [4, 3, 2, 5, -1, 1, 6, 7, 0]
@@ -42,6 +43,8 @@ var timer: int = 0
 var lastBa: bool = false
 var lastBb: bool = false
 var lastBq: bool = false
+var lastRmb: bool = false
+var tgt: int = -1
 var ek: int[]
 var ex: float[]
 var ey: float[]
@@ -64,6 +67,7 @@ var slife: int[]
 var skind: int[]
 var sdir: int[]
 var sz: float[]
+var szd: float[]
 var qx: float[]
 var qy: float[]
 var qdx: float[]
@@ -188,6 +192,8 @@ mod reset() {
   skind.resize(0, 0)
   sdir.resize(0, 0)
   sz.resize(0, 0.0)
+  szd.resize(0, 0.0)
+  tgt = -1
   qx.resize(0, 0.0)
   qy.resize(0, 0.0)
   qdx.resize(0, 0.0)
@@ -199,6 +205,16 @@ mod reset() {
   xx.resize(0, 0.0)
   xy.resize(0, 0.0)
   xt.resize(0, 0)
+}
+// a ground target worth locking: alive, within 7 tiles and in front (within ~60 deg of the nose)
+mod inFront(j: int) -> bool {
+  if j < 0 || j >= ek.length() { return false }
+  if ehp.get(j) <= 0 { return false }
+  let tx = ex.get(j) - hx
+  let ty = ey.get(j) - hy
+  let td = sqrt(tx * tx + ty * ty)
+  if td < 0.05 || td > 7.0 { return false }
+  return (tx * DX[hd] + ty * DY[hd]) / td > 0.5
 }
 mod shoot(kind: int) {
   // reuse a dead slot, else push
@@ -216,6 +232,7 @@ mod shoot(kind: int) {
     skind.push(0)
     sdir.push(0)
     sz.push(0.0)
+    szd.push(0.0)
     slot = slife.length() - 1
   }
   let sp = if kind == 0 then 0.42 else 0.3
@@ -243,7 +260,11 @@ mod shoot(kind: int) {
       }
     }
   }
+  if inFront(tgt) { bj = tgt }
+  sz[slot] = hz * 0.85
+  szd[slot] = 0.0
   if bj >= 0 {
+    szd[slot] = -0.2
     let tx = ex.get(bj) - hx
     let ty = ey.get(bj) - hy
     let td = sqrt(tx * tx + ty * ty)
@@ -253,7 +274,6 @@ mod shoot(kind: int) {
   slife[slot] = if kind == 0 then 16 else 26
   skind[slot] = kind
   sdir[slot] = hd
-  sz[slot] = hz * 0.85
 }
 mod eshoot(i: int) {
   let dx = hx - ex.get(i)
@@ -317,6 +337,8 @@ mod step() {
   lastBa = ba
   lastBb = bb
   lastBq = bq
+  let pr = rmb && lastRmb == false
+  lastRmb = rmb
   if mode == 0 {
     if pa {
       mode = 1
@@ -331,7 +353,7 @@ mod step() {
       page += 1
       if page < {{NBRIEF}} { msgv = BRIEF[page] } else {
         mode = 2
-        msgv = "WASD fly   SPACE gun   E missile   Q land / lift off"
+        msgv = "WASD fly   SPACE gun   E missile   RMB lock   Q land / lift off"
         landing = 1
       }
     }
@@ -379,6 +401,19 @@ mod step() {
         hx = min(max(hx + DX[d] * 0.085, 0.5), {{MW}}.0 - 0.5)
         hy = min(max(hy + DY[d] * 0.085, 0.5), {{MH}}.0 - 0.5)
       }
+      // right mouse: lock the next target in front (cycles), none left = unlock
+      if pr {
+        var nt: int = -1
+        nt = -1
+        for k in 1..ek.length() + 1 {
+          let j = (tgt + k + ek.length()) % ek.length()
+          if nt < 0 && inFront(j) && j != tgt { nt = j }
+        }
+        tgt = nt
+        sb = 1.8
+        beep = 1
+      }
+      if tgt >= 0 && ehp.get(tgt) <= 0 { tgt = -1 }
       if gcd > 0 { gcd -= 1 }
       if ba && gcd == 0 && gunA > 0 {
         shoot(0)
@@ -445,7 +480,7 @@ mod step() {
         sby[i] = sby.get(i) + sdy.get(i)
         // shots dive from the helicopter to the ground: hits are tested at ground level, so the tracer has to be drawn
         // there too (Rookstun: had to aim way above their heads when it flew at a fixed height)
-        sz[i] = max(sz.get(i) - 0.2, 0.05)
+        sz[i] = max(sz.get(i) + szd.get(i), 0.05) // locked shots dive to their ground target, free shots fly level
         for j in 0..ek.length() {
           if slife.get(i) > 0 && ehp.get(j) > 0 {
             // hitboxes match the sprites (Rookstun): sandbag post ~5 px, tank ~8 px, factory ~2 tiles; the test is swept
@@ -533,6 +568,7 @@ mod step() {
   var extra: string = ""
   extra = ""
   if onboard > 0 { extra = "  (+${onboard} aboard)" }
+  if tgt >= 0 { extra = extra .. (if ek.get(tgt) == 2 then "  LOCK: FACTORY" else (if ek.get(tgt) == 1 then "  LOCK: TANK" else "  LOCK: GUN POST")) }
   hudv = "ARMOR ${armor}  FUEL ${fuel}  GUN ${gunA}  MSL ${msl}     FACTORIES ${3 - fleft}/3  RESCUED ${rescued}/{{NPEOPLE}}${extra}"
 }
 // screen position of a world point (image pixels), packed with a sprite id for the bus
@@ -581,6 +617,7 @@ mod bus() {
   for i in 0..slife.length() {
     if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, sz.get(i), if skind.get(i) == 1 then {{S_MISSILE}} else {{S_BULLET}} + sdir.get(i), 901.0) }
   }
+  if tgt >= 0 && mode == 2 { put(ex.get(tgt), ey.get(tgt), 0.0, {{S_LOCK}}, 899.0) }
   if mode != 3 {
     put(rx, ry, 0.0, {{S_SHADOW}}, rx + ry - 0.05)
     put(rx, ry, rz, hd * 2 + (if hz > 0.0 then tk % 2 else 0), 1000.0)

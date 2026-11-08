@@ -140,10 +140,11 @@ add('shadow', flat([36, 46, 40], 1.9, 1.9));
 // people are hand-drawn pixels (Rookstun: "people should be 3 pixels tall"): head, shirt, legs; waving = arms up
 const PX = { h: [228, 180, 140], s: [236, 236, 228], l: [50, 60, 110], a: [228, 180, 140], H: [70, 80, 50], o: [90, 100, 60], g: [10, 10, 10], L: [60, 66, 40], b: [184, 164, 112], B: [150, 132, 92], x: [40, 36, 32] };
 const addPix = (name, rows) => { SPR[name] = SID++; SPRITES.push({ name, rows }); };
-addPix('person0', ['h', 's', 'l']); addPix('person1', ['aha', '.s.', '.l.']);
+// 2 wide x 4 tall (Rookstun): head, shirt x2, legs
+addPix('person0', ['hh', 'ss', 'ss', 'll']); addPix('person1', ['ahha', '.ss.', '.ss.', '.ll.']);
 for (let d = 0; d < 4; d++) add(`tank${d}`, tank(d));
 // sandbag post: a 3 px soldier (helmet, body, legs) with a 1 px black gun, bags around his legs (Rookstun)
-addPix('gun', ['..H..', '..og.', 'bBLBb']); addPix('gunDead', ['.....', '..x..', 'bxBxb']);
+addPix('gun', ['..HH..', '..oog.', '..oo..', 'bBLLBb']); addPix('gunDead', ['......', '......', '..xx..', 'bxBBxb']);
 add('factory', factory(false), 8); add('factoryDead', factory(true), 3);
 // tracers: 4 px lines pointing the way they fly, bright pixel at the front (Rookstun), one per heading d (world angle d*45 deg)
 const TRACE = [['12..', '..23'], ['1', '2', '2', '3'], ['..21', '32..'], ['3221'], ['32..', '..21'], ['3', '2', '2', '1'], ['..23', '12..'], ['1223']];
@@ -151,7 +152,9 @@ Object.assign(PX, { 1: [200, 170, 60], 2: [255, 230, 90], 3: [255, 255, 220], 4:
 TRACE.forEach((r, d) => addPix(`bullet${d}`, r));
 TRACE.forEach((r, d) => addPix(`ebullet${d}`, r.map(t => t.replace(/[123]/g, c => String(+c + 3))))); add('missile', bolt([240, 240, 240], 0.8, 0.18));
 add('boom0', ball([250, 140, 40], [255, 236, 130], 1.3)); add('boom1', ball([200, 80, 40], [250, 170, 60], 2.1));
-addPix('person_board', ['h', 's', 'l']); // spare id for people walking to the helicopter
+addPix('person_board', ['hh', 'ss', 'ss', 'll']);
+// target lock marker (right mouse cycles targets): 4 corner pixels around the locked target
+Object.assign(PX, { 7: [255, 60, 60] }); addPix('lock', ['7......7', '........', '........', '........', '........', '7......7']); // spare id for people walking to the helicopter
 
 export function sprites(pal) {
   return SPRITES.map(({ name, fn, zmax, rows }) => {
