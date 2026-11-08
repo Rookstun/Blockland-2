@@ -165,7 +165,19 @@ function tracer(k, dim, mid, hot) {
 Object.assign(PX, { 1: [200, 170, 60], 2: [255, 230, 90], 3: [255, 255, 220], 4: [170, 50, 40], 5: [240, 90, 60], 6: [255, 210, 160] });
 for (let k = 0; k < NTR; k++) addPix(`bullet${k}`, tracer(k, '1', '2', '3'));
 for (let k = 0; k < NTR; k++) addPix(`ebullet${k}`, tracer(k, '4', '5', '6'));
-add('missile', bolt([240, 240, 240], 0.8, 0.18));
+// missiles: 6 px long x 2 px thick lines like the tracers (Rookstun), orange exhaust at the back, grey body, dark tip
+function missile(k) {
+  const a = k * 2 * Math.PI / NTR, wx = Math.cos(a), wy = Math.sin(a), sx = wx - wy, sy = (wx + wy) / 2, m = Math.max(Math.abs(sx), Math.abs(sy));
+  const side = Math.abs(sx) >= Math.abs(sy) ? [0, 1] : [1, 0], col = ['7', '8', '9', '9', '9', '0'];
+  const pts = [];
+  for (let i = 0; i < 6; i++) { const p = [Math.round(i * sx / m), Math.round(i * sy / m)]; pts.push([...p, col[i]], [p[0] + side[0], p[1] + side[1], col[i]]); }
+  const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), w = Math.max(...pts.map(p => p[0])) - x0 + 1, h = Math.max(...pts.map(p => p[1])) - y0 + 1;
+  const g = Array.from({ length: h }, () => Array(w).fill('.'));
+  for (const [x, y, c] of pts) g[y - y0][x - x0] = c;
+  return g.map(r => r.join(''));
+}
+Object.assign(PX, { 7: [255, 120, 30], 8: [255, 190, 70], 9: [200, 200, 196], 0: [60, 60, 64] });
+for (let k = 0; k < NTR; k++) addPix(`missile${k}`, missile(k));
 add('boom0', ball([250, 140, 40], [255, 236, 130], 1.3)); add('boom1', ball([200, 80, 40], [250, 170, 60], 2.1));
 addPix('person_board', ['hh', 'ss', 'ss', 'll']);
 // target lock marker (right mouse cycles targets): 4 corner pixels around the locked target

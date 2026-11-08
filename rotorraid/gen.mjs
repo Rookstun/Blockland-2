@@ -12,6 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 // 10 channels x 12 rows (one 2-unit strip each): half the work per channel event (5 x 24 rows ran out: panels went blank)
 export const W = +(process.env.RR_W ?? 120), H = +(process.env.RR_H ?? 80), NCH = 10, ROWS = H / NCH, NOB = 24, STRIP = ROWS;
 const NBK = IW / 64;
+const GHZ = 25; // game clock (Rookstun: speed the whole game up a little, was 20)
 export const proj = (x, y, z) => [(x - y) * MSC + MOX, (x + y) * MSC / 2 - z * MSC + MOY];
 export const BUS = ['frame', 'phase', 'camx', 'camy', ...Array.from({ length: NOB }, (_, i) => `o${i}`)];
 const q = JSON.stringify, fill = (tpl, v) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => { if (!(k in v)) throw Error(`template: no ${k}`); return v[k]; });
@@ -44,14 +45,14 @@ export function cpuSrc() {
   return fill(fs.readFileSync(join(here, 'cpu.ws.tpl'), 'utf8'), {
     TILES: g.tiles.join(', '), DX: Array.from({ length: 8 }, (_, d) => r(Math.cos(d * Math.PI / 4))).join(', '), DY: Array.from({ length: 8 }, (_, d) => r(Math.sin(d * Math.PI / 4))).join(', '),
     TX: Array.from({ length: NTR }, (_, k) => r(Math.cos(k * 2 * Math.PI / NTR))).join(', '), TY: Array.from({ length: NTR }, (_, k) => r(Math.sin(k * 2 * Math.PI / NTR))).join(', '), NTR,
-    SX: r(START[0]), SY: r(START[1]), MW, MH, MSC, HSC: MSC / 2, MOX, MOY, W, H, HALFW: W / 2, HALFH: H / 2, IW, IH, NOB, NPEOPLE: PEOPLE.length,
+    GHZ, SX: r(START[0]), SY: r(START[1]), MW, MH, MSC, HSC: MSC / 2, MOX, MOY, W, H, HALFW: W / 2, HALFH: H / 2, IW, IH, NOB, NPEOPLE: PEOPLE.length,
     OVARS: Array.from({ length: NOB }, (_, i) => `var oO${i}: int = -1`).join('\n'),
     OOUTS: Array.from({ length: NOB }, (_, i) => `@right out o${i}_: int = oO${i}`).join('\n'),
     OASSIGN: Array.from({ length: NOB }, (_, i) => `  oO${i} = if base + ${i} < n then floor(vals.get(base + ${i})) else -1`).join('\n'),
     SPAWN: spawn, PEOPLE: people, BRIEF: BRIEF.map(t => q(t)).join(', '), NBRIEF: BRIEF.length, WIN: q(TEXT.WIN),
     NOLAND: TEXT.NOLAND, NOFUEL: TEXT.NOFUEL, SHOTDOWN: TEXT.SHOTDOWN, DELIVER: TEXT.DELIVER, BOARD: TEXT.BOARD, FACTORY: TEXT.FACTORY,
     S_GUN: SPR.gun, S_GUNDEAD: SPR.gunDead, S_FACT: SPR.factory, S_FACTDEAD: SPR.factoryDead, S_TANK: SPR.tank0, S_PERSON: SPR.person0,
-    S_BOOM0: SPR.boom0, S_BOOM1: SPR.boom1, S_EBULLET: SPR.ebullet0, S_MISSILE: SPR.missile, S_BULLET: SPR.bullet0, S_SHADOW: SPR.shadow, S_LOCK: SPR.lock,
+    S_BOOM0: SPR.boom0, S_BOOM1: SPR.boom1, S_EBULLET: SPR.ebullet0, S_MISSILE: SPR.missile0, S_BULLET: SPR.bullet0, S_SHADOW: SPR.shadow, S_LOCK: SPR.lock,
   });
 }
 export function channelSrc(k) {
@@ -103,4 +104,4 @@ ${r.map(v => `on Change(${v}) {\n  check()\n}`).join('\n')}
 `;
 }
 // cabinet options (the DMA cabinet reads W/H/STRIP/titleLH from here)
-export const cabinetGen = () => ({ W, H, STRIP, src: cpuSrc(), titleLH: 1.1, synths: ['Square'], clockHz: 20, renderHz: 100, rmbPin: true }); // RotorRaid FastCabinetRender (Rookstun): game clock 50 ms, free render clock 10 ms
+export const cabinetGen = () => ({ W, H, STRIP, src: cpuSrc(), titleLH: 1.1, synths: ['Square'], clockHz: GHZ, renderHz: 100, rmbPin: true }); // RotorRaid FastCabinetRender (Rookstun): game clock 50 ms, free render clock 10 ms

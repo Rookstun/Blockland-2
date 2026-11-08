@@ -437,8 +437,8 @@ mod step() {
         tvx = DX[d] * 0.13
         tvy = DY[d] * 0.13
       }
-      mvx = mvx + (tvx - mvx) * 0.08
-      mvy = mvy + (tvy - mvy) * 0.08
+      mvx = mvx + (tvx - mvx) * 0.05
+      mvy = mvy + (tvy - mvy) * 0.05
       hvx = mvx
       hvy = mvy
       hx = min(max(hx + mvx, 0.5), {{MW}}.0 - 0.5)
@@ -651,7 +651,7 @@ mod put(x: float, y: float, z: float, spr: int, key: float) {
 }
 mod bus() {
   // draw between game ticks: the helicopter and shots move on by their speed x the time since the last tick
-  fr = min(max((ServerUptime() - lastLT) * 20.0, 0.0), 1.0)
+  fr = min(max((ServerUptime() - lastLT) * {{GHZ}}.0, 0.0), 1.0)
   let rx = hx + hvx * fr
   let ry = hy + hvy * fr
   let rz = hz + hvz * fr
@@ -684,7 +684,7 @@ mod bus() {
     if qlife.get(i) > 0 { put(qx.get(i) + qdx.get(i) * fr, qy.get(i) + qdy.get(i) * fr, qz.get(i), {{S_EBULLET}} + qd.get(i), 900.0) }
   }
   for i in 0..slife.length() {
-    if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, sz.get(i), if skind.get(i) == 1 then {{S_MISSILE}} else {{S_BULLET}} + sdir.get(i), 901.0) }
+    if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, sz.get(i), (if skind.get(i) == 1 then {{S_MISSILE}} else {{S_BULLET}}) + sdir.get(i), 901.0) }
   }
   if tgt >= 0 && mode == 2 { put(ex.get(tgt), ey.get(tgt), 0.0, {{S_LOCK}}, 899.0) }
   if mode != 3 {
