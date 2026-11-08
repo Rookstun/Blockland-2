@@ -13,7 +13,6 @@ const COLS = [{{COLS}}]
 {{CHUNKCONSTS}}
 const SRI = [{{SRI}}]
 const SRS = [{{SRS}}]
-const SP = [{{SP}}]
 const SH = [{{SH}}]
 const SAX = [{{SAX}}]
 const SAY = [{{SAY}}]
@@ -107,7 +106,7 @@ mod row(sr: int) -> string {
     if r >= 0 && r < SH[spr] {
       let rr = SRI[spr] + r
       for j in SRS[rr]..SRS[rr + 1] {
-        let p = SP[j]
+        let p = sp(j)
         paint(ox.get(k) + p % 64, ox.get(k) + (p / 64) % 64, p / 4096)
       }
     }

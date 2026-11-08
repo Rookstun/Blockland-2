@@ -64,12 +64,12 @@ export function channelSrc(k) {
   if (g.sprites.some(s => s.w >= 64)) throw Error('sprite wider than 63 px');
   // big const tables -> chunks of CHUNK + a getter mod (wirescript const arrays fail past a few thousand entries)
   const CHUNK = 1000, consts = [], mods = [];
-  for (const [name, arr] of [['MP', MP], ['MB', MB], ['ME', ME]]) {
+  for (const [name, arr] of [['MP', MP], ['MB', MB], ['ME', ME], ['SP', SP]]) {
     const parts = Array.from({ length: Math.ceil(arr.length / CHUNK) }, (_, i) => arr.slice(i * CHUNK, (i + 1) * CHUNK));
     parts.forEach((c, i) => consts.push(`const ${name}${i} = [${c.join(', ')}]`));
     mods.push(`mod ${name.toLowerCase()}(j: int) -> int {\n` + parts.map((_, i) => i < parts.length - 1 ? `  if j < ${(i + 1) * CHUNK} { return ${name}${i}[j - ${i * CHUNK}] }` : `  return ${name}${i}[j - ${i * CHUNK}]`).join('\n') + '\n}');
   }
-  for (const t of [SP, SRS]) if (t.length > CHUNK) throw Error('a constant table is over the chunk size: chunk it too');
+  for (const t of [SRS]) if (t.length > CHUNK) throw Error('a constant table is over the chunk size: chunk it too');
   const unpack = Array.from({ length: NOB }, (_, i) => `  if o${i} >= 0 {
     let spr = o${i} / 262144
     let top = (o${i} / 512) % 512 - 128 - SAY[spr]
@@ -83,7 +83,7 @@ export function channelSrc(k) {
     K: k, PH: Math.floor(k * 3 / NCH), R0, R1, W, H, IH, ROWS, ROWS1: ROWS - 1, BL: '█'.repeat(W),
     OINS: Array.from({ length: NOB }, (_, i) => `@left in o${i}: int`).join('\n'),
     COLS: g.palette.map(h => q(`<color="${h}">`)).join(', '), NBK, NBK1: NBK + 1, CHUNK, CHUNKCONSTS: consts.join('\n'), CHUNKMODS: mods.join('\n'),
-    SRI: SRI.join(', '), SRS: SRS.join(', '), SP: SP.join(', ') || '0',
+    SRI: SRI.join(', '), SRS: SRS.join(', '),
     SH: g.sprites.map(s => s.h).join(', '), SAX: g.sprites.map(s => s.ax).join(', '), SAY: g.sprites.map(s => s.ay).join(', '), SW: g.sprites.map(s => s.w).join(', '), OUNPACK: unpack,
   });
 }
