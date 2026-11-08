@@ -27,6 +27,8 @@ var hy: float = {{SY}}
 var hz: float = 0.0
 var hd: int = 1
 var hvx: float = 0.0
+var mvx: float = 0.0
+var mvy: float = 0.0
 var hvy: float = 0.0
 var hvz: float = 0.0
 var lastLT: float = 0.0
@@ -168,6 +170,8 @@ mod reset() {
   hz = 0.0
   hd = 1
   landing = 0
+  mvx = 0.0
+  mvy = 0.0
   fuel = 100
   armor = 10
   gunA = 200
@@ -407,7 +411,11 @@ mod step() {
     if landing == -1 {
       hz = max(hz - 0.04, 0.0)
       hvz = if hz > 0.0 then -0.04 else 0.0
-      if hz <= 0.0 { landing = 0 }
+      if hz <= 0.0 {
+        landing = 0
+        mvx = 0.0
+        mvy = 0.0
+      }
     }
     if pq {
       if hz <= 0.0 { landing = 1 } else { if hz >= 1.0 {
@@ -419,13 +427,22 @@ mod step() {
       let sx = (if right then 1 else 0) - (if left then 1 else 0)
       let sy = (if down then 1 else 0) - (if up then 1 else 0)
       let d = DIRT[(sx + 1) * 3 + sy + 1]
+      // inertia (Rookstun): the nose turns at once, but speed eases toward the stick (or to a hover) about 8% a tick
+      var tvx: float = 0.0
+      var tvy: float = 0.0
+      tvx = 0.0
+      tvy = 0.0
       if d >= 0 {
         hd = d
-        hvx = DX[d] * 0.085
-        hvy = DY[d] * 0.085
-        hx = min(max(hx + DX[d] * 0.085, 0.5), {{MW}}.0 - 0.5)
-        hy = min(max(hy + DY[d] * 0.085, 0.5), {{MH}}.0 - 0.5)
+        tvx = DX[d] * 0.085
+        tvy = DY[d] * 0.085
       }
+      mvx = mvx + (tvx - mvx) * 0.08
+      mvy = mvy + (tvy - mvy) * 0.08
+      hvx = mvx
+      hvy = mvy
+      hx = min(max(hx + mvx, 0.5), {{MW}}.0 - 0.5)
+      hy = min(max(hy + mvy, 0.5), {{MH}}.0 - 0.5)
       // right mouse: lock the next target in front (cycles), none left = unlock
       // right mouse: any live target within 10 tiles, in any direction (Rookstun), ordered by how close it is to
       // where the nose points (then distance); each click steps to the next in that order, wrapping round
