@@ -62,6 +62,8 @@ export function channelSrc(k) {
   const SRI = [], SRS = [0], SP = [];
   for (const s of g.sprites) { SRI.push(SRS.length - 1); for (const row of s.rows) { for (const [a, b, c] of row) SP.push(a + b * 64 + c * 4096); SRS.push(SP.length); } }
   if (g.sprites.some(s => s.w >= 64)) throw Error('sprite wider than 63 px');
+  const CHUNK = 4000, mpChunks = Array.from({ length: Math.ceil(MP.length / CHUNK) }, (_, i) => MP.slice(i * CHUNK, (i + 1) * CHUNK));
+  for (const t of [MB, ME, SP, SRS]) if (t.length > CHUNK) throw Error('a constant table is over 4000 entries: chunk it too');
   const unpack = Array.from({ length: NOB }, (_, i) => `  if o${i} >= 0 {
     let spr = o${i} / 262144
     let top = (o${i} / 512) % 512 - 128 - SAY[spr]
@@ -74,7 +76,8 @@ export function channelSrc(k) {
   return fill(fs.readFileSync(join(here, 'channel.ws.tpl'), 'utf8'), {
     K: k, R0, R1, W, H, IH, ROWS, ROWS1: ROWS - 1, BL: '█'.repeat(W),
     OINS: Array.from({ length: NOB }, (_, i) => `@left in o${i}: int`).join('\n'),
-    COLS: g.palette.map(h => q(`<color="${h}">`)).join(', '), MB: MB.join(', '), ME: ME.join(', '), NBK, NBK1: NBK + 1, MP: MP.join(', ') || '0',
+    COLS: g.palette.map(h => q(`<color="${h}">`)).join(', '), MB: MB.join(', '), ME: ME.join(', '), NBK, NBK1: NBK + 1, MPCHUNK: CHUNK, MPCONSTS: mpChunks.map((c, i) => `const MP${i} = [${c.join(', ')}]`).join('\n'),
+    MPGET: mpChunks.map((_, i) => i < mpChunks.length - 1 ? `  if j < ${(i + 1) * CHUNK} { return MP${i}[j - ${i * CHUNK}] }` : `  return MP${i}[j - ${i * CHUNK}]`).join('\n'),
     SRI: SRI.join(', '), SRS: SRS.join(', '), SP: SP.join(', ') || '0',
     SH: g.sprites.map(s => s.h).join(', '), SAX: g.sprites.map(s => s.ax).join(', '), SAY: g.sprites.map(s => s.ay).join(', '), SW: g.sprites.map(s => s.w).join(', '), OUNPACK: unpack,
   });
