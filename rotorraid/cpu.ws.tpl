@@ -73,6 +73,7 @@ var xt: int[]
 var keys: float[]
 var vals: float[]
 var frameO: int = 0
+var phaseO: int = 0
 var camxO: int = 0
 var camyO: int = 0
 {{OVARS}}
@@ -87,6 +88,7 @@ var aP0: float = 1.0
 var aV0: float = 0.0
 
 @right out frame_: int = frameO
+@right out phase_: int = phaseO
 @right out camx_: int = camxO
 @right out camy_: int = camyO
 {{OOUTS}}
@@ -537,7 +539,9 @@ on tick {
       msgv = "SPACE: start"
     }
     step()
-    bus()
+    // a frame every 3 ticks: bus on phase 0, channels draw in thirds on phases 0, 1, 2 (shared per-tick wire budget)
+    if tk % 3 == 0 { bus() }
+    phaseO = tk % 3
   } else {
     if was {
       was = false

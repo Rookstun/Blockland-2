@@ -5,6 +5,7 @@
 @left in camx: int
 @left in camy: int
 @left in go: int
+@left in phase: int
 {{OINS}}
 
 const BL = "{{BL}}"
@@ -125,7 +126,7 @@ mod row(sr: int) -> string {
   flush()
   return s
 }
-on Change(frame) {
+mod draw() {
   pbO = pbA
   fO = fA
   fA = frame
@@ -140,6 +141,11 @@ on Change(frame) {
   }
   pbA = acc
   readyO = frame
+}
+// the server's wire budget is shared by every chip in a tick (ch5-9 got nothing once 0-4 had drawn), so each
+// channel draws on its own phase tick of the 3-tick frame: a third of the channels per tick
+on Change(phase) {
+  if phase == {{PH}} && frame != fA { draw() }
 }
 on Change(go) {
   if go == fA { stA = pbA } else { if go == fO { stA = pbO } }
