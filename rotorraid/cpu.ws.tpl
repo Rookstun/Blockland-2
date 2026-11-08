@@ -214,10 +214,17 @@ mod reset() {
   xy.resize(0, 0.0)
   xt.resize(0, 0)
 }
+// on the screen the player sees (camera from the last frame, a few px margin): only these can be aimed at or act
+mod onScreen(x: float, y: float, m: float) -> bool {
+  let sx = (x - y) * {{MSC}}.0 + {{MOX}}.0 - camxO
+  let sy = (x + y) * {{HSC}}.0 + {{MOY}}.0 - camyO
+  return sx > 0.0 - m && sx < {{W}}.0 + m && sy > 0.0 - m && sy < {{H}}.0 + m
+}
 // a ground target worth locking: alive, within 7 tiles and in front (within ~60 deg of the nose)
 mod inFront(j: int) -> bool {
   if j < 0 || j >= ek.length() { return false }
   if ehp.get(j) <= 0 { return false }
+  if onScreen(ex.get(j), ey.get(j), 0.0) == false { return false } // off screen = can't be aimed at (Rookstun)
   let tx = ex.get(j) - hx
   let ty = ey.get(j) - hy
   let td = sqrt(tx * tx + ty * ty)
@@ -260,7 +267,7 @@ mod shoot(kind: int) {
       let tx = ex.get(j) - hx
       let ty = ey.get(j) - hy
       let td = sqrt(tx * tx + ty * ty)
-      if td > 0.05 && td < 7.0 {
+      if td > 0.05 && td < 7.0 && onScreen(ex.get(j), ey.get(j), 0.0) {
         let c = (tx * DX[hd] + ty * DY[hd]) / td
         if c > bestc {
           bestc = c
@@ -430,7 +437,7 @@ mod step() {
             let tx = ex.get(j) - hx
             let ty = ey.get(j) - hy
             let td = sqrt(tx * tx + ty * ty)
-            if td > 0.05 && td < 10.0 {
+            if td > 0.05 && td < 10.0 && onScreen(ex.get(j), ey.get(j), 0.0) {
               ck.push(floor((1.0 - (tx * DX[hd] + ty * DY[hd]) / td) * 8.0) * 100.0 + td)
               cj.push(j)
             }
@@ -446,7 +453,7 @@ mod step() {
         sb = 1.8
         beep = 1
       }
-      if tgt >= 0 && ehp.get(tgt) <= 0 { tgt = -1 }
+      if tgt >= 0 && (ehp.get(tgt) <= 0 || onScreen(ex.get(tgt), ey.get(tgt), 0.0) == false) { tgt = -1 } // lock lost when it leaves the screen
       if gcd > 0 { gcd -= 1 }
       // LMB/E = guns (held), SPACE = missiles (Rookstun)
       if bb && gcd == 0 && gunA > 0 {
@@ -554,7 +561,8 @@ mod step() {
     }
     // ---- enemies: tanks patrol, guns and tanks shoot at a flying helicopter in range
     for i in 0..ek.length() {
-      if ehp.get(i) > 0 {
+      // off-screen enemies sleep (no patrol, no shooting): less work per tick, nothing fires at you from off screen
+      if ehp.get(i) > 0 && onScreen(ex.get(i), ey.get(i), 24.0) {
         if ek.get(i) == 1 {
           var p: float = 0.0
           p = ep.get(i) + edr.get(i) * 0.01
