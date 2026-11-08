@@ -111,7 +111,7 @@ export async function buildDmaCabinet({ dir, name, title, owner: OWNER, cell = 0
   wireTo(cmp('Expr_CompareGreater', add(port(split, 'InputUp'), port(split, 'bPressedRightMouse')), 0.5), 'ba');
   wireTo(cmp('Expr_CompareGreater', add(port(split, 'bPressedLeftMouse'), port(split, 'bPressedE')), 0.5), 'bb');
   wireTo(cmp('Expr_CompareGreater', port(split, 'bPressedQ'), 0.5), 'bq'); // Q = add a ball (Rookstun, hidden)
-  const clock = gate(C.Clock, { IntervalSeconds: 0.05, bEnabled: true });
+  const clock = gate(C.Clock, { IntervalSeconds: gen.clockHz ? 1 / gen.clockHz : 0.05, bEnabled: true }); // clockHz: faster clock = more per-tick wire budget a second
   w.addWire({ brick: seat, component_type: C.Seat.NAME, port: 'bIsOccupied' }, port(clock, 'bEnabled'));
   wireTo(port(clock, 'Pulse'), 'tick');
   if (gen.renderHz) { // a second clock just for drawing (Rookstun: split the refresh from the game, 48 fps)
