@@ -16,10 +16,10 @@ const GHZ = 20; // game clock 50 ms (Rookstun: keep it; everything moves and fir
 export const proj = (x, y, z) => [(x - y) * MSC + MOX, (x + y) * MSC / 2 - z * MSC + MOY];
 export const BUS = ['frame', 'phase', 'camx', 'camy', ...Array.from({ length: NOB }, (_, i) => `o${i}`)];
 const q = JSON.stringify, fill = (tpl, v) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => { if (!(k in v)) throw Error(`template: no ${k}`); return v[k]; });
-const BRIEF = ['MISSION 1: OPERATION SOGGY BISCUIT   (SPACE)', 'Grubb Island makes jam for very bad toast.', 'Blow up all 3 of its jam factories.',
-  'Four accountants are stuck on the sandbar.', 'Land near them, then fly them home to the H.', 'WASD fly  LMB/E guns  SPACE missile  RMB lock  Q land   SPACE: go'];
+const BRIEF = ['MISSION 1: OPERATION SOGGY BISCUIT   (CLICK)', 'Grubb Island makes jam for very bad toast.', 'Blow up all 3 of its jam factories.',
+  'Four accountants are stuck on the sandbar.', 'Land near them, then fly them home to the H.', 'WASD fly  LMB fire  E weapon  RMB lock  Q land   CLICK: go'];
 const TEXT = {
-  WIN: 'MISSION COMPLETE. The accountants are home and already invoicing you.   SPACE: again',
+  WIN: 'MISSION COMPLETE. The accountants are home and already invoicing you.   CLICK: again',
   NOLAND: 'That is not a landing spot. That is a tree, or the sea.',
   NOFUEL: 'OUT OF FUEL. Gravity was waiting the whole time.',
   SHOTDOWN: 'SHOT DOWN. Your helicopter is now modern sculpture.',

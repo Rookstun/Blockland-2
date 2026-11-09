@@ -403,7 +403,7 @@ mod crash(why: string) {
   boom(hx, hy)
   sadTune()
   titlev = ""
-  msgv = why .. "   SPACE: try again"
+  msgv = why .. "   LMB: try again"
 }
 mod step() {
   tk += 1
@@ -417,7 +417,8 @@ mod step() {
     aV0 = 0.35
     beep -= 1
   } else { aV0 = 0.0 } }
-  let pa = ba && lastBa == false
+  // spacebar does nothing (Rookstun): menus advance on left mouse instead
+  let pa = bb && lastBb == false
   let pb = bb && lastBb == false
   let pq = bq && lastBq == false
   lastBa = ba
@@ -441,7 +442,7 @@ mod step() {
       page += 1
       if page < {{NBRIEF}} { msgv = BRIEF[page] } else {
         mode = 2
-        msgv = "WASD fly   LMB fire   E switch weapon   RMB lock   SPACE missile   Q land"
+        msgv = "WASD fly   LMB fire   E switch weapon   RMB lock   Q land"
         landing = 1
       }
     }
@@ -553,7 +554,7 @@ mod step() {
       if tgt >= 0 && (ehp.get(tgt) <= 0 || onScreen(ex.get(tgt), ey.get(tgt), 0.0) == false) { tgt = -1 } // lock lost when it leaves the screen
       if gcd > 0 { gcd -= 1 }
       // LMB/E = guns (held), SPACE = missiles (Rookstun)
-      // E switches weapon (Rookstun): LMB fires guns or missiles; SPACE still fires a missile
+      // E switches weapon (Rookstun): LMB fires guns or missiles; spacebar does nothing
       if pe {
         wsel = 1 - wsel
         msgv = if wsel == 0 then "WEAPON: GUNS" else "WEAPON: MISSILES"
@@ -567,7 +568,7 @@ mod step() {
       }
       // SPACE = missile: only with a lock, 2 s reload; launch = flash at the heli, a message and a whoosh (Rookstun)
       if mcd > 0 { mcd -= 1 }
-      if pa || (pb && wsel == 1) {
+      if pb && wsel == 1 {
         if inFront(tgt) == false { msgv = "MISSILE: lock a target first (right mouse)" } else { if mcd > 0 { msgv = "MISSILE RELOADING" } else { if msl > 0 {
           shoot(1)
           msl -= 1
@@ -700,8 +701,8 @@ mod step() {
           let dy = hy - ey.get(i)
           if ecd.get(i) <= 0 && hz > 0.3 && dx * dx + dy * dy < 100.0 {
             eshoot(i, 0.0)
-            // longer range (10 tiles) and no rhythm: waits anywhere from 0.4 to 3.5 s (Rookstun: no bursts, unpatterned)
-            ecd[i] = 8 + floor(Random(0.0, 62.0))
+            // longer range (10 tiles) and no rhythm: waits anywhere from 1.5 to 4 s (Rookstun: no bursts, unpatterned)
+            ecd[i] = 30 + floor(Random(0.0, 50.0))
           }
         }
       }
@@ -818,7 +819,7 @@ on tick {
       mode = 0
       titlev = "ROTOR RAID"
       hudv = ""
-      msgv = "SPACE: start"
+      msgv = "CLICK: start"
     }
     step()
   } else {
