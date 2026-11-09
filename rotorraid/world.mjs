@@ -165,7 +165,8 @@ function tracer(k, dim, mid, hot) {
   return g.map(r => r.join(''));
 }
 // 3 px tracers (Rookstun): ours all red, theirs all green
-Object.assign(PX, { 1: [170, 20, 20], 2: [230, 40, 40], 3: [255, 90, 90], 4: [20, 130, 40], 5: [50, 200, 70], 6: [140, 255, 140] });
+// red tracers match the green ones' dark/mid/bright steps (Rookstun)
+Object.assign(PX, { 1: [130, 20, 20], 2: [200, 50, 50], 3: [255, 140, 140], 4: [20, 130, 40], 5: [50, 200, 70], 6: [140, 255, 140] });
 for (let k = 0; k < NTR; k++) addPix(`bullet${k}`, tracer(k, '1', '2', '3'));
 for (let k = 0; k < NTR; k++) addPix(`ebullet${k}`, tracer(k, '4', '5', '6'));
 // missiles (Rookstun: "your own way"): a little shaded 3D rocket, ray-marched like the helicopter so it matches the
@@ -182,7 +183,24 @@ const missileModel = k => (x0, y0, z0) => {
   if (u < -1.0 && u > -2.8 && r < 0.26 * (u + 2.8) / 1.8) return u > -1.4 ? [255, 255, 230] : u > -2.0 ? [255, 220, 80] : [255, 130, 40]; // flame
   return null;
 };
-for (let k = 0; k < NTR; k++) add(`missile${k}`, missileModel(k), 3);
+// missile v4 (Rookstun: "1 pixel line with fins, with smoke effects and a flashing thruster"): 1 px body along the
+// heading (dark nose 'g', white body 's'), red fins '2' beside the tail, thruster '3'/'7' behind it, smoke 'A'/'C' trailing.
+// Frames: missile0..15 thruster bright, missile16..31 thruster dim; the CPU alternates them every tick. Only colours
+// already in the palette ('7' was the lock marker colour: reassigning it broke the last try).
+Object.assign(PX, { A: [200, 200, 196], C: [150, 150, 146] });
+function missilePix(k, hot) {
+  const a = k * 2 * Math.PI / NTR, wx = Math.cos(a), wy = Math.sin(a), sx = wx - wy, sy = (wx + wy) / 2, m = Math.max(Math.abs(sx), Math.abs(sy));
+  const ux = sx / m, uy = sy / m, px = -uy, py = ux;
+  const pts = [];
+  for (let i = -5; i <= 3; i++) pts.push([Math.round(i * ux), Math.round(i * uy), i === 3 ? 'g' : i >= 0 ? 's' : i === -1 ? (hot ? '3' : '7') : i >= -3 ? 'A' : 'C']);
+  for (const sgn of [1, -1]) pts.push([Math.round(px * sgn), Math.round(py * sgn), '2']);
+  const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1]));
+  const g = Array.from({ length: Math.max(...pts.map(p => p[1])) - y0 + 1 }, () => Array(Math.max(...pts.map(p => p[0])) - x0 + 1).fill('.'));
+  for (const [x, y, c] of pts) g[y - y0][x - x0] = c;
+  return g.map(r => r.join(''));
+}
+for (let k = 0; k < NTR; k++) addPix(`missile${k}`, missilePix(k, true));
+for (let k = 0; k < NTR; k++) addPix(`missile${k + NTR}`, missilePix(k, false));
 add('puff0', ball([200, 200, 196], [235, 235, 230], 0.6)); add('puff1', ball([150, 150, 146], [180, 180, 176], 0.9)); // missile smoke trail
 add('flash', ball([255, 240, 160], [255, 255, 255], 1.1)); // launch flash at the helicopter
 add('boom0', ball([250, 140, 40], [255, 236, 130], 1.3)); add('boom1', ball([200, 80, 40], [250, 170, 60], 2.1));

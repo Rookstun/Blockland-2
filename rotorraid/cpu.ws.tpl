@@ -774,7 +774,7 @@ mod bus() {
     if qlife.get(i) > 0 { put(qx.get(i) + qdx.get(i) * fr, qy.get(i) + qdy.get(i) * fr, qz.get(i), {{S_EBULLET}} + qd.get(i), 900.0) }
   }
   for i in 0..slife.length() {
-    if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, sz.get(i), (if skind.get(i) == 1 then {{S_MISSILE}} else {{S_BULLET}}) + sdir.get(i), 901.0) }
+    if slife.get(i) > 0 { put(sbx.get(i) + sdx.get(i) * fr, sby.get(i) + sdy.get(i) * fr, sz.get(i), (if skind.get(i) == 1 then {{S_MISSILE}} + (tk % 2) * {{NTR}} else {{S_BULLET}}) + sdir.get(i), 901.0) }
   }
   if tgt >= 0 && mode == 2 { put(ex.get(tgt), ey.get(tgt), 0.0, {{S_LOCK}}, 899.0) }
   if mode != 3 {
