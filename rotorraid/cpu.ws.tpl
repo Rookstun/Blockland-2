@@ -29,6 +29,7 @@ var hz: float = 0.0
 var hd: int = 2
 var th: int = 2
 var aimTh: int = -1
+const SPRAY = [-0.09, -0.06, -0.03, 0.0, 0.03, 0.06, 0.09]
 var leadX: float = 0.0
 var leadY: float = 0.0
 var hvx: float = 0.0
@@ -333,6 +334,13 @@ mod shoot(kind: int) {
     slife[slot] = life
     szd[slot] = 0.0 - (sz.get(slot) - 0.05) / max(life * 1.0, 1.0)
   }
+  // bullet spray (Rookstun): gun rounds wander a few degrees either side
+  if kind == 0 {
+    let j = SPRAY[Random(0, 6)]
+    let ox = sdx.get(slot)
+    sdx[slot] = ox - sdy.get(slot) * j
+    sdy[slot] = sdy.get(slot) + ox * j
+  }
   // tracer drawn along the way the round really flies (nearest of 8 headings), not the nose
   var bd: int = 0
   bd = 0
@@ -495,8 +503,10 @@ mod step() {
       // otherwise thrust is along the nose (Rookstun: was stuck flying at what it aimed at)
       if d >= 0 {
         let k = if aimTh >= 0 then d * 2 else hd
-        tvx = TX[k] * 0.21
-        tvy = TY[k] * 0.21
+        // strafing (aim held) is slower than flying nose-first (Rookstun)
+        let spd = if aimTh >= 0 then 0.12 else 0.21
+        tvx = TX[k] * spd
+        tvy = TY[k] * spd
       }
       mvx = mvx + (tvx - mvx) * 0.06
       mvy = mvy + (tvy - mvy) * 0.06
@@ -611,6 +621,8 @@ mod step() {
     for i in 0..slife.length() {
       if slife.get(i) > 0 {
         slife[i] = slife.get(i) - 1
+        // ground impact puff where a gun round runs out (Rookstun)
+        if slife.get(i) == 0 && skind.get(i) == 0 { fx(sbx.get(i), sby.get(i), 0.0, 1, 4) }
         // a round fired at a target homes on it every tick, so it lands whatever the distance or the target's motion
         let g = stg.get(i)
         if g >= 0 && ehp.get(g) > 0 {

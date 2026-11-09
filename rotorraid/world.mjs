@@ -166,7 +166,8 @@ function tracer(k, dim, mid, hot) {
 }
 // 3 px tracers (Rookstun): ours all red, theirs all green
 // red tracers match the green ones' dark/mid/bright steps (Rookstun)
-Object.assign(PX, { 1: [130, 20, 20], 2: [200, 50, 50], 3: [255, 140, 140], 4: [20, 130, 40], 5: [50, 200, 70], 6: [140, 255, 140] });
+Object.assign(PX, { 1: [120, 15, 15], 2: [190, 35, 30], 3: [255, 20, 10], // tip = bright saturated red (Rookstun)
+  4: [20, 130, 40], 5: [50, 200, 70], 6: [140, 255, 140] });
 for (let k = 0; k < NTR; k++) addPix(`bullet${k}`, tracer(k, '1', '2', '3'));
 for (let k = 0; k < NTR; k++) addPix(`ebullet${k}`, tracer(k, '4', '5', '6'));
 // missiles (Rookstun: "your own way"): a little shaded 3D rocket, ray-marched like the helicopter so it matches the
