@@ -32,8 +32,6 @@ var pe: int = 0
 var hi: int = 0
 var acc: string = ""
 var rs: string[]
-var tcache: string[]
-var tcx: int[]
 var rk1: int[]
 var rk2: int[]
 var hs: int = 0
@@ -95,21 +93,8 @@ mod row(sr: int) -> string {
     }
   }
   if hi <= lo {
-    // scroll reuse (Rookstun, optimisation 2): a plain map row is the same text whenever the camera x is the same,
-    // so up/down scrolling just picks rows already built for other screen lines
-    if iy >= 0 && iy < {{IH}} {
-      if tcx.length() != {{IH}} {
-        tcache.resize({{IH}}, "")
-        tcx.resize({{IH}}, -1)
-      }
-      if tcx.get(iy) == camx { return tcache.get(iy) }
-    }
     terrain(iy, 0, {{W}})
     flush()
-    if iy >= 0 && iy < {{IH}} {
-      tcache[iy] = s
-      tcx[iy] = camx
-    }
     return s
   }
   terrain(iy, 0, lo)
