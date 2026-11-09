@@ -338,9 +338,9 @@ mod shoot(kind: int) {
   // aimed rounds still spray while the aircraft is moving (they only home in when it is still) (Rookstun)
   // spray scales with speed (fades as the aircraft slows); aimed rounds home in only when it is (nearly) still
   let spd = sqrt(mvx * mvx + mvy * mvy)
-  if kind == 0 && spd > 0.01 { stg[slot] = -1 }
+  if kind == 0 { stg[slot] = -1 } // guns always spray (Rookstun: at minimum keep it)
   if kind == 0 && stg.get(slot) < 0 {
-    let j = SPRAY[Random(0, 40)] * 0.18 * min(spd / 0.21, 1.0) + SPRAY[Random(0, 40)] * 0.03
+    let j = SPRAY[Random(0, 40)] * 0.18 * max(min(spd / 0.21, 1.0), 0.35)
     let ox = sdx.get(slot)
     sdx[slot] = ox - sdy.get(slot) * j
     sdy[slot] = sdy.get(slot) + ox * j
@@ -356,7 +356,7 @@ mod shoot(kind: int) {
   if stg.get(slot) >= 0 { slife[slot] = floor(sqrt((ex.get(stg.get(slot)) - hx) * (ex.get(stg.get(slot)) - hx) + (ey.get(stg.get(slot)) - hy) * (ey.get(stg.get(slot)) - hy)) / sp) + 4 }
   skind[slot] = kind
 }
-mod eshoot(i: int) {
+mod eshoot(i: int, back: float) {
   let dx = hx - ex.get(i)
   let dy = hy - ey.get(i)
   let d = max(sqrt(dx * dx + dy * dy), 0.01)
@@ -376,8 +376,9 @@ mod eshoot(i: int) {
     qdz.push(0.0)
     slot = qlife.length() - 1
   }
-  qx[slot] = ex.get(i)
-  qy[slot] = ey.get(i)
+  // back > 0 = a later round of a burst: starts that many ticks behind on the same line
+  qx[slot] = ex.get(i) - dx / d * 0.24 * back
+  qy[slot] = ey.get(i) - dy / d * 0.24 * back
   qdx[slot] = dx / d * 0.24
   qdy[slot] = dy / d * 0.24
   qlife[slot] = 70
@@ -474,7 +475,7 @@ mod step() {
     if pq {
       if hz <= 0.0 { landing = 1 } else { if hz >= 1.0 {
         let t = tileAt(hx, hy)
-        if t == 0 || t == 1 || t == 4 || t == 9 || t == 10 { msgv = "{{NOLAND}}" } else { landing = -1 }
+        if t == 0 || t == 1 || t == 4 || t == 9 || t == 10 { msgv = "{{NOLAND}}" } else { if abs(mvx) + abs(mvy) > 0.02 { msgv = "HOVER STILL TO LAND" } else { landing = -1 } }
       } }
     }
     if hz >= 1.0 {
@@ -694,7 +695,12 @@ mod step() {
           let dx = hx - ex.get(i)
           let dy = hy - ey.get(i)
           if ecd.get(i) <= 0 && hz > 0.3 && dx * dx + dy * dy < 36.0 {
-            eshoot(i)
+            eshoot(i, 0.0)
+            // riflemen fire 3-round bursts (Rookstun)
+            if ek.get(i) == 0 {
+              eshoot(i, 3.0)
+              eshoot(i, 6.0)
+            }
             ecd[i] = 22 + floor(Random(0.0, 16.0))
           }
         }
