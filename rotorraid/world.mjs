@@ -148,7 +148,9 @@ const addPix = (name, rows) => { SPR[name] = SID++; SPRITES.push({ name, rows })
 addPix('person0', ['hh', 'ss', 'ss', 'll']); addPix('person1', ['ahha', '.ss.', '.ss.', '.ll.']);
 for (let d = 0; d < 4; d++) add(`tank${d}`, tank(d));
 // sandbag post: a 3 px soldier (helmet, body, legs) with a 1 px black gun, bags around his legs (Rookstun)
-addPix('gun', ['..HH..', '..oog.', '..oo..', 'bBLLBb']); addPix('gunDead', ['......', '......', '..xx..', 'bxBBxb']);
+// 4 facings so riflemen track the helicopter (Rookstun): gun right, left, toward the viewer, away
+addPix('gun0', ['..HH..', '..oog.', '..oo..', 'bBLLBb']); addPix('gun1', ['..HH..', '.goo..', '..oo..', 'bBLLBb']);
+addPix('gun2', ['..HH..', '..oo..', '..oog.', 'bBLLBb']); addPix('gun3', ['..HHg.', '..oo..', '..oo..', 'bBLLBb']); addPix('gunDead', ['......', '......', '..xx..', 'bxBBxb']);
 add('factory', factory(false), 8); add('factoryDead', factory(true), 3);
 // tracers: 4 px lines pointing the way they fly, bright pixel at the front (Rookstun), one per heading d (world angle d*45 deg)
 // tracers: 4 px lines along the screen direction of each of 16 world headings (22.5 deg apart: gives true screen
@@ -156,13 +158,14 @@ add('factory', factory(false), 8); add('factoryDead', factory(true), 3);
 export const NTR = 16;
 function tracer(k, dim, mid, hot) {
   const a = k * 2 * Math.PI / NTR, wx = Math.cos(a), wy = Math.sin(a), sx = wx - wy, sy = (wx + wy) / 2, m = Math.max(Math.abs(sx), Math.abs(sy));
-  const pts = [0, 1, 2, 3].map(i => [Math.round(i * sx / m), Math.round(i * sy / m)]);
+  const pts = [0, 1, 2].map(i => [Math.round(i * sx / m), Math.round(i * sy / m)]);
   const x0 = Math.min(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), w = Math.max(...pts.map(p => p[0])) - x0 + 1, h = Math.max(...pts.map(p => p[1])) - y0 + 1;
   const g = Array.from({ length: h }, () => Array(w).fill('.'));
-  pts.forEach(([x, y], i) => { g[y - y0][x - x0] = i === 3 ? hot : i === 0 ? dim : mid; });
+  pts.forEach(([x, y], i) => { g[y - y0][x - x0] = i === 2 ? hot : i === 0 ? dim : mid; });
   return g.map(r => r.join(''));
 }
-Object.assign(PX, { 1: [200, 170, 60], 2: [255, 230, 90], 3: [255, 255, 220], 4: [170, 50, 40], 5: [240, 90, 60], 6: [255, 210, 160] });
+// 3 px tracers (Rookstun): ours all red, theirs all green
+Object.assign(PX, { 1: [170, 20, 20], 2: [230, 40, 40], 3: [255, 90, 90], 4: [20, 130, 40], 5: [50, 200, 70], 6: [140, 255, 140] });
 for (let k = 0; k < NTR; k++) addPix(`bullet${k}`, tracer(k, '1', '2', '3'));
 for (let k = 0; k < NTR; k++) addPix(`ebullet${k}`, tracer(k, '4', '5', '6'));
 // missiles (Rookstun: "your own way"): a little shaded 3D rocket, ray-marched like the helicopter so it matches the

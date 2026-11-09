@@ -9,6 +9,7 @@
 @left in ba: bool
 @left in bb: bool
 @left in bq: bool
+@left in be: bool
 @left in rmb: bool
 
 const TILE = [{{TILES}}]
@@ -52,6 +53,8 @@ var timer: int = 0
 var lastBa: bool = false
 var lastBb: bool = false
 var lastBq: bool = false
+var lastBe: bool = false
+var wsel: int = 0
 var lastRmb: bool = false
 var tgt: int = -1
 var mcd: int = 0
@@ -403,6 +406,8 @@ mod step() {
   lastBa = ba
   lastBb = bb
   lastBq = bq
+  let pe = be && lastBe == false
+  lastBe = be
   let pr = rmb && lastRmb == false
   lastRmb = rmb
   if mode == 0 {
@@ -419,7 +424,7 @@ mod step() {
       page += 1
       if page < {{NBRIEF}} { msgv = BRIEF[page] } else {
         mode = 2
-        msgv = "WASD fly   LMB/E guns   RMB lock   SPACE missile (needs lock)   Q land"
+        msgv = "WASD fly   LMB fire   E switch weapon   RMB lock   SPACE missile   Q land"
         landing = 1
       }
     }
@@ -529,7 +534,12 @@ mod step() {
       if tgt >= 0 && (ehp.get(tgt) <= 0 || onScreen(ex.get(tgt), ey.get(tgt), 0.0) == false) { tgt = -1 } // lock lost when it leaves the screen
       if gcd > 0 { gcd -= 1 }
       // LMB/E = guns (held), SPACE = missiles (Rookstun)
-      if bb && gcd == 0 && gunA > 0 {
+      // E switches weapon (Rookstun): LMB fires guns or missiles; SPACE still fires a missile
+      if pe {
+        wsel = 1 - wsel
+        msgv = if wsel == 0 then "WEAPON: GUNS" else "WEAPON: MISSILES"
+      }
+      if bb && wsel == 0 && gcd == 0 && gunA > 0 {
         shoot(0)
         gunA -= 1
         gcd = 2
@@ -538,7 +548,7 @@ mod step() {
       }
       // SPACE = missile: only with a lock, 2 s reload; launch = flash at the heli, a message and a whoosh (Rookstun)
       if mcd > 0 { mcd -= 1 }
-      if pa {
+      if pa || (pb && wsel == 1) {
         if inFront(tgt) == false { msgv = "MISSILE: lock a target first (right mouse)" } else { if mcd > 0 { msgv = "MISSILE RELOADING" } else { if msl > 0 {
           shoot(1)
           msl -= 1
@@ -738,7 +748,12 @@ mod bus() {
     let dead = ehp.get(i) <= 0
     var spr: int = 0
     spr = 0
-    if k == 0 { spr = if dead then {{S_GUNDEAD}} else {{S_GUN}} }
+    if k == 0 {
+      // riflemen face the helicopter, 4 ways (Rookstun)
+      let fdx = (hx - ex.get(i)) - (hy - ey.get(i))
+      let fdy = (hx - ex.get(i)) + (hy - ey.get(i))
+      spr = if dead then {{S_GUNDEAD}} else {{S_GUN}} + (if abs(fdx) >= abs(fdy) then (if fdx > 0.0 then 0 else 1) else (if fdy > 0.0 then 2 else 3))
+    }
     if k == 2 { spr = if dead then {{S_FACTDEAD}} else {{S_FACT}} }
     if k == 1 {
       spr = {{S_TANK}} + (if eax.get(i) == ebx.get(i) then (if edr.get(i) > 0.0 then 1 else 3) else (if edr.get(i) > 0.0 then 0 else 2))
