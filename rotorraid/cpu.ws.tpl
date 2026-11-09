@@ -29,7 +29,7 @@ var hz: float = 0.0
 var hd: int = 2
 var th: int = 2
 var aimTh: int = -1
-const SPRAY = [-0.18, -0.12, -0.06, 0.0, 0.06, 0.12, 0.18]
+const SPRAY = [-1.00, -0.95, -0.90, -0.85, -0.80, -0.75, -0.70, -0.65, -0.60, -0.55, -0.50, -0.45, -0.40, -0.35, -0.30, -0.25, -0.20, -0.15, -0.10, -0.05, 0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00] // -1..1 in 0.05 steps (spray as a float, Rookstun)
 var leadX: float = 0.0
 var leadY: float = 0.0
 var hvx: float = 0.0
@@ -336,9 +336,11 @@ mod shoot(kind: int) {
   }
   // bullet spray (Rookstun): gun rounds wander a few degrees either side
   // aimed rounds still spray while the aircraft is moving (they only home in when it is still) (Rookstun)
-  if kind == 0 && abs(mvx) + abs(mvy) > 0.02 { stg[slot] = -1 }
+  // spray scales with speed (fades as the aircraft slows); aimed rounds home in only when it is (nearly) still
+  let spd = sqrt(mvx * mvx + mvy * mvy)
+  if kind == 0 && spd > 0.01 { stg[slot] = -1 }
   if kind == 0 && stg.get(slot) < 0 {
-    let j = SPRAY[Random(0, 6)]
+    let j = SPRAY[Random(0, 40)] * 0.18 * min(spd / 0.21, 1.0) + SPRAY[Random(0, 40)] * 0.03
     let ox = sdx.get(slot)
     sdx[slot] = ox - sdy.get(slot) * j
     sdy[slot] = sdy.get(slot) + ox * j
