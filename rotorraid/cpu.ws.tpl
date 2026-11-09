@@ -694,14 +694,10 @@ mod step() {
           ecd[i] = ecd.get(i) - 1
           let dx = hx - ex.get(i)
           let dy = hy - ey.get(i)
-          if ecd.get(i) <= 0 && hz > 0.3 && dx * dx + dy * dy < 36.0 {
+          if ecd.get(i) <= 0 && hz > 0.3 && dx * dx + dy * dy < 100.0 {
             eshoot(i, 0.0)
-            // riflemen fire 3-round bursts (Rookstun)
-            if ek.get(i) == 0 {
-              eshoot(i, 3.0)
-              eshoot(i, 6.0)
-            }
-            ecd[i] = 22 + floor(Random(0.0, 16.0))
+            // longer range (10 tiles) and no rhythm: waits anywhere from 0.4 to 3.5 s (Rookstun: no bursts, unpatterned)
+            ecd[i] = 8 + floor(Random(0.0, 62.0))
           }
         }
       }
