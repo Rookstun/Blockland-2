@@ -312,6 +312,10 @@ mod shoot(kind: int) {
     }
   }
   if inFront(tgt) { bj = tgt }
+  // aiming down (RMB held): the locked target always wins over whatever is nearest the nose (Rookstun)
+  if rmb && tgt >= 0 && tgt < ek.length() {
+    if ehp.get(tgt) > 0 { bj = tgt }
+  }
   sz[slot] = hz * 0.85
   szd[slot] = 0.0
   stg[slot] = -1
